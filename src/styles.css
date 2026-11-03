@@ -1,0 +1,631 @@
+:root {
+  --pine: #1e3634; /* 酒場の壁 */
+  --pine-deep: #162826;
+  --pine-line: #335450;
+  --bone: #ece5d3; /* カードの紙 */
+  --bone-dim: #b9b29f;
+  --ink: #23201b; /* カード上の文字 */
+  --info: #4a5da6;
+  --procure: #b48d35;
+  --funds: #6a8a3b;
+  --alert: #e0a08a;
+  --fire: #d9653b; /* 炎の属性 */
+  --poison: #9a7cc4; /* 毒の属性 */
+  --hp-you: #9cc46a;
+  --hp-enemy: #e2c178;
+
+  --serif: 'Zen Old Mincho', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+  --sans: 'Zen Kaku Gothic New', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+
+  --step--1: 0.8125rem;
+  --step-0: 1rem;
+  --step-1: 1.25rem;
+  --step-2: 1.75rem;
+  --step-3: 2.5rem;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--pine);
+  color: var(--bone);
+  font-family: var(--sans);
+  font-size: var(--step-0);
+  line-height: 1.7;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--bone);
+  outline-offset: 3px;
+}
+
+.screen {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 2.5rem 1rem 4rem;
+  display: grid;
+  gap: 1.75rem;
+}
+
+.screen--narrow {
+  max-width: 44rem;
+}
+
+/* ===== 見出し ===== */
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem 2rem;
+}
+
+.top__run {
+  margin: 0;
+  color: var(--bone-dim);
+  font-size: var(--step--1);
+}
+
+.top__title {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: var(--step-3);
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+}
+
+.lead {
+  margin: 0.75rem 0 0;
+  max-width: 34em;
+  color: var(--bone-dim);
+}
+
+.status {
+  display: flex;
+  gap: 2rem;
+  margin: 0;
+}
+
+.status dt,
+.facts dt {
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.status dd,
+.facts dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.status div:first-child dd {
+  font-family: var(--serif);
+  font-size: var(--step-2);
+  line-height: 1.2;
+}
+
+/* ===== 準備の日程（この画面の主役） ===== */
+.calendar {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--days, 3), minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.day {
+  position: relative;
+  min-height: 9.5rem;
+  padding: 0.75rem;
+  border: 1px dashed var(--pine-line);
+  border-radius: 6px;
+  background: var(--pine-deep);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.day__label {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: var(--step-1);
+}
+
+.day--today {
+  border: 2px solid var(--bone);
+}
+
+.day--past {
+  opacity: 0.72;
+}
+
+.day--future .day__label {
+  color: var(--bone-dim);
+}
+
+.day__empty {
+  margin: auto 0;
+  color: var(--bone-dim);
+  font-size: var(--step--1);
+}
+
+/* ===== カード ===== */
+.card {
+  --tone: var(--info);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  text-align: left;
+  background: var(--bone);
+  color: var(--ink);
+  border: none;
+  border-top: 6px solid var(--tone);
+  border-radius: 4px;
+  padding: 0.75rem 0.875rem 0.875rem;
+}
+
+.card--info {
+  --tone: var(--info);
+}
+.card--procure {
+  --tone: var(--procure);
+}
+.card--funds {
+  --tone: var(--funds);
+}
+
+.card--hand {
+  width: 11rem;
+  min-height: 9rem;
+}
+
+.card--slot {
+  width: 100%;
+}
+
+button.card {
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+button.card:hover:not(:disabled) {
+  transform: translateY(-4px);
+}
+
+button.card:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.card.is-selected {
+  outline: 3px solid var(--bone);
+  outline-offset: 3px;
+  transform: translateY(-4px);
+}
+
+.card__kind {
+  font-size: var(--step--1);
+  font-weight: 700;
+  color: var(--tone);
+}
+
+.card__name {
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: var(--step-1);
+  line-height: 1.35;
+}
+
+.card__desc {
+  font-size: var(--step--1);
+  line-height: 1.6;
+}
+
+/* ===== 店と記録 ===== */
+.middle {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 1.75rem;
+}
+
+.panel__title {
+  margin: 0 0 0.75rem;
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: var(--step-1);
+}
+
+.muted {
+  margin: 0;
+  color: var(--bone-dim);
+  font-size: var(--step--1);
+}
+
+.shop__list,
+.log__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.buy {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 1rem;
+  text-align: left;
+  padding: 0.625rem 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--pine-line);
+  cursor: pointer;
+}
+
+.buy:hover:not(:disabled) .buy__name {
+  text-decoration: underline;
+}
+
+.buy:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.buy__name {
+  font-weight: 700;
+}
+
+.buy__desc {
+  grid-column: 1;
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.buy__price {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-family: var(--serif);
+  font-size: var(--step-1);
+}
+
+.shop__bag {
+  margin: 0.75rem 0 0;
+  font-size: var(--step--1);
+}
+
+.log__list {
+  max-height: 11rem;
+  overflow-y: auto;
+  font-size: var(--step--1);
+}
+
+.log__list li {
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--pine-line);
+}
+
+.log__list li:first-child {
+  color: var(--bone);
+  font-weight: 700;
+}
+
+/* ===== 手札 ===== */
+.hand__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.hand__head .panel__title {
+  margin: 0;
+}
+
+.hand__cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.875rem;
+  padding: 0.5rem 0 0.75rem;
+}
+
+.primary {
+  padding: 0.625rem 1.25rem;
+  background: var(--bone);
+  color: var(--ink);
+  border: none;
+  border-radius: 4px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary:hover {
+  background: #fff8e6;
+}
+
+.primary--wide {
+  justify-self: start;
+  padding: 0.875rem 2rem;
+  font-size: var(--step-1);
+  font-family: var(--serif);
+}
+
+.error {
+  margin: 0;
+  min-height: 1.7em;
+  color: var(--alert);
+  font-weight: 700;
+}
+
+/* ===== 結果 ===== */
+.reveal__trait {
+  margin: 0 0 1.25rem;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: var(--step-2);
+}
+
+.facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem 2rem;
+}
+
+/* ===== ダンジョン ===== */
+.depth {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.depth__floor {
+  display: grid;
+  gap: 0.25rem;
+  justify-items: center;
+  padding: 0.375rem 0.625rem;
+  border-radius: 4px;
+  color: var(--bone-dim);
+  font-size: var(--step--1);
+}
+
+.depth__floor.is-current {
+  background: var(--pine-deep);
+  color: var(--bone);
+  font-weight: 700;
+}
+
+.depth__dots {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--bone-dim);
+}
+
+.dot--boss {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.dot.is-done {
+  background: var(--bone-dim);
+}
+
+.dot.is-now {
+  border: 2px solid var(--bone);
+  box-shadow: 0 0 0 3px var(--pine-line);
+}
+
+.arena {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.75rem;
+}
+
+.fighter {
+  padding: 1.25rem;
+  border-radius: 6px;
+  background: var(--pine-deep);
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+
+.fighter--enemy {
+  border: 2px solid var(--pine-line);
+}
+
+.fighter__head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.fighter__name {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: var(--step-2);
+  line-height: 1.25;
+}
+
+.fighter__note {
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.element {
+  padding: 0.125rem 0.5rem;
+  border-radius: 3px;
+  font-size: var(--step--1);
+  font-weight: 700;
+  color: var(--pine-deep);
+}
+
+.element--fire {
+  background: var(--fire);
+}
+
+.element--poison {
+  background: var(--poison);
+}
+
+.bar {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.bar__label {
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.bar__label strong {
+  font-family: var(--serif);
+  font-size: var(--step-1);
+  color: var(--bone);
+}
+
+.bar__track {
+  height: 0.75rem;
+  border-radius: 2px;
+  background: var(--pine-line);
+  overflow: hidden;
+}
+
+.bar__fill {
+  display: block;
+  height: 100%;
+  transition: width 240ms ease;
+}
+
+.bar__track--you .bar__fill {
+  background: var(--hp-you);
+}
+
+.bar__track--enemy .bar__fill {
+  background: var(--hp-enemy);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.item-btn {
+  display: grid;
+  text-align: left;
+  padding: 0.5rem 1rem;
+  background: none;
+  border: 1.5px solid var(--bone-dim);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.item-btn:hover {
+  border-color: var(--bone);
+}
+
+.item-btn__name {
+  font-weight: 700;
+}
+
+.item-btn__count {
+  margin-left: 0.25rem;
+  font-weight: 400;
+  color: var(--bone-dim);
+}
+
+.item-btn__desc {
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.ending {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.ending__text {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: var(--step-2);
+}
+
+.log__list--tall {
+  max-height: 16rem;
+}
+
+@media (max-width: 40rem) {
+  .arena {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  .depth__floor {
+    padding: 0.25rem 0.375rem;
+  }
+  .middle {
+    grid-template-columns: 1fr;
+  }
+  .top__title {
+    font-size: var(--step-2);
+  }
+  .card--hand {
+    width: calc(50% - 0.5rem);
+  }
+  .calendar {
+    gap: 0.375rem;
+  }
+  .day {
+    min-height: 7rem;
+    padding: 0.5rem;
+  }
+  .day__label {
+    font-size: var(--step-0);
+  }
+  .card--slot {
+    padding: 0.5rem;
+  }
+  .card--slot .card__name {
+    font-size: var(--step--1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.card,
+  .bar__fill {
+    transition: none;
+  }
+  button.card:hover:not(:disabled),
+  .card.is-selected {
+    transform: none;
+  }
+}
