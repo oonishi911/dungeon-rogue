@@ -252,27 +252,28 @@ export const ENCHANT_VS_ELEMENT: Record<Element, Partial<Record<Element, number>
   neutral: {},
 };
 
+// 攻撃力は自動プレイのバランステスト（balance.test.ts）を満たすように調整している
 export const ENEMIES: Record<EnemyId, EnemyDef> = {
   // 無属性
-  goblin: { id: 'goblin', name: 'ゴブリン', hp: 14, atk: 5, def: 1, element: 'neutral', body: 'normal' },
-  giant_rat: { id: 'giant_rat', name: '大ネズミ', hp: 10, atk: 4, def: 0, element: 'neutral', body: 'soft' },
-  stone_golem: { id: 'stone_golem', name: '石ゴーレム', hp: 22, atk: 6, def: 3, element: 'neutral', body: 'hard' },
+  goblin: { id: 'goblin', name: 'ゴブリン', hp: 14, atk: 8, def: 1, element: 'neutral', body: 'normal' },
+  giant_rat: { id: 'giant_rat', name: '大ネズミ', hp: 10, atk: 6, def: 0, element: 'neutral', body: 'soft' },
+  stone_golem: { id: 'stone_golem', name: '石ゴーレム', hp: 22, atk: 10, def: 3, element: 'neutral', body: 'hard' },
   // 炎
-  fire_imp: { id: 'fire_imp', name: '火の小鬼', hp: 12, atk: 8, def: 0, element: 'fire', body: 'normal' },
-  flame_hound: { id: 'flame_hound', name: '炎の猟犬', hp: 16, atk: 9, def: 1, element: 'fire', body: 'soft' },
-  lava_lizard: { id: 'lava_lizard', name: '溶岩トカゲ', hp: 22, atk: 9, def: 3, element: 'fire', body: 'hard' },
+  fire_imp: { id: 'fire_imp', name: '火の小鬼', hp: 12, atk: 13, def: 0, element: 'fire', body: 'normal' },
+  flame_hound: { id: 'flame_hound', name: '炎の猟犬', hp: 16, atk: 14, def: 1, element: 'fire', body: 'soft' },
+  lava_lizard: { id: 'lava_lizard', name: '溶岩トカゲ', hp: 22, atk: 14, def: 3, element: 'fire', body: 'hard' },
   // 氷
-  ice_imp: { id: 'ice_imp', name: '氷の小鬼', hp: 12, atk: 8, def: 0, element: 'ice', body: 'normal' },
-  ice_slime: { id: 'ice_slime', name: '氷のスライム', hp: 16, atk: 7, def: 0, element: 'ice', body: 'soft' },
-  ice_beetle: { id: 'ice_beetle', name: '氷の甲虫', hp: 20, atk: 8, def: 3, element: 'ice', body: 'hard' },
+  ice_imp: { id: 'ice_imp', name: '氷の小鬼', hp: 12, atk: 13, def: 0, element: 'ice', body: 'normal' },
+  ice_slime: { id: 'ice_slime', name: '氷のスライム', hp: 16, atk: 11, def: 0, element: 'ice', body: 'soft' },
+  ice_beetle: { id: 'ice_beetle', name: '氷の甲虫', hp: 20, atk: 13, def: 3, element: 'ice', body: 'hard' },
   // 光（炎＋無属性）
-  light_bird: { id: 'light_bird', name: '光の鳥', hp: 12, atk: 8, def: 0, element: 'light', body: 'soft' },
-  holy_armor: { id: 'holy_armor', name: '聖なる甲冑', hp: 24, atk: 9, def: 3, element: 'light', body: 'hard' },
-  light_wisp: { id: 'light_wisp', name: '光の精', hp: 14, atk: 8, def: 0, element: 'light', body: 'spirit' },
+  light_bird: { id: 'light_bird', name: '光の鳥', hp: 12, atk: 13, def: 0, element: 'light', body: 'soft' },
+  holy_armor: { id: 'holy_armor', name: '聖なる甲冑', hp: 24, atk: 14, def: 3, element: 'light', body: 'hard' },
+  light_wisp: { id: 'light_wisp', name: '光の精', hp: 14, atk: 13, def: 0, element: 'light', body: 'spirit' },
   // 闇（氷＋無属性）
-  dark_bat: { id: 'dark_bat', name: '闇コウモリ', hp: 10, atk: 8, def: 0, element: 'dark', body: 'soft' },
-  shadow: { id: 'shadow', name: '影', hp: 16, atk: 9, def: 1, element: 'dark', body: 'spirit' },
-  phantom: { id: 'phantom', name: '亡霊', hp: 18, atk: 9, def: 1, element: 'dark', body: 'spirit' },
+  dark_bat: { id: 'dark_bat', name: '闇コウモリ', hp: 10, atk: 13, def: 0, element: 'dark', body: 'soft' },
+  shadow: { id: 'shadow', name: '影', hp: 16, atk: 14, def: 1, element: 'dark', body: 'spirit' },
+  phantom: { id: 'phantom', name: '亡霊', hp: 18, atk: 14, def: 1, element: 'dark', body: 'spirit' },
 };
 
 /**
