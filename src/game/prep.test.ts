@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PREP_CONFIG } from './data';
-import { buyItem, createPrep, endDay, finishPrep, playCard, toPlayerView } from './prep';
+import { buyItem, createPrep, endDay, finishPrep, playCard, toPlayerView, upgradeRank } from './prep';
+import { RANK_CONFIG } from './rank';
 import type { CardId, PrepState, Result } from './types';
 
 // テスト用：手札を指定した状態を作る
@@ -166,5 +167,30 @@ describe('toPlayerView', () => {
     expect(view).not.toHaveProperty('trait');
     expect(view).not.toHaveProperty('rngState');
     expect(view).not.toHaveProperty('seed');
+  });
+});
+
+describe('upgradeRank', () => {
+  it('経験1つと金貨を払ってランクを上げる。カードも日数も使わない', () => {
+    const s = unwrap(upgradeRank(createPrep(1, [], { rank: 2, exp: 1, startGold: 150 })));
+    expect(s.rank).toBe(3);
+    expect(s.exp).toBe(0);
+    expect(s.gold).toBe(50);
+    expect(s.day).toBe(1);
+    expect(s.playedToday).toBe(false);
+  });
+
+  it('経験・お金が足りないか、最高ランクなら上げられない', () => {
+    expect(upgradeRank(createPrep(1, [], { exp: 0, startGold: 999 })).ok).toBe(false);
+    expect(upgradeRank(createPrep(1, [], { exp: 1, startGold: 10 })).ok).toBe(false);
+    expect(upgradeRank(createPrep(1, [], { rank: RANK_CONFIG.maxRank, exp: 5, startGold: 9999 })).ok).toBe(false);
+  });
+
+  it('ランクと残りの経験は探索と次の挑戦に引き継がれる', () => {
+    let s = unwrap(upgradeRank(createPrep(1, [], { exp: 2, startGold: 100 })));
+    for (let d = 0; d < s.maxDays; d++) s = unwrap(endDay(s));
+    const result = unwrap(finishPrep(s, []));
+    expect(result.rank).toBe(2);
+    expect(result.exp).toBe(1);
   });
 });

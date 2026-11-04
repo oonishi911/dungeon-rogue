@@ -715,3 +715,40 @@ button.card:disabled {
   color: var(--bone-dim);
   font-size: 0.75rem;
 }
+
+/* ===== ランク ===== */
+.rank__now {
+  margin: 0 0 0.75rem;
+  color: var(--bone-dim);
+  font-size: var(--step--1);
+}
+
+.rank__next {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+.rank__next p {
+  margin: 0;
+}
+
+.rank .primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.prep-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.reset {
+  padding: 0.25rem 0;
+  background: none;
+  border: none;
+  color: var(--bone-dim);
+  font-size: var(--step--1);
+  text-decoration: underline;
+  cursor: pointer;
+}

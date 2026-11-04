@@ -43,6 +43,8 @@ const KEY_ACTIONS: Record<string, ExploreAction> = {
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 // ?seed=123 で同じ階層を再現できる（不具合の再現や見た目の確認用）
 const urlSeed = Number(new URLSearchParams(location.search).get('seed'));
+// ?rank=3 でランクを指定できる（広いマップの確認用）
+const urlRank = Number(new URLSearchParams(location.search).get('rank')) || 1;
 
 /** 敵の頭上に出すマークと、文字で伝える状態 */
 const ENEMY_MARK: Record<EnemyMode, { mark: string; text: string }> = {
@@ -58,7 +60,7 @@ const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fi
 export function ExploreDevScreen() {
   return (
     <ExploreScreen
-      start={() => startExplore(Number.isInteger(urlSeed) && urlSeed > 0 ? urlSeed : newSeed(), { loadout: DEV_LOADOUT })}
+      start={() => startExplore(Number.isInteger(urlSeed) && urlSeed > 0 ? urlSeed : newSeed(), { loadout: DEV_LOADOUT, rank: urlRank })}
     />
   );
 }
@@ -135,7 +137,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
       <header className="top">
         <div>
           <p className="top__run">
-            {runNumber ? `${runNumber}回目の挑戦` : '開発用'} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体 ・ 金貨{' '}
+            {runNumber ? `${runNumber}回目の挑戦` : '開発用'} ・ ランク{state.rank} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体 ・ 金貨{' '}
             {state.gold}G
           </p>
           <h1 className="top__title">{floorName}</h1>

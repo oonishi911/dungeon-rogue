@@ -204,6 +204,12 @@ describe('報酬とボス', () => {
     const s = act(arena(ROOM, { x: 1, y: 2 }, [boss]), { kind: 'move', dir: 'right' });
     expect(s.outcome).toBe('cleared');
     expect(s.gold).toBe(TREASURE_CONFIG.bossGold);
+  });
+
+  it('ボスの報酬はランクに比例する', () => {
+    const boss = { ...spawnBoss({ x: 2, y: 2 }, 'fire', 0), hp: 1 };
+    const s = act({ ...arena(ROOM, { x: 1, y: 2 }, [boss]), rank: 3 }, { kind: 'move', dir: 'right' });
+    expect(s.gold).toBe(TREASURE_CONFIG.bossGold * 3);
     expect(step(s, WAIT).ok).toBe(false);
   });
 

@@ -13,6 +13,7 @@ import {
 } from './explore';
 import { PREP_CONFIG, TRAIT_ENEMIES, TREASURE_CONFIG } from './data';
 import { tileAt, type FloorMap } from './map';
+import { RANK_CONFIG, rankParams } from './rank';
 import type { ItemId } from './types';
 import type { Result } from './types';
 
@@ -47,7 +48,7 @@ describe('startExplore', () => {
     const s = startExplore(1);
     expect(s.floor).toBe(0);
     expect(s.player).toEqual(s.map.start);
-    expect(s.satiety).toBe(EXPLORE_CONFIG.maxSatiety);
+    expect(s.satiety).toBe(rankParams(1).maxSatiety);
     expect(s.stats.hp).toBe(s.stats.maxHp);
     expect(s.seen[s.player.y * s.map.width + s.player.x]).toBe(true);
   });
@@ -82,7 +83,7 @@ describe('step', () => {
   it('足踏みも1行動', () => {
     const s = act(startExplore(3), { kind: 'wait' });
     expect(s.turn).toBe(1);
-    expect(s.satiety).toBe(EXPLORE_CONFIG.maxSatiety - 1);
+    expect(s.satiety).toBe(rankParams(1).maxSatiety - 1);
   });
 
   it('階段の上でなければ降りられない', () => {
@@ -122,6 +123,17 @@ describe('step', () => {
     while (s.outcome === 'ongoing') s = act(s, { kind: 'wait' });
     expect(s.outcome).toBe('defeated');
     expect(s.stats.hp).toBe(0);
+  });
+
+  it('どのランクでも、本道だけを歩けば満腹度が0にならずにボス階まで着ける', () => {
+    for (let rank = 2; rank <= RANK_CONFIG.maxRank; rank++) {
+      for (let i = 0; i < 10; i++) {
+        let s = startExplore(i * 2654435761, { enemyDensity: 0, rank });
+        for (let f = 0; f < EXPLORE_CONFIG.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
+        expect(isBossFloor(s)).toBe(true);
+        expect(s.satiety).toBeGreaterThan(0);
+      }
+    }
   });
 
   it('強化していなくても、本道だけを歩けば満腹度が0にならずにボス階まで着ける', () => {
@@ -255,5 +267,22 @@ describe('地図', () => {
   it('地図がなければ、階段は最初は見えていない', () => {
     const s = startExplore(12, { enemyDensity: 0 });
     expect(s.seen[s.map.stairs!.y * s.map.width + s.map.stairs!.x]).toBe(false);
+  });
+});
+
+describe('ランク', () => {
+  it('ランクで広さと満腹度の上限が決まる', () => {
+    const s = startExplore(3, { rank: 3 });
+    expect(s.rank).toBe(3);
+    expect(s.map.width).toBe(rankParams(3).mapSize);
+    expect(s.maxSatiety).toBe(rankParams(3).maxSatiety);
+  });
+
+  it('ランクが高いほど宝箱の金貨が多い', () => {
+    // 同じシード・同じ広さで比べ、ランクの倍率だけを変える
+    const low = startExplore(5, { rank: 1, mapSize: 50 });
+    const high = startExplore(5, { rank: 3, mapSize: 50 });
+    expect(high.chests.map((c) => c.pos)).toEqual(low.chests.map((c) => c.pos));
+    high.chests.forEach((c, i) => expect(c.gold).toBe(Math.round(low.chests[i]!.gold * rankParams(3).chestGoldRate)));
   });
 });
