@@ -16,15 +16,14 @@ import {
   type MapEnemy,
 } from './enemies';
 import { generateBossFloor, generateFloor, tileAt, type FloorMap, type Pos } from './map';
+import { rankParams } from './rank';
 import { nextInt, nextRandom } from './rng';
 import type { ItemId, PlayerStats, Result, TraitId } from './types';
 
 // 数値はすべて仮。バランス調整で見直す
 export const EXPLORE_CONFIG = {
   floors: 3, // 通常の階の数。その下にボス階がある
-  mapSize: 40, // ランク1の広さ
   sightRadius: 6, // 視界の半径（マス）
-  maxSatiety: 1600, // 満腹度の上限。霧の中で階段を探すと1階あたり250〜400歩かかるので、3階分＋α
   satietyPerAction: 1,
   starveDamage: 1, // 満腹度0のとき、1行動ごとに減るHP
   regenInterval: 20, // 満腹度が残っていれば、このターン数ごとにHPが1回復する
@@ -58,6 +57,7 @@ export interface Chest {
 export interface ExploreState {
   seed: number;
   trait: TraitId;
+  rank: number; // 広さ・満腹度の上限・敵の数・報酬が決まる
   floor: number; // 0始まり。floors と同じならボス階
   floors: number; // 通常の階の数
   mapSize: number;
@@ -82,6 +82,7 @@ export interface ExploreState {
 
 export interface ExploreOptions {
   floors?: number;
+  rank?: number; // 省略時は1。広さ・満腹度・敵の密度は、個別に指定するとそちらが優先される
   mapSize?: number;
   maxSatiety?: number;
   trait?: TraitId; // 省略時はシードから決める
@@ -99,16 +100,18 @@ export function floorSeed(seed: number, floor: number): number {
 }
 
 export function startExplore(seed: number, options: ExploreOptions = {}): ExploreState {
-  const mapSize = options.mapSize ?? EXPLORE_CONFIG.mapSize;
-  const maxSatiety = options.maxSatiety ?? EXPLORE_CONFIG.maxSatiety;
+  const params = rankParams(options.rank ?? 1);
+  const mapSize = options.mapSize ?? params.mapSize;
+  const maxSatiety = options.maxSatiety ?? params.maxSatiety;
   const traitRoll = nextInt(seed, TRAIT_IDS.length);
   const state: ExploreState = {
     seed,
     trait: options.trait ?? TRAIT_IDS[traitRoll.value]!,
+    rank: params.rank,
     floor: 0,
     floors: options.floors ?? EXPLORE_CONFIG.floors,
     mapSize,
-    enemyDensity: options.enemyDensity ?? ENEMY_CONFIG.density,
+    enemyDensity: options.enemyDensity ?? params.enemyDensity,
     map: floorMap(seed, 0, mapSize),
     player: { x: 0, y: 0 },
     stats: buildPlayer(options.loadout ?? []),
@@ -204,7 +207,7 @@ function enterFloor(state: ExploreState, floor: number, map: FloorMap): ExploreS
   }
 
   const spawned = spawnEnemies(map, state.trait, state.rngState, state.nextUid, state.enemyDensity);
-  const filled = fillChests(map, spawned.rngState);
+  const filled = fillChests(map, spawned.rngState, rankParams(state.rank).chestGoldRate);
   return reveal({
     ...state,
     floor,
@@ -225,8 +228,8 @@ export function isBossFloor(state: ExploreState): boolean {
 
 // ===== 宝箱 =====
 
-/** マップの「宝箱」の行き止まりに中身を入れる。金貨は本道から遠いほど多く、道具は一定の確率で入る */
-function fillChests(map: FloorMap, rngState: number): { chests: Chest[]; rngState: number } {
+/** マップの「宝箱」の行き止まりに中身を入れる。金貨は本道から遠いほど、ランクが高いほど多く、道具は一定の確率で入る */
+function fillChests(map: FloorMap, rngState: number, goldRate: number): { chests: Chest[]; rngState: number } {
   let s = rngState;
   const chests: Chest[] = [];
   for (const f of map.features) {
@@ -236,7 +239,7 @@ function fillChests(map: FloorMap, rngState: number): { chests: Chest[]; rngStat
     s = pick.state;
     chests.push({
       pos: f.pos,
-      gold: f.depth * TREASURE_CONFIG.goldPerDepth,
+      gold: Math.round(f.depth * TREASURE_CONFIG.goldPerDepth * goldRate),
       item: has.value < TREASURE_CONFIG.itemChance ? TREASURE_CONFIG.items[pick.value]! : null,
     });
   }
@@ -336,8 +339,9 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
     log.push(`${def.name}を倒した`);
     let gold = state.gold;
     if (def.boss) {
-      gold += TREASURE_CONFIG.bossGold;
-      log.push(`報酬として金貨${TREASURE_CONFIG.bossGold}Gを手に入れた`, 'ダンジョンを踏破した');
+      const reward = rankParams(state.rank).bossGold;
+      gold += reward;
+      log.push(`報酬として金貨${reward}Gを手に入れた`, 'ダンジョンを踏破した');
     } else if (target.elite) {
       gold += TREASURE_CONFIG.eliteGold;
       log.push(`金貨${TREASURE_CONFIG.eliteGold}Gを手に入れた`);

@@ -3,6 +3,7 @@
 
 import { itemSlot } from './combat';
 import { CARDS, DECK, ITEMS, PREP_CONFIG, TRAITS, TRAIT_IDS } from './data';
+import { RANK_CONFIG, rankParams, upgradeCost } from './rank';
 import { nextInt, nextRandom, shuffle } from './rng';
 import type { CardInstance, ItemId, PrepResult, PrepState, Result } from './types';
 
@@ -13,6 +14,8 @@ export interface PrepOptions {
   maxDays?: number;
   handSize?: number;
   startGold?: number;
+  rank?: number;
+  exp?: number;
 }
 
 /**
@@ -45,6 +48,8 @@ export function createPrep(seed: number, carried: CardInstance[] = [], options: 
     gold,
     knowledge: { status: 'unknown' },
     hasMap: false,
+    rank: options.rank ?? 1,
+    exp: options.exp ?? 0,
     openShop: null,
     inventory: [],
     rngState: shuffled.state,
@@ -133,6 +138,25 @@ export function buyItem(state: PrepState, itemId: ItemId): Result<PrepState> {
   );
 }
 
+/**
+ * ランクを1つ上げる。踏破経験と金貨を払う。カードも日数も使わない。
+ * ランクが上がるとダンジョンが広くなるかわりに、満腹度の上限と報酬が増える。
+ */
+export function upgradeRank(state: PrepState): Result<PrepState> {
+  if (state.phase !== 'prep') return err('準備フェーズは終わっています');
+  if (state.rank >= RANK_CONFIG.maxRank) return err('これ以上ランクは上げられません');
+  if (state.exp < RANK_CONFIG.expPerUpgrade) return err('ダンジョンを踏破した経験が足りません');
+  const cost = upgradeCost(state.rank);
+  if (state.gold < cost) return err(`お金が足りません（${cost}G必要）`);
+  const rank = state.rank + 1;
+  return ok(
+    withLog(
+      { ...state, rank, exp: state.exp - RANK_CONFIG.expPerUpgrade, gold: state.gold - cost },
+      `ランク${rank}に上がった。ダンジョンは${rankParams(rank).mapSize}×${rankParams(rank).mapSize}になる`,
+    ),
+  );
+}
+
 /** 1日を終える。カードを使わずに終えることもできる */
 export function endDay(state: PrepState): Result<PrepState> {
   if (state.phase !== 'prep') return err('準備フェーズは終わっています');
@@ -162,6 +186,8 @@ export function finishPrep(state: PrepState, keepUids: string[]): Result<PrepRes
     trait: state.trait,
     knowledge: state.knowledge,
     hasMap: state.hasMap,
+    rank: state.rank,
+    exp: state.exp,
     loadout: state.inventory,
     carried: carried as CardInstance[],
   });

@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { ITEMS, TRAITS } from '../game/data';
 import { toPlayerView } from '../game/prep';
+import { RANK_CONFIG, rankParams, upgradeCost } from '../game/rank';
 import type { ItemId, Knowledge, PrepState, ShopId } from '../game/types';
 import { Card } from './Card';
 
@@ -18,10 +19,12 @@ interface PrepScreenProps {
   error: string | null;
   onPlay: (uid: string) => void;
   onBuy: (item: ItemId) => void;
+  onUpgrade: () => void;
   onEndDay: () => void;
+  onReset: () => void;
 }
 
-export function PrepScreen({ run, state, error, onPlay, onBuy, onEndDay }: PrepScreenProps) {
+export function PrepScreen({ run, state, error, onPlay, onBuy, onUpgrade, onEndDay, onReset }: PrepScreenProps) {
   // 正解の特性を含まない状態だけを使って描画する
   const view = toPlayerView(state);
   const daysLeft = view.maxDays - view.day;
@@ -32,7 +35,9 @@ export function PrepScreen({ run, state, error, onPlay, onBuy, onEndDay }: PrepS
     <main className="screen">
       <header className="top">
         <div>
-          <p className="top__run">{run}回目の挑戦</p>
+          <p className="top__run">
+            {run}回目の挑戦 ・ ランク{view.rank}
+          </p>
           <h1 className="top__title">
             {daysLeft === 0 ? '明日、ダンジョンへ出発' : `出発まで、あと${daysLeft + 1}日`}
           </h1>
@@ -118,6 +123,8 @@ export function PrepScreen({ run, state, error, onPlay, onBuy, onEndDay }: PrepS
         </section>
       </div>
 
+      <RankPanel rank={view.rank} exp={view.exp} gold={view.gold} onUpgrade={onUpgrade} />
+
       <p className="error" role="alert">
         {error ?? ''}
       </p>
@@ -138,6 +145,57 @@ export function PrepScreen({ run, state, error, onPlay, onBuy, onEndDay }: PrepS
         </div>
         {view.playedToday && <p className="muted">今日はもうカードを使った。</p>}
       </section>
+
+      <footer className="prep-footer">
+        <button
+          type="button"
+          className="reset"
+          onClick={() => {
+            if (window.confirm('ランク・経験・持ち越したカードと金貨を消して、最初から始めますか？')) onReset();
+          }}
+        >
+          記録を消して最初から始める
+        </button>
+      </footer>
     </main>
+  );
+}
+
+/** ランクと強化。強化はカードも日数も使わず、経験と金貨を払う */
+function RankPanel({ rank, exp, gold, onUpgrade }: { rank: number; exp: number; gold: number; onUpgrade: () => void }) {
+  const now = rankParams(rank);
+  const maxed = rank >= RANK_CONFIG.maxRank;
+  const next = rankParams(rank + 1);
+  const cost = upgradeCost(rank);
+  const reason =
+    exp < RANK_CONFIG.expPerUpgrade
+      ? 'ダンジョンを踏破すると、強化に使える経験が手に入る。'
+      : gold < cost
+        ? `強化には${cost}G必要。`
+        : null;
+
+  return (
+    <section className="panel rank" aria-labelledby="rank-heading">
+      <h2 id="rank-heading" className="panel__title">
+        ランク{rank}
+      </h2>
+      <p className="rank__now">
+        ダンジョン {now.mapSize}×{now.mapSize} ・ 満腹度の上限 {now.maxSatiety} ・ 踏破した経験 {exp}
+      </p>
+      {maxed ? (
+        <p className="muted">これ以上ランクは上げられない。</p>
+      ) : (
+        <div className="rank__next">
+          <p>
+            ランク{next.rank}にすると：ダンジョン {next.mapSize}×{next.mapSize}、満腹度の上限 {next.maxSatiety}、宝箱の金貨
+            ×{next.chestGoldRate}、ボスの報酬 {next.bossGold}G
+          </p>
+          <button type="button" className="primary" onClick={onUpgrade} disabled={reason !== null}>
+            ランクを上げる（{cost}G・経験{RANK_CONFIG.expPerUpgrade}）
+          </button>
+          {reason && <p className="muted">{reason}</p>}
+        </div>
+      )}
+    </section>
   );
 }
