@@ -23,10 +23,10 @@ export const EXPLORE_CONFIG = {
   floors: 3, // ボス階は別に作る予定
   mapSize: 40, // ランク1の広さ
   sightRadius: 6, // 視界の半径（マス）
-  maxSatiety: 600, // 満腹度の上限。3階分の本道（40×40で最大400歩弱）を歩き切れる量
+  maxSatiety: 1600, // 満腹度の上限。霧の中で階段を探すと1階あたり250〜400歩かかるので、3階分＋α
   satietyPerAction: 1,
   starveDamage: 1, // 満腹度0のとき、1行動ごとに減るHP
-  regenInterval: 6, // 満腹度が残っていれば、このターン数ごとにHPが1回復する
+  regenInterval: 20, // 満腹度が残っていれば、このターン数ごとにHPが1回復する
 } as const;
 
 export type Dir = 'up' | 'down' | 'left' | 'right';
