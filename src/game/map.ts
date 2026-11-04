@@ -9,7 +9,7 @@
 import { nextInt, nextRandom, shuffle } from './rng';
 
 export const MAP_CONFIG = {
-  minSize: 30,
+  minSize: 20,
   maxSize: 100,
   roomAttemptRate: 0.04, // 迷路のセル数に対する、部屋を置こうとする回数の割合
   roomMinSize: 3, // 部屋の一辺（奇数）
