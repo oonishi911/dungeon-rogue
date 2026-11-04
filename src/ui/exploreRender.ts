@@ -7,6 +7,7 @@ import type { Pos } from '../game/map';
 import { drawSprite } from '../sprites/canvas';
 import { CLOAKS } from '../sprites/data';
 import { cloakOf, ENEMY_LOOKS } from '../sprites/looks';
+import { floorVariant, QUARTER, TILESET, wallPieces } from './autotile';
 
 export const VIEW_W = 21; // 画面に映すマス数（主人公が中央に来るよう奇数）。画面の大きさに関係なく固定
 export const VIEW_H = 15;
@@ -32,6 +33,7 @@ export interface Frame {
   from: Motion;
   progress: number; // 0〜1。1なら動き終わり
   walkTarget: Pos | null; // タップ・クリックで向かっている場所
+  tileset: HTMLImageElement | null; // ダンジョン特性のタイル素材。読み込み前は null（色の四角で描く）
 }
 
 export function motionOf(state: ExploreState): Motion {
@@ -84,6 +86,8 @@ export function drawView(canvas: HTMLCanvasElement, frame: Frame, colors: Colors
 
   ctx.fillStyle = colors.fog;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = false; // ドット絵をぼかさない
+  const tiles = frame.tileset;
 
   // スクロールの途中は端のマスが半分ずつ見えるので、1マス余分に描く
   const x0 = Math.floor(origin.x);
@@ -94,18 +98,27 @@ export function drawView(canvas: HTMLCanvasElement, frame: Frame, colors: Colors
       const i = y * map.width + x;
       if (!seen[i]) continue;
       const { px, py } = toPx(x, y);
-      if (map.tiles[i] === 'wall') {
-        ctx.fillStyle = colors.wall;
-        ctx.fillRect(px, py, CELL, CELL);
-        ctx.fillStyle = colors.wallTop;
-        ctx.fillRect(px, py, CELL, 4);
-      } else {
-        ctx.fillStyle = colors.floor;
-        ctx.fillRect(px, py, CELL, CELL);
-      }
-      if (map.stairs && x === map.stairs.x && y === map.stairs.y) drawStairs(ctx, px, py, colors.stairs);
+      const isStairs = map.stairs !== null && x === map.stairs.x && y === map.stairs.y;
       // まだ空になっていない宝箱だけを描く
-      if (state.chests.some((c) => c.pos.x === x && c.pos.y === y)) drawChest(ctx, px, py, colors.treasure, colors.fog);
+      const hasChest = state.chests.some((c) => c.pos.x === x && c.pos.y === y);
+      if (tiles) {
+        drawTile(ctx, tiles, TILESET.floors[floorVariant(x, y)]!, px, py);
+        if (map.tiles[i] === 'wall') drawWall(ctx, tiles, state, x, y, px, py);
+        if (isStairs) drawTile(ctx, tiles, TILESET.stairs, px, py);
+        if (hasChest) drawTile(ctx, tiles, TILESET.chest, px, py);
+      } else {
+        if (map.tiles[i] === 'wall') {
+          ctx.fillStyle = colors.wall;
+          ctx.fillRect(px, py, CELL, CELL);
+          ctx.fillStyle = colors.wallTop;
+          ctx.fillRect(px, py, CELL, 4);
+        } else {
+          ctx.fillStyle = colors.floor;
+          ctx.fillRect(px, py, CELL, CELL);
+        }
+        if (isStairs) drawStairs(ctx, px, py, colors.stairs);
+        if (hasChest) drawChest(ctx, px, py, colors.treasure, colors.fog);
+      }
       // 一度見たが今は見えていないマスは暗くする
       if (!visible.has(i)) {
         ctx.globalAlpha = 0.45;
@@ -133,6 +146,37 @@ export function drawView(canvas: HTMLCanvasElement, frame: Frame, colors: Colors
   }
 
   drawSprite(ctx, 'hero', Math.floor(VIEW_W / 2) * CELL, Math.floor(VIEW_H / 2) * CELL, CELL, CLOAKS[cloakOf(state.stats.armor)]);
+}
+
+function drawTile(ctx: CanvasRenderingContext2D, tiles: HTMLImageElement, src: { x: number; y: number }, px: number, py: number) {
+  ctx.drawImage(tiles, src.x, src.y, CELL, CELL, px, py, CELL, CELL);
+}
+
+/**
+ * 壁をオートタイルで描く。隣のマスとのつながりで、4分の1マスずつ部品を選ぶ。
+ * まだ見ていない隣のマスは壁として扱う（縁の形から、霧の向こうが通路だとわからないように）。
+ */
+function drawWall(
+  ctx: CanvasRenderingContext2D,
+  tiles: HTMLImageElement,
+  state: ExploreState,
+  x: number,
+  y: number,
+  px: number,
+  py: number,
+) {
+  const { map, seen } = state;
+  const isWall = (dx: number, dy: number) => {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= map.width || ny >= map.height) return true;
+    const i = ny * map.width + nx;
+    return !seen[i] || map.tiles[i] === 'wall';
+  };
+  const base = TILESET.wallTemplate;
+  for (const { q, src } of wallPieces(isWall)) {
+    ctx.drawImage(tiles, base.x + src.x, base.y + src.y, QUARTER, QUARTER, px + q.sx * QUARTER, py + q.sy * QUARTER, QUARTER, QUARTER);
+  }
 }
 
 function drawEnemy(ctx: CanvasRenderingContext2D, enemy: MapEnemy, px: number, py: number, colors: Colors) {
