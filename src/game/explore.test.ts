@@ -43,7 +43,7 @@ describe('startExplore', () => {
     expect(s.floor).toBe(0);
     expect(s.player).toEqual(s.map.start);
     expect(s.satiety).toBe(EXPLORE_CONFIG.maxSatiety);
-    expect(s.hp).toBe(s.maxHp);
+    expect(s.stats.hp).toBe(s.stats.maxHp);
     expect(s.seen[s.player.y * s.map.width + s.player.x]).toBe(true);
   });
 
@@ -85,7 +85,7 @@ describe('step', () => {
   });
 
   it('階段で降りると次の階の入口に出て、霧も新しくなる', () => {
-    const s = walkMainPath(startExplore(4));
+    const s = walkMainPath(startExplore(4, { enemyDensity: 0 }));
     const next = act(s, { kind: 'descend' });
     expect(next.floor).toBe(1);
     expect(next.map).not.toEqual(s.map);
@@ -96,27 +96,27 @@ describe('step', () => {
   });
 
   it('最下層の階段で降りると探索を終え、それ以上は行動できない', () => {
-    let s = startExplore(6);
+    let s = startExplore(6, { enemyDensity: 0 });
     for (let f = 0; f < EXPLORE_CONFIG.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
     expect(s.outcome).toBe('reached_bottom');
     expect(step(s, { kind: 'wait' }).ok).toBe(false);
   });
 
   it('満腹度が0になると、行動のたびにHPが減り、0で力尽きる', () => {
-    let s = startExplore(7, { maxSatiety: 2 });
+    let s = startExplore(7, { maxSatiety: 2, enemyDensity: 0 });
     s = act(s, { kind: 'wait' }, { kind: 'wait' });
     expect(s.satiety).toBe(0);
-    expect(s.hp).toBe(s.maxHp);
+    expect(s.stats.hp).toBe(s.stats.maxHp);
     s = act(s, { kind: 'wait' });
-    expect(s.hp).toBe(s.maxHp - EXPLORE_CONFIG.starveDamage);
+    expect(s.stats.hp).toBe(s.stats.maxHp - EXPLORE_CONFIG.starveDamage);
     while (s.outcome === 'ongoing') s = act(s, { kind: 'wait' });
     expect(s.outcome).toBe('defeated');
-    expect(s.hp).toBe(0);
+    expect(s.stats.hp).toBe(0);
   });
 
   it('強化していなくても、本道だけを歩けば満腹度が0にならずに最下層まで着ける', () => {
     for (let i = 0; i < 100; i++) {
-      let s = startExplore(i * 2654435761);
+      let s = startExplore(i * 2654435761, { enemyDensity: 0 });
       for (let f = 0; f < EXPLORE_CONFIG.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
       expect(s.outcome).toBe('reached_bottom');
       expect(s.satiety).toBeGreaterThan(0);
