@@ -29,7 +29,7 @@ export type EnemyMode = 'wander' | 'chase' | 'search';
 export interface MapEnemy {
   uid: number;
   id: EnemyId;
-  elite: boolean; // 強敵は動かない
+  elite: boolean; // 強敵とボスは動かず、離れようとすると必ず背後から攻撃してくる
   pos: Pos;
   hp: number;
   mode: EnemyMode;
@@ -38,10 +38,10 @@ export interface MapEnemy {
   searchTurns: number; // search のとき、あと何ターン探すか
 }
 
-/** 強敵なら能力を上げた敵の定義を返す */
+/** 強敵なら能力を上げた敵の定義を返す。ボスは自分の能力のまま */
 export function enemyDef(enemy: Pick<MapEnemy, 'id' | 'elite'>): EnemyDef {
   const base = ENEMIES[enemy.id];
-  if (!enemy.elite) return base;
+  if (!enemy.elite || base.boss) return base;
   return {
     ...base,
     name: `${base.name}（強敵）`,
@@ -81,7 +81,7 @@ export function spawnEnemies(
     searchTurns: 0,
   });
 
-  const occupied = new Set<string>([key(map.start), key(map.stairs)]);
+  const occupied = new Set<string>([key(map.start), ...(map.stairs ? [key(map.stairs)] : [])]);
   for (const f of map.features) {
     occupied.add(key(f.pos));
     if (f.kind === 'elite') enemies.push(make(strongestOf(trait), f.pos, true));
@@ -105,6 +105,22 @@ export function spawnEnemies(
     enemies.push(make(pool[kind.value]!, pos!, false));
   }
   return { enemies, rngState: s };
+}
+
+/** ボス階のボス。動かない点は強敵と同じなので elite として扱う */
+export function spawnBoss(pos: Pos, trait: TraitId, uid: number): MapEnemy {
+  const id = TRAIT_ENEMIES[trait].boss;
+  return {
+    uid,
+    id,
+    elite: true,
+    pos,
+    hp: ENEMIES[id].hp,
+    mode: 'wander',
+    justNoticed: false,
+    lastSeen: null,
+    searchTurns: 0,
+  };
 }
 
 /**

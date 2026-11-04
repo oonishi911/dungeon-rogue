@@ -35,6 +35,15 @@ export const ENEMY_LOOKS: Record<EnemyId, Look> = {
   },
   shadow: { sprite: 'poison_slime', recolor: { L: '#6a5a8a', U: '#3e3358', u: '#241d36' } },
   phantom: { sprite: 'fire_imp', recolor: { F: '#e8e4f0', O: '#b9b2cc', R: '#8a80a6', r: '#5a5276' } },
+  // ボス
+  flame_beast: { sprite: 'flame_hound', recolor: { F: '#ff9a5a', O: '#e0562e', R: '#b8321c', r: '#7a1e12' } },
+  ice_colossus: { sprite: 'fire_drake', recolor: { F: '#cfeefa', O: '#8fd0ee', R: '#4f97c4', r: '#2f5d80' } },
+  ogre_chief: { sprite: 'goblin', recolor: { g: '#c0563a', G: '#8a3424' } },
+  light_guardian: {
+    sprite: 'venom_queen',
+    recolor: { U: '#fff3b0', u: '#f2d36a', V: '#c9a23a', v: '#8a6b1e', E: '#ffffff', Z: '#fff9dc' },
+  },
+  dark_lord: { sprite: 'fire_drake', recolor: { F: '#9a7cc4', O: '#6f5596', R: '#4b3a63', r: '#2a2140', t: '#36294a' } },
 };
 
 export type CloakId = keyof typeof CLOAKS;

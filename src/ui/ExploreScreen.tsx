@@ -6,6 +6,7 @@ import { BODY_NAMES, ITEMS, TRAITS } from '../game/data';
 import { enemyDef, type EnemyMode, type MapEnemy } from '../game/enemies';
 import {
   EXPLORE_CONFIG,
+  isBossFloor,
   samePos,
   startExplore,
   step,
@@ -125,16 +126,17 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
 
   const { stats } = state;
   const visibleEnemies = state.enemies.filter((e) => visible.has(e.pos.y * state.map.width + e.pos.x));
-  const onStairs = samePos(state.player, state.map.stairs);
+  const onStairs = state.map.stairs !== null && samePos(state.player, state.map.stairs);
   const ended = state.outcome !== 'ongoing';
-  const floorName = `地下${state.floor + 1}階`;
+  const floorName = isBossFloor(state) ? '最深部' : `地下${state.floor + 1}階`;
 
   return (
     <main className="screen">
       <header className="top">
         <div>
           <p className="top__run">
-            {runNumber ? `${runNumber}回目の挑戦` : '開発用'} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体
+            {runNumber ? `${runNumber}回目の挑戦` : '開発用'} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体 ・ 金貨{' '}
+            {state.gold}G
           </p>
           <h1 className="top__title">{floorName}</h1>
         </div>
@@ -330,6 +332,7 @@ function drawView(canvas: HTMLCanvasElement, state: ExploreState, visible: Set<n
     stairs: cssColor('--bone'),
     treasure: cssColor('--hp-enemy'),
     elite: cssColor('--fire'),
+    boss: cssColor('--procure'),
     notice: cssColor('--hp-enemy'),
     calm: cssColor('--bone-dim'),
     hp: cssColor('--hp-enemy'),
@@ -358,14 +361,9 @@ function drawView(canvas: HTMLCanvasElement, state: ExploreState, visible: Set<n
         ctx.fillStyle = colors.floor;
         ctx.fillRect(px, py, CELL, CELL);
       }
-      if (x === map.stairs.x && y === map.stairs.y) drawStairs(ctx, px, py, colors.stairs);
-      // 強敵は敵として描くので、ここでは宝箱だけ
-      const treasure = map.features.find((f) => f.kind === 'treasure' && f.pos.x === x && f.pos.y === y);
-      if (treasure) {
-        ctx.fillStyle = colors.treasure;
-        const m = CELL / 4;
-        ctx.fillRect(px + m, py + m, CELL - m * 2, CELL - m * 2);
-      }
+      if (map.stairs && x === map.stairs.x && y === map.stairs.y) drawStairs(ctx, px, py, colors.stairs);
+      // まだ空になっていない宝箱だけを描く
+      if (state.chests.some((c) => c.pos.x === x && c.pos.y === y)) drawChest(ctx, px, py, colors.treasure, colors.fog);
       // 一度見たが今は見えていないマスは暗くする
       if (!visible.has(i)) {
         ctx.globalAlpha = 0.45;
@@ -393,13 +391,15 @@ function drawEnemy(
   enemy: MapEnemy,
   px: number,
   py: number,
-  colors: Record<'elite' | 'notice' | 'calm' | 'hp' | 'fog', string>,
+  colors: Record<'elite' | 'boss' | 'notice' | 'calm' | 'hp' | 'fog', string>,
 ) {
   if (enemy.elite) {
-    // 強敵は赤い枠で囲む
-    ctx.strokeStyle = colors.elite;
+    // 強敵は赤い枠、ボスは金の二重枠で囲む
+    const boss = enemyDef(enemy).boss === true;
+    ctx.strokeStyle = boss ? colors.boss : colors.elite;
     ctx.lineWidth = 2;
     ctx.strokeRect(px + 1, py + 1, CELL - 2, CELL - 2);
+    if (boss) ctx.strokeRect(px - 2, py - 2, CELL + 4, CELL + 4);
   }
   const look = ENEMY_LOOKS[enemy.id];
   drawSprite(ctx, look.sprite, px, py, CELL, look.recolor);
@@ -426,6 +426,16 @@ function drawEnemy(
   ctx.fillText(ENEMY_MARK[enemy.mode].mark, mx, my);
 }
 
+function drawChest(ctx: CanvasRenderingContext2D, px: number, py: number, color: string, line: string) {
+  const m = CELL / 4;
+  ctx.fillStyle = color;
+  ctx.fillRect(px + m, py + m + 2, CELL - m * 2, CELL - m * 2 - 2);
+  // ふたの線と留め金
+  ctx.fillStyle = line;
+  ctx.fillRect(px + m, py + m + 7, CELL - m * 2, 2);
+  ctx.fillRect(px + CELL / 2 - 2, py + m + 9, 4, 4);
+}
+
 function drawStairs(ctx: CanvasRenderingContext2D, px: number, py: number, color: string) {
   ctx.fillStyle = color;
   for (let k = 0; k < 4; k++) {
@@ -444,7 +454,7 @@ function drawMinimap(canvas: HTMLCanvasElement, state: ExploreState) {
   map.tiles.forEach((t, i) => {
     if (t === 'floor' && seen[i]) ctx.fillRect((i % map.width) * MINI_CELL, Math.floor(i / map.width) * MINI_CELL, MINI_CELL, MINI_CELL);
   });
-  if (seen[map.stairs.y * map.width + map.stairs.x]) {
+  if (map.stairs && seen[map.stairs.y * map.width + map.stairs.x]) {
     ctx.fillStyle = cssColor('--bone');
     ctx.fillRect(map.stairs.x * MINI_CELL - 1, map.stairs.y * MINI_CELL - 1, MINI_CELL + 2, MINI_CELL + 2);
   }

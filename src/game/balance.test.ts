@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { autoPlay, clearRate } from './autoplay';
+import { ITEMS, PREP_CONFIG } from './data';
 import type { ItemId, TraitId } from './types';
 
 const TRIALS = 40;
@@ -30,7 +31,7 @@ describe('自動プレイ', () => {
   it('AIは不正な行動を選ばず、最後まで遊び切る', () => {
     for (let i = 0; i < 10; i++) {
       const r = autoPlay(i * 7919, { loadout: ['sword', 'plate', 'potion', 'food', 'fire_whetstone'] });
-      expect(['reached_bottom', 'defeated']).toContain(r.outcome);
+      expect(['cleared', 'defeated']).toContain(r.outcome);
     }
   });
 
@@ -53,4 +54,26 @@ describe('バランス：準備で勝負が決まる', () => {
       expect(clearRate([], trait, TRIALS)).toBeLessThan(0.2);
     });
   }
+});
+
+describe('バランス：準備フェーズのお金', () => {
+  it('正しい準備は、初期の所持金で実際に買える（噂で特性を知り、鍛冶屋と道具屋に行く3日間）', () => {
+    for (const prep of Object.values(PREPS)) {
+      const cost = [...prep.right, ...SUPPLIES].reduce((sum, id) => sum + ITEMS[id].price, 0);
+      expect(cost).toBeLessThanOrEqual(PREP_CONFIG.startGold);
+    }
+  });
+});
+
+describe('バランス：地図', () => {
+  it('地図があると、探索にかかるターン数が大きく減る', { timeout: 30_000 }, () => {
+    const average = (hasMap: boolean) => {
+      let turns = 0;
+      for (let i = 0; i < 20; i++) {
+        turns += autoPlay((i * 2654435761) >>> 0, { trait: 'fire', loadout: [...PREPS.fire.right, ...SUPPLIES], hasMap }).turns;
+      }
+      return turns / 20;
+    };
+    expect(average(true)).toBeLessThan(average(false) * 0.6);
+  });
 });

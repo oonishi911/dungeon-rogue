@@ -85,9 +85,21 @@ describe('playCard', () => {
   });
 });
 
+describe('地図', () => {
+  it('30G払うと地図が手に入り、探索に持っていける', () => {
+    const s = unwrap(playCard(stateWithHand(['map'], { gold: 50 }), 't0'));
+    expect(s.hasMap).toBe(true);
+    expect(s.gold).toBe(20);
+  });
+
+  it('お金が足りないと買えない', () => {
+    expect(playCard(stateWithHand(['map'], { gold: 10 }), 't0').ok).toBe(false);
+  });
+});
+
 describe('buyItem', () => {
   it('その日に行った店でしか買えない', () => {
-    const s = unwrap(playCard(stateWithHand(['armor_shop'], { gold: 100 }), 't0'));
+    const s = unwrap(playCard(stateWithHand(['smithy'], { gold: 100 }), 't0'));
     expect(buyItem(s, 'potion').ok).toBe(false);
     const bought = unwrap(buyItem(s, 'fire_cloak'));
     expect(bought.inventory).toEqual(['fire_cloak']);
@@ -100,9 +112,9 @@ describe('buyItem', () => {
   });
 
   it('武器と防具は1つずつしか買えない', () => {
-    const s = unwrap(buyItem(unwrap(playCard(stateWithHand(['armor_shop'], { gold: 200 }), 't0')), 'fire_cloak'));
+    const s = unwrap(buyItem(unwrap(playCard(stateWithHand(['smithy'], { gold: 200 }), 't0')), 'fire_cloak'));
     expect(buyItem(s, 'ice_cloak').ok).toBe(false);
-    const w = unwrap(buyItem(unwrap(playCard(stateWithHand(['weapon_shop'], { gold: 200 }), 't0')), 'sword'));
+    const w = unwrap(buyItem(unwrap(playCard(stateWithHand(['smithy'], { gold: 200 }), 't0')), 'sword'));
     expect(buyItem(w, 'hammer').ok).toBe(false);
   });
 
@@ -115,14 +127,14 @@ describe('buyItem', () => {
   });
 
   it('お金が足りないと買えない', () => {
-    const s = unwrap(playCard(stateWithHand(['armor_shop'], { gold: 10 }), 't0'));
+    const s = unwrap(playCard(stateWithHand(['smithy'], { gold: 10 }), 't0'));
     expect(buyItem(s, 'fire_cloak').ok).toBe(false);
   });
 });
 
 describe('準備の流れ全体', () => {
   it('最終日を終えると探索に出られ、余りカードを持ち越せる', () => {
-    let s = stateWithHand(['work', 'informant', 'armor_shop', 'rumor', 'item_shop'], { gold: 0 });
+    let s = stateWithHand(['work', 'informant', 'smithy', 'rumor', 'item_shop'], { gold: 0 });
 
     s = unwrap(playCard(s, 't0')); // 1日目：稼ぐ（40G）
     s = unwrap(endDay(s));

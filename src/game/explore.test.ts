@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest';
+import { enemyDef } from './enemies';
 import {
   dirBetween,
   EXPLORE_CONFIG,
+  isBossFloor,
+  toResult,
   startExplore,
   step,
   visibleTiles,
   type ExploreAction,
   type ExploreState,
 } from './explore';
+import { PREP_CONFIG, TRAIT_ENEMIES, TREASURE_CONFIG } from './data';
 import { tileAt, type FloorMap } from './map';
+import type { ItemId } from './types';
 import type { Result } from './types';
 
 function unwrap<T>(result: Result<T>): T {
@@ -95,11 +100,16 @@ describe('step', () => {
     expect(next.seen.filter(Boolean).length).toBe(visible.size);
   });
 
-  it('最下層の階段で降りると探索を終え、それ以上は行動できない', () => {
+  it('最後の階の階段を降りるとボス階に出る。ボス階に階段はなく、ボスが1体だけいる', () => {
     let s = startExplore(6, { enemyDensity: 0 });
     for (let f = 0; f < EXPLORE_CONFIG.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
-    expect(s.outcome).toBe('reached_bottom');
-    expect(step(s, { kind: 'wait' }).ok).toBe(false);
+    expect(isBossFloor(s)).toBe(true);
+    expect(s.outcome).toBe('ongoing');
+    expect(s.map.stairs).toBeNull();
+    expect(s.enemies).toHaveLength(1);
+    expect(enemyDef(s.enemies[0]!).boss).toBe(true);
+    expect(s.enemies[0]!.id).toBe(TRAIT_ENEMIES[s.trait].boss);
+    expect(s.chests).toEqual([]);
   });
 
   it('満腹度が0になると、行動のたびにHPが減り、0で力尽きる', () => {
@@ -114,11 +124,11 @@ describe('step', () => {
     expect(s.stats.hp).toBe(0);
   });
 
-  it('強化していなくても、本道だけを歩けば満腹度が0にならずに最下層まで着ける', () => {
+  it('強化していなくても、本道だけを歩けば満腹度が0にならずにボス階まで着ける', () => {
     for (let i = 0; i < 100; i++) {
       let s = startExplore(i * 2654435761, { enemyDensity: 0 });
       for (let f = 0; f < EXPLORE_CONFIG.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
-      expect(s.outcome).toBe('reached_bottom');
+      expect(isBossFloor(s)).toBe(true);
       expect(s.satiety).toBeGreaterThan(0);
     }
   });
@@ -134,6 +144,7 @@ describe('visibleTiles', () => {
     rooms: [],
     start: { x: 1, y: 1 },
     stairs: { x: 5, y: 1 },
+    boss: null,
     mainPath: [],
     features: [],
   };
@@ -179,5 +190,70 @@ describe('道具', () => {
 
   it('持っていない道具は使えない', () => {
     expect(step(startExplore(8), { kind: 'use_item', item: 'potion' }).ok).toBe(false);
+  });
+});
+
+describe('宝箱と金貨', () => {
+  /** 宝箱の隣まで本道と脇道をたどる代わりに、宝箱の上へ直接動かす状態を作る */
+  function besideChest(seed: number, items: ItemId[] = []) {
+    const s0 = startExplore(seed, { enemyDensity: 0, loadout: items });
+    const chest = s0.chests[0]!;
+    const from = [
+      { x: chest.pos.x, y: chest.pos.y + 1 },
+      { x: chest.pos.x, y: chest.pos.y - 1 },
+      { x: chest.pos.x + 1, y: chest.pos.y },
+      { x: chest.pos.x - 1, y: chest.pos.y },
+    ].find((p) => tileAt(s0.map, p) === 'floor')!;
+    return { state: { ...s0, player: from, enemies: [] }, chest, dir: dirBetween(from, chest.pos) };
+  }
+
+  it('宝箱は「宝箱」の行き止まりに置かれ、金貨は本道から遠いほど多い', () => {
+    const s = startExplore(11, { enemyDensity: 0 });
+    const spots = s.map.features.filter((f) => f.kind === 'treasure');
+    expect(s.chests.map((c) => c.pos)).toEqual(spots.map((f) => f.pos));
+    for (const c of s.chests) {
+      const depth = spots.find((f) => f.pos.x === c.pos.x && f.pos.y === c.pos.y)!.depth;
+      expect(c.gold).toBe(depth * TREASURE_CONFIG.goldPerDepth);
+    }
+  });
+
+  it('宝箱の上に乗ると中身を手に入れ、宝箱はなくなる', () => {
+    const { state, chest, dir } = besideChest(11);
+    const s = act(state, { kind: 'move', dir });
+    expect(s.gold).toBe(chest.gold);
+    if (chest.item) expect(s.stats.items).toContain(chest.item);
+    expect(s.chests).toHaveLength(state.chests.length - 1);
+  });
+
+  it('持ち物がいっぱいなら、道具は宝箱に残る', () => {
+    // 道具の入った宝箱があるシードを探す
+    let seed = 1;
+    while (!startExplore(seed, { enemyDensity: 0 }).chests[0]?.item) seed++;
+    const full: ItemId[] = Array.from({ length: PREP_CONFIG.maxItems }, () => 'potion');
+    const { state, chest, dir } = besideChest(seed, full);
+    const s = act(state, { kind: 'move', dir });
+    expect(s.gold).toBe(chest.gold);
+    expect(s.stats.items).toHaveLength(PREP_CONFIG.maxItems);
+    expect(s.chests.find((c) => c.pos.x === chest.pos.x && c.pos.y === chest.pos.y)).toEqual({ ...chest, gold: 0 });
+  });
+
+  it('踏破すれば金貨を全額、力尽きたら半分持ち帰る', () => {
+    const s = { ...startExplore(1), gold: 81 };
+    expect(toResult({ ...s, outcome: 'cleared' }).goldBrought).toBe(81);
+    expect(toResult({ ...s, outcome: 'defeated' }).goldBrought).toBe(40);
+  });
+});
+
+describe('地図', () => {
+  it('地図があると、各階の入口から階段までの道筋が最初から見えている', () => {
+    const s = startExplore(12, { hasMap: true, enemyDensity: 0 });
+    for (const p of s.map.mainPath) expect(s.seen[p.y * s.map.width + p.x]).toBe(true);
+    const next = act(walkMainPath(s), { kind: 'descend' });
+    for (const p of next.map.mainPath) expect(next.seen[p.y * next.map.width + p.x]).toBe(true);
+  });
+
+  it('地図がなければ、階段は最初は見えていない', () => {
+    const s = startExplore(12, { enemyDensity: 0 });
+    expect(s.seen[s.map.stairs!.y * s.map.width + s.map.stairs!.x]).toBe(false);
   });
 });

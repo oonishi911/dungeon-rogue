@@ -15,22 +15,17 @@ export interface TraitDef {
 }
 
 // ===== カード =====
-export type CardId =
-  | 'rumor'
-  | 'informant'
-  | 'weapon_shop'
-  | 'armor_shop'
-  | 'item_shop'
-  | 'work';
+export type CardId = 'rumor' | 'informant' | 'map' | 'smithy' | 'item_shop' | 'work';
 
 export type CardCategory = 'info' | 'procure' | 'funds';
-export type ShopId = 'weapon' | 'armor' | 'item';
+export type ShopId = 'smithy' | 'item'; // 鍛冶屋は武器と防具、道具屋は道具
 
 // カードの効果は判別可能なユニオン型で表す。
 // 新しい効果を追加すると、switch の書き漏れを型チェックで検出できる。
 export type CardEffect =
   | { kind: 'rumor'; revealChance: number } // 一定確率で特性がわかる（安い・不確実）
   | { kind: 'informant'; cost: number } // お金を払えば確実にわかる
+  | { kind: 'map'; cost: number } // お金を払うと、全階の本道が最初から見える
   | { kind: 'open_shop'; shop: ShopId } // その日だけ店で買い物ができる
   | { kind: 'work'; gold: number }; // お金を稼ぐ
 
@@ -107,6 +102,7 @@ export interface PrepState {
   playedToday: boolean;
   gold: number;
   knowledge: Knowledge;
+  hasMap: boolean;
   openShop: ShopId | null;
   inventory: ItemId[];
   rngState: number; // 乱数の状態も state に持たせ、処理を純粋関数に保つ
@@ -117,6 +113,7 @@ export interface PrepState {
 export interface PrepResult {
   trait: TraitId;
   knowledge: Knowledge;
+  hasMap: boolean;
   loadout: ItemId[];
   carried: CardInstance[];
 }
@@ -137,7 +134,13 @@ export type EnemyId =
   | 'light_wisp'
   | 'dark_bat'
   | 'shadow'
-  | 'phantom';
+  | 'phantom'
+  // ボス
+  | 'flame_beast'
+  | 'ice_colossus'
+  | 'ogre_chief'
+  | 'light_guardian'
+  | 'dark_lord';
 
 export interface EnemyDef {
   id: EnemyId;
@@ -147,6 +150,7 @@ export interface EnemyDef {
   def: number;
   element: Element;
   body: Body;
+  boss?: boolean;
 }
 
 // ===== プレイヤー =====
