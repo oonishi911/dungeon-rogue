@@ -5,7 +5,7 @@
 // キーを押し続けたときの歩く速さが、OS のキーリピートの設定に左右されず一定になる。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { BODY_NAMES, ITEMS, TRAITS } from '../game/data';
+import { BODY_NAMES, ITEMS, TRAIT_IDS, TRAITS } from '../game/data';
 import { enemyDef } from '../game/enemies';
 import {
   EXPLORE_CONFIG,
@@ -35,6 +35,7 @@ import {
   type Frame,
   type Motion,
 } from './exploreRender';
+import { tilesetFor } from './tileset';
 
 const STEP_MS = 120; // 1マス動くのにかける時間。押し続けたときの歩く速さもこれで決まる
 const QUEUE_MAX = 2; // 動いている途中に押した操作を、いくつまで覚えておくか（多すぎると指を止めても歩き続ける）
@@ -62,15 +63,18 @@ const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 const urlSeed = Number(new URLSearchParams(location.search).get('seed'));
 // ?rank=3 でランクを指定できる（広いマップの確認用）
 const urlRank = Number(new URLSearchParams(location.search).get('rank')) || 1;
+// ?trait=fire でダンジョン特性を指定できる（タイル素材の確認用）
+const traitParam = new URLSearchParams(location.search).get('trait');
+const urlTrait = TRAIT_IDS.find((t) => t === traitParam);
 
 // 開発用画面で持たせる装備と道具
 const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fire_whetstone', 'ice_whetstone'];
 
-/** 開発用：準備フェーズを通さずに探索だけを試す。?seed=123 で同じ階層を再現できる */
+/** 開発用：準備フェーズを通さずに探索だけを試す。?seed=・?rank=・?trait= で条件を指定できる */
 export function ExploreDevScreen() {
   return (
     <ExploreScreen
-      start={() => startExplore(Number.isInteger(urlSeed) && urlSeed > 0 ? urlSeed : newSeed(), { loadout: DEV_LOADOUT, rank: urlRank })}
+      start={() => startExplore(Number.isInteger(urlSeed) && urlSeed > 0 ? urlSeed : newSeed(), { loadout: DEV_LOADOUT, rank: urlRank, trait: urlTrait })}
     />
   );
 }
@@ -181,6 +185,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
         from: motionRef.current.from,
         progress: reduceMotion ? 1 : Math.min(1, (now - motionRef.current.start) / STEP_MS),
         walkTarget: walkRef.current,
+        tileset: tilesetFor(current.trait),
       };
       originRef.current = viewOrigin(frame);
       if (viewRef.current) drawView(viewRef.current, frame, colors);

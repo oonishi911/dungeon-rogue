@@ -36,6 +36,7 @@ src/
 scripts/
   sprite-shapes.ts  ドット絵の形を図形の組み合わせで定義
   build-sprites.ts  src/sprites/data.ts を生成する
+  build-tiles.ts    仮のタイル素材（public/tiles/*.png）を生成する（仕様は docs/tiles.md）
 ```
 
 ## 設計のポイント
