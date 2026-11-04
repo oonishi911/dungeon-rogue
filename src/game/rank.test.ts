@@ -3,15 +3,24 @@ import { ENEMY_CONFIG } from './enemies';
 import { RANK_CONFIG, rankParams, upgradeCost } from './rank';
 
 describe('rankParams', () => {
-  it('ランク1は今までの探索と同じ条件', () => {
+  it('ランク1は20×20。満腹度の上限は広さ²、敵の密度と回復の速さは基準（40×40）の2倍', () => {
     expect(rankParams(1)).toEqual({
       rank: 1,
-      mapSize: 40,
-      maxSatiety: 1600,
-      enemyDensity: ENEMY_CONFIG.density,
+      mapSize: 20,
+      maxSatiety: 400,
+      enemyDensity: ENEMY_CONFIG.density * 2,
       chestGoldRate: 1,
       bossGold: 50,
+      regenInterval: 10,
     });
+  });
+
+  it('基準の広さ（40×40）では、自動プレイで測ったときの条件になる', () => {
+    const p = rankParams(3);
+    expect(p.mapSize).toBe(RANK_CONFIG.referenceSize);
+    expect(p.maxSatiety).toBe(1600);
+    expect(p.enemyDensity).toBe(ENEMY_CONFIG.density);
+    expect(p.regenInterval).toBe(RANK_CONFIG.regenInterval);
   });
 
   it('ランクが上がるほど広く、満腹度の上限と報酬が増え、敵の密度は下がる', () => {
@@ -23,6 +32,7 @@ describe('rankParams', () => {
       expect(b.chestGoldRate).toBeGreaterThan(a.chestGoldRate);
       expect(b.bossGold).toBeGreaterThan(a.bossGold);
       expect(b.enemyDensity).toBeLessThan(a.enemyDensity);
+      expect(b.regenInterval).toBeGreaterThanOrEqual(a.regenInterval);
     }
   });
 

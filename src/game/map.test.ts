@@ -3,6 +3,7 @@ import { bfs, findDeadEnds, generateBossFloor, generateFloor, MAP_CONFIG, tileAt
 
 const SEEDS = Array.from({ length: 30 }, (_, i) => i * 2654435761);
 const SIZES = [
+  { width: 20, height: 20 },
   { width: 30, height: 30 },
   { width: 57, height: 41 },
   { width: 100, height: 100 },
@@ -41,7 +42,7 @@ describe('generateFloor', () => {
   });
 
   it('範囲外の広さはエラー', () => {
-    expect(() => generateFloor(1, { width: 29, height: 30 })).toThrow(RangeError);
+    expect(() => generateFloor(1, { width: 19, height: 30 })).toThrow(RangeError);
     expect(() => generateFloor(1, { width: 30, height: 101 })).toThrow(RangeError);
     expect(() => generateFloor(1, { width: 30.5, height: 30 })).toThrow(RangeError);
   });

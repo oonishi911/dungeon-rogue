@@ -16,7 +16,7 @@ import {
   type MapEnemy,
 } from './enemies';
 import { generateBossFloor, generateFloor, tileAt, type FloorMap, type Pos } from './map';
-import { rankParams } from './rank';
+import { rankParams, regenIntervalFor } from './rank';
 import { nextInt, nextRandom } from './rng';
 import type { ItemId, PlayerStats, Result, TraitId } from './types';
 
@@ -26,7 +26,6 @@ export const EXPLORE_CONFIG = {
   sightRadius: 6, // 視界の半径（マス）
   satietyPerAction: 1,
   starveDamage: 1, // 満腹度0のとき、1行動ごとに減るHP
-  regenInterval: 20, // 満腹度が残っていれば、このターン数ごとにHPが1回復する
 } as const;
 
 export type Dir = 'up' | 'down' | 'left' | 'right';
@@ -467,7 +466,8 @@ function spendAction(state: ExploreState): ExploreState {
   if (state.satiety > 0) {
     const satiety = Math.max(0, state.satiety - EXPLORE_CONFIG.satietyPerAction);
     const log = satiety === 0 ? [...state.log, '空腹で力が出ない…'] : state.log;
-    const regen = turn % EXPLORE_CONFIG.regenInterval === 0 && stats.hp < stats.maxHp ? 1 : 0;
+    // 回復の間隔はマップの広さで決まる（狭いほど速い）
+    const regen = turn % regenIntervalFor(state.mapSize) === 0 && stats.hp < stats.maxHp ? 1 : 0;
     return { ...state, turn, satiety, stats: { ...stats, hp: stats.hp + regen }, log };
   }
   const hp = Math.max(0, stats.hp - EXPLORE_CONFIG.starveDamage);
