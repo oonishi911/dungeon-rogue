@@ -13,6 +13,8 @@
   --poison: #9a7cc4; /* 毒の属性 */
   --hp-you: #9cc46a;
   --hp-enemy: #e2c178;
+  --fog: #0b1413; /* まだ見ていない場所 */
+  --wall-top: #46706a; /* 壁の上辺のハイライト */
 
   --serif: 'Zen Old Mincho', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
   --sans: 'Zen Kaku Gothic New', 'Hiragino Sans', 'Yu Gothic', sans-serif;
@@ -730,6 +732,145 @@ button.card:disabled {
 
 @media (max-width: 40rem) {
   .mapview__body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===== 探索の確認（開発用） ===== */
+.explore {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15rem;
+  gap: 1.75rem;
+  align-items: start;
+}
+
+.explore__stage {
+  position: relative;
+}
+
+.explore__view {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  border: 1px solid var(--pine-line);
+  border-radius: 4px;
+}
+
+.explore__ending {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1rem;
+  background: rgb(11 20 19 / 0.8);
+  font-family: var(--serif);
+  font-size: var(--step-2);
+  font-weight: 900;
+  text-align: center;
+}
+
+.explore__ending p {
+  margin: 0;
+}
+
+.explore__side {
+  display: grid;
+  gap: 1rem;
+}
+
+.explore__side .primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.explore__mini {
+  width: 100%;
+  max-width: 15rem;
+  justify-self: center;
+  height: auto;
+  image-rendering: pixelated;
+  border: 1px solid var(--pine-line);
+  border-radius: 4px;
+}
+
+.meter__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.meter__track {
+  height: 0.5rem;
+  background: var(--pine-deep);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.meter__fill {
+  height: 100%;
+  background: var(--hp-you);
+}
+
+.meter__track--satiety .meter__fill {
+  background: var(--procure);
+}
+
+.pad {
+  display: grid;
+  grid-template-columns: repeat(3, 3rem);
+  grid-template-areas:
+    '. up .'
+    'left wait right'
+    '. down .';
+  gap: 0.375rem;
+  justify-content: center;
+}
+
+.pad__btn {
+  height: 3rem;
+  background: var(--pine-deep);
+  border: 1px solid var(--pine-line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.pad__btn:hover:not(:disabled) {
+  border-color: var(--bone-dim);
+}
+
+.pad__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pad__up { grid-area: up; }
+.pad__down { grid-area: down; }
+.pad__left { grid-area: left; }
+.pad__right { grid-area: right; }
+
+.pad__wait {
+  grid-area: wait;
+  font-size: var(--step--1);
+}
+
+.explore__log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+  color: var(--bone-dim);
+}
+
+.explore__log li:first-child {
+  color: var(--bone);
+}
+
+@media (max-width: 48rem) {
+  .explore {
     grid-template-columns: 1fr;
   }
 }
