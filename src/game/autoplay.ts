@@ -45,18 +45,19 @@ export function autoAction(state: ExploreState): ExploreAction {
   }
 
   // 3. 階段の上なら降りる
-  if (player.x === map.stairs.x && player.y === map.stairs.y) return { kind: 'descend' };
+  const { stairs } = map;
+  if (stairs && player.x === stairs.x && player.y === stairs.y) return { kind: 'descend' };
 
-  // 4. 階段が見えていれば向かう。5. 見えていなければ、まだ見ていない場所へ近づく
+  // 4. 目的地（階段、ボス階ではボス）が見えていれば向かう。5. 見えていなければ、まだ見ていない場所へ近づく
+  const goal = stairs ?? map.boss;
+  const isGoal = (p: Pos) => goal !== null && p.x === goal.x && p.y === goal.y;
+  const goalKnown = goal !== null && state.seen[goal.y * map.width + goal.x] === true;
   const avoid = eliteZone(state);
-  const stairsKnown = state.seen[map.stairs.y * map.width + map.stairs.x];
-  const next = stairsKnown
-    ? firstStep(state, (p) => p.x === map.stairs.x && p.y === map.stairs.y, avoid)
-    : firstStep(state, (p) => touchesFog(state, p), avoid);
+  const next = goalKnown ? firstStep(state, isGoal, avoid) : firstStep(state, (p) => touchesFog(state, p), avoid);
   if (next) return { kind: 'move', dir: dirBetween(player, next) };
 
   // 強敵の周りを避けると行き場がないときは、避けずに探す
-  const fallback = firstStep(state, (p) => touchesFog(state, p) || (Boolean(stairsKnown) && p.x === map.stairs.x && p.y === map.stairs.y), new Set());
+  const fallback = firstStep(state, (p) => touchesFog(state, p) || (goalKnown && isGoal(p)), new Set());
   if (fallback) return { kind: 'move', dir: dirBetween(player, fallback) };
   return { kind: 'wait' };
 }
@@ -80,11 +81,11 @@ function bestEnchant(state: ExploreState, target: MapEnemy): ItemId | undefined 
   return best?.id;
 }
 
-/** 見えている（または一度見た場所にいる）強敵の隣のマス。近づくと背後から確実に攻撃されるので避ける */
+/** 見えている（または一度見た場所にいる）強敵の隣のマス。近づくと背後から確実に攻撃されるので避ける。ボスは倒しに行くので除く */
 function eliteZone(state: ExploreState): Set<string> {
   const zone = new Set<string>();
   for (const e of state.enemies) {
-    if (!e.elite || !state.seen[e.pos.y * state.map.width + e.pos.x]) continue;
+    if (!e.elite || enemyDef(e).boss || !state.seen[e.pos.y * state.map.width + e.pos.x]) continue;
     zone.add(key(e.pos));
     for (const d of DIRS) zone.add(key({ x: e.pos.x + d.x, y: e.pos.y + d.y }));
   }
@@ -147,10 +148,15 @@ export function autoPlay(seed: number, options: ExploreOptions = {}): ExploreRes
 }
 
 /** 多数のシードで自動プレイしたときのクリア率 */
-export function clearRate(loadout: readonly ItemId[], trait: TraitId, trials = 100): number {
+export function clearRate(
+  loadout: readonly ItemId[],
+  trait: TraitId,
+  trials = 100,
+  options: ExploreOptions = {},
+): number {
   let cleared = 0;
   for (let i = 0; i < trials; i++) {
-    if (autoPlay((i * 2654435761) >>> 0, { trait, loadout }).outcome === 'reached_bottom') cleared++;
+    if (autoPlay((i * 2654435761) >>> 0, { ...options, trait, loadout }).outcome === 'cleared') cleared++;
   }
   return cleared / trials;
 }

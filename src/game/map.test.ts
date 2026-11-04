@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bfs, findDeadEnds, generateFloor, MAP_CONFIG, tileAt, type FloorMap, type Pos } from './map';
+import { bfs, findDeadEnds, generateBossFloor, generateFloor, MAP_CONFIG, tileAt, type FloorMap, type Pos } from './map';
 
 const SEEDS = Array.from({ length: 30 }, (_, i) => i * 2654435761);
 const SIZES = [
@@ -66,7 +66,7 @@ describe('generateFloor', () => {
         expect(tileAt(map, b)).toBe('floor');
       }
       const { dist } = bfs(map, [map.start]);
-      expect(path.length - 1).toBe(dist[map.stairs.y * map.width + map.stairs.x]);
+      expect(path.length - 1).toBe(dist[map.stairs!.y * map.width + map.stairs!.x]);
     });
   });
 
@@ -74,7 +74,7 @@ describe('generateFloor', () => {
     forEachMap((map) => {
       const { dist } = bfs(map, [map.start]);
       const farthest = Math.max(...dist);
-      const d = dist[map.stairs.y * map.width + map.stairs.x]!;
+      const d = dist[map.stairs!.y * map.width + map.stairs!.x]!;
       expect(d).toBeGreaterThanOrEqual(Math.ceil(farthest * MAP_CONFIG.stairsMinRatio));
       expect(d).toBeLessThanOrEqual(Math.floor(farthest * MAP_CONFIG.stairsMaxRatio));
     });
@@ -131,5 +131,17 @@ describe('generateFloor', () => {
     const kinds = new Set<string>();
     forEachMap((map) => map.features.forEach((f) => kinds.add(f.kind)));
     expect(kinds).toEqual(new Set(['treasure', 'elite']));
+  });
+});
+
+describe('generateBossFloor', () => {
+  it('階段はなく、入口からボスまで通路でつながっている', () => {
+    const map = generateBossFloor();
+    expect(map.stairs).toBeNull();
+    expect(map.boss).not.toBeNull();
+    expect(tileAt(map, map.boss!)).toBe('floor');
+    expect(map.mainPath[0]).toEqual(map.start);
+    expect(map.mainPath.at(-1)).toEqual(map.boss);
+    expect(map.features).toEqual([]);
   });
 });

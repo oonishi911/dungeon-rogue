@@ -44,6 +44,7 @@ export function createPrep(seed: number, carried: CardInstance[] = [], options: 
     playedToday: false,
     gold,
     knowledge: { status: 'unknown' },
+    hasMap: false,
     openShop: null,
     inventory: [],
     rngState: shuffled.state,
@@ -77,6 +78,12 @@ export function playCard(state: PrepState, uid: string): Result<PrepState> {
     case 'informant': {
       if (state.gold < effect.cost) return err(`お金が足りません（${effect.cost}G必要）`);
       next = learn({ ...next, gold: next.gold - effect.cost }, 'informant');
+      break;
+    }
+    case 'map': {
+      if (state.hasMap) return err('地図はもう持っています');
+      if (state.gold < effect.cost) return err(`お金が足りません（${effect.cost}G必要）`);
+      next = withLog({ ...next, gold: next.gold - effect.cost, hasMap: true }, '地図を手に入れた。各階の階段までの道筋がわかる');
       break;
     }
     case 'open_shop': {
@@ -154,6 +161,7 @@ export function finishPrep(state: PrepState, keepUids: string[]): Result<PrepRes
   return ok({
     trait: state.trait,
     knowledge: state.knowledge,
+    hasMap: state.hasMap,
     loadout: state.inventory,
     carried: carried as CardInstance[],
   });

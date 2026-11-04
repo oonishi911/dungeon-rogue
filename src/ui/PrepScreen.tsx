@@ -4,7 +4,7 @@ import { toPlayerView } from '../game/prep';
 import type { ItemId, Knowledge, PrepState, ShopId } from '../game/types';
 import { Card } from './Card';
 
-const SHOP_NAME: Record<ShopId, string> = { weapon: '武器屋', armor: '防具屋', item: '道具屋' };
+const SHOP_NAME: Record<ShopId, string> = { smithy: '鍛冶屋', item: '道具屋' };
 
 export function knowledgeText(knowledge: Knowledge): string {
   if (knowledge.status === 'unknown') return 'まだ何もわからない';
@@ -45,6 +45,10 @@ export function PrepScreen({ run, state, error, onPlay, onBuy, onEndDay }: PrepS
           <div>
             <dt>ダンジョンの情報</dt>
             <dd>{knowledgeText(view.knowledge)}</dd>
+          </div>
+          <div>
+            <dt>地図</dt>
+            <dd>{view.hasMap ? 'あり' : 'なし'}</dd>
           </div>
         </dl>
       </header>

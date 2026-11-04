@@ -11,16 +11,15 @@ interface ResultScreenProps {
 }
 
 export function ResultScreen({ run, outcome, expedition, onNextRun }: ResultScreenProps) {
-  // ボス階はまだないので、最下層の階段まで着けば踏破とする
-  const cleared = expedition.outcome === 'reached_bottom';
-  const where = `地下${expedition.floorReached}階`;
+  const cleared = expedition.outcome === 'cleared';
+  const where = expedition.bossFloor ? '最深部' : `地下${expedition.floorReached}階`;
 
   return (
     <main className="screen screen--narrow">
       <header className="top">
         <div>
           <p className="top__run">{run}回目の挑戦</p>
-          <h1 className="top__title">{cleared ? '最深部にたどり着いた' : `${where}で力尽きた`}</h1>
+          <h1 className="top__title">{cleared ? 'ダンジョンを踏破した' : `${where}で力尽きた`}</h1>
         </div>
       </header>
 
@@ -41,12 +40,20 @@ export function ResultScreen({ run, outcome, expedition, onNextRun }: ResultScre
             <dd>{expedition.defeated}体</dd>
           </div>
           <div>
+            <dt>持ち帰った金貨</dt>
+            <dd>
+              {expedition.goldBrought}G
+              {expedition.goldBrought < expedition.gold && `（手に入れた${expedition.gold}Gのうち）`}
+            </dd>
+          </div>
+          <div>
             <dt>次に持ち越すカード</dt>
             <dd>{outcome.carried.length ? outcome.carried.map((c) => CARDS[c.cardId].name).join('、') : 'なし'}</dd>
           </div>
         </dl>
       </section>
 
+      <p className="muted">持ち帰った金貨は、次の準備の所持金に足される。</p>
       <button type="button" className="primary primary--wide" onClick={onNextRun}>
         次の挑戦を始める
       </button>

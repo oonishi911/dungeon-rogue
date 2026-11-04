@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { startExplore, toResult, type ExploreResult } from './game/explore';
+import { PREP_CONFIG } from './game/data';
 import { buyItem, createPrep, endDay, finishPrep, playCard } from './game/prep';
 import type { CardInstance, ItemId, PrepResult, PrepState, Result } from './game/types';
 import { CarryScreen } from './ui/CarryScreen';
@@ -34,10 +35,11 @@ export function App() {
     setStage(prep.phase === 'ready' ? { kind: 'carry', prep } : { kind: 'prep', prep });
   };
 
-  const startNextRun = (carried: CardInstance[]) => {
+  // 持ち越したカードと、持ち帰った金貨を次の準備に引き継ぐ
+  const startNextRun = (carried: CardInstance[], goldBrought: number) => {
     setRun((r) => r + 1);
     setError(null);
-    setStage({ kind: 'prep', prep: createPrep(newSeed(), carried) });
+    setStage({ kind: 'prep', prep: createPrep(newSeed(), carried, { startGold: PREP_CONFIG.startGold + goldBrought }) });
   };
 
   switch (stage.kind) {
@@ -75,7 +77,7 @@ export function App() {
           key={`${run}-${seed}`}
           run={run}
           // 準備で決まった特性と持ち物で探索を始める。階層の形は準備と同じシードから作る
-          start={() => startExplore(seed, { trait: outcome.trait, loadout: outcome.loadout })}
+          start={() => startExplore(seed, { trait: outcome.trait, loadout: outcome.loadout, hasMap: outcome.hasMap })}
           onFinish={(state) => setStage({ kind: 'result', outcome, expedition: toResult(state) })}
         />
       );
@@ -86,7 +88,7 @@ export function App() {
           run={run}
           outcome={stage.outcome}
           expedition={stage.expedition}
-          onNextRun={() => startNextRun(stage.outcome.carried)}
+          onNextRun={() => startNextRun(stage.outcome.carried, stage.expedition.goldBrought)}
         />
       );
   }

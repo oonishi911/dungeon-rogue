@@ -149,5 +149,5 @@ function draw(canvas: HTMLCanvasElement, map: FloorMap, showPath: boolean) {
   }
   for (const f of map.features) mark(f.pos.x, f.pos.y, color(f.kind === 'treasure' ? '--hp-enemy' : '--fire'));
   mark(map.start.x, map.start.y, color('--hp-you'));
-  mark(map.stairs.x, map.stairs.y, color('--bone'));
+  if (map.stairs) mark(map.stairs.x, map.stairs.y, color('--bone'));
 }

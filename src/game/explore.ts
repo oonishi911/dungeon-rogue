@@ -1,26 +1,27 @@
-// マップ上の探索。プレイヤーの移動・霧（視界と記憶）・満腹度・階段・敵との戦闘を扱う。
+// マップ上の探索。プレイヤーの移動・霧（視界と記憶）・満腹度・階段・宝箱・敵との戦闘・ボス階を扱う。
 // 1ターン = プレイヤーの行動 → 満腹度の消費 → 敵の手番。
 // ほかのロジックと同じく、状態を受け取り新しい状態を返す純粋関数でできている。
 
 import { buildPlayer, enemyHitDamage, playerHitDamage } from './combat';
-import { COMBAT_CONFIG, ITEMS, TRAITS, TRAIT_IDS } from './data';
+import { COMBAT_CONFIG, ITEMS, PREP_CONFIG, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
 import {
   ENEMY_CONFIG,
   enemyDef,
   isAdjacent,
   key,
   nextStepToward,
+  spawnBoss,
   spawnEnemies,
   wanderStep,
   type MapEnemy,
 } from './enemies';
-import { generateFloor, tileAt, type FloorMap, type Pos } from './map';
+import { generateBossFloor, generateFloor, tileAt, type FloorMap, type Pos } from './map';
 import { nextInt, nextRandom } from './rng';
 import type { ItemId, PlayerStats, Result, TraitId } from './types';
 
 // 数値はすべて仮。バランス調整で見直す
 export const EXPLORE_CONFIG = {
-  floors: 3, // ボス階は別に作る予定
+  floors: 3, // 通常の階の数。その下にボス階がある
   mapSize: 40, // ランク1の広さ
   sightRadius: 6, // 視界の半径（マス）
   maxSatiety: 1600, // 満腹度の上限。霧の中で階段を探すと1階あたり250〜400歩かかるので、3階分＋α
@@ -45,13 +46,20 @@ export type ExploreAction =
   | { kind: 'descend' }
   | { kind: 'use_item'; item: ItemId };
 
-export type ExploreOutcome = 'ongoing' | 'reached_bottom' | 'defeated';
+export type ExploreOutcome = 'ongoing' | 'cleared' | 'defeated';
+
+/** 宝箱。持ち物がいっぱいで道具を取れなかったときは、道具だけ残る */
+export interface Chest {
+  pos: Pos;
+  gold: number;
+  item: ItemId | null;
+}
 
 export interface ExploreState {
   seed: number;
   trait: TraitId;
-  floor: number; // 0始まり
-  floors: number;
+  floor: number; // 0始まり。floors と同じならボス階
+  floors: number; // 通常の階の数
   mapSize: number;
   enemyDensity: number;
   map: FloorMap;
@@ -60,6 +68,9 @@ export interface ExploreState {
   satiety: number;
   maxSatiety: number;
   enemies: MapEnemy[];
+  chests: Chest[]; // この階の、まだ空になっていない宝箱
+  gold: number; // この挑戦で手に入れた金貨
+  hasMap: boolean; // 地図があれば、各階の入口から階段までの道筋が最初から見える
   nextUid: number;
   defeated: number; // 倒した敵の数
   seen: boolean[]; // この階で一度でも見えたマス（霧が晴れた場所）
@@ -76,6 +87,7 @@ export interface ExploreOptions {
   trait?: TraitId; // 省略時はシードから決める
   loadout?: readonly ItemId[];
   enemyDensity?: number;
+  hasMap?: boolean;
 }
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value });
@@ -103,6 +115,9 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     satiety: maxSatiety,
     maxSatiety,
     enemies: [],
+    chests: [],
+    gold: 0,
+    hasMap: options.hasMap ?? false,
     nextUid: 0,
     defeated: 0,
     seen: [],
@@ -130,7 +145,7 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
       } else {
         next = backAttacks(state, to);
         if (next.outcome !== 'ongoing') return ok({ ...next, turn: next.turn + 1 });
-        next = reveal({ ...next, player: to });
+        next = openChest(reveal({ ...next, player: to }));
       }
       break;
     }
@@ -145,18 +160,11 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
       break;
     }
     case 'descend': {
-      if (!samePos(state.player, state.map.stairs)) return err('ここに階段はない');
-      if (state.floor + 1 >= state.floors) {
-        // 最下層の階段。ボス階は未実装なので、ここで探索を終える
-        return ok({
-          ...spendAction(state),
-          outcome: 'reached_bottom',
-          log: [...state.log, '最深部へ続く階段を見つけた'],
-        });
-      }
-      // 階を移ったターンは敵が動かない
+      if (!state.map.stairs || !samePos(state.player, state.map.stairs)) return err('ここに階段はない');
+      // 最後の通常の階の階段はボス階へ続く。階を移ったターンは敵が動かない
       const floor = state.floor + 1;
-      return ok(spendAction(enterFloor(state, floor, floorMap(state.seed, floor, state.mapSize))));
+      const map = floor >= state.floors ? generateBossFloor() : floorMap(state.seed, floor, state.mapSize);
+      return ok(spendAction(enterFloor(state, floor, map)));
     }
     default: {
       const unreachable: never = action;
@@ -175,20 +183,90 @@ function floorMap(seed: number, floor: number, mapSize: number): FloorMap {
   return generateFloor(floorSeed(seed, floor), { width: mapSize, height: mapSize });
 }
 
-/** 新しい階に入る：入口に立ち、敵を配置し、霧をリセットする */
+/** 新しい階に入る：入口に立ち、敵と宝箱を配置し、霧をリセットする。地図があれば本道は最初から見える */
 function enterFloor(state: ExploreState, floor: number, map: FloorMap): ExploreState {
+  const seen = new Array<boolean>(map.tiles.length).fill(false);
+  if (state.hasMap) for (const p of map.mainPath) seen[p.y * map.width + p.x] = true;
+
+  if (map.boss) {
+    const boss = spawnBoss(map.boss, state.trait, state.nextUid);
+    return reveal({
+      ...state,
+      floor,
+      map,
+      player: map.start,
+      enemies: [boss],
+      chests: [],
+      nextUid: state.nextUid + 1,
+      seen,
+      log: [...state.log, '最深部に降りた。強い気配がする'],
+    });
+  }
+
   const spawned = spawnEnemies(map, state.trait, state.rngState, state.nextUid, state.enemyDensity);
+  const filled = fillChests(map, spawned.rngState);
   return reveal({
     ...state,
     floor,
     map,
     player: map.start,
     enemies: spawned.enemies,
+    chests: filled.chests,
     nextUid: state.nextUid + spawned.enemies.length,
-    rngState: spawned.rngState,
-    seen: new Array<boolean>(map.tiles.length).fill(false),
+    rngState: filled.rngState,
+    seen,
     log: [...state.log, `地下${floor + 1}階に降りた`],
   });
+}
+
+export function isBossFloor(state: ExploreState): boolean {
+  return state.floor >= state.floors;
+}
+
+// ===== 宝箱 =====
+
+/** マップの「宝箱」の行き止まりに中身を入れる。金貨は本道から遠いほど多く、道具は一定の確率で入る */
+function fillChests(map: FloorMap, rngState: number): { chests: Chest[]; rngState: number } {
+  let s = rngState;
+  const chests: Chest[] = [];
+  for (const f of map.features) {
+    if (f.kind !== 'treasure') continue;
+    const has = nextRandom(s);
+    const pick = nextInt(has.state, TREASURE_CONFIG.items.length);
+    s = pick.state;
+    chests.push({
+      pos: f.pos,
+      gold: f.depth * TREASURE_CONFIG.goldPerDepth,
+      item: has.value < TREASURE_CONFIG.itemChance ? TREASURE_CONFIG.items[pick.value]! : null,
+    });
+  }
+  return { chests, rngState: s };
+}
+
+/** 宝箱の上に乗ったら開ける。持ち物がいっぱいなら道具は残す */
+function openChest(state: ExploreState): ExploreState {
+  const chest = state.chests.find((c) => samePos(c.pos, state.player));
+  if (!chest) return state;
+  const log: string[] = [];
+  let { gold, stats } = state;
+  let item = chest.item;
+  if (chest.gold > 0) {
+    gold += chest.gold;
+    log.push(`宝箱から金貨${chest.gold}Gを手に入れた`);
+  }
+  if (item) {
+    if (stats.items.length < PREP_CONFIG.maxItems) {
+      stats = { ...stats, items: [...stats.items, item] };
+      log.push(`宝箱から${ITEMS[item].name}を手に入れた`);
+      item = null;
+    } else {
+      log.push(`宝箱に${ITEMS[item].name}が入っているが、持ち物がいっぱいだ`);
+    }
+  }
+  const chests = item
+    ? state.chests.map((c) => (c === chest ? { ...c, gold: 0, item } : c))
+    : state.chests.filter((c) => c !== chest);
+  return { ...state, gold, stats, chests, log: [...state.log, ...log] };
 }
 
 // ===== 道具 =====
@@ -255,12 +333,23 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
   }
 
   if (hp <= 0) {
+    log.push(`${def.name}を倒した`);
+    let gold = state.gold;
+    if (def.boss) {
+      gold += TREASURE_CONFIG.bossGold;
+      log.push(`報酬として金貨${TREASURE_CONFIG.bossGold}Gを手に入れた`, 'ダンジョンを踏破した');
+    } else if (target.elite) {
+      gold += TREASURE_CONFIG.eliteGold;
+      log.push(`金貨${TREASURE_CONFIG.eliteGold}Gを手に入れた`);
+    }
     return {
       ...state,
       stats,
+      gold,
       enemies: state.enemies.filter((e) => e.uid !== target.uid),
       defeated: state.defeated + 1,
-      log: [...log, `${def.name}を倒した`],
+      outcome: def.boss ? 'cleared' : state.outcome,
+      log,
     };
   }
   // 攻撃された敵はこちらに気付く
@@ -395,16 +484,23 @@ function applyPoison(state: ExploreState): ExploreState {
 // ===== 結果 =====
 
 export interface ExploreResult {
-  outcome: 'reached_bottom' | 'defeated';
+  outcome: 'cleared' | 'defeated';
   floorReached: number; // 1始まり
+  bossFloor: boolean; // ボス階までたどり着いたか
   defeated: number;
+  gold: number; // 手に入れた金貨
+  goldBrought: number; // 持ち帰った金貨。踏破すれば全額、力尽きたら一部
 }
 
 export function toResult(state: ExploreState): ExploreResult {
+  const cleared = state.outcome === 'cleared';
   return {
-    outcome: state.outcome === 'reached_bottom' ? 'reached_bottom' : 'defeated',
+    outcome: cleared ? 'cleared' : 'defeated',
     floorReached: state.floor + 1,
+    bossFloor: isBossFloor(state),
     defeated: state.defeated,
+    gold: state.gold,
+    goldBrought: cleared ? state.gold : Math.floor(state.gold * TREASURE_CONFIG.keepOnDefeat),
   };
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { enemyHitDamage, playerHitDamage } from './combat';
-import { ENEMY_CONFIG, enemyDef, key, type MapEnemy } from './enemies';
+import { ENEMIES, TREASURE_CONFIG } from './data';
+import { ENEMY_CONFIG, enemyDef, key, spawnBoss, type MapEnemy } from './enemies';
 import { startExplore, step, type ExploreAction, type ExploreState } from './explore';
 import { tileAt, type FloorMap, type Pos } from './map';
 import type { Result } from './types';
@@ -42,6 +43,7 @@ function arena(rows: string[], player: Pos, enemies: MapEnemy[]): ExploreState {
     rooms: [],
     start: player,
     stairs: { x: 1, y: 1 },
+    boss: null,
     mainPath: [],
     features: [],
   };
@@ -185,5 +187,36 @@ describe('属性付与と攻撃', () => {
     s = act(s, { kind: 'move', dir: 'right' });
     expect(s.stats.enchant).toBeNull();
     expect(s.log.some((l) => l.includes('力が消えた'))).toBe(true);
+  });
+});
+
+describe('報酬とボス', () => {
+  it('強敵を倒すと金貨を落とす', () => {
+    const s = act(arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { elite: true, hp: 1 })]), {
+      kind: 'move',
+      dir: 'right',
+    });
+    expect(s.gold).toBe(TREASURE_CONFIG.eliteGold);
+  });
+
+  it('ボスを倒すと報酬が出て、ダンジョンを踏破する', () => {
+    const boss = { ...spawnBoss({ x: 2, y: 2 }, 'fire', 0), hp: 1 };
+    const s = act(arena(ROOM, { x: 1, y: 2 }, [boss]), { kind: 'move', dir: 'right' });
+    expect(s.outcome).toBe('cleared');
+    expect(s.gold).toBe(TREASURE_CONFIG.bossGold);
+    expect(step(s, WAIT).ok).toBe(false);
+  });
+
+  it('ボスは動かず、離れようとすると必ず背後から攻撃してくる', () => {
+    const boss = { ...spawnBoss({ x: 2, y: 2 }, 'ice', 0), mode: 'chase' as const };
+    const s0 = arena(ROOM, { x: 1, y: 2 }, [boss]);
+    const s = act(s0, { kind: 'move', dir: 'up' });
+    expect(s.enemies[0]!.pos).toEqual({ x: 2, y: 2 });
+    expect(s.stats.hp).toBe(s0.stats.hp - enemyHitDamage(s0.stats, enemyDef(boss)));
+  });
+
+  it('ボスの能力は強敵の倍率で上がらない', () => {
+    const boss = spawnBoss({ x: 0, y: 0 }, 'dark', 0);
+    expect(enemyDef(boss)).toEqual(ENEMIES.dark_lord);
   });
 });

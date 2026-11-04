@@ -19,7 +19,7 @@ export const PREP_CONFIG = {
   maxDays: 3,
   handSize: 5,
   maxCarry: 3,
-  startGold: 30,
+  startGold: 100, // 前の挑戦で持ち帰った金貨は、これに足される
   maxItems: 8, // 道具（消耗品）を持てる数。武器と防具は1つずつ
 } as const;
 
@@ -64,19 +64,19 @@ export const CARDS: Record<CardId, CardDef> = {
     description: '30G払うと、ダンジョンの特性が確実にわかる',
     effect: { kind: 'informant', cost: 30 },
   },
-  weapon_shop: {
-    id: 'weapon_shop',
-    name: '武器屋に行く',
-    category: 'procure',
-    description: 'その日だけ武器を買える',
-    effect: { kind: 'open_shop', shop: 'weapon' },
+  map: {
+    id: 'map',
+    name: '地図を買う',
+    category: 'info',
+    description: '30G払うと、全階の入口から階段までの道筋が最初から見える',
+    effect: { kind: 'map', cost: 30 },
   },
-  armor_shop: {
-    id: 'armor_shop',
-    name: '防具屋に行く',
+  smithy: {
+    id: 'smithy',
+    name: '鍛冶屋に行く',
     category: 'procure',
-    description: 'その日だけ防具を買える',
-    effect: { kind: 'open_shop', shop: 'armor' },
+    description: 'その日だけ武器と防具を買える',
+    effect: { kind: 'open_shop', shop: 'smithy' },
   },
   item_shop: {
     id: 'item_shop',
@@ -101,12 +101,14 @@ export const DECK: readonly CardId[] = [
   'rumor',
   'informant',
   'informant',
-  'weapon_shop',
-  'armor_shop',
-  'armor_shop',
+  'map',
+  'map',
+  'smithy',
+  'smithy',
+  'smithy',
   'item_shop',
   'item_shop',
-  'work',
+  'item_shop',
   'work',
   'work',
 ];
@@ -116,7 +118,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   sword: {
     id: 'sword',
     name: '剣',
-    shop: 'weapon',
+    shop: 'smithy',
     price: 30,
     description: '柔らかい敵によく効く。硬い敵・霊体には効きにくい',
     effect: { kind: 'weapon', weapon: 'sword' },
@@ -124,7 +126,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   hammer: {
     id: 'hammer',
     name: '槌',
-    shop: 'weapon',
+    shop: 'smithy',
     price: 30,
     description: '硬い敵によく効く。霊体には効きにくい',
     effect: { kind: 'weapon', weapon: 'hammer' },
@@ -132,7 +134,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   staff: {
     id: 'staff',
     name: '杖',
-    shop: 'weapon',
+    shop: 'smithy',
     price: 30,
     description: '霊体によく効く。柔らかい敵には効きにくい',
     effect: { kind: 'weapon', weapon: 'staff' },
@@ -140,7 +142,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   fire_cloak: {
     id: 'fire_cloak',
     name: '耐火のマント',
-    shop: 'armor',
+    shop: 'smithy',
     price: 40,
     description: '炎のダメージを大きく減らす（光の攻撃は半分だけ）',
     effect: { kind: 'armor', guard: { kind: 'component', component: 'fire', rate: 0.3 } },
@@ -148,7 +150,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   ice_cloak: {
     id: 'ice_cloak',
     name: '耐氷のマント',
-    shop: 'armor',
+    shop: 'smithy',
     price: 40,
     description: '氷のダメージを大きく減らす（闇の攻撃は半分だけ）',
     effect: { kind: 'armor', guard: { kind: 'component', component: 'ice', rate: 0.3 } },
@@ -156,7 +158,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   plate: {
     id: 'plate',
     name: '鎧',
-    shop: 'armor',
+    shop: 'smithy',
     price: 40,
     description: '無属性のダメージを少し減らす（光・闇の攻撃は半分だけ）',
     effect: { kind: 'armor', guard: { kind: 'component', component: 'neutral', rate: 0.6 } },
@@ -164,16 +166,16 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   light_robe: {
     id: 'light_robe',
     name: '光の衣',
-    shop: 'armor',
-    price: 60,
+    shop: 'smithy',
+    price: 50,
     description: '光の攻撃を大きく減らす。ほかの属性には効かない',
     effect: { kind: 'armor', guard: { kind: 'whole', element: 'light', rate: 0.3 } },
   },
   dark_robe: {
     id: 'dark_robe',
     name: '闇の衣',
-    shop: 'armor',
-    price: 60,
+    shop: 'smithy',
+    price: 50,
     description: '闇の攻撃を大きく減らす。ほかの属性には効かない',
     effect: { kind: 'armor', guard: { kind: 'whole', element: 'dark', rate: 0.3 } },
   },
@@ -274,6 +276,14 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
   dark_bat: { id: 'dark_bat', name: '闇コウモリ', hp: 10, atk: 13, def: 0, element: 'dark', body: 'soft' },
   shadow: { id: 'shadow', name: '影', hp: 16, atk: 14, def: 1, element: 'dark', body: 'spirit' },
   phantom: { id: 'phantom', name: '亡霊', hp: 18, atk: 14, def: 1, element: 'dark', body: 'spirit' },
+  // ボス：ダンジョンの属性と体質の傾向に合わせる。動かない。
+  // 正しい準備で挑んだとき、ボス戦で受ける合計ダメージがどのボスでも40前後になるようにそろえている
+  flame_beast: { id: 'flame_beast', name: '炎の魔獣', hp: 60, atk: 18, def: 2, element: 'fire', body: 'soft', boss: true },
+  ice_colossus: { id: 'ice_colossus', name: '氷の巨像', hp: 60, atk: 18, def: 2, element: 'ice', body: 'hard', boss: true },
+  ogre_chief: { id: 'ogre_chief', name: '鬼の首領', hp: 60, atk: 9, def: 1, element: 'neutral', body: 'normal', boss: true },
+  // 光のダンジョンは、光の衣で防げない炎・無属性の敵も混ざり道中で消耗するので、ボスを少し弱くしている
+  light_guardian: { id: 'light_guardian', name: '光の守護者', hp: 50, atk: 14, def: 2, element: 'light', body: 'hard', boss: true },
+  dark_lord: { id: 'dark_lord', name: '闇の王', hp: 60, atk: 18, def: 2, element: 'dark', body: 'spirit', boss: true },
 };
 
 /**
@@ -281,10 +291,20 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
  * その属性の敵が中心で、成分の属性の敵も混ざる。体質にも傾向がある
  * （炎：柔らかい、氷：硬い、無属性：混在、光：硬い、闇：霊体）。
  */
-export const TRAIT_ENEMIES: Record<TraitId, { pool: readonly EnemyId[] }> = {
-  fire: { pool: ['fire_imp', 'fire_imp', 'flame_hound', 'flame_hound', 'flame_hound', 'lava_lizard', 'goblin'] },
-  ice: { pool: ['ice_imp', 'ice_slime', 'ice_beetle', 'ice_beetle', 'ice_beetle', 'goblin'] },
-  neutral: { pool: ['goblin', 'goblin', 'giant_rat', 'giant_rat', 'stone_golem', 'stone_golem'] },
-  light: { pool: ['light_bird', 'holy_armor', 'holy_armor', 'holy_armor', 'light_wisp', 'fire_imp', 'stone_golem'] },
-  dark: { pool: ['dark_bat', 'shadow', 'shadow', 'phantom', 'phantom', 'ice_imp', 'giant_rat'] },
+export const TRAIT_ENEMIES: Record<TraitId, { pool: readonly EnemyId[]; boss: EnemyId }> = {
+  fire: { pool: ['fire_imp', 'fire_imp', 'flame_hound', 'flame_hound', 'flame_hound', 'lava_lizard', 'goblin'], boss: 'flame_beast' },
+  ice: { pool: ['ice_imp', 'ice_slime', 'ice_beetle', 'ice_beetle', 'ice_beetle', 'goblin'], boss: 'ice_colossus' },
+  neutral: { pool: ['goblin', 'goblin', 'giant_rat', 'giant_rat', 'stone_golem', 'stone_golem'], boss: 'ogre_chief' },
+  light: { pool: ['light_bird', 'holy_armor', 'holy_armor', 'holy_armor', 'light_wisp', 'fire_imp', 'stone_golem'], boss: 'light_guardian' },
+  dark: { pool: ['dark_bat', 'shadow', 'shadow', 'phantom', 'phantom', 'ice_imp', 'giant_rat'], boss: 'dark_lord' },
 };
+
+// ===== 宝箱と金貨（仮） =====
+export const TREASURE_CONFIG = {
+  goldPerDepth: 5, // 宝箱の金貨＝本道からの距離×これ
+  itemChance: 0.5, // 宝箱に道具が入っている確率
+  items: ['potion', 'food', 'fire_whetstone', 'ice_whetstone', 'holy_water', 'dark_oil'] as readonly ItemId[],
+  eliteGold: 30, // 強敵を倒すと落とす金貨
+  bossGold: 50, // ボスを倒したときの報酬
+  keepOnDefeat: 0.5, // 力尽きたときに持ち帰れる金貨の割合
+} as const;

@@ -49,8 +49,9 @@ export interface FloorMap {
   tiles: Tile[]; // 行優先（index = y * width + x）
   rooms: Room[];
   start: Pos;
-  stairs: Pos;
-  mainPath: Pos[]; // 入口から階段までの最短路（両端を含む）
+  stairs: Pos | null; // ボス階には階段がない
+  boss: Pos | null; // ボスのいる場所（ボス階だけ）
+  mainPath: Pos[]; // 入口から階段（ボス階ではボス）までの最短路（両端を含む）
   features: Feature[];
 }
 
@@ -210,7 +211,33 @@ export function generateFloor(seed: number, options: FloorOptions): FloorMap {
     features.push({ kind: r.value < 0.5 ? 'treasure' : 'elite', pos, depth: fromMain.dist[idx(pos)]! });
   }
 
-  return { width, height, tiles, rooms, start, stairs, mainPath, features };
+  return { width, height, tiles, rooms, start, stairs, boss: null, mainPath, features };
+}
+
+/**
+ * ボス階：入口からの短い通路と、大部屋が1つだけの決まった形。ボスは部屋の奥に置く。
+ * 形が決まっているので乱数は使わない。
+ */
+export function generateBossFloor(): FloorMap {
+  const width = 31;
+  const height = 25;
+  const tiles: Tile[] = new Array<Tile>(width * height).fill('wall');
+  const room: Room = { x: 6, y: 2, width: 19, height: 13 };
+  for (let y = room.y; y < room.y + room.height; y++) {
+    for (let x = room.x; x < room.x + room.width; x++) tiles[y * width + x] = 'floor';
+  }
+  const center = room.x + Math.floor(room.width / 2);
+  const start = { x: center, y: 21 };
+  for (let y = room.y + room.height; y <= start.y; y++) tiles[y * width + center] = 'floor';
+  const boss = { x: center, y: room.y + 2 };
+
+  const map = { width, height, tiles };
+  const { parent } = bfs(map, [start]);
+  const mainPath: Pos[] = [];
+  for (let i = boss.y * width + boss.x; i !== -1; i = parent[i]!) mainPath.push({ x: i % width, y: Math.floor(i / width) });
+  mainPath.reverse();
+
+  return { width, height, tiles, rooms: [room], start, stairs: null, boss, mainPath, features: [] };
 }
 
 /** 周囲1マスの壁も含めて重なるか */
@@ -297,13 +324,14 @@ export function bfs(
   return { dist, parent };
 }
 
-/** デバッグ・テスト用の文字表示。# 壁 . 通路 S 入口 > 階段 T 宝箱 E 強敵 */
+/** デバッグ・テスト用の文字表示。# 壁 . 通路 S 入口 > 階段 B ボス T 宝箱 E 強敵 */
 export function toAscii(map: FloorMap): string {
   const chars: string[] = map.tiles.map((t) => (t === 'wall' ? '#' : '.'));
   const put = (p: Pos, c: string) => (chars[p.y * map.width + p.x] = c);
   for (const f of map.features) put(f.pos, f.kind === 'treasure' ? 'T' : 'E');
   put(map.start, 'S');
-  put(map.stairs, '>');
+  if (map.stairs) put(map.stairs, '>');
+  if (map.boss) put(map.boss, 'B');
   const lines: string[] = [];
   for (let y = 0; y < map.height; y++) lines.push(chars.slice(y * map.width, (y + 1) * map.width).join(''));
   return lines.join('\n');
