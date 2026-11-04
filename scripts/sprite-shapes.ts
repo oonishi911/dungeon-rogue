@@ -292,9 +292,12 @@ export const PALETTE: Record<string, string> = {
   U: '#9a7cc4', u: '#6f5596', L: '#cdb9e6', V: '#4b3a63', v: '#36294a', E: '#e05a7a', Z: '#7fb069',
 };
 
-// マントの色（H：明るい色、C：本体、c：影）
+// マントの色（H：明るい色、C：本体、c：影）。キーは装備している防具
 export const CLOAKS = {
   none: { H: '#a88660', C: '#8a6b4a', c: '#6a5038' },
-  fire: { H: '#ec8a5a', C: '#d9653b', c: '#a8432a' },
-  poison: { H: '#b49ad6', C: '#9a7cc4', c: '#6f5596' },
+  fire_cloak: { H: '#ec8a5a', C: '#d9653b', c: '#a8432a' },
+  ice_cloak: { H: '#9fd6ef', C: '#5aa7d6', c: '#2f6f9e' },
+  plate: { H: '#c9c3b3', C: '#8f8977', c: '#5f5a4e' },
+  light_robe: { H: '#fff6c8', C: '#f2d36a', c: '#b48d35' },
+  dark_robe: { H: '#8a7aaa', C: '#5a4a7a', c: '#36294a' },
 };

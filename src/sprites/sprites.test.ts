@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ENEMIES } from '../game/data';
+import { ENEMIES, ITEMS } from '../game/data';
 import { CLOAKS, PALETTE, SPRITES } from './data';
+import { cloakOf, ENEMY_LOOKS } from './looks';
 
 describe('ドット絵のデータ', () => {
   const cloakKeys = Object.keys(CLOAKS.none);
@@ -17,7 +18,19 @@ describe('ドット絵のデータ', () => {
     });
   }
 
-  it('すべての敵に絵がある', () => {
-    for (const id of Object.keys(ENEMIES)) expect(id in SPRITES).toBe(true);
+  it('すべての敵に見た目があり、色の差し替えは絵で使っている文字だけ', () => {
+    for (const id of Object.keys(ENEMIES) as (keyof typeof ENEMIES)[]) {
+      const look = ENEMY_LOOKS[id];
+      expect(look.sprite in SPRITES).toBe(true);
+      const used = new Set(SPRITES[look.sprite].join(''));
+      for (const ch of Object.keys(look.recolor ?? {})) expect(used.has(ch)).toBe(true);
+    }
+  });
+
+  it('すべての防具にマントの色がある', () => {
+    for (const item of Object.values(ITEMS)) {
+      if (item.effect.kind === 'armor') expect(cloakOf(item.id)).toBe(item.id);
+    }
+    expect(cloakOf(null)).toBe('none');
   });
 });

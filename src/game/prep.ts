@@ -1,6 +1,7 @@
 // 準備フェーズのロジック。
 // すべて「状態を受け取り、新しい状態を返す」純粋関数。UI（React）からは独立している。
 
+import { itemSlot } from './combat';
 import { CARDS, DECK, ITEMS, PREP_CONFIG, TRAITS, TRAIT_IDS } from './data';
 import { nextInt, nextRandom, shuffle } from './rng';
 import type { CardInstance, ItemId, PrepResult, PrepState, Result } from './types';
@@ -107,6 +108,15 @@ export function buyItem(state: PrepState, itemId: ItemId): Result<PrepState> {
   const item = ITEMS[itemId];
   if (state.openShop !== item.shop) return err('今日はその店に行っていません');
   if (state.gold < item.price) return err(`お金が足りません（${item.price}G必要）`);
+
+  // 武器と防具は1つずつしか装備できないので、2つ目は買えない
+  const slot = itemSlot(item);
+  const owned = state.inventory.filter((id) => itemSlot(ITEMS[id]) === slot).length;
+  if (slot === 'weapon' && owned >= 1) return err('武器はもう持っています（1つまで）');
+  if (slot === 'armor' && owned >= 1) return err('防具はもう持っています（1つまで）');
+  if (slot === 'consumable' && owned >= PREP_CONFIG.maxItems) {
+    return err(`道具はこれ以上持てません（${PREP_CONFIG.maxItems}個まで）`);
+  }
 
   return ok(
     withLog(

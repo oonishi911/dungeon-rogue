@@ -1,6 +1,13 @@
-// ===== ダンジョン特性 =====
-// MVPでは2種類。周回ごとに裏で1つ決まり、プレイヤーには隠される。
-export type TraitId = 'fire' | 'poison';
+// ===== 属性・体質 =====
+// 属性は攻撃の種類（防具の選択に関わる）。光は炎＋無属性、闇は氷＋無属性の複合属性。
+export type Element = 'fire' | 'ice' | 'neutral' | 'light' | 'dark';
+// 複合属性を分解したときの成分。防具はこの成分ごとに効く
+export type ElementComponent = 'fire' | 'ice' | 'neutral';
+// 体質は守りの種類（武器の選択に関わる）
+export type Body = 'normal' | 'soft' | 'hard' | 'spirit';
+
+// ダンジョン特性は5つの属性のうち1つ。周回ごとに裏で決まり、プレイヤーには隠される。
+export type TraitId = Element;
 
 export interface TraitDef {
   id: TraitId;
@@ -43,23 +50,43 @@ export interface CardInstance {
 
 // ===== アイテム =====
 export type ItemId =
-  | 'iron_sword'
+  | 'sword'
+  | 'hammer'
+  | 'staff'
   | 'fire_cloak'
-  | 'poison_cloak'
+  | 'ice_cloak'
+  | 'plate'
+  | 'light_robe'
+  | 'dark_robe'
   | 'potion'
-  | 'antidote'
-  | 'frost_scroll';
+  | 'food'
+  | 'fire_whetstone'
+  | 'ice_whetstone'
+  | 'holy_water'
+  | 'dark_oil';
 
 export type ItemSlot = 'weapon' | 'armor' | 'consumable';
+export type WeaponType = 'sword' | 'hammer' | 'staff';
+
+// 防具の守り方。成分ごとに効くもの（マント・鎧）と、複合属性を丸ごと防ぐもの（専用防具）がある
+export type ArmorGuard =
+  | { kind: 'component'; component: ElementComponent; rate: number }
+  | { kind: 'whole'; element: 'light' | 'dark'; rate: number };
+
+export type ItemEffect =
+  | { kind: 'weapon'; weapon: WeaponType }
+  | { kind: 'armor'; guard: ArmorGuard }
+  | { kind: 'heal'; hp: number }
+  | { kind: 'food'; satiety: number }
+  | { kind: 'enchant'; element: Element; hits: number }; // 武器に一時的に属性を付ける
 
 export interface ItemDef {
   id: ItemId;
   name: string;
-  slot: ItemSlot;
   shop: ShopId;
   price: number;
-  resist?: TraitId; // この特性への耐性・対策になる
   description: string;
+  effect: ItemEffect;
 }
 
 // ===== 準備フェーズの状態 =====
@@ -97,12 +124,20 @@ export interface PrepResult {
 // ===== 敵 =====
 export type EnemyId =
   | 'goblin'
+  | 'giant_rat'
+  | 'stone_golem'
   | 'fire_imp'
   | 'flame_hound'
-  | 'fire_drake'
-  | 'poison_slime'
-  | 'venom_spider'
-  | 'venom_queen';
+  | 'lava_lizard'
+  | 'ice_imp'
+  | 'ice_slime'
+  | 'ice_beetle'
+  | 'light_bird'
+  | 'holy_armor'
+  | 'light_wisp'
+  | 'dark_bat'
+  | 'shadow'
+  | 'phantom';
 
 export interface EnemyDef {
   id: EnemyId;
@@ -110,37 +145,26 @@ export interface EnemyDef {
   hp: number;
   atk: number;
   def: number;
-  element?: TraitId; // fire：炎ダメージ（耐火で軽減） / poison：攻撃で毒を与える
-  boss?: boolean;
+  element: Element;
+  body: Body;
 }
 
-// ===== 戦闘 =====
+// ===== プレイヤー =====
+export interface Enchant {
+  element: Element;
+  hits: number; // あと何回の攻撃に属性が乗るか
+}
+
 export interface PlayerStats {
   hp: number;
   maxHp: number;
   atk: number;
   def: number;
-  poisonTurns: number; // 毒の残りターン
+  poisonTurns: number; // 毒の残りターン（仕組みだけ残している。今は毒を与える敵はいない）
   weapon: ItemId | null;
   armor: ItemId | null;
-  consumables: ItemId[];
-}
-
-export interface EnemyState {
-  id: EnemyId;
-  hp: number;
-}
-
-export type CombatAction = { kind: 'attack' } | { kind: 'use_item'; item: ItemId };
-
-export type CombatOutcome = 'ongoing' | 'won' | 'lost';
-
-export interface CombatState {
-  player: PlayerStats;
-  enemy: EnemyState;
-  round: number;
-  outcome: CombatOutcome;
-  log: string[];
+  items: ItemId[]; // 持っている道具（消耗品）
+  enchant: Enchant | null;
 }
 
 // 例外ではなく値でエラーを返す

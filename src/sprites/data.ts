@@ -314,14 +314,29 @@ export const CLOAKS = {
     "C": "#8a6b4a",
     "c": "#6a5038"
   },
-  "fire": {
+  "fire_cloak": {
     "H": "#ec8a5a",
     "C": "#d9653b",
     "c": "#a8432a"
   },
-  "poison": {
-    "H": "#b49ad6",
-    "C": "#9a7cc4",
-    "c": "#6f5596"
+  "ice_cloak": {
+    "H": "#9fd6ef",
+    "C": "#5aa7d6",
+    "c": "#2f6f9e"
+  },
+  "plate": {
+    "H": "#c9c3b3",
+    "C": "#8f8977",
+    "c": "#5f5a4e"
+  },
+  "light_robe": {
+    "H": "#fff6c8",
+    "C": "#f2d36a",
+    "c": "#b48d35"
+  },
+  "dark_robe": {
+    "H": "#8a7aaa",
+    "C": "#5a4a7a",
+    "c": "#36294a"
   }
 } as const;

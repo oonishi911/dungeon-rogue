@@ -42,7 +42,7 @@ describe('createPrep', () => {
 
   it('シードによって特性は両方とも出る', () => {
     const traits = new Set(Array.from({ length: 50 }, (_, i) => createPrep(i).trait));
-    expect(traits).toEqual(new Set(['fire', 'poison']));
+    expect(traits).toEqual(new Set(['fire', 'ice', 'neutral', 'light', 'dark']));
   });
 });
 
@@ -97,6 +97,21 @@ describe('buyItem', () => {
   it('翌日になると店は閉まる', () => {
     const s = unwrap(endDay(unwrap(playCard(stateWithHand(['item_shop'], { gold: 100 }), 't0'))));
     expect(buyItem(s, 'potion').ok).toBe(false);
+  });
+
+  it('武器と防具は1つずつしか買えない', () => {
+    const s = unwrap(buyItem(unwrap(playCard(stateWithHand(['armor_shop'], { gold: 200 }), 't0')), 'fire_cloak'));
+    expect(buyItem(s, 'ice_cloak').ok).toBe(false);
+    const w = unwrap(buyItem(unwrap(playCard(stateWithHand(['weapon_shop'], { gold: 200 }), 't0')), 'sword'));
+    expect(buyItem(w, 'hammer').ok).toBe(false);
+  });
+
+  it(`道具は${PREP_CONFIG.maxItems}個まで`, () => {
+    let s = unwrap(playCard(stateWithHand(['item_shop'], { gold: 1000 }), 't0'));
+    for (let i = 0; i < PREP_CONFIG.maxItems; i++) s = unwrap(buyItem(s, 'potion'));
+    const r = buyItem(s, 'food');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain(`${PREP_CONFIG.maxItems}個まで`);
   });
 
   it('お金が足りないと買えない', () => {

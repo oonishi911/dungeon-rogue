@@ -1,4 +1,17 @@
-import type { CardDef, CardId, EnemyDef, EnemyId, ItemDef, ItemId, TraitDef, TraitId } from './types';
+import type {
+  Body,
+  CardDef,
+  CardId,
+  Element,
+  ElementComponent,
+  EnemyDef,
+  EnemyId,
+  ItemDef,
+  ItemId,
+  TraitDef,
+  TraitId,
+  WeaponType,
+} from './types';
 
 // ===== MVPの設定値 =====
 // 数値は仮。遊んでみてバランス調整する。
@@ -7,14 +20,34 @@ export const PREP_CONFIG = {
   handSize: 5,
   maxCarry: 3,
   startGold: 30,
+  maxItems: 8, // 道具（消耗品）を持てる数。武器と防具は1つずつ
 } as const;
 
 export const TRAITS: Record<TraitId, TraitDef> = {
   fire: { id: 'fire', name: '炎' },
-  poison: { id: 'poison', name: '毒' },
+  ice: { id: 'ice', name: '氷' },
+  neutral: { id: 'neutral', name: '無属性' },
+  light: { id: 'light', name: '光' },
+  dark: { id: 'dark', name: '闇' },
 };
 
-export const TRAIT_IDS: readonly TraitId[] = ['fire', 'poison'];
+export const TRAIT_IDS: readonly TraitId[] = ['fire', 'ice', 'neutral', 'light', 'dark'];
+
+/** 属性を成分に分解したときの割合。複合属性のダメージは半分ずつに分けて計算する */
+export const ELEMENT_COMPONENTS: Record<Element, Partial<Record<ElementComponent, number>>> = {
+  fire: { fire: 1 },
+  ice: { ice: 1 },
+  neutral: { neutral: 1 },
+  light: { fire: 0.5, neutral: 0.5 },
+  dark: { ice: 0.5, neutral: 0.5 },
+};
+
+export const BODY_NAMES: Record<Body, string> = {
+  normal: '普通',
+  soft: '柔らかい',
+  hard: '硬い',
+  spirit: '霊体',
+};
 
 export const CARDS: Record<CardId, CardDef> = {
   rumor: {
@@ -78,58 +111,119 @@ export const DECK: readonly CardId[] = [
   'work',
 ];
 
+// 数値はすべて仮。遊んでみてバランス調整する
 export const ITEMS: Record<ItemId, ItemDef> = {
-  iron_sword: {
-    id: 'iron_sword',
-    name: '鉄の剣',
-    slot: 'weapon',
+  sword: {
+    id: 'sword',
+    name: '剣',
     shop: 'weapon',
     price: 30,
-    description: '攻撃力が上がる',
+    description: '柔らかい敵によく効く。硬い敵・霊体には効きにくい',
+    effect: { kind: 'weapon', weapon: 'sword' },
+  },
+  hammer: {
+    id: 'hammer',
+    name: '槌',
+    shop: 'weapon',
+    price: 30,
+    description: '硬い敵によく効く。霊体には効きにくい',
+    effect: { kind: 'weapon', weapon: 'hammer' },
+  },
+  staff: {
+    id: 'staff',
+    name: '杖',
+    shop: 'weapon',
+    price: 30,
+    description: '霊体によく効く。柔らかい敵には効きにくい',
+    effect: { kind: 'weapon', weapon: 'staff' },
   },
   fire_cloak: {
     id: 'fire_cloak',
     name: '耐火のマント',
-    slot: 'armor',
     shop: 'armor',
     price: 40,
-    resist: 'fire',
-    description: '炎のダメージを大きく減らす',
+    description: '炎のダメージを大きく減らす（光の攻撃は半分だけ）',
+    effect: { kind: 'armor', guard: { kind: 'component', component: 'fire', rate: 0.3 } },
   },
-  poison_cloak: {
-    id: 'poison_cloak',
-    name: '防毒のマント',
-    slot: 'armor',
+  ice_cloak: {
+    id: 'ice_cloak',
+    name: '耐氷のマント',
     shop: 'armor',
     price: 40,
-    resist: 'poison',
-    description: '毒にかかりにくくなる',
+    description: '氷のダメージを大きく減らす（闇の攻撃は半分だけ）',
+    effect: { kind: 'armor', guard: { kind: 'component', component: 'ice', rate: 0.3 } },
+  },
+  plate: {
+    id: 'plate',
+    name: '鎧',
+    shop: 'armor',
+    price: 40,
+    description: '無属性のダメージを少し減らす（光・闇の攻撃は半分だけ）',
+    effect: { kind: 'armor', guard: { kind: 'component', component: 'neutral', rate: 0.6 } },
+  },
+  light_robe: {
+    id: 'light_robe',
+    name: '光の衣',
+    shop: 'armor',
+    price: 60,
+    description: '光の攻撃を大きく減らす。ほかの属性には効かない',
+    effect: { kind: 'armor', guard: { kind: 'whole', element: 'light', rate: 0.3 } },
+  },
+  dark_robe: {
+    id: 'dark_robe',
+    name: '闇の衣',
+    shop: 'armor',
+    price: 60,
+    description: '闇の攻撃を大きく減らす。ほかの属性には効かない',
+    effect: { kind: 'armor', guard: { kind: 'whole', element: 'dark', rate: 0.3 } },
   },
   potion: {
     id: 'potion',
     name: '回復薬',
-    slot: 'consumable',
     shop: 'item',
     price: 10,
-    description: 'HPを回復する',
+    description: 'HPを15回復する',
+    effect: { kind: 'heal', hp: 15 },
   },
-  antidote: {
-    id: 'antidote',
-    name: '毒消し',
-    slot: 'consumable',
+  food: {
+    id: 'food',
+    name: '食料',
     shop: 'item',
     price: 15,
-    resist: 'poison',
-    description: '毒を治す',
+    description: '満腹度を200回復する',
+    effect: { kind: 'food', satiety: 200 },
   },
-  frost_scroll: {
-    id: 'frost_scroll',
-    name: '氷の巻物',
-    slot: 'consumable',
+  fire_whetstone: {
+    id: 'fire_whetstone',
+    name: '炎の砥石',
     shop: 'item',
-    price: 25,
-    resist: 'fire',
-    description: '炎の敵に大ダメージ',
+    price: 20,
+    description: '武器に炎の力を宿す（攻撃5回）。氷の敵によく効く',
+    effect: { kind: 'enchant', element: 'fire', hits: 5 },
+  },
+  ice_whetstone: {
+    id: 'ice_whetstone',
+    name: '氷の砥石',
+    shop: 'item',
+    price: 20,
+    description: '武器に氷の力を宿す（攻撃5回）。炎の敵によく効く',
+    effect: { kind: 'enchant', element: 'ice', hits: 5 },
+  },
+  holy_water: {
+    id: 'holy_water',
+    name: '光の聖水',
+    shop: 'item',
+    price: 20,
+    description: '武器に光の力を宿す（攻撃5回）。闇の敵によく効く',
+    effect: { kind: 'enchant', element: 'light', hits: 5 },
+  },
+  dark_oil: {
+    id: 'dark_oil',
+    name: '闇の香油',
+    shop: 'item',
+    price: 20,
+    description: '武器に闇の力を宿す（攻撃5回）。光の敵によく効く',
+    effect: { kind: 'enchant', element: 'dark', hits: 5 },
   },
 };
 
@@ -138,29 +232,58 @@ export const COMBAT_CONFIG = {
   playerHp: 60,
   playerAtk: 6,
   playerDef: 1,
-  swordAtk: 3, // 鉄の剣の攻撃力ボーナス
-  fireResistRate: 0.3, // 耐火のマント装備時、炎ダメージはこの倍率になる
-  poisonDamage: 7, // 毒の1ターンあたりのダメージ
-  poisonTurns: 4,
-  potionHeal: 15,
-  frostVsFire: 30, // 氷の巻物：炎の敵へのダメージ
-  frostVsOther: 10,
+  weaponAtk: 3, // 武器を持っているときの攻撃力ボーナス
+  poisonDamage: 7, // 毒の1ターンあたりのダメージ（今は毒を与える敵はいない）
 } as const;
 
-export const ENEMIES: Record<EnemyId, EnemyDef> = {
-  goblin: { id: 'goblin', name: 'ゴブリン', hp: 14, atk: 5, def: 1 },
-  // 炎の敵は攻撃力が高い（耐火で大きく軽減できる）
-  fire_imp: { id: 'fire_imp', name: '火の小鬼', hp: 12, atk: 10, def: 0, element: 'fire' },
-  flame_hound: { id: 'flame_hound', name: '炎の猟犬', hp: 18, atk: 12, def: 1, element: 'fire' },
-  fire_drake: { id: 'fire_drake', name: '炎竜', hp: 40, atk: 18, def: 2, element: 'fire', boss: true },
-  // 毒の敵は攻撃力は低いが、毒が重い（防毒で防げる）
-  poison_slime: { id: 'poison_slime', name: '毒スライム', hp: 14, atk: 3, def: 0, element: 'poison' },
-  venom_spider: { id: 'venom_spider', name: '毒蜘蛛', hp: 16, atk: 4, def: 1, element: 'poison' },
-  venom_queen: { id: 'venom_queen', name: '毒蜘蛛の女王', hp: 40, atk: 6, def: 2, element: 'poison', boss: true },
+/** 武器と体質の相性。素手はどの体質にも1倍 */
+export const WEAPON_VS_BODY: Record<WeaponType, Record<Body, number>> = {
+  sword: { normal: 1, soft: 1.5, hard: 0.6, spirit: 0.25 },
+  hammer: { normal: 1, soft: 1, hard: 1.5, spirit: 0.6 },
+  staff: { normal: 1, soft: 0.6, hard: 1, spirit: 1.5 },
 };
 
-// 特性ごとの出現する敵とボス
-export const TRAIT_ENEMIES: Record<TraitId, { pool: readonly EnemyId[]; boss: EnemyId }> = {
-  fire: { pool: ['goblin', 'fire_imp', 'fire_imp', 'flame_hound'], boss: 'fire_drake' },
-  poison: { pool: ['goblin', 'poison_slime', 'poison_slime', 'venom_spider'], boss: 'venom_queen' },
+/** 武器に付けた属性と、敵の属性の相性。書いていない組み合わせは1倍 */
+export const ENCHANT_VS_ELEMENT: Record<Element, Partial<Record<Element, number>>> = {
+  fire: { ice: 2, dark: 1.5, fire: 0.5, light: 0.75 },
+  ice: { fire: 2, light: 1.5, ice: 0.5, dark: 0.75 },
+  light: { dark: 2, light: 0.5 },
+  dark: { light: 2, dark: 0.5 },
+  neutral: {},
+};
+
+export const ENEMIES: Record<EnemyId, EnemyDef> = {
+  // 無属性
+  goblin: { id: 'goblin', name: 'ゴブリン', hp: 14, atk: 5, def: 1, element: 'neutral', body: 'normal' },
+  giant_rat: { id: 'giant_rat', name: '大ネズミ', hp: 10, atk: 4, def: 0, element: 'neutral', body: 'soft' },
+  stone_golem: { id: 'stone_golem', name: '石ゴーレム', hp: 22, atk: 6, def: 3, element: 'neutral', body: 'hard' },
+  // 炎
+  fire_imp: { id: 'fire_imp', name: '火の小鬼', hp: 12, atk: 8, def: 0, element: 'fire', body: 'normal' },
+  flame_hound: { id: 'flame_hound', name: '炎の猟犬', hp: 16, atk: 9, def: 1, element: 'fire', body: 'soft' },
+  lava_lizard: { id: 'lava_lizard', name: '溶岩トカゲ', hp: 22, atk: 9, def: 3, element: 'fire', body: 'hard' },
+  // 氷
+  ice_imp: { id: 'ice_imp', name: '氷の小鬼', hp: 12, atk: 8, def: 0, element: 'ice', body: 'normal' },
+  ice_slime: { id: 'ice_slime', name: '氷のスライム', hp: 16, atk: 7, def: 0, element: 'ice', body: 'soft' },
+  ice_beetle: { id: 'ice_beetle', name: '氷の甲虫', hp: 20, atk: 8, def: 3, element: 'ice', body: 'hard' },
+  // 光（炎＋無属性）
+  light_bird: { id: 'light_bird', name: '光の鳥', hp: 12, atk: 8, def: 0, element: 'light', body: 'soft' },
+  holy_armor: { id: 'holy_armor', name: '聖なる甲冑', hp: 24, atk: 9, def: 3, element: 'light', body: 'hard' },
+  light_wisp: { id: 'light_wisp', name: '光の精', hp: 14, atk: 8, def: 0, element: 'light', body: 'spirit' },
+  // 闇（氷＋無属性）
+  dark_bat: { id: 'dark_bat', name: '闇コウモリ', hp: 10, atk: 8, def: 0, element: 'dark', body: 'soft' },
+  shadow: { id: 'shadow', name: '影', hp: 16, atk: 9, def: 1, element: 'dark', body: 'spirit' },
+  phantom: { id: 'phantom', name: '亡霊', hp: 18, atk: 9, def: 1, element: 'dark', body: 'spirit' },
+};
+
+/**
+ * ダンジョン特性ごとに出る敵。同じ敵を複数並べると出やすくなる。
+ * その属性の敵が中心で、成分の属性の敵も混ざる。体質にも傾向がある
+ * （炎：柔らかい、氷：硬い、無属性：混在、光：硬い、闇：霊体）。
+ */
+export const TRAIT_ENEMIES: Record<TraitId, { pool: readonly EnemyId[] }> = {
+  fire: { pool: ['fire_imp', 'fire_imp', 'flame_hound', 'flame_hound', 'flame_hound', 'lava_lizard', 'goblin'] },
+  ice: { pool: ['ice_imp', 'ice_slime', 'ice_beetle', 'ice_beetle', 'ice_beetle', 'goblin'] },
+  neutral: { pool: ['goblin', 'goblin', 'giant_rat', 'giant_rat', 'stone_golem', 'stone_golem'] },
+  light: { pool: ['light_bird', 'holy_armor', 'holy_armor', 'holy_armor', 'light_wisp', 'fire_imp', 'stone_golem'] },
+  dark: { pool: ['dark_bat', 'shadow', 'shadow', 'phantom', 'phantom', 'ice_imp', 'giant_rat'] },
 };
