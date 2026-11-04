@@ -1,0 +1,205 @@
+// 探索画面の Canvas への描画。
+// 1歩ごとの状態の変化を、前の位置から新しい位置へ少しずつ動かして描くことで、滑らかにスクロールさせる。
+
+import { enemyDef, type EnemyMode, type MapEnemy } from '../game/enemies';
+import type { ExploreState } from '../game/explore';
+import type { Pos } from '../game/map';
+import { drawSprite } from '../sprites/canvas';
+import { CLOAKS } from '../sprites/data';
+import { cloakOf, ENEMY_LOOKS } from '../sprites/looks';
+
+export const VIEW_W = 21; // 画面に映すマス数（主人公が中央に来るよう奇数）。画面の大きさに関係なく固定
+export const VIEW_H = 15;
+export const CELL = 32; // 1マスの大きさ（px）。あとで用意する画像の大きさに合わせる
+export const MINI_CELL = 3;
+
+/** 敵の頭上に出すマークと、文字で伝える状態 */
+export const ENEMY_MARK: Record<EnemyMode, { mark: string; text: string }> = {
+  wander: { mark: '…', text: '気付いていない（不意打ちできる）' },
+  chase: { mark: '!', text: '追ってくる' },
+  search: { mark: '?', text: '見失って探している' },
+};
+
+/** 1歩の動きの始まりの位置。ここから今の状態の位置へ動かして描く */
+export interface Motion {
+  player: Pos;
+  enemies: Map<number, Pos>;
+}
+
+export interface Frame {
+  state: ExploreState;
+  visible: Set<number>;
+  from: Motion;
+  progress: number; // 0〜1。1なら動き終わり
+  walkTarget: Pos | null; // タップ・クリックで向かっている場所
+}
+
+export function motionOf(state: ExploreState): Motion {
+  return { player: state.player, enemies: new Map(state.enemies.map((e) => [e.uid, e.pos])) };
+}
+
+export type Colors = ReturnType<typeof readColors>;
+
+/** 色は styles.css の変数から取る。毎フレーム読むと重いので、画面を開いたときに1回だけ読む */
+export function readColors() {
+  const css = getComputedStyle(document.documentElement);
+  const c = (name: string) => css.getPropertyValue(name).trim();
+  return {
+    fog: c('--fog'),
+    floor: c('--pine-deep'),
+    wall: c('--pine-line'),
+    wallTop: c('--wall-top'),
+    stairs: c('--bone'),
+    treasure: c('--hp-enemy'),
+    elite: c('--fire'),
+    boss: c('--procure'),
+    notice: c('--hp-enemy'),
+    calm: c('--bone-dim'),
+    hp: c('--hp-enemy'),
+    target: c('--hp-you'),
+    mini: c('--pine-line'),
+  };
+}
+
+const lerp = (a: Pos, b: Pos, t: number): Pos => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+
+/** 画面の左上に映っているマップ上の座標（小数）。主人公が常に中央に来る */
+export function viewOrigin(frame: Frame): Pos {
+  const camera = lerp(frame.from.player, frame.state.player, frame.progress);
+  return { x: camera.x - Math.floor(VIEW_W / 2), y: camera.y - Math.floor(VIEW_H / 2) };
+}
+
+/** 主人公を中心に、周りのマスを描く。見えていないマスは霧、一度見たマスは暗く描く */
+export function drawView(canvas: HTMLCanvasElement, frame: Frame, colors: Colors) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const { state, visible } = frame;
+  const { map, seen } = state;
+  const origin = viewOrigin(frame);
+  // 小数の位置のまま描くと境目がにじむので、整数のピクセルにそろえる
+  const toPx = (x: number, y: number) => ({
+    px: Math.round((x - origin.x) * CELL),
+    py: Math.round((y - origin.y) * CELL),
+  });
+
+  ctx.fillStyle = colors.fog;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // スクロールの途中は端のマスが半分ずつ見えるので、1マス余分に描く
+  const x0 = Math.floor(origin.x);
+  const y0 = Math.floor(origin.y);
+  for (let y = y0; y <= y0 + VIEW_H; y++) {
+    for (let x = x0; x <= x0 + VIEW_W; x++) {
+      if (x < 0 || y < 0 || x >= map.width || y >= map.height) continue;
+      const i = y * map.width + x;
+      if (!seen[i]) continue;
+      const { px, py } = toPx(x, y);
+      if (map.tiles[i] === 'wall') {
+        ctx.fillStyle = colors.wall;
+        ctx.fillRect(px, py, CELL, CELL);
+        ctx.fillStyle = colors.wallTop;
+        ctx.fillRect(px, py, CELL, 4);
+      } else {
+        ctx.fillStyle = colors.floor;
+        ctx.fillRect(px, py, CELL, CELL);
+      }
+      if (map.stairs && x === map.stairs.x && y === map.stairs.y) drawStairs(ctx, px, py, colors.stairs);
+      // まだ空になっていない宝箱だけを描く
+      if (state.chests.some((c) => c.pos.x === x && c.pos.y === y)) drawChest(ctx, px, py, colors.treasure, colors.fog);
+      // 一度見たが今は見えていないマスは暗くする
+      if (!visible.has(i)) {
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = colors.fog;
+        ctx.fillRect(px, py, CELL, CELL);
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  if (frame.walkTarget) {
+    const { px, py } = toPx(frame.walkTarget.x, frame.walkTarget.y);
+    ctx.strokeStyle = colors.target;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px + 4, py + 4, CELL - 8, CELL - 8);
+  }
+
+  // 敵は今見えているマスにいるものだけ、前の位置から動かして描く
+  for (const e of state.enemies) {
+    if (!visible.has(e.pos.y * map.width + e.pos.x)) continue;
+    const at = lerp(frame.from.enemies.get(e.uid) ?? e.pos, e.pos, frame.progress);
+    const { px, py } = toPx(at.x, at.y);
+    if (px < -CELL || py < -CELL || px >= canvas.width || py >= canvas.height) continue;
+    drawEnemy(ctx, e, px, py, colors);
+  }
+
+  drawSprite(ctx, 'hero', Math.floor(VIEW_W / 2) * CELL, Math.floor(VIEW_H / 2) * CELL, CELL, CLOAKS[cloakOf(state.stats.armor)]);
+}
+
+function drawEnemy(ctx: CanvasRenderingContext2D, enemy: MapEnemy, px: number, py: number, colors: Colors) {
+  const def = enemyDef(enemy);
+  if (enemy.elite) {
+    // 強敵は赤い枠、ボスは金の二重枠で囲む
+    ctx.strokeStyle = def.boss ? colors.boss : colors.elite;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px + 1, py + 1, CELL - 2, CELL - 2);
+    if (def.boss) ctx.strokeRect(px - 2, py - 2, CELL + 4, CELL + 4);
+  }
+  const look = ENEMY_LOOKS[enemy.id];
+  drawSprite(ctx, look.sprite, px, py, CELL, look.recolor);
+
+  if (enemy.hp < def.hp) {
+    ctx.fillStyle = colors.fog;
+    ctx.fillRect(px + 3, py + CELL - 5, CELL - 6, 3);
+    ctx.fillStyle = colors.hp;
+    ctx.fillRect(px + 3, py + CELL - 5, Math.max(1, Math.round((CELL - 6) * (enemy.hp / def.hp))), 3);
+  }
+
+  // 頭上のマーク。気付いた瞬間の「！」だけ大きく強調する
+  const big = enemy.justNoticed;
+  ctx.font = `900 ${big ? 22 : 14}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = colors.fog;
+  ctx.fillStyle = enemy.mode === 'wander' ? colors.calm : colors.notice;
+  const mx = px + CELL / 2;
+  const my = py + (big ? 6 : 4);
+  ctx.strokeText(ENEMY_MARK[enemy.mode].mark, mx, my);
+  ctx.fillText(ENEMY_MARK[enemy.mode].mark, mx, my);
+}
+
+function drawChest(ctx: CanvasRenderingContext2D, px: number, py: number, color: string, line: string) {
+  const m = CELL / 4;
+  ctx.fillStyle = color;
+  ctx.fillRect(px + m, py + m + 2, CELL - m * 2, CELL - m * 2 - 2);
+  // ふたの線と留め金
+  ctx.fillStyle = line;
+  ctx.fillRect(px + m, py + m + 7, CELL - m * 2, 2);
+  ctx.fillRect(px + CELL / 2 - 2, py + m + 9, 4, 4);
+}
+
+function drawStairs(ctx: CanvasRenderingContext2D, px: number, py: number, color: string) {
+  ctx.fillStyle = color;
+  for (let k = 0; k < 4; k++) {
+    const inset = 4 + k * 3;
+    ctx.fillRect(px + inset, py + 6 + k * 6, CELL - inset * 2, 3);
+  }
+}
+
+export function drawMinimap(canvas: HTMLCanvasElement, state: ExploreState, colors: Colors) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const { map, seen, player } = state;
+  ctx.fillStyle = colors.fog;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = colors.mini;
+  map.tiles.forEach((t, i) => {
+    if (t === 'floor' && seen[i]) ctx.fillRect((i % map.width) * MINI_CELL, Math.floor(i / map.width) * MINI_CELL, MINI_CELL, MINI_CELL);
+  });
+  if (map.stairs && seen[map.stairs.y * map.width + map.stairs.x]) {
+    ctx.fillStyle = colors.stairs;
+    ctx.fillRect(map.stairs.x * MINI_CELL - 1, map.stairs.y * MINI_CELL - 1, MINI_CELL + 2, MINI_CELL + 2);
+  }
+  ctx.fillStyle = colors.target;
+  ctx.fillRect(player.x * MINI_CELL - 1, player.y * MINI_CELL - 1, MINI_CELL + 2, MINI_CELL + 2);
+}

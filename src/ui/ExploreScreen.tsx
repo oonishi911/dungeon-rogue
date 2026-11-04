@@ -1,9 +1,12 @@
 // ダンジョンの探索画面。マップを歩き、敵と戦い、道具を使う。
 // ゲーム本体では準備フェーズの持ち物で始まり、開発用には ?view=explore で単独でも開ける。
+//
+// 操作はすべて「意図」として記録し、毎フレームの処理で、前の1歩の動きが終わっていれば1つ実行する。
+// キーを押し続けたときの歩く速さが、OS のキーリピートの設定に左右されず一定になる。
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { BODY_NAMES, ITEMS, TRAITS } from '../game/data';
-import { enemyDef, type EnemyMode, type MapEnemy } from '../game/enemies';
+import { enemyDef } from '../game/enemies';
 import {
   EXPLORE_CONFIG,
   isBossFloor,
@@ -15,25 +18,39 @@ import {
   type ExploreAction,
   type ExploreState,
 } from '../game/explore';
+import type { Pos } from '../game/map';
+import { walkToward } from '../game/path';
 import type { ItemId } from '../game/types';
-import { drawSprite } from '../sprites/canvas';
-import { CLOAKS } from '../sprites/data';
-import { cloakOf, ENEMY_LOOKS } from '../sprites/looks';
+import {
+  CELL,
+  drawMinimap,
+  drawView,
+  ENEMY_MARK,
+  MINI_CELL,
+  motionOf,
+  readColors,
+  viewOrigin,
+  VIEW_H,
+  VIEW_W,
+  type Frame,
+  type Motion,
+} from './exploreRender';
 
-const VIEW_W = 21; // 画面に映すマス数（主人公が中央に来るよう奇数）
-const VIEW_H = 15;
-const CELL = 32; // ドット絵が32×32なので、1マス32px
-const MINI_CELL = 3;
+const STEP_MS = 120; // 1マス動くのにかける時間。押し続けたときの歩く速さもこれで決まる
+const QUEUE_MAX = 2; // 動いている途中に押した操作を、いくつまで覚えておくか（多すぎると指を止めても歩き続ける）
+
+const KEY_DIRS: Record<string, Dir> = {
+  ArrowUp: 'up',
+  ArrowDown: 'down',
+  ArrowLeft: 'left',
+  ArrowRight: 'right',
+  w: 'up',
+  s: 'down',
+  a: 'left',
+  d: 'right',
+};
 
 const KEY_ACTIONS: Record<string, ExploreAction> = {
-  ArrowUp: { kind: 'move', dir: 'up' },
-  ArrowDown: { kind: 'move', dir: 'down' },
-  ArrowLeft: { kind: 'move', dir: 'left' },
-  ArrowRight: { kind: 'move', dir: 'right' },
-  w: { kind: 'move', dir: 'up' },
-  s: { kind: 'move', dir: 'down' },
-  a: { kind: 'move', dir: 'left' },
-  d: { kind: 'move', dir: 'right' },
   ' ': { kind: 'wait' },
   '.': { kind: 'wait' },
   Enter: { kind: 'descend' },
@@ -45,13 +62,6 @@ const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 const urlSeed = Number(new URLSearchParams(location.search).get('seed'));
 // ?rank=3 でランクを指定できる（広いマップの確認用）
 const urlRank = Number(new URLSearchParams(location.search).get('rank')) || 1;
-
-/** 敵の頭上に出すマークと、文字で伝える状態 */
-const ENEMY_MARK: Record<EnemyMode, { mark: string; text: string }> = {
-  wander: { mark: '…', text: '気付いていない（不意打ちできる）' },
-  chase: { mark: '!', text: '追ってくる' },
-  search: { mark: '?', text: '見失って探している' },
-};
 
 // 開発用画面で持たせる装備と道具
 const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fire_whetstone', 'ice_whetstone'];
@@ -77,6 +87,14 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
   const viewRef = useRef<HTMLCanvasElement>(null);
   const miniRef = useRef<HTMLCanvasElement>(null);
 
+  // 毎フレームの処理と入力の処理は、React の再描画を待たずに最新の値を使えるよう ref に持つ
+  const stateRef = useRef(state);
+  const motionRef = useRef<{ from: Motion; start: number }>({ from: motionOf(state), start: 0 });
+  const heldRef = useRef<Dir[]>([]); // 押し続けている方向（あとから押したものが優先）
+  const queueRef = useRef<ExploreAction[]>([]); // 次に1回ずつ行う行動（動いている途中に押した分）
+  const walkRef = useRef<Pos | null>(null); // タップ・クリックで向かっている場所
+  const originRef = useRef<Pos>({ x: 0, y: 0 }); // 今描いている画面の左上の座標（タップ位置の計算に使う）
+
   const visible = useMemo(
     () => visibleTiles(state.map, state.player, EXPLORE_CONFIG.sightRadius),
     [state.map, state.player],
@@ -92,39 +110,162 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
     }
     return groups;
   }, [state.stats.items]);
+  const itemGroupsRef = useRef(itemGroups);
+  itemGroupsRef.current = itemGroups;
 
-  const run = useCallback(
-    (action: ExploreAction) => {
-      const result = step(state, action);
-      setError(result.ok ? null : result.error);
-      if (result.ok) setState(result.value);
-    },
-    [state],
-  );
+  /** 行動を1つ行い、前の位置から新しい位置への動きを始める。行動にならなければ false */
+  const perform = useCallback((action: ExploreAction): boolean => {
+    const prev = stateRef.current;
+    const result = step(prev, action);
+    if (!result.ok) {
+      setError(result.error);
+      return false;
+    }
+    const next = result.value;
+    // 階を移ったときは動かさずに切り替える
+    motionRef.current = { from: motionOf(next.map === prev.map ? prev : next), start: performance.now() };
+    stateRef.current = next;
+    setError(null);
+    setState(next);
+    return true;
+  }, []);
+
+  /** 次に1回だけ行う行動を予約する。歩いている途中なら止まる */
+  const request = useCallback((action: ExploreAction) => {
+    walkRef.current = null;
+    if (queueRef.current.length < QUEUE_MAX) queueRef.current = [...queueRef.current, action];
+  }, []);
+
+  const hold = useCallback((dir: Dir) => {
+    walkRef.current = null;
+    if (heldRef.current.includes(dir)) return;
+    heldRef.current = [...heldRef.current, dir];
+    // 押してすぐ離しても1歩は進むように、1歩分を予約しておく
+    request({ kind: 'move', dir });
+  }, [request]);
+
+  const release = useCallback((dir: Dir) => {
+    heldRef.current = heldRef.current.filter((d) => d !== dir);
+  }, []);
+
+  // 毎フレーム：前の動きが終わっていれば次の行動を1つ行い、画面を描く
+  useEffect(() => {
+    const colors = readColors();
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // 視界の計算は、状態が変わったときだけやり直す
+    let sight = { state: stateRef.current, visible: visibleTiles(stateRef.current.map, stateRef.current.player, EXPLORE_CONFIG.sightRadius) };
+    let frameId = 0;
+    const tick = (now: number) => {
+      if (now - motionRef.current.start >= STEP_MS && stateRef.current.outcome === 'ongoing') {
+        const held = heldRef.current.at(-1);
+        const [queued, ...rest] = queueRef.current;
+        if (queued) {
+          queueRef.current = rest;
+          perform(queued);
+        } else if (held) {
+          perform({ kind: 'move', dir: held });
+        } else if (walkRef.current) {
+          const before = stateRef.current.player;
+          const action = walkToward(stateRef.current, walkRef.current);
+          // 着いた・進めない・敵を攻撃した（その場から動かなかった）ときは止まる
+          if (!action || !perform(action) || samePos(before, stateRef.current.player)) walkRef.current = null;
+        }
+      }
+      const current = stateRef.current;
+      if (sight.state !== current) {
+        sight = { state: current, visible: visibleTiles(current.map, current.player, EXPLORE_CONFIG.sightRadius) };
+      }
+      const frame: Frame = {
+        state: current,
+        visible: sight.visible,
+        from: motionRef.current.from,
+        progress: reduceMotion ? 1 : Math.min(1, (now - motionRef.current.start) / STEP_MS),
+        walkTarget: walkRef.current,
+      };
+      originRef.current = viewOrigin(frame);
+      if (viewRef.current) drawView(viewRef.current, frame, colors);
+      frameId = requestAnimationFrame(tick);
+    };
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
+  }, [perform]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    if (miniRef.current) drawMinimap(miniRef.current, state, readColors());
+  }, [state]);
+
+  // キーボード：方向キーは押している間ずっと歩く。そのほかのキーは押した回数だけ行う
+  useEffect(() => {
+    const onDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
-      // 数字キーで持ち物の上から順に使う
-      const n = Number(e.key);
-      if (Number.isInteger(n) && n >= 1 && n <= itemGroups.length) {
-        e.preventDefault();
-        run({ kind: 'use_item', item: itemGroups[n - 1]!.id });
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      const dir = KEY_DIRS[key];
+      if (dir) {
+        e.preventDefault(); // 矢印キーでページがスクロールしないように
+        if (!e.repeat) hold(dir);
         return;
       }
-      const action = KEY_ACTIONS[e.key];
+      const n = Number(e.key);
+      const action =
+        Number.isInteger(n) && n >= 1 && n <= itemGroupsRef.current.length
+          ? ({ kind: 'use_item', item: itemGroupsRef.current[n - 1]!.id } as const)
+          : KEY_ACTIONS[e.key];
       if (!action) return;
-      e.preventDefault(); // 矢印キーやスペースでページがスクロールしないように
-      run(action);
+      e.preventDefault();
+      if (!e.repeat) request(action);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [run, itemGroups]);
+    const onUp = (e: KeyboardEvent) => {
+      const dir = KEY_DIRS[e.key.length === 1 ? e.key.toLowerCase() : e.key];
+      if (dir) release(dir);
+    };
+    // ウィンドウから離れるとキーを離した通知が来ないので、押している方向を忘れる
+    const onBlur = () => {
+      heldRef.current = [];
+    };
+    window.addEventListener('keydown', onDown);
+    window.addEventListener('keyup', onUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onDown);
+      window.removeEventListener('keyup', onUp);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, [hold, release, request]);
 
-  useEffect(() => {
-    if (viewRef.current) drawView(viewRef.current, state, visible);
-    if (miniRef.current) drawMinimap(miniRef.current, state);
-  }, [state, visible]);
+  /** マップをタップ・クリックすると、そのマスまで歩く */
+  const onMapClick = (e: { clientX: number; clientY: number }) => {
+    const canvas = viewRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scale = canvas.width / rect.width; // 画面が狭いと Canvas は縮んで表示される
+    const target = {
+      x: Math.floor(originRef.current.x + ((e.clientX - rect.left) * scale) / CELL),
+      y: Math.floor(originRef.current.y + ((e.clientY - rect.top) * scale) / CELL),
+    };
+    const s = stateRef.current;
+    if (s.outcome !== 'ongoing' || samePos(target, s.player)) return;
+    const i = target.y * s.map.width + target.x;
+    const known = target.x >= 0 && target.y >= 0 && target.x < s.map.width && target.y < s.map.height && s.seen[i];
+    if (!known || s.map.tiles[i] === 'wall') {
+      setError('まだ見ていない場所や壁へは移動できない');
+      return;
+    }
+    heldRef.current = [];
+    queueRef.current = [];
+    walkRef.current = target;
+    setError(null);
+  };
+
+  const restart = () => {
+    const fresh = start();
+    stateRef.current = fresh;
+    motionRef.current = { from: motionOf(fresh), start: 0 };
+    heldRef.current = [];
+    queueRef.current = [];
+    walkRef.current = null;
+    setError(null);
+    setState(fresh);
+  };
 
   const { stats } = state;
   const visibleEnemies = state.enemies.filter((e) => visible.has(e.pos.y * state.map.width + e.pos.x));
@@ -152,7 +293,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
             width={VIEW_W * CELL}
             height={VIEW_H * CELL}
             role="img"
-            aria-label={`${floorName}の周囲。${onStairs ? '足元に階段がある' : ''}`}
+            aria-label={`${floorName}の周囲。マスをクリックするとそこまで歩く。${onStairs ? '足元に階段がある' : ''}`}
+            onClick={onMapClick}
           />
           {ended && (
             <div className="explore__ending">
@@ -162,14 +304,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
                   結果を見る
                 </button>
               ) : (
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    setError(null);
-                    setState(start());
-                  }}
-                >
+                <button type="button" className="primary" onClick={restart}>
                   もう一度歩く
                 </button>
               )}
@@ -205,7 +340,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
                     <button
                       type="button"
                       className="explore__use"
-                      onClick={() => run({ kind: 'use_item', item: g.id })}
+                      onClick={() => request({ kind: 'use_item', item: g.id })}
                       disabled={ended}
                       title={ITEMS[g.id].description}
                     >
@@ -250,18 +385,20 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
           />
 
           <div className="pad" role="group" aria-label="操作">
-            <PadButton dir="up" label="↑" run={run} disabled={ended} />
-            <PadButton dir="left" label="←" run={run} disabled={ended} />
-            <button type="button" className="pad__btn pad__wait" onClick={() => run({ kind: 'wait' })} disabled={ended}>
+            <PadButton dir="up" label="↑" hold={hold} release={release} disabled={ended} />
+            <PadButton dir="left" label="←" hold={hold} release={release} disabled={ended} />
+            <button type="button" className="pad__btn pad__wait" onClick={() => request({ kind: 'wait' })} disabled={ended}>
               待つ
             </button>
-            <PadButton dir="right" label="→" run={run} disabled={ended} />
-            <PadButton dir="down" label="↓" run={run} disabled={ended} />
+            <PadButton dir="right" label="→" hold={hold} release={release} disabled={ended} />
+            <PadButton dir="down" label="↓" hold={hold} release={release} disabled={ended} />
           </div>
-          <button type="button" className="primary" onClick={() => run({ kind: 'descend' })} disabled={!onStairs || ended}>
+          <button type="button" className="primary" onClick={() => request({ kind: 'descend' })} disabled={!onStairs || ended}>
             階段を降りる
           </button>
-          <p className="muted">矢印キー／WASDで移動、スペースで待つ、Enterで階段を降りる、数字キーで道具を使う</p>
+          <p className="muted">
+            矢印キー／WASDで移動（押し続けると歩き続ける）、マスをクリックするとそこまで歩く、スペースで待つ、Enterで階段を降りる、数字キーで道具を使う
+          </p>
           <p className="error" role="alert">
             {error}
           </p>
@@ -285,12 +422,32 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
   );
 }
 
-function PadButton({ dir, label, run, disabled }: { dir: Dir; label: string; run: (a: ExploreAction) => void; disabled: boolean }) {
+/** 方向ボタン。押している間ずっと歩く（キーボードでは矢印キーを使う） */
+function PadButton({
+  dir,
+  label,
+  hold,
+  release,
+  disabled,
+}: {
+  dir: Dir;
+  label: string;
+  hold: (d: Dir) => void;
+  release: (d: Dir) => void;
+  disabled: boolean;
+}) {
+  const up = () => release(dir);
   return (
     <button
       type="button"
       className={`pad__btn pad__${dir}`}
-      onClick={() => run({ kind: 'move', dir })}
+      onPointerDown={(e: PointerEvent<HTMLButtonElement>) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        hold(dir);
+      }}
+      onPointerUp={up}
+      onPointerCancel={up}
+      onLostPointerCapture={up}
       disabled={disabled}
       aria-label={{ up: '上へ', down: '下へ', left: '左へ', right: '右へ' }[dir]}
     >
@@ -298,6 +455,7 @@ function PadButton({ dir, label, run, disabled }: { dir: Dir; label: string; run
     </button>
   );
 }
+
 
 function Meter({ label, value, max, tone }: { label: string; value: number; max: number; tone: 'hp' | 'satiety' }) {
   return (
@@ -313,153 +471,4 @@ function Meter({ label, value, max, tone }: { label: string; value: number; max:
       </div>
     </div>
   );
-}
-
-// ===== 描画 =====
-
-function cssColor(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
-/** 主人公を中心に、周りのマスを描く。見えていないマスは霧、一度見たマスは暗く描く */
-function drawView(canvas: HTMLCanvasElement, state: ExploreState, visible: Set<number>) {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  const { map, player, seen } = state;
-  const colors = {
-    fog: cssColor('--fog'),
-    floor: cssColor('--pine-deep'),
-    wall: cssColor('--pine-line'),
-    wallTop: cssColor('--wall-top'),
-    stairs: cssColor('--bone'),
-    treasure: cssColor('--hp-enemy'),
-    elite: cssColor('--fire'),
-    boss: cssColor('--procure'),
-    notice: cssColor('--hp-enemy'),
-    calm: cssColor('--bone-dim'),
-    hp: cssColor('--hp-enemy'),
-  };
-  const originX = player.x - Math.floor(VIEW_W / 2);
-  const originY = player.y - Math.floor(VIEW_H / 2);
-
-  ctx.fillStyle = colors.fog;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  for (let vy = 0; vy < VIEW_H; vy++) {
-    for (let vx = 0; vx < VIEW_W; vx++) {
-      const x = originX + vx;
-      const y = originY + vy;
-      if (x < 0 || y < 0 || x >= map.width || y >= map.height) continue;
-      const i = y * map.width + x;
-      if (!seen[i]) continue;
-      const px = vx * CELL;
-      const py = vy * CELL;
-      if (map.tiles[i] === 'wall') {
-        ctx.fillStyle = colors.wall;
-        ctx.fillRect(px, py, CELL, CELL);
-        ctx.fillStyle = colors.wallTop;
-        ctx.fillRect(px, py, CELL, 4);
-      } else {
-        ctx.fillStyle = colors.floor;
-        ctx.fillRect(px, py, CELL, CELL);
-      }
-      if (map.stairs && x === map.stairs.x && y === map.stairs.y) drawStairs(ctx, px, py, colors.stairs);
-      // まだ空になっていない宝箱だけを描く
-      if (state.chests.some((c) => c.pos.x === x && c.pos.y === y)) drawChest(ctx, px, py, colors.treasure, colors.fog);
-      // 一度見たが今は見えていないマスは暗くする
-      if (!visible.has(i)) {
-        ctx.globalAlpha = 0.45;
-        ctx.fillStyle = colors.fog;
-        ctx.fillRect(px, py, CELL, CELL);
-        ctx.globalAlpha = 1;
-      }
-    }
-  }
-
-  // 敵は今見えているマスにいるものだけ描く
-  for (const e of state.enemies) {
-    if (!visible.has(e.pos.y * map.width + e.pos.x)) continue;
-    const px = (e.pos.x - originX) * CELL;
-    const py = (e.pos.y - originY) * CELL;
-    if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) continue;
-    drawEnemy(ctx, e, px, py, colors);
-  }
-
-  drawSprite(ctx, 'hero', Math.floor(VIEW_W / 2) * CELL, Math.floor(VIEW_H / 2) * CELL, CELL, CLOAKS[cloakOf(state.stats.armor)]);
-}
-
-function drawEnemy(
-  ctx: CanvasRenderingContext2D,
-  enemy: MapEnemy,
-  px: number,
-  py: number,
-  colors: Record<'elite' | 'boss' | 'notice' | 'calm' | 'hp' | 'fog', string>,
-) {
-  if (enemy.elite) {
-    // 強敵は赤い枠、ボスは金の二重枠で囲む
-    const boss = enemyDef(enemy).boss === true;
-    ctx.strokeStyle = boss ? colors.boss : colors.elite;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(px + 1, py + 1, CELL - 2, CELL - 2);
-    if (boss) ctx.strokeRect(px - 2, py - 2, CELL + 4, CELL + 4);
-  }
-  const look = ENEMY_LOOKS[enemy.id];
-  drawSprite(ctx, look.sprite, px, py, CELL, look.recolor);
-
-  const def = enemyDef(enemy);
-  if (enemy.hp < def.hp) {
-    ctx.fillStyle = colors.fog;
-    ctx.fillRect(px + 3, py + CELL - 5, CELL - 6, 3);
-    ctx.fillStyle = colors.hp;
-    ctx.fillRect(px + 3, py + CELL - 5, Math.max(1, Math.round((CELL - 6) * (enemy.hp / def.hp))), 3);
-  }
-
-  // 頭上のマーク。気付いた瞬間の「！」だけ大きく強調する
-  const big = enemy.justNoticed;
-  ctx.font = `900 ${big ? 22 : 14}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'bottom';
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = colors.fog;
-  ctx.fillStyle = enemy.mode === 'wander' ? colors.calm : colors.notice;
-  const mx = px + CELL / 2;
-  const my = py + (big ? 6 : 4);
-  ctx.strokeText(ENEMY_MARK[enemy.mode].mark, mx, my);
-  ctx.fillText(ENEMY_MARK[enemy.mode].mark, mx, my);
-}
-
-function drawChest(ctx: CanvasRenderingContext2D, px: number, py: number, color: string, line: string) {
-  const m = CELL / 4;
-  ctx.fillStyle = color;
-  ctx.fillRect(px + m, py + m + 2, CELL - m * 2, CELL - m * 2 - 2);
-  // ふたの線と留め金
-  ctx.fillStyle = line;
-  ctx.fillRect(px + m, py + m + 7, CELL - m * 2, 2);
-  ctx.fillRect(px + CELL / 2 - 2, py + m + 9, 4, 4);
-}
-
-function drawStairs(ctx: CanvasRenderingContext2D, px: number, py: number, color: string) {
-  ctx.fillStyle = color;
-  for (let k = 0; k < 4; k++) {
-    const inset = 4 + k * 3;
-    ctx.fillRect(px + inset, py + 6 + k * 6, CELL - inset * 2, 3);
-  }
-}
-
-function drawMinimap(canvas: HTMLCanvasElement, state: ExploreState) {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  const { map, seen, player } = state;
-  ctx.fillStyle = cssColor('--fog');
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = cssColor('--pine-line');
-  map.tiles.forEach((t, i) => {
-    if (t === 'floor' && seen[i]) ctx.fillRect((i % map.width) * MINI_CELL, Math.floor(i / map.width) * MINI_CELL, MINI_CELL, MINI_CELL);
-  });
-  if (map.stairs && seen[map.stairs.y * map.width + map.stairs.x]) {
-    ctx.fillStyle = cssColor('--bone');
-    ctx.fillRect(map.stairs.x * MINI_CELL - 1, map.stairs.y * MINI_CELL - 1, MINI_CELL + 2, MINI_CELL + 2);
-  }
-  ctx.fillStyle = cssColor('--hp-you');
-  ctx.fillRect(player.x * MINI_CELL - 1, player.y * MINI_CELL - 1, MINI_CELL + 2, MINI_CELL + 2);
 }
