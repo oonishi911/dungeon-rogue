@@ -1,8 +1,9 @@
-// 開発用：マップを歩いて探索を確かめる画面。?view=explore で開く。
-// 敵はまだいない。準備フェーズやゲーム本体にはまだ組み込んでいない。
+// 開発用：マップを歩いて探索と戦闘を確かめる画面。?view=explore で開く。
+// 準備フェーズやゲーム本体にはまだ組み込んでいない。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EXPLORE_CONFIG, samePos, startExplore, step, visibleTiles, type Dir, type ExploreAction, type ExploreState } from '../game/explore';
+import { enemyDef, type EnemyMode, type MapEnemy } from '../game/enemies';
 import { drawSprite } from '../sprites/canvas';
 
 const VIEW_W = 21; // 画面に映すマス数（主人公が中央に来るよう奇数）
@@ -26,9 +27,18 @@ const KEY_ACTIONS: Record<string, ExploreAction> = {
 };
 
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
+// ?seed=123 で同じ階層を再現できる（不具合の再現や見た目の確認用）
+const urlSeed = Number(new URLSearchParams(location.search).get('seed'));
+
+/** 敵の頭上に出すマークと、文字で伝える状態 */
+const ENEMY_MARK: Record<EnemyMode, { mark: string; text: string }> = {
+  wander: { mark: '…', text: '気付いていない（不意打ちできる）' },
+  chase: { mark: '!', text: '追ってくる' },
+  search: { mark: '?', text: '見失って探している' },
+};
 
 export function ExploreScreen() {
-  const [state, setState] = useState<ExploreState>(() => startExplore(newSeed()));
+  const [state, setState] = useState<ExploreState>(() => startExplore(Number.isInteger(urlSeed) && urlSeed > 0 ? urlSeed : newSeed()));
   const [error, setError] = useState<string | null>(null);
   const viewRef = useRef<HTMLCanvasElement>(null);
   const miniRef = useRef<HTMLCanvasElement>(null);
@@ -64,6 +74,7 @@ export function ExploreScreen() {
     if (miniRef.current) drawMinimap(miniRef.current, state);
   }, [state, visible]);
 
+  const visibleEnemies = state.enemies.filter((e) => visible.has(e.pos.y * state.map.width + e.pos.x));
   const onStairs = samePos(state.player, state.map.stairs);
   const ended = state.outcome !== 'ongoing';
   const floorName = `地下${state.floor + 1}階`;
@@ -72,7 +83,9 @@ export function ExploreScreen() {
     <main className="screen">
       <header className="top">
         <div>
-          <p className="top__run">開発用 ・ {state.turn}ターン</p>
+          <p className="top__run">
+            開発用 ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体
+          </p>
           <h1 className="top__title">{floorName}</h1>
         </div>
       </header>
@@ -89,7 +102,7 @@ export function ExploreScreen() {
           />
           {ended && (
             <div className="explore__ending">
-              <p>{state.outcome === 'reached_bottom' ? '最深部へ続く階段を見つけた' : '飢えて力尽きた…'}</p>
+              <p>{state.log.at(-1)}</p>
               <button
                 type="button"
                 className="primary"
@@ -106,7 +119,27 @@ export function ExploreScreen() {
 
         <aside className="explore__side">
           <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" />
-          <Meter label="HP" value={state.hp} max={state.maxHp} tone="hp" />
+          <Meter label="HP" value={state.stats.hp} max={state.stats.maxHp} tone="hp" />
+
+          <section aria-labelledby="explore-enemies">
+            <h2 id="explore-enemies" className="meter__head">
+              見えている敵
+            </h2>
+            {visibleEnemies.length === 0 ? (
+              <p className="muted">いない</p>
+            ) : (
+              <ul className="explore__enemies">
+                {visibleEnemies.map((e) => (
+                  <li key={e.uid}>
+                    <span className={`explore__mark explore__mark--${e.mode}`} aria-hidden="true">
+                      {ENEMY_MARK[e.mode].mark}
+                    </span>
+                    {enemyDef(e).name}（HP {e.hp}）：{ENEMY_MARK[e.mode].text}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
           <canvas
             ref={miniRef}
@@ -142,7 +175,7 @@ export function ExploreScreen() {
         </h2>
         <ol className="explore__log">
           {state.log
-            .slice(-6)
+            .slice(-8)
             .reverse()
             .map((line, i) => (
               <li key={state.log.length - i}>{line}</li>
@@ -202,6 +235,9 @@ function drawView(canvas: HTMLCanvasElement, state: ExploreState, visible: Set<n
     stairs: cssColor('--bone'),
     treasure: cssColor('--hp-enemy'),
     elite: cssColor('--fire'),
+    notice: cssColor('--hp-enemy'),
+    calm: cssColor('--bone-dim'),
+    hp: cssColor('--hp-enemy'),
   };
   const originX = player.x - Math.floor(VIEW_W / 2);
   const originY = player.y - Math.floor(VIEW_H / 2);
@@ -228,9 +264,10 @@ function drawView(canvas: HTMLCanvasElement, state: ExploreState, visible: Set<n
         ctx.fillRect(px, py, CELL, CELL);
       }
       if (x === map.stairs.x && y === map.stairs.y) drawStairs(ctx, px, py, colors.stairs);
-      const feature = map.features.find((f) => f.pos.x === x && f.pos.y === y);
-      if (feature) {
-        ctx.fillStyle = feature.kind === 'treasure' ? colors.treasure : colors.elite;
+      // 強敵は敵として描くので、ここでは宝箱だけ
+      const treasure = map.features.find((f) => f.kind === 'treasure' && f.pos.x === x && f.pos.y === y);
+      if (treasure) {
+        ctx.fillStyle = colors.treasure;
         const m = CELL / 4;
         ctx.fillRect(px + m, py + m, CELL - m * 2, CELL - m * 2);
       }
@@ -244,7 +281,53 @@ function drawView(canvas: HTMLCanvasElement, state: ExploreState, visible: Set<n
     }
   }
 
+  // 敵は今見えているマスにいるものだけ描く
+  for (const e of state.enemies) {
+    if (!visible.has(e.pos.y * map.width + e.pos.x)) continue;
+    const px = (e.pos.x - originX) * CELL;
+    const py = (e.pos.y - originY) * CELL;
+    if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) continue;
+    drawEnemy(ctx, e, px, py, colors);
+  }
+
   drawSprite(ctx, 'hero', Math.floor(VIEW_W / 2) * CELL, Math.floor(VIEW_H / 2) * CELL, CELL);
+}
+
+function drawEnemy(
+  ctx: CanvasRenderingContext2D,
+  enemy: MapEnemy,
+  px: number,
+  py: number,
+  colors: Record<'elite' | 'notice' | 'calm' | 'hp' | 'fog', string>,
+) {
+  if (enemy.elite) {
+    // 強敵は赤い枠で囲む
+    ctx.strokeStyle = colors.elite;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px + 1, py + 1, CELL - 2, CELL - 2);
+  }
+  drawSprite(ctx, enemy.id, px, py, CELL);
+
+  const def = enemyDef(enemy);
+  if (enemy.hp < def.hp) {
+    ctx.fillStyle = colors.fog;
+    ctx.fillRect(px + 3, py + CELL - 5, CELL - 6, 3);
+    ctx.fillStyle = colors.hp;
+    ctx.fillRect(px + 3, py + CELL - 5, Math.max(1, Math.round((CELL - 6) * (enemy.hp / def.hp))), 3);
+  }
+
+  // 頭上のマーク。気付いた瞬間の「！」だけ大きく強調する
+  const big = enemy.justNoticed;
+  ctx.font = `900 ${big ? 22 : 14}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = colors.fog;
+  ctx.fillStyle = enemy.mode === 'wander' ? colors.calm : colors.notice;
+  const mx = px + CELL / 2;
+  const my = py + (big ? 6 : 4);
+  ctx.strokeText(ENEMY_MARK[enemy.mode].mark, mx, my);
+  ctx.fillText(ENEMY_MARK[enemy.mode].mark, mx, my);
 }
 
 function drawStairs(ctx: CanvasRenderingContext2D, px: number, py: number, color: string) {
