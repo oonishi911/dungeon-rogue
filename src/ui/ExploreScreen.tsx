@@ -3,6 +3,8 @@
 //
 // 操作はすべて「意図」として記録し、毎フレームの処理で、前の1歩の動きが終わっていれば1つ実行する。
 // キーを押し続けたときの歩く速さが、OS のキーリピートの設定に左右されず一定になる。
+//
+// 描画は3D（explore3d.ts）が標準。?render=2d で、これまでのドット絵の2D表示に切り替えられる。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { BODY_NAMES, ITEMS, TRAIT_IDS, TRAITS } from '../game/data';
@@ -35,6 +37,7 @@ import {
   type Frame,
   type Motion,
 } from './exploreRender';
+import { ExploreRenderer3D } from './explore3d';
 import { tilesetFor } from './tileset';
 
 const STEP_MS = 120; // 1マス動くのにかける時間。押し続けたときの歩く速さもこれで決まる
@@ -66,6 +69,17 @@ const urlRank = Number(new URLSearchParams(location.search).get('rank')) || 1;
 // ?trait=fire でダンジョン特性を指定できる（タイル素材の確認用）
 const traitParam = new URLSearchParams(location.search).get('trait');
 const urlTrait = TRAIT_IDS.find((t) => t === traitParam);
+// ?render=2d で2D表示にする。WebGL が使えない環境でも2D表示になる
+const prefer3d = new URLSearchParams(location.search).get('render') !== '2d';
+const canUseWebGL = (() => {
+  try {
+    return !!document.createElement('canvas').getContext('webgl2');
+  } catch {
+    return false;
+  }
+})();
+const use3d = prefer3d && canUseWebGL;
+// 3D表示は描画の大きさを表示サイズに合わせて自分で決めるので、canvas の width・height は2D表示のときだけ指定する
 
 // 開発用画面で持たせる装備と道具
 const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fire_whetstone', 'ice_whetstone'];
@@ -97,7 +111,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
   const heldRef = useRef<Dir[]>([]); // 押し続けている方向（あとから押したものが優先）
   const queueRef = useRef<ExploreAction[]>([]); // 次に1回ずつ行う行動（動いている途中に押した分）
   const walkRef = useRef<Pos | null>(null); // タップ・クリックで向かっている場所
-  const originRef = useRef<Pos>({ x: 0, y: 0 }); // 今描いている画面の左上の座標（タップ位置の計算に使う）
+  const originRef = useRef<Pos>({ x: 0, y: 0 }); // 今描いている画面の左上の座標（2D表示でタップ位置の計算に使う）
+  const renderer3dRef = useRef<ExploreRenderer3D | null>(null);
 
   const visible = useMemo(
     () => visibleTiles(state.map, state.player, EXPLORE_CONFIG.sightRadius),
@@ -156,6 +171,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
   useEffect(() => {
     const colors = readColors();
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const renderer3d = use3d && viewRef.current ? new ExploreRenderer3D(viewRef.current, colors) : null;
+    renderer3dRef.current = renderer3d;
     // 視界の計算は、状態が変わったときだけやり直す
     let sight = { state: stateRef.current, visible: visibleTiles(stateRef.current.map, stateRef.current.player, EXPLORE_CONFIG.sightRadius) };
     let frameId = 0;
@@ -187,12 +204,20 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
         walkTarget: walkRef.current,
         tileset: tilesetFor(current.trait),
       };
-      originRef.current = viewOrigin(frame);
-      if (viewRef.current) drawView(viewRef.current, frame, colors);
+      if (renderer3d) {
+        renderer3d.render(frame);
+      } else {
+        originRef.current = viewOrigin(frame);
+        if (viewRef.current) drawView(viewRef.current, frame, colors);
+      }
       frameId = requestAnimationFrame(tick);
     };
     frameId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frameId);
+    return () => {
+      cancelAnimationFrame(frameId);
+      renderer3d?.dispose();
+      renderer3dRef.current = null;
+    };
   }, [perform]);
 
   useEffect(() => {
@@ -241,13 +266,19 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
   const onMapClick = (e: { clientX: number; clientY: number }) => {
     const canvas = viewRef.current;
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const scale = canvas.width / rect.width; // 画面が狭いと Canvas は縮んで表示される
-    const target = {
-      x: Math.floor(originRef.current.x + ((e.clientX - rect.left) * scale) / CELL),
-      y: Math.floor(originRef.current.y + ((e.clientY - rect.top) * scale) / CELL),
-    };
+    let target: Pos | null;
+    if (renderer3dRef.current) {
+      target = renderer3dRef.current.pickTile(e.clientX, e.clientY);
+    } else {
+      const rect = canvas.getBoundingClientRect();
+      const scale = canvas.width / rect.width; // 画面が狭いと Canvas は縮んで表示される
+      target = {
+        x: Math.floor(originRef.current.x + ((e.clientX - rect.left) * scale) / CELL),
+        y: Math.floor(originRef.current.y + ((e.clientY - rect.top) * scale) / CELL),
+      };
+    }
     const s = stateRef.current;
+    if (!target) return;
     if (s.outcome !== 'ongoing' || samePos(target, s.player)) return;
     const i = target.y * s.map.width + target.x;
     const known = target.x >= 0 && target.y >= 0 && target.x < s.map.width && target.y < s.map.height && s.seen[i];
@@ -293,10 +324,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
       <div className="explore">
         <div className="explore__stage">
           <canvas
+            key={use3d ? '3d' : '2d'}
             ref={viewRef}
-            className="explore__view"
-            width={VIEW_W * CELL}
-            height={VIEW_H * CELL}
+            className={use3d ? 'explore__view explore__view--3d' : 'explore__view'}
+            width={use3d ? undefined : VIEW_W * CELL}
+            height={use3d ? undefined : VIEW_H * CELL}
             role="img"
             aria-label={`${floorName}の周囲。マスをクリックするとそこまで歩く。${onStairs ? '足元に階段がある' : ''}`}
             onClick={onMapClick}

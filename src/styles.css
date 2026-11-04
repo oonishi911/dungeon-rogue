@@ -517,6 +517,12 @@ button.card:disabled {
   position: relative;
 }
 
+/* 3D表示：2D表示と同じ縦横比（21×15マス）で、表示サイズに合わせて描く */
+.explore__view.explore__view--3d {
+  aspect-ratio: 21 / 15;
+  image-rendering: auto;
+}
+
 .explore__view {
   display: block;
   width: 100%;
