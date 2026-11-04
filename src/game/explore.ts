@@ -3,7 +3,7 @@
 // ほかのロジックと同じく、状態を受け取り新しい状態を返す純粋関数でできている。
 
 import { buildPlayer, enemyHitDamage, playerHitDamage } from './combat';
-import { TRAIT_IDS } from './data';
+import { COMBAT_CONFIG, ITEMS, TRAITS, TRAIT_IDS } from './data';
 import {
   ENEMY_CONFIG,
   enemyDef,
@@ -38,8 +38,12 @@ export const DIR_DELTA: Record<Dir, Pos> = {
   right: { x: 1, y: 0 },
 };
 
-/** 移動先に敵がいれば、移動ではなく攻撃になる（体当たり方式） */
-export type ExploreAction = { kind: 'move'; dir: Dir } | { kind: 'wait' } | { kind: 'descend' };
+/** 移動先に敵がいれば、移動ではなく攻撃になる（体当たり方式）。道具を使うのも1行動 */
+export type ExploreAction =
+  | { kind: 'move'; dir: Dir }
+  | { kind: 'wait' }
+  | { kind: 'descend' }
+  | { kind: 'use_item'; item: ItemId };
 
 export type ExploreOutcome = 'ongoing' | 'reached_bottom' | 'defeated';
 
@@ -134,6 +138,12 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
       next = state;
       break;
     }
+    case 'use_item': {
+      const r = useItem(state, action.item);
+      if (!r.ok) return r;
+      next = r.value;
+      break;
+    }
     case 'descend': {
       if (!samePos(state.player, state.map.stairs)) return err('ここに階段はない');
       if (state.floor + 1 >= state.floors) {
@@ -181,6 +191,51 @@ function enterFloor(state: ExploreState, floor: number, map: FloorMap): ExploreS
   });
 }
 
+// ===== 道具 =====
+
+function useItem(state: ExploreState, itemId: ItemId): Result<ExploreState> {
+  const { stats } = state;
+  const index = stats.items.indexOf(itemId);
+  if (index === -1) return err('その道具は持っていません');
+  const item = ITEMS[itemId];
+  const items = stats.items.filter((_, i) => i !== index);
+  const effect = item.effect;
+
+  switch (effect.kind) {
+    case 'heal': {
+      if (stats.hp >= stats.maxHp) return err('HPは減っていない');
+      const hp = Math.min(stats.maxHp, stats.hp + effect.hp);
+      return ok({ ...state, stats: { ...stats, hp, items }, log: [...state.log, `${item.name}でHPが${hp - stats.hp}回復`] });
+    }
+    case 'food': {
+      if (state.satiety >= state.maxSatiety) return err('お腹はいっぱいだ');
+      const satiety = Math.min(state.maxSatiety, state.satiety + effect.satiety);
+      return ok({
+        ...state,
+        satiety,
+        stats: { ...stats, items },
+        log: [...state.log, `${item.name}を食べて満腹度が${satiety - state.satiety}回復`],
+      });
+    }
+    case 'enchant': {
+      // 付けられる属性は1つだけ。新しく付けると上書きする
+      const holder = stats.weapon ? ITEMS[stats.weapon].name : '拳';
+      return ok({
+        ...state,
+        stats: { ...stats, items, enchant: { element: effect.element, hits: effect.hits } },
+        log: [...state.log, `${item.name}で${holder}に${TRAITS[effect.element].name}の力が宿った（攻撃${effect.hits}回）`],
+      });
+    }
+    case 'weapon':
+    case 'armor':
+      return err('装備品は道具として使えません');
+    default: {
+      const unreachable: never = effect;
+      return unreachable;
+    }
+  }
+}
+
 // ===== プレイヤーの攻撃 =====
 
 /** 体当たりで攻撃する。気付いていない敵なら不意打ちになる */
@@ -191,9 +246,18 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
   const hp = target.hp - dmg;
   const log = [...state.log, surprise ? `${def.name}に不意打ち！ ${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`];
 
+  // 属性付与はダメージを計算したあとで1回減らし、0回になると消える
+  let stats = state.stats;
+  if (stats.enchant) {
+    const hits = stats.enchant.hits - 1;
+    if (hits <= 0) log.push(`武器から${TRAITS[stats.enchant.element].name}の力が消えた`);
+    stats = { ...stats, enchant: hits > 0 ? { ...stats.enchant, hits } : null };
+  }
+
   if (hp <= 0) {
     return {
       ...state,
+      stats,
       enemies: state.enemies.filter((e) => e.uid !== target.uid),
       defeated: state.defeated + 1,
       log: [...log, `${def.name}を倒した`],
@@ -201,7 +265,7 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
   }
   // 攻撃された敵はこちらに気付く
   const hit: MapEnemy = { ...target, hp, mode: 'chase', justNoticed: surprise, lastSeen: state.player };
-  return { ...state, enemies: state.enemies.map((e) => (e.uid === target.uid ? hit : e)), log };
+  return { ...state, stats, enemies: state.enemies.map((e) => (e.uid === target.uid ? hit : e)), log };
 }
 
 /** 隣にいる敵から離れると、背後から攻撃されることがある（強敵は必ず） */
@@ -302,6 +366,9 @@ function damagePlayer(state: ExploreState, dmg: number, message: string, by: str
 
 /** 1行動ぶん満腹度を減らす。満腹度が残っていればHPが少しずつ回復し、0ならHPが減る */
 function spendAction(state: ExploreState): ExploreState {
+  const poisoned = applyPoison(state);
+  if (poisoned.outcome !== 'ongoing') return { ...poisoned, turn: poisoned.turn + 1 };
+  state = poisoned;
   const turn = state.turn + 1;
   const { stats } = state;
   if (state.satiety > 0) {
@@ -315,6 +382,30 @@ function spendAction(state: ExploreState): ExploreState {
     return { ...state, turn, stats: { ...stats, hp }, outcome: 'defeated', log: [...state.log, '飢えて力尽きた…'] };
   }
   return { ...state, turn, stats: { ...stats, hp } };
+}
+
+/** 毒の仕組み（今は毒を与える敵はいないが、状態異常として残している） */
+function applyPoison(state: ExploreState): ExploreState {
+  const { stats } = state;
+  if (stats.poisonTurns <= 0) return state;
+  const next = { ...stats, poisonTurns: stats.poisonTurns - 1 };
+  return damagePlayer({ ...state, stats: next }, COMBAT_CONFIG.poisonDamage, '毒', '毒');
+}
+
+// ===== 結果 =====
+
+export interface ExploreResult {
+  outcome: 'reached_bottom' | 'defeated';
+  floorReached: number; // 1始まり
+  defeated: number;
+}
+
+export function toResult(state: ExploreState): ExploreResult {
+  return {
+    outcome: state.outcome === 'reached_bottom' ? 'reached_bottom' : 'defeated',
+    floorReached: state.floor + 1,
+    defeated: state.defeated,
+  };
 }
 
 // ===== 視界 =====

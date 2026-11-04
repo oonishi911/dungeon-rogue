@@ -1,172 +1,77 @@
-// ターン制戦闘のロジック。
-// 1ラウンド = プレイヤーの行動 → 敵の攻撃 → 毒のダメージ。
-// 準備フェーズで揃えた装備（耐性）がダメージ計算に直接効く。
+// 戦闘の計算：持ち物からプレイヤーの能力を作り、攻撃1回のダメージを求める。
+// 準備フェーズで揃えた装備（武器と体質の相性、防具と属性の相性）がダメージ計算に直接効く。
+// 戦闘の進行（誰がいつ攻撃するか）は explore.ts にある。
 
-import { COMBAT_CONFIG as C, ENEMIES, ITEMS } from './data';
-import type {
-  CombatAction,
-  CombatState,
-  EnemyDef,
-  EnemyId,
-  ItemId,
-  PlayerStats,
-  Result,
-} from './types';
+import { COMBAT_CONFIG as C, ELEMENT_COMPONENTS, ENCHANT_VS_ELEMENT, ITEMS, WEAPON_VS_BODY } from './data';
+import type { ElementComponent, EnemyDef, ItemDef, ItemId, ItemSlot, PlayerStats } from './types';
 
-const ok = <T>(value: T): Result<T> => ({ ok: true, value });
-const err = <T>(error: string): Result<T> => ({ ok: false, error });
+export function itemSlot(item: ItemDef): ItemSlot {
+  switch (item.effect.kind) {
+    case 'weapon':
+      return 'weapon';
+    case 'armor':
+      return 'armor';
+    case 'heal':
+    case 'food':
+    case 'enchant':
+      return 'consumable';
+    default: {
+      const unreachable: never = item.effect;
+      return unreachable;
+    }
+  }
+}
 
-/**
- * 持ち込んだアイテムからプレイヤーの能力を作る。
- * 武器・防具は1つずつ装備。防具を複数持っている場合は armorChoice で選ぶ（省略時は最初の1つ）。
- */
-export function buildPlayer(loadout: readonly ItemId[], armorChoice?: ItemId): PlayerStats {
-  const weapon = loadout.find((id) => ITEMS[id].slot === 'weapon') ?? null;
-  const armors = loadout.filter((id) => ITEMS[id].slot === 'armor');
-  const armor = armorChoice && armors.includes(armorChoice) ? armorChoice : (armors[0] ?? null);
-
+/** 持ち込んだアイテムからプレイヤーの能力を作る。武器・防具は1つずつ装備する */
+export function buildPlayer(loadout: readonly ItemId[]): PlayerStats {
+  const weapon = loadout.find((id) => itemSlot(ITEMS[id]) === 'weapon') ?? null;
+  const armor = loadout.find((id) => itemSlot(ITEMS[id]) === 'armor') ?? null;
   return {
     hp: C.playerHp,
     maxHp: C.playerHp,
-    atk: C.playerAtk + (weapon === 'iron_sword' ? C.swordAtk : 0),
+    atk: C.playerAtk + (weapon ? C.weaponAtk : 0),
     def: C.playerDef,
     poisonTurns: 0,
     weapon,
     armor,
-    consumables: loadout.filter((id) => ITEMS[id].slot === 'consumable'),
+    items: loadout.filter((id) => itemSlot(ITEMS[id]) === 'consumable'),
+    enchant: null,
   };
 }
 
-export function startCombat(player: PlayerStats, enemyId: EnemyId): CombatState {
-  const enemy = ENEMIES[enemyId];
-  return {
-    player,
-    enemy: { id: enemyId, hp: enemy.hp },
-    round: 1,
-    outcome: 'ongoing',
-    log: [`${enemy.name}が現れた`],
-  };
-}
-
-/** 敵の攻撃1回でプレイヤーが受けるダメージ（耐性込み） */
+/**
+ * 敵の攻撃1回でプレイヤーが受けるダメージ。
+ * 複合属性（光・闇）は成分ごとに半分ずつ分け、防具はそれぞれの成分に別々に効く。
+ * 専用防具（光の衣・闇の衣）は、その属性の攻撃を丸ごと軽減する。
+ */
 export function enemyHitDamage(player: PlayerStats, enemy: EnemyDef): number {
   const base = Math.max(1, enemy.atk - player.def);
-  if (enemy.element === 'fire' && resists(player, 'fire')) {
-    return Math.max(1, Math.ceil(base * C.fireResistRate));
+  const effect = player.armor ? ITEMS[player.armor].effect : null;
+  const guard = effect?.kind === 'armor' ? effect.guard : null;
+
+  if (guard?.kind === 'whole') {
+    return Math.max(1, Math.ceil(base * (guard.element === enemy.element ? guard.rate : 1)));
   }
-  return base;
+  let total = 0;
+  for (const [component, share] of Object.entries(ELEMENT_COMPONENTS[enemy.element]) as [ElementComponent, number][]) {
+    const rate = guard?.kind === 'component' && guard.component === component ? guard.rate : 1;
+    total += base * share * rate;
+  }
+  return Math.max(1, Math.ceil(total));
 }
 
-/** プレイヤーの攻撃1回で敵が受けるダメージ */
+/** プレイヤーの攻撃1回で敵が受けるダメージ。武器と体質、付けた属性と敵の属性の相性で増減する */
 export function playerHitDamage(player: PlayerStats, enemy: EnemyDef): number {
-  return Math.max(1, player.atk - enemy.def);
+  const base = Math.max(1, player.atk - enemy.def);
+  return Math.max(1, Math.round(base * bodyMultiplier(player, enemy) * enchantMultiplier(player, enemy)));
 }
 
-/** 1ラウンド進める */
-export function act(state: CombatState, action: CombatAction): Result<CombatState> {
-  if (state.outcome !== 'ongoing') return err('戦闘は終わっています');
-
-  const enemyDef = ENEMIES[state.enemy.id];
-  let player = state.player;
-  let enemyHp = state.enemy.hp;
-  const log: string[] = [];
-
-  // --- プレイヤーの行動 ---
-  switch (action.kind) {
-    case 'attack': {
-      const dmg = playerHitDamage(player, enemyDef);
-      enemyHp -= dmg;
-      log.push(`${enemyDef.name}に${dmg}のダメージ`);
-      break;
-    }
-    case 'use_item': {
-      const index = player.consumables.indexOf(action.item);
-      if (index === -1) return err('そのアイテムは持っていません');
-      const consumables = player.consumables.filter((_, i) => i !== index);
-
-      switch (action.item) {
-        case 'potion': {
-          const hp = Math.min(player.maxHp, player.hp + C.potionHeal);
-          log.push(`回復薬でHPが${hp - player.hp}回復`);
-          player = { ...player, hp, consumables };
-          break;
-        }
-        case 'antidote': {
-          log.push('毒消しで毒が治った');
-          player = { ...player, poisonTurns: 0, consumables };
-          break;
-        }
-        case 'frost_scroll': {
-          const dmg = enemyDef.element === 'fire' ? C.frostVsFire : C.frostVsOther;
-          enemyHp -= dmg;
-          log.push(`氷の巻物で${enemyDef.name}に${dmg}のダメージ`);
-          player = { ...player, consumables };
-          break;
-        }
-        default:
-          return err('戦闘中に使えないアイテムです');
-      }
-      break;
-    }
-    default: {
-      const unreachable: never = action;
-      return unreachable;
-    }
-  }
-
-  if (enemyHp <= 0) {
-    log.push(`${enemyDef.name}を倒した`);
-    return ok(finish(state, player, 0, 'won', log));
-  }
-
-  // --- 敵の攻撃 ---
-  const dmg = enemyHitDamage(player, enemyDef);
-  player = { ...player, hp: player.hp - dmg };
-  log.push(
-    enemyDef.element === 'fire' && resists(player, 'fire')
-      ? `${enemyDef.name}の炎！ 耐火のマントで軽減して${dmg}のダメージ`
-      : `${enemyDef.name}の攻撃で${dmg}のダメージ`,
-  );
-
-  if (enemyDef.element === 'poison') {
-    if (resists(player, 'poison')) {
-      log.push('防毒のマントが毒を防いだ');
-    } else {
-      player = { ...player, poisonTurns: C.poisonTurns };
-      log.push('毒にかかった');
-    }
-  }
-
-  // --- 毒のダメージ ---
-  if (player.poisonTurns > 0) {
-    player = { ...player, hp: player.hp - C.poisonDamage, poisonTurns: player.poisonTurns - 1 };
-    log.push(`毒で${C.poisonDamage}のダメージ`);
-  }
-
-  if (player.hp <= 0) {
-    log.push('力尽きた…');
-    return ok(finish(state, { ...player, hp: 0 }, enemyHp, 'lost', log));
-  }
-
-  return ok(finish(state, player, enemyHp, 'ongoing', log));
+export function bodyMultiplier(player: PlayerStats, enemy: EnemyDef): number {
+  const effect = player.weapon ? ITEMS[player.weapon].effect : null;
+  return effect?.kind === 'weapon' ? WEAPON_VS_BODY[effect.weapon][enemy.body] : 1;
 }
 
-function resists(player: PlayerStats, trait: 'fire' | 'poison'): boolean {
-  return player.armor !== null && ITEMS[player.armor].resist === trait;
-}
-
-function finish(
-  state: CombatState,
-  player: PlayerStats,
-  enemyHp: number,
-  outcome: CombatState['outcome'],
-  log: string[],
-): CombatState {
-  return {
-    player,
-    enemy: { ...state.enemy, hp: Math.max(0, enemyHp) },
-    round: outcome === 'ongoing' ? state.round + 1 : state.round,
-    outcome,
-    log: [...state.log, ...log],
-  };
+export function enchantMultiplier(player: PlayerStats, enemy: EnemyDef): number {
+  if (!player.enchant) return 1;
+  return ENCHANT_VS_ELEMENT[player.enchant.element][enemy.element] ?? 1;
 }

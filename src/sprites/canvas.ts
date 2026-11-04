@@ -1,8 +1,9 @@
-import { CLOAKS, PALETTE, SPRITES, type SpriteId } from './data';
+import { PALETTE, SPRITES, type SpriteId } from './data';
 
 /**
  * 文字列のドット絵を Canvas に描く（マップのように多数のマスを描く画面用）。
  * Sprite.tsx と同じく、横に同じ色が続く部分は1回の fillRect にまとめる。
+ * colors で PALETTE の色を差し替えられる（マントの色、敵の色違い）。
  */
 export function drawSprite(
   ctx: CanvasRenderingContext2D,
@@ -10,9 +11,9 @@ export function drawSprite(
   x: number,
   y: number,
   size: number,
-  cloak: keyof typeof CLOAKS = 'none',
+  colors: Record<string, string> = {},
 ) {
-  const palette: Record<string, string> = { ...PALETTE, ...CLOAKS[cloak] };
+  const palette: Record<string, string> = { ...PALETTE, ...colors };
   const rows = SPRITES[id];
   const dot = size / rows.length;
   rows.forEach((row, py) => {

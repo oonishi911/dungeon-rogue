@@ -151,3 +151,33 @@ describe('visibleTiles', () => {
     expect(v.has(i(5, 4))).toBe(false);
   });
 });
+
+describe('道具', () => {
+  it('回復薬はHPを回復し、なくなる。HPが満タンなら使えない', () => {
+    const s0 = startExplore(8, { loadout: ['potion'], enemyDensity: 0 });
+    expect(step(s0, { kind: 'use_item', item: 'potion' }).ok).toBe(false);
+    const hurt = { ...s0, stats: { ...s0.stats, hp: 30 } };
+    const s = act(hurt, { kind: 'use_item', item: 'potion' });
+    expect(s.stats.hp).toBe(45);
+    expect(s.stats.items).toEqual([]);
+    expect(s.turn).toBe(1);
+  });
+
+  it('食料は満腹度を回復する', () => {
+    const s0 = startExplore(8, { loadout: ['food'], enemyDensity: 0 });
+    const s = act({ ...s0, satiety: 100 }, { kind: 'use_item', item: 'food' });
+    expect(s.satiety).toBe(300 - EXPLORE_CONFIG.satietyPerAction);
+  });
+
+  it('属性付与は武器に属性を付け、新しく付けると上書きする', () => {
+    const s0 = startExplore(8, { loadout: ['sword', 'fire_whetstone', 'ice_whetstone'], enemyDensity: 0 });
+    let s = act(s0, { kind: 'use_item', item: 'fire_whetstone' });
+    expect(s.stats.enchant).toEqual({ element: 'fire', hits: 5 });
+    s = act(s, { kind: 'use_item', item: 'ice_whetstone' });
+    expect(s.stats.enchant).toEqual({ element: 'ice', hits: 5 });
+  });
+
+  it('持っていない道具は使えない', () => {
+    expect(step(startExplore(8), { kind: 'use_item', item: 'potion' }).ok).toBe(false);
+  });
+});

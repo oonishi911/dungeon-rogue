@@ -2,19 +2,19 @@
 // ルールはすべて src/game 側にあり、ここには書かない。
 
 import { useState } from 'react';
-import { advance, startExpedition, toResult, type ExpeditionResult, type ExpeditionState } from './game/expedition';
+import { startExplore, toResult, type ExploreResult } from './game/explore';
 import { buyItem, createPrep, endDay, finishPrep, playCard } from './game/prep';
 import type { CardInstance, ItemId, PrepResult, PrepState, Result } from './game/types';
 import { CarryScreen } from './ui/CarryScreen';
-import { DungeonScreen } from './ui/DungeonScreen';
+import { ExploreScreen } from './ui/ExploreScreen';
 import { PrepScreen } from './ui/PrepScreen';
 import { ResultScreen } from './ui/ResultScreen';
 
 type Stage =
   | { kind: 'prep'; prep: PrepState }
   | { kind: 'carry'; prep: PrepState }
-  | { kind: 'dungeon'; outcome: PrepResult; expedition: ExpeditionState }
-  | { kind: 'result'; outcome: PrepResult; expedition: ExpeditionResult };
+  | { kind: 'dungeon'; outcome: PrepResult; seed: number }
+  | { kind: 'result'; outcome: PrepResult; expedition: ExploreResult };
 
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 
@@ -64,31 +64,22 @@ export function App() {
               return;
             }
             setError(null);
-            const outcome = result.value;
-            const expedition = startExpedition(outcome.loadout, outcome.trait, stage.prep.seed);
-            setStage({ kind: 'dungeon', outcome, expedition });
+            setStage({ kind: 'dungeon', outcome: result.value, seed: stage.prep.seed });
           }}
         />
       );
-    case 'dungeon':
+    case 'dungeon': {
+      const { outcome, seed } = stage;
       return (
-        <DungeonScreen
-          state={stage.expedition}
-          error={error}
-          onAction={(action) => {
-            const result = advance(stage.expedition, action);
-            if (!result.ok) {
-              setError(result.error);
-              return;
-            }
-            setError(null);
-            setStage({ ...stage, expedition: result.value });
-          }}
-          onFinish={() =>
-            setStage({ kind: 'result', outcome: stage.outcome, expedition: toResult(stage.expedition) })
-          }
+        <ExploreScreen
+          key={`${run}-${seed}`}
+          run={run}
+          // 準備で決まった特性と持ち物で探索を始める。階層の形は準備と同じシードから作る
+          start={() => startExplore(seed, { trait: outcome.trait, loadout: outcome.loadout })}
+          onFinish={(state) => setStage({ kind: 'result', outcome, expedition: toResult(state) })}
         />
       );
+    }
     case 'result':
       return (
         <ResultScreen

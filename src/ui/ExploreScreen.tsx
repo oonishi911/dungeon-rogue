@@ -1,10 +1,23 @@
-// 開発用：マップを歩いて探索と戦闘を確かめる画面。?view=explore で開く。
-// 準備フェーズやゲーム本体にはまだ組み込んでいない。
+// ダンジョンの探索画面。マップを歩き、敵と戦い、道具を使う。
+// ゲーム本体では準備フェーズの持ち物で始まり、開発用には ?view=explore で単独でも開ける。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EXPLORE_CONFIG, samePos, startExplore, step, visibleTiles, type Dir, type ExploreAction, type ExploreState } from '../game/explore';
+import { BODY_NAMES, ITEMS, TRAITS } from '../game/data';
 import { enemyDef, type EnemyMode, type MapEnemy } from '../game/enemies';
+import {
+  EXPLORE_CONFIG,
+  samePos,
+  startExplore,
+  step,
+  visibleTiles,
+  type Dir,
+  type ExploreAction,
+  type ExploreState,
+} from '../game/explore';
+import type { ItemId } from '../game/types';
 import { drawSprite } from '../sprites/canvas';
+import { CLOAKS } from '../sprites/data';
+import { cloakOf, ENEMY_LOOKS } from '../sprites/looks';
 
 const VIEW_W = 21; // 画面に映すマス数（主人公が中央に来るよう奇数）
 const VIEW_H = 15;
@@ -37,8 +50,26 @@ const ENEMY_MARK: Record<EnemyMode, { mark: string; text: string }> = {
   search: { mark: '?', text: '見失って探している' },
 };
 
-export function ExploreScreen() {
-  const [state, setState] = useState<ExploreState>(() => startExplore(Number.isInteger(urlSeed) && urlSeed > 0 ? urlSeed : newSeed()));
+// 開発用画面で持たせる装備と道具
+const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fire_whetstone', 'ice_whetstone'];
+
+/** 開発用：準備フェーズを通さずに探索だけを試す。?seed=123 で同じ階層を再現できる */
+export function ExploreDevScreen() {
+  return (
+    <ExploreScreen
+      start={() => startExplore(Number.isInteger(urlSeed) && urlSeed > 0 ? urlSeed : newSeed(), { loadout: DEV_LOADOUT })}
+    />
+  );
+}
+
+interface ExploreScreenProps {
+  start: () => ExploreState;
+  run?: number; // 何回目の挑戦か。省略すると開発用の表示になる
+  onFinish?: (state: ExploreState) => void; // 省略すると、終わったあと同じ条件でやり直せる
+}
+
+export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreenProps) {
+  const [state, setState] = useState<ExploreState>(start);
   const [error, setError] = useState<string | null>(null);
   const viewRef = useRef<HTMLCanvasElement>(null);
   const miniRef = useRef<HTMLCanvasElement>(null);
@@ -47,6 +78,17 @@ export function ExploreScreen() {
     () => visibleTiles(state.map, state.player, EXPLORE_CONFIG.sightRadius),
     [state.map, state.player],
   );
+
+  // 同じ道具はまとめて「回復薬 ×2」のように表示する
+  const itemGroups = useMemo(() => {
+    const groups: { id: ItemId; count: number }[] = [];
+    for (const id of state.stats.items) {
+      const g = groups.find((x) => x.id === id);
+      if (g) g.count++;
+      else groups.push({ id, count: 1 });
+    }
+    return groups;
+  }, [state.stats.items]);
 
   const run = useCallback(
     (action: ExploreAction) => {
@@ -60,6 +102,13 @@ export function ExploreScreen() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
+      // 数字キーで持ち物の上から順に使う
+      const n = Number(e.key);
+      if (Number.isInteger(n) && n >= 1 && n <= itemGroups.length) {
+        e.preventDefault();
+        run({ kind: 'use_item', item: itemGroups[n - 1]!.id });
+        return;
+      }
       const action = KEY_ACTIONS[e.key];
       if (!action) return;
       e.preventDefault(); // 矢印キーやスペースでページがスクロールしないように
@@ -67,13 +116,14 @@ export function ExploreScreen() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [run]);
+  }, [run, itemGroups]);
 
   useEffect(() => {
     if (viewRef.current) drawView(viewRef.current, state, visible);
     if (miniRef.current) drawMinimap(miniRef.current, state);
   }, [state, visible]);
 
+  const { stats } = state;
   const visibleEnemies = state.enemies.filter((e) => visible.has(e.pos.y * state.map.width + e.pos.x));
   const onStairs = samePos(state.player, state.map.stairs);
   const ended = state.outcome !== 'ongoing';
@@ -84,7 +134,7 @@ export function ExploreScreen() {
       <header className="top">
         <div>
           <p className="top__run">
-            開発用 ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体
+            {runNumber ? `${runNumber}回目の挑戦` : '開発用'} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体
           </p>
           <h1 className="top__title">{floorName}</h1>
         </div>
@@ -103,23 +153,67 @@ export function ExploreScreen() {
           {ended && (
             <div className="explore__ending">
               <p>{state.log.at(-1)}</p>
-              <button
-                type="button"
-                className="primary"
-                onClick={() => {
-                  setError(null);
-                  setState(startExplore(newSeed()));
-                }}
-              >
-                もう一度歩く
-              </button>
+              {onFinish ? (
+                <button type="button" className="primary" onClick={() => onFinish(state)}>
+                  結果を見る
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => {
+                    setError(null);
+                    setState(start());
+                  }}
+                >
+                  もう一度歩く
+                </button>
+              )}
             </div>
           )}
         </div>
 
         <aside className="explore__side">
           <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" />
-          <Meter label="HP" value={state.stats.hp} max={state.stats.maxHp} tone="hp" />
+          <Meter label="HP" value={stats.hp} max={stats.maxHp} tone="hp" />
+
+          <section aria-labelledby="explore-gear">
+            <h2 id="explore-gear" className="meter__head">
+              装備と持ち物
+            </h2>
+            <p className="explore__gear">
+              武器：{stats.weapon ? ITEMS[stats.weapon].name : 'なし'}
+              <br />
+              防具：{stats.armor ? ITEMS[stats.armor].name : 'なし'}
+              {stats.enchant && (
+                <>
+                  <br />
+                  付与：{TRAITS[stats.enchant.element].name}（あと{stats.enchant.hits}回）
+                </>
+              )}
+            </p>
+            {itemGroups.length === 0 ? (
+              <p className="muted">道具はない</p>
+            ) : (
+              <ul className="explore__items">
+                {itemGroups.map((g, i) => (
+                  <li key={g.id}>
+                    <button
+                      type="button"
+                      className="explore__use"
+                      onClick={() => run({ kind: 'use_item', item: g.id })}
+                      disabled={ended}
+                      title={ITEMS[g.id].description}
+                    >
+                      <span className="explore__key">{i + 1}</span>
+                      {ITEMS[g.id].name}
+                      {g.count > 1 && ` ×${g.count}`}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
           <section aria-labelledby="explore-enemies">
             <h2 id="explore-enemies" className="meter__head">
@@ -134,7 +228,8 @@ export function ExploreScreen() {
                     <span className={`explore__mark explore__mark--${e.mode}`} aria-hidden="true">
                       {ENEMY_MARK[e.mode].mark}
                     </span>
-                    {enemyDef(e).name}（HP {e.hp}）：{ENEMY_MARK[e.mode].text}
+                    {enemyDef(e).name}（{TRAITS[enemyDef(e).element].name}・{BODY_NAMES[enemyDef(e).body]}、HP {e.hp}）：
+                    {ENEMY_MARK[e.mode].text}
                   </li>
                 ))}
               </ul>
@@ -162,7 +257,7 @@ export function ExploreScreen() {
           <button type="button" className="primary" onClick={() => run({ kind: 'descend' })} disabled={!onStairs || ended}>
             階段を降りる
           </button>
-          <p className="muted">矢印キー／WASDで移動、スペースで待つ、Enterで階段を降りる</p>
+          <p className="muted">矢印キー／WASDで移動、スペースで待つ、Enterで階段を降りる、数字キーで道具を使う</p>
           <p className="error" role="alert">
             {error}
           </p>
@@ -290,7 +385,7 @@ function drawView(canvas: HTMLCanvasElement, state: ExploreState, visible: Set<n
     drawEnemy(ctx, e, px, py, colors);
   }
 
-  drawSprite(ctx, 'hero', Math.floor(VIEW_W / 2) * CELL, Math.floor(VIEW_H / 2) * CELL, CELL);
+  drawSprite(ctx, 'hero', Math.floor(VIEW_W / 2) * CELL, Math.floor(VIEW_H / 2) * CELL, CELL, CLOAKS[cloakOf(state.stats.armor)]);
 }
 
 function drawEnemy(
@@ -306,7 +401,8 @@ function drawEnemy(
     ctx.lineWidth = 2;
     ctx.strokeRect(px + 1, py + 1, CELL - 2, CELL - 2);
   }
-  drawSprite(ctx, enemy.id, px, py, CELL);
+  const look = ENEMY_LOOKS[enemy.id];
+  drawSprite(ctx, look.sprite, px, py, CELL, look.recolor);
 
   const def = enemyDef(enemy);
   if (enemy.hp < def.hp) {

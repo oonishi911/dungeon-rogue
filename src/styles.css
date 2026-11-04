@@ -10,7 +10,6 @@
   --funds: #6a8a3b;
   --alert: #e0a08a;
   --fire: #d9653b; /* 炎の属性 */
-  --poison: #9a7cc4; /* 毒の属性 */
   --hp-you: #9cc46a;
   --hp-enemy: #e2c178;
   --fog: #0b1413; /* まだ見ていない場所 */
@@ -388,236 +387,7 @@ button.card:disabled {
   gap: 1rem 2rem;
 }
 
-/* ===== ダンジョン ===== */
-.depth {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  gap: 0.25rem;
-}
-
-.depth__floor {
-  display: grid;
-  gap: 0.25rem;
-  justify-items: center;
-  padding: 0.375rem 0.625rem;
-  border-radius: 4px;
-  color: var(--bone-dim);
-  font-size: var(--step--1);
-}
-
-.depth__floor.is-current {
-  background: var(--pine-deep);
-  color: var(--bone);
-  font-weight: 700;
-}
-
-.depth__dots {
-  display: flex;
-  gap: 0.375rem;
-}
-
-.dot {
-  width: 0.75rem;
-  height: 0.75rem;
-  border-radius: 50%;
-  border: 1.5px solid var(--bone-dim);
-}
-
-.dot--boss {
-  width: 1.125rem;
-  height: 1.125rem;
-}
-
-.dot.is-done {
-  background: var(--bone-dim);
-}
-
-.dot.is-now {
-  border: 2px solid var(--bone);
-  box-shadow: 0 0 0 3px var(--pine-line);
-}
-
-.arena {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.75rem;
-}
-
-.fighter {
-  padding: 1.25rem;
-  border-radius: 6px;
-  background: var(--pine-deep);
-  display: grid;
-  gap: 0.75rem;
-  align-content: start;
-}
-
-.fighter--enemy {
-  border: 2px solid var(--pine-line);
-}
-
-.fighter__sprite {
-  height: 160px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.fighter__sprite svg {
-  display: block;
-  image-rendering: pixelated;
-}
-
-.fighter__sprite.is-down svg {
-  opacity: 0.35;
-  filter: grayscale(1);
-}
-
-.fighter__head {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.fighter__name {
-  margin: 0;
-  font-family: var(--serif);
-  font-weight: 900;
-  font-size: var(--step-2);
-  line-height: 1.25;
-}
-
-.fighter__note {
-  margin: 0;
-  font-size: var(--step--1);
-  color: var(--bone-dim);
-}
-
-.element {
-  padding: 0.125rem 0.5rem;
-  border-radius: 3px;
-  font-size: var(--step--1);
-  font-weight: 700;
-  color: var(--pine-deep);
-}
-
-.element--fire {
-  background: var(--fire);
-}
-
-.element--poison {
-  background: var(--poison);
-}
-
-.bar {
-  display: grid;
-  gap: 0.25rem;
-}
-
-.bar__label {
-  font-size: var(--step--1);
-  color: var(--bone-dim);
-}
-
-.bar__label strong {
-  font-family: var(--serif);
-  font-size: var(--step-1);
-  color: var(--bone);
-}
-
-.bar__track {
-  height: 0.75rem;
-  border-radius: 2px;
-  background: var(--pine-line);
-  overflow: hidden;
-}
-
-.bar__fill {
-  display: block;
-  height: 100%;
-  transition: width 240ms ease;
-}
-
-.bar__track--you .bar__fill {
-  background: var(--hp-you);
-}
-
-.bar__track--enemy .bar__fill {
-  background: var(--hp-enemy);
-}
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: stretch;
-}
-
-.item-btn {
-  display: grid;
-  text-align: left;
-  padding: 0.5rem 1rem;
-  background: none;
-  border: 1.5px solid var(--bone-dim);
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.item-btn:hover {
-  border-color: var(--bone);
-}
-
-.item-btn__name {
-  font-weight: 700;
-}
-
-.item-btn__count {
-  margin-left: 0.25rem;
-  font-weight: 400;
-  color: var(--bone-dim);
-}
-
-.item-btn__desc {
-  font-size: var(--step--1);
-  color: var(--bone-dim);
-}
-
-.ending {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1.5rem;
-}
-
-.ending__text {
-  margin: 0;
-  font-family: var(--serif);
-  font-weight: 900;
-  font-size: var(--step-2);
-}
-
-.log__list--tall {
-  max-height: 16rem;
-}
-
 @media (max-width: 40rem) {
-  .arena {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-  }
-  .depth__floor {
-    padding: 0.25rem 0.375rem;
-  }
-  .fighter__sprite {
-    height: 104px;
-  }
-  .fighter__sprite svg {
-    width: 96px;
-    height: 96px;
-  }
   .middle {
     grid-template-columns: 1fr;
   }
@@ -646,8 +416,7 @@ button.card:disabled {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  button.card,
-  .bar__fill {
+  button.card {
     transition: none;
   }
   button.card:hover:not(:disabled),
@@ -898,4 +667,51 @@ button.card:disabled {
 
 .explore__mark--wander {
   color: var(--bone-dim);
+}
+
+.explore__gear {
+  margin: 0.25rem 0 0.5rem;
+  font-size: var(--step--1);
+}
+
+.explore__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.375rem;
+}
+
+.explore__use {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  background: var(--pine-deep);
+  border: 1px solid var(--pine-line);
+  border-radius: 4px;
+  font-size: var(--step--1);
+  text-align: left;
+  cursor: pointer;
+}
+
+.explore__use:hover:not(:disabled) {
+  border-color: var(--bone-dim);
+}
+
+.explore__use:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.explore__key {
+  display: inline-grid;
+  place-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 3px;
+  color: var(--bone-dim);
+  font-size: 0.75rem;
 }

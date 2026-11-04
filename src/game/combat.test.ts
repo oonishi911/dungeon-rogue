@@ -1,94 +1,122 @@
 import { describe, expect, it } from 'vitest';
-import { act, buildPlayer, enemyHitDamage, startCombat } from './combat';
+import { buildPlayer, enemyHitDamage, playerHitDamage } from './combat';
 import { COMBAT_CONFIG, ENEMIES } from './data';
-import type { CombatState, Result } from './types';
+import type { Element, EnemyDef, ItemId, PlayerStats } from './types';
 
-function unwrap<T>(result: Result<T>): T {
-  if (!result.ok) throw new Error(result.error);
-  return result.value;
+/** 属性だけを変えた、攻撃力11・防御0の敵（プレイヤーの防御1を引くと基礎ダメージ10） */
+function attacker(element: Element): EnemyDef {
+  return { id: 'goblin', name: 'テスト', hp: 10, atk: 11, def: 0, element, body: 'normal' };
 }
 
+/** 体質だけを変えた、防御0の敵 */
+function target(body: EnemyDef['body'], element: Element = 'neutral'): EnemyDef {
+  return { id: 'goblin', name: 'テスト', hp: 10, atk: 1, def: 0, element, body };
+}
+
+const hit = (loadout: ItemId[], element: Element) => enemyHitDamage(buildPlayer(loadout), attacker(element));
+
 describe('buildPlayer', () => {
-  it('剣を持つと攻撃力が上がる', () => {
-    expect(buildPlayer(['iron_sword']).atk).toBe(COMBAT_CONFIG.playerAtk + COMBAT_CONFIG.swordAtk);
+  it('武器・防具・道具を振り分ける', () => {
+    const p = buildPlayer(['potion', 'hammer', 'plate', 'food']);
+    expect(p.weapon).toBe('hammer');
+    expect(p.armor).toBe('plate');
+    expect(p.items).toEqual(['potion', 'food']);
+    expect(p.enchant).toBeNull();
   });
 
-  it('防具は1つだけ装備し、選ばなければ最初の1つ', () => {
-    expect(buildPlayer(['poison_cloak', 'fire_cloak']).armor).toBe('poison_cloak');
-    expect(buildPlayer(['poison_cloak', 'fire_cloak'], 'fire_cloak').armor).toBe('fire_cloak');
-  });
-
-  it('消費アイテムだけが戦闘中に使える持ち物になる', () => {
-    expect(buildPlayer(['iron_sword', 'potion', 'antidote']).consumables).toEqual(['potion', 'antidote']);
-  });
-});
-
-describe('耐性', () => {
-  it('耐火のマントで炎のダメージが大きく減る', () => {
-    const drake = ENEMIES.fire_drake;
-    const plain = enemyHitDamage(buildPlayer([]), drake);
-    const resisted = enemyHitDamage(buildPlayer(['fire_cloak']), drake);
-    expect(resisted).toBeLessThan(plain / 2);
-  });
-
-  it('逆の耐性のマントでは炎は減らない', () => {
-    const drake = ENEMIES.fire_drake;
-    expect(enemyHitDamage(buildPlayer(['poison_cloak']), drake)).toBe(enemyHitDamage(buildPlayer([]), drake));
-  });
-
-  it('毒の敵に攻撃されると毒になり、毎ラウンドダメージを受ける', () => {
-    const s = unwrap(act(startCombat(buildPlayer([]), 'venom_queen'), { kind: 'attack' }));
-    const hit = ENEMIES.venom_queen.atk - COMBAT_CONFIG.playerDef;
-    expect(s.player.hp).toBe(COMBAT_CONFIG.playerHp - hit - COMBAT_CONFIG.poisonDamage);
-    expect(s.player.poisonTurns).toBe(COMBAT_CONFIG.poisonTurns - 1);
-  });
-
-  it('防毒のマントがあれば毒にならない', () => {
-    const s = unwrap(act(startCombat(buildPlayer(['poison_cloak']), 'venom_queen'), { kind: 'attack' }));
-    expect(s.player.poisonTurns).toBe(0);
+  it('武器を持つと攻撃力が上がる', () => {
+    expect(buildPlayer(['sword']).atk).toBe(COMBAT_CONFIG.playerAtk + COMBAT_CONFIG.weaponAtk);
+    expect(buildPlayer([]).atk).toBe(COMBAT_CONFIG.playerAtk);
   });
 });
 
-describe('act', () => {
-  it('敵を倒すと勝利し、反撃は受けない', () => {
-    const start: CombatState = { ...startCombat(buildPlayer([]), 'goblin'), enemy: { id: 'goblin', hp: 1 } };
-    const s = unwrap(act(start, { kind: 'attack' }));
-    expect(s.outcome).toBe('won');
-    expect(s.player.hp).toBe(COMBAT_CONFIG.playerHp);
+describe('enemyHitDamage（防具と属性）', () => {
+  it('防具なしなら属性に関係なく同じ', () => {
+    for (const e of ['fire', 'ice', 'neutral', 'light', 'dark'] as const) expect(hit([], e)).toBe(10);
   });
 
-  it('HPが0になると敗北する', () => {
-    const weak = { ...buildPlayer([]), hp: 1 };
-    const s = unwrap(act(startCombat(weak, 'flame_hound'), { kind: 'attack' }));
-    expect(s.outcome).toBe('lost');
-    expect(s.player.hp).toBe(0);
+  it('マントは対応する属性を大きく減らし、ほかの属性には効かない', () => {
+    expect(hit(['fire_cloak'], 'fire')).toBe(3);
+    expect(hit(['fire_cloak'], 'ice')).toBe(10);
+    expect(hit(['ice_cloak'], 'ice')).toBe(3);
   });
 
-  it('回復薬は最大HPを超えて回復しない', () => {
-    const s = unwrap(act(startCombat(buildPlayer(['potion']), 'goblin'), { kind: 'use_item', item: 'potion' }));
-    expect(s.player.consumables).toEqual([]);
-    expect(s.player.hp).toBeLessThan(COMBAT_CONFIG.playerHp); // 満タンから回復→ゴブリンの攻撃
+  it('複合属性には、成分の半分だけ効く', () => {
+    // 光＝炎5＋無属性5。耐火のマントは炎の5だけを0.3倍
+    expect(hit(['fire_cloak'], 'light')).toBe(Math.ceil(5 * 0.3 + 5));
+    expect(hit(['ice_cloak'], 'light')).toBe(10);
+    expect(hit(['ice_cloak'], 'dark')).toBe(Math.ceil(5 * 0.3 + 5));
   });
 
-  it('毒消しで毒が治る', () => {
-    const poisoned = { ...buildPlayer(['antidote']), poisonTurns: 3 };
-    const s = unwrap(act(startCombat(poisoned, 'goblin'), { kind: 'use_item', item: 'antidote' }));
-    expect(s.player.poisonTurns).toBe(0);
+  it('鎧は無属性に弱めに効き、光と闇にも半分効く（保険）', () => {
+    expect(hit(['plate'], 'neutral')).toBe(6);
+    expect(hit(['plate'], 'light')).toBe(Math.ceil(5 + 5 * 0.6));
+    expect(hit(['plate'], 'dark')).toBe(Math.ceil(5 + 5 * 0.6));
+    expect(hit(['plate'], 'fire')).toBe(10);
   });
 
-  it('氷の巻物は炎の敵に大ダメージ', () => {
-    const s = unwrap(act(startCombat(buildPlayer(['frost_scroll']), 'fire_drake'), { kind: 'use_item', item: 'frost_scroll' }));
-    expect(s.enemy.hp).toBe(ENEMIES.fire_drake.hp - COMBAT_CONFIG.frostVsFire);
+  it('専用防具はその属性を丸ごと減らし、ほかには効かない', () => {
+    expect(hit(['light_robe'], 'light')).toBe(3);
+    expect(hit(['light_robe'], 'fire')).toBe(10);
+    expect(hit(['dark_robe'], 'dark')).toBe(3);
+    expect(hit(['dark_robe'], 'neutral')).toBe(10);
   });
 
-  it('持っていないアイテムや装備品は使えない', () => {
-    const start = startCombat(buildPlayer(['iron_sword']), 'goblin');
-    expect(act(start, { kind: 'use_item', item: 'potion' }).ok).toBe(false);
-    expect(act(start, { kind: 'use_item', item: 'iron_sword' }).ok).toBe(false);
+  it('ダメージは最低1', () => {
+    expect(enemyHitDamage(buildPlayer(['fire_cloak']), { ...attacker('fire'), atk: 1 })).toBe(1);
+  });
+});
+
+describe('playerHitDamage（武器と体質）', () => {
+  // 武器ありの攻撃力9、防御0の敵なら基礎ダメージ9
+  const dmg = (weapon: ItemId, body: EnemyDef['body']) => playerHitDamage(buildPlayer([weapon]), target(body));
+
+  it('剣は柔らかい敵に強く、硬い敵・霊体に弱い', () => {
+    expect(dmg('sword', 'soft')).toBeGreaterThan(dmg('sword', 'normal'));
+    expect(dmg('sword', 'hard')).toBeLessThan(dmg('sword', 'normal'));
+    expect(dmg('sword', 'spirit')).toBeLessThan(dmg('sword', 'hard'));
   });
 
-  it('終わった戦闘では行動できない', () => {
-    const done: CombatState = { ...startCombat(buildPlayer([]), 'goblin'), outcome: 'won' };
-    expect(act(done, { kind: 'attack' }).ok).toBe(false);
+  it('槌は硬い敵に、杖は霊体に強い', () => {
+    expect(dmg('hammer', 'hard')).toBeGreaterThan(dmg('sword', 'hard'));
+    expect(dmg('staff', 'spirit')).toBeGreaterThan(dmg('hammer', 'spirit'));
+    expect(dmg('staff', 'soft')).toBeLessThan(dmg('sword', 'soft'));
+  });
+
+  it('素手はどの体質にも同じ', () => {
+    const p = buildPlayer([]);
+    const values = (['normal', 'soft', 'hard', 'spirit'] as const).map((b) => playerHitDamage(p, target(b)));
+    expect(new Set(values).size).toBe(1);
+  });
+
+  it('防御の高い敵ほど通りにくい', () => {
+    const p = buildPlayer(['hammer']);
+    expect(playerHitDamage(p, ENEMIES.stone_golem)).toBeLessThan(playerHitDamage(p, { ...ENEMIES.stone_golem, def: 0 }));
+  });
+});
+
+describe('playerHitDamage（属性付与）', () => {
+  // 素手・攻撃力6、防御0、普通の体質の敵なら基礎ダメージ6
+  const withEnchant = (element: Element): PlayerStats => ({ ...buildPlayer([]), enchant: { element, hits: 5 } });
+  const dmg = (enchant: Element, enemy: Element) => playerHitDamage(withEnchant(enchant), target('normal', enemy));
+
+  it('弱点を突くと2倍、複合属性の弱点の成分なら1.5倍', () => {
+    expect(dmg('fire', 'ice')).toBe(12);
+    expect(dmg('fire', 'dark')).toBe(9);
+    expect(dmg('ice', 'fire')).toBe(12);
+    expect(dmg('ice', 'light')).toBe(9);
+    expect(dmg('light', 'dark')).toBe(12);
+    expect(dmg('dark', 'light')).toBe(12);
+  });
+
+  it('同じ属性には半分、同じ成分を含む複合属性には0.75倍', () => {
+    expect(dmg('fire', 'fire')).toBe(3);
+    expect(dmg('fire', 'light')).toBe(Math.round(6 * 0.75));
+    expect(dmg('light', 'light')).toBe(3);
+  });
+
+  it('関係のない属性には効果がない', () => {
+    expect(dmg('fire', 'neutral')).toBe(6);
+    expect(dmg('light', 'fire')).toBe(6);
   });
 });

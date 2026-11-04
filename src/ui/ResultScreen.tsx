@@ -1,27 +1,26 @@
 import { CARDS, ITEMS, TRAITS } from '../game/data';
-import { EXPEDITION_CONFIG, type ExpeditionResult } from '../game/expedition';
+import type { ExploreResult } from '../game/explore';
 import type { PrepResult } from '../game/types';
 import { knowledgeText } from './PrepScreen';
 
 interface ResultScreenProps {
   run: number;
   outcome: PrepResult;
-  expedition: ExpeditionResult;
+  expedition: ExploreResult;
   onNextRun: () => void;
 }
 
 export function ResultScreen({ run, outcome, expedition, onNextRun }: ResultScreenProps) {
-  const cleared = expedition.outcome === 'cleared';
-  const bossFloor = EXPEDITION_CONFIG.floors + 1;
-  const where =
-    expedition.floorReached === bossFloor ? 'ボスの前' : `${expedition.floorReached}階`;
+  // ボス階はまだないので、最下層の階段まで着けば踏破とする
+  const cleared = expedition.outcome === 'reached_bottom';
+  const where = `地下${expedition.floorReached}階`;
 
   return (
     <main className="screen screen--narrow">
       <header className="top">
         <div>
           <p className="top__run">{run}回目の挑戦</p>
-          <h1 className="top__title">{cleared ? 'ダンジョンを踏破した' : `${where}で力尽きた`}</h1>
+          <h1 className="top__title">{cleared ? '最深部にたどり着いた' : `${where}で力尽きた`}</h1>
         </div>
       </header>
 
@@ -39,7 +38,7 @@ export function ResultScreen({ run, outcome, expedition, onNextRun }: ResultScre
           </div>
           <div>
             <dt>倒した敵</dt>
-            <dd>{expedition.enemiesDefeated}体</dd>
+            <dd>{expedition.defeated}体</dd>
           </div>
           <div>
             <dt>次に持ち越すカード</dt>

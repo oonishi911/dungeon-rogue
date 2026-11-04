@@ -175,3 +175,15 @@ describe('背後からの攻撃', () => {
     expect(s.stats.hp).toBe(s0.stats.hp);
   });
 });
+
+describe('属性付与と攻撃', () => {
+  it('攻撃するたびに付与の残り回数が減り、0回で消える', () => {
+    const s0 = arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { mode: 'chase', hp: 999 })]);
+    let s: ExploreState = { ...s0, stats: { ...s0.stats, enchant: { element: 'fire', hits: 2 } } };
+    s = act(s, { kind: 'move', dir: 'right' });
+    expect(s.stats.enchant).toEqual({ element: 'fire', hits: 1 });
+    s = act(s, { kind: 'move', dir: 'right' });
+    expect(s.stats.enchant).toBeNull();
+    expect(s.log.some((l) => l.includes('力が消えた'))).toBe(true);
+  });
+});
