@@ -456,6 +456,23 @@ button.card:disabled {
   border: 2px solid var(--pine-line);
 }
 
+.fighter__sprite {
+  height: 160px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.fighter__sprite svg {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.fighter__sprite.is-down svg {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+
 .fighter__head {
   display: flex;
   align-items: center;
@@ -591,6 +608,13 @@ button.card:disabled {
   }
   .depth__floor {
     padding: 0.25rem 0.375rem;
+  }
+  .fighter__sprite {
+    height: 104px;
+  }
+  .fighter__sprite svg {
+    width: 96px;
+    height: 96px;
   }
   .middle {
     grid-template-columns: 1fr;

@@ -2,6 +2,7 @@ import { enemyHitDamage, playerHitDamage } from '../game/combat';
 import { ENEMIES, ITEMS, TRAITS } from '../game/data';
 import type { ExpeditionState } from '../game/expedition';
 import type { CombatAction, ItemId } from '../game/types';
+import { Sprite, type CloakColor } from '../sprites/Sprite';
 
 interface DungeonScreenProps {
   state: ExpeditionState;
@@ -24,6 +25,8 @@ export function DungeonScreen({ state, error, onAction, onFinish }: DungeonScree
   const armor = player.armor ? ITEMS[player.armor] : null;
   const resisted = enemy.element !== undefined && armor?.resist === enemy.element;
   const incoming = enemyHitDamage(player, enemy);
+  // 着ているマントの色を主人公の絵に反映する
+  const cloak: CloakColor = armor?.resist ?? 'none';
 
   const counts = USABLE.map((id) => ({ id, n: player.consumables.filter((c) => c === id).length })).filter(
     (c) => c.n > 0,
@@ -41,6 +44,9 @@ export function DungeonScreen({ state, error, onAction, onFinish }: DungeonScree
 
       <div className="arena">
         <section className="fighter fighter--enemy" aria-labelledby="enemy-name">
+          <div className={`fighter__sprite${combat.enemy.hp === 0 ? ' is-down' : ''}`}>
+            <Sprite id={enemy.id} scale={enemy.boss ? 5 : 4} label={enemy.name} />
+          </div>
           <div className="fighter__head">
             <h2 id="enemy-name" className="fighter__name">
               {enemy.name}
@@ -59,6 +65,9 @@ export function DungeonScreen({ state, error, onAction, onFinish }: DungeonScree
         </section>
 
         <section className="fighter" aria-labelledby="you-name">
+          <div className={`fighter__sprite${player.hp === 0 ? ' is-down' : ''}`}>
+            <Sprite id="hero" scale={4} cloak={cloak} label={`あなた（${armor ? armor.name : 'マントなし'}）`} />
+          </div>
           <div className="fighter__head">
             <h2 id="you-name" className="fighter__name">
               あなた
