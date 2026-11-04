@@ -15,7 +15,8 @@ import {
   type ExploreResult,
   type ExploreState,
 } from './explore';
-import { tileAt, type Pos } from './map';
+import type { Pos } from './map';
+import { DIRS, findPath } from './path';
 import type { ItemId, TraitId } from './types';
 
 export const AUTOPLAY_CONFIG = {
@@ -101,40 +102,10 @@ function touchesFog(state: ExploreState, p: Pos): boolean {
   });
 }
 
-/**
- * 一度見た通路だけを通って、goal を満たす最も近いマスへ向かう最短路の最初の1歩。
- * avoid のマスは通らない。敵のいるマスは通れる扱い（ぶつかれば攻撃になる）。
- */
+/** 一度見た通路だけを通って、goal を満たす最も近いマスへ向かう最初の1歩 */
 function firstStep(state: ExploreState, goal: (p: Pos) => boolean, avoid: ReadonlySet<string>): Pos | null {
-  const { map, player, seen } = state;
-  const start = key(player);
-  const parent = new Map<string, string>([[start, '']]);
-  const queue: Pos[] = [player];
-  for (let head = 0; head < queue.length; head++) {
-    const p = queue[head]!;
-    if (head > 0 && goal(p)) {
-      let cur = key(p);
-      while (parent.get(cur) !== start) cur = parent.get(cur)!;
-      const [x, y] = cur.split(',').map(Number);
-      return { x: x!, y: y! };
-    }
-    for (const d of DIRS) {
-      const n = { x: p.x + d.x, y: p.y + d.y };
-      const k = key(n);
-      if (parent.has(k) || avoid.has(k) || tileAt(map, n) === 'wall' || !seen[n.y * map.width + n.x]) continue;
-      parent.set(k, key(p));
-      queue.push(n);
-    }
-  }
-  return null;
+  return findPath(state, goal, avoid)?.[0] ?? null;
 }
-
-const DIRS: readonly Pos[] = [
-  { x: 0, y: -1 },
-  { x: 1, y: 0 },
-  { x: 0, y: 1 },
-  { x: -1, y: 0 },
-];
 
 /** AIに最後まで遊ばせた結果 */
 export function autoPlay(seed: number, options: ExploreOptions = {}): ExploreResult & { turns: number } {
