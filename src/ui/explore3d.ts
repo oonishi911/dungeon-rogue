@@ -18,9 +18,12 @@ import { cloakOf, ENEMY_LOOKS } from '../sprites/looks';
 import { floorVariant } from './autotile';
 import { ENEMY_MARK, lerp, type Frame } from './exploreRender';
 
-const WALL_HEIGHT = 0.6; // マスの大きさを1とした壁の高さ。低めにして、手前の壁で主人公が隠れにくくする
+// マスの大きさを1とした壁の高さ。高くすると通路が深く見える。
+// 今のカメラの角度（約63度）では、高さ1までなら、すぐ手前の壁は隣のマスに立つキャラクターの足元に届く程度で、体は隠れない
+const WALL_HEIGHT = 1;
 const CAMERA = { fov: 40, height: 15, back: 7.5 }; // 主人公の真上15・手前7.5から見下ろす（約63度。横に17マスほど映る）
 const REMEMBERED = 0.3; // 一度見たが今は見えていないマスの明るさ
+const FADED_WALL_OPACITY = 0.35; // 敵・宝箱・階段のすぐ手前にあって、それを隠してしまう壁の濃さ
 const BACKGROUND = 0x0b1413;
 // 床と壁を描く範囲（主人公からのマス数）。画面に映る横17×縦12マスほどより、動いている途中の分だけ広くとる
 const DRAW_RANGE = { x: 13, z: 11 };
@@ -28,7 +31,7 @@ const DRAW_CAPACITY = (DRAW_RANGE.x * 2 + 1) * (DRAW_RANGE.z * 2 + 1);
 
 /**
  * テクスチャの中の配置（128×64px、1マス32px）。詳しくは docs/textures.md。
- * 1段目に床4種類、2段目に壁の上面と側面。壁の側面は、下から壁の高さの分（約19px）だけが見える
+ * 1段目に床4種類、2段目に壁の上面と側面。壁の側面は、マスの下から壁の高さの分が使われる（高さ1なら全体）
  */
 export const TEXTURE_ATLAS = {
   columns: 4,
@@ -64,7 +67,8 @@ export class DungeonView3D {
   private shownState: ExploreState | null = null;
   private readonly floors: THREE.InstancedMesh[]; // 床の模様ごとに1つ
   private readonly walls: THREE.InstancedMesh;
-  private readonly wallMaterials: { top: THREE.MeshLambertMaterial; side: THREE.MeshLambertMaterial };
+  private readonly fadedWalls: THREE.InstancedMesh; // 半透明にした壁
+  private readonly wallMaterials: { top: THREE.MeshLambertMaterial; side: THREE.MeshLambertMaterial }[]; // 0：普通、1：半透明
   private readonly atlases = new Map<TraitId, Atlas | null>(); // null は読み込み中か、読み込めなかった
   private appliedAtlas: Atlas | null = null;
   private readonly props = new THREE.Group(); // 階段・宝箱・目印
@@ -104,14 +108,17 @@ export class DungeonView3D {
     // 床は模様ごとにテクスチャが違うので、模様の数だけ入れ物を分ける
     const floorGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
     this.floors = TEXTURE_ATLAS.floors.map(() => new THREE.InstancedMesh(floorGeo, new THREE.MeshLambertMaterial(), DRAW_CAPACITY));
-    // 壁は面ごとに素材を分ける。箱の面の順番は +x, -x, +y（上）, -y（下）, +z, -z
-    this.wallMaterials = {
-      top: new THREE.MeshLambertMaterial({ vertexColors: true }),
-      side: new THREE.MeshLambertMaterial({ vertexColors: true }),
-    };
-    const { top, side } = this.wallMaterials;
-    this.walls = new THREE.InstancedMesh(shadedBox(WALL_HEIGHT), [side, side, top, side, side, side], DRAW_CAPACITY);
-    for (const mesh of [...this.floors, this.walls]) {
+    // 壁は面ごとに素材を分ける。箱の面の順番は +x, -x, +y（上）, -y（下）, +z, -z。
+    // 敵などを隠してしまう手前の壁は、半透明の素材で別に描く
+    this.wallMaterials = [{}, { transparent: true, opacity: FADED_WALL_OPACITY, depthWrite: false }].map((extra) => ({
+      top: new THREE.MeshLambertMaterial({ vertexColors: true, ...extra }),
+      side: new THREE.MeshLambertMaterial({ vertexColors: true, ...extra }),
+    }));
+    const wallGeo = shadedBox(WALL_HEIGHT);
+    const [solid, faded] = this.wallMaterials.map(({ top, side }) => [side, side, top, side, side, side]);
+    this.walls = new THREE.InstancedMesh(wallGeo, solid!, DRAW_CAPACITY);
+    this.fadedWalls = new THREE.InstancedMesh(wallGeo, faded!, DRAW_CAPACITY);
+    for (const mesh of [...this.floors, this.walls, this.fadedWalls]) {
       // 中身を毎回入れ替えるので、最初の中身で計算された範囲で画面外と判定されないようにする
       mesh.frustumCulled = false;
       this.scene.add(mesh);
@@ -164,8 +171,8 @@ export class DungeonView3D {
 
   dispose() {
     this.floors[0]!.geometry.dispose(); // 床の形はすべての入れ物で共通
-    this.walls.geometry.dispose();
-    for (const mesh of [...this.floors, this.walls]) {
+    this.walls.geometry.dispose(); // 半透明の壁と共通
+    for (const mesh of [...this.floors, this.walls, this.fadedWalls]) {
       for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) mat.dispose();
       mesh.dispose();
     }
@@ -196,6 +203,8 @@ export class DungeonView3D {
     const c = new THREE.Color();
     const floorCounts = this.floors.map(() => 0);
     let walls = 0;
+    let fadedWalls = 0;
+    const faded = this.wallsToFade(frame);
     for (let z = player.y - DRAW_RANGE.z; z <= player.y + DRAW_RANGE.z; z++) {
       for (let x = player.x - DRAW_RANGE.x; x <= player.x + DRAW_RANGE.x; x++) {
         if (x < 0 || z < 0 || x >= map.width || z >= map.height) continue;
@@ -203,8 +212,15 @@ export class DungeonView3D {
         if (!seen[i]) continue;
         const light = frame.visible.has(i) ? 1 : REMEMBERED;
         if (map.tiles[i] === 'wall') {
-          this.walls.setMatrixAt(walls, m.makeTranslation(x, WALL_HEIGHT / 2, z));
-          this.walls.setColorAt(walls++, c.copy(wallBase).multiplyScalar(light));
+          c.copy(wallBase).multiplyScalar(light);
+          m.makeTranslation(x, WALL_HEIGHT / 2, z);
+          if (faded.has(i)) {
+            this.fadedWalls.setMatrixAt(fadedWalls, m);
+            this.fadedWalls.setColorAt(fadedWalls++, c);
+          } else {
+            this.walls.setMatrixAt(walls, m);
+            this.walls.setColorAt(walls++, c);
+          }
         } else {
           // 床の模様はマスの位置で決める（2D表示と同じ決め方）。色だけで描くときは明るさを少し変える
           const k = floorVariant(x, z);
@@ -214,12 +230,34 @@ export class DungeonView3D {
         }
       }
     }
-    const counts = [...this.floors.map((mesh, k) => [mesh, floorCounts[k]!] as const), [this.walls, walls] as const];
+    const counts = [
+      ...this.floors.map((mesh, k) => [mesh, floorCounts[k]!] as const),
+      [this.walls, walls] as const,
+      [this.fadedWalls, fadedWalls] as const,
+    ];
     for (const [mesh, count] of counts) {
       mesh.count = count;
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
+  }
+
+  /**
+   * 半透明にする壁（マスの番号）。今見えている敵・宝箱・階段の、すぐ手前（カメラ側）にある壁。
+   * 主人公は壁より手前に描くので含めない（歩くたびに壁が透けると、立体感が薄れるため）
+   */
+  private wallsToFade(frame: Frame): Set<number> {
+    const { map, enemies, chests } = frame.state;
+    const result = new Set<number>();
+    const behind = (p: Pos) => {
+      if (!frame.visible.has(p.y * map.width + p.x) || p.y + 1 >= map.height) return;
+      const i = (p.y + 1) * map.width + p.x;
+      if (map.tiles[i] === 'wall') result.add(i);
+    };
+    for (const e of enemies) behind(e.pos);
+    for (const c of chests) behind(c.pos);
+    if (map.stairs) behind(map.stairs);
+    return result;
   }
 
   /** ダンジョン特性のテクスチャ。まだ読み込んでいなければ読み込みを始めて null を返す */
@@ -247,10 +285,12 @@ export class DungeonView3D {
       mat.map = atlas?.floors[k] ?? null;
       mat.needsUpdate = true;
     });
-    this.wallMaterials.top.map = atlas?.top ?? null;
-    this.wallMaterials.side.map = atlas?.side ?? null;
-    this.wallMaterials.top.needsUpdate = true;
-    this.wallMaterials.side.needsUpdate = true;
+    for (const { top, side } of this.wallMaterials) {
+      top.map = atlas?.top ?? null;
+      side.map = atlas?.side ?? null;
+      top.needsUpdate = true;
+      side.needsUpdate = true;
+    }
     this.appliedAtlas = atlas;
   }
 
