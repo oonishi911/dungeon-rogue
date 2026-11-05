@@ -63,7 +63,7 @@ export function readColors() {
   };
 }
 
-const lerp = (a: Pos, b: Pos, t: number): Pos => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+export const lerp = (a: Pos, b: Pos, t: number): Pos => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
 
 /** 画面の左上に映っているマップ上の座標（小数）。主人公が常に中央に来る */
 export function viewOrigin(frame: Frame): Pos {

@@ -23,6 +23,9 @@ export const PREP_CONFIG = {
   maxItems: 8, // 道具（消耗品）を持てる数。武器と防具は1つずつ
 } as const;
 
+// 準備フェーズを流れから外している間、毎回この持ち物でダンジョンに入る
+export const STARTING_LOADOUT: readonly ItemId[] = ['sword', 'plate', 'potion', 'potion'];
+
 export const TRAITS: Record<TraitId, TraitDef> = {
   fire: { id: 'fire', name: '炎' },
   ice: { id: 'ice', name: '氷' },
