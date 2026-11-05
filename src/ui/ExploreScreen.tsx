@@ -35,6 +35,7 @@ import {
   type Frame,
   type Motion,
 } from './exploreRender';
+import { padDirection } from './dpad';
 import { DungeonView3D } from './explore3d';
 import { tilesetFor } from './tileset';
 
@@ -185,6 +186,16 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       }
     }
     view3dRef.current = view3d;
+    // 3D表示は、Canvas の画面上の大きさに合わせて描く（スマホの縦長の画面でも引き伸ばさない）
+    const canvas = viewRef.current;
+    const observer =
+      view3d && canvas
+        ? new ResizeObserver(() => view3d!.resize(canvas.clientWidth, canvas.clientHeight))
+        : null;
+    if (observer && canvas) {
+      observer.observe(canvas);
+      view3d!.resize(canvas.clientWidth, canvas.clientHeight);
+    }
     // 視界の計算は、状態が変わったときだけやり直す
     let sight = { state: stateRef.current, visible: visibleTiles(stateRef.current.map, stateRef.current.player, EXPLORE_CONFIG.sightRadius) };
     let frameId = 0;
@@ -227,6 +238,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     frameId = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(frameId);
+      observer?.disconnect();
       view3d?.dispose();
       view3dRef.current = null;
     };
@@ -321,9 +333,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
   const ended = state.outcome !== 'ongoing';
   const floorName = isBossFloor(state) ? '最深部' : `地下${state.floor + 1}階`;
 
+  const lastLog = state.log.at(-1);
+
   return (
-    <main className="screen">
-      <header className="top">
+    <main className="screen explore-screen">
+      <header className="top explore-top">
         <div>
           <p className="top__run">
             {runNumber ? `${runNumber}回目の挑戦` : '開発用'} ・ ランク{state.rank} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体 ・ 金貨{' '}
@@ -339,16 +353,22 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
             // 2Dと3Dでは Canvas の描き方（コンテキスト）が違うので、切り替えたら作り直す
             key={mode}
             ref={viewRef}
-            className="explore__view"
+            className={mode === '3d' ? 'explore__view explore__view--3d' : 'explore__view'}
             width={VIEW_W * CELL}
             height={VIEW_H * CELL}
             role="img"
             aria-label={`${floorName}の周囲。マスをクリックするとそこまで歩く。${onStairs ? '足元に階段がある' : ''}`}
             onClick={onMapClick}
           />
+          {/* スマホでは記録の欄が画面の外になるので、いちばん新しい1行を画面の上に重ねて出す */}
+          {!ended && lastLog && (
+            <p className="explore__toast" aria-hidden="true">
+              {lastLog}
+            </p>
+          )}
           {ended && (
             <div className="explore__ending">
-              <p>{state.log.at(-1)}</p>
+              <p>{lastLog}</p>
               {onFinish ? (
                 <button type="button" className="primary" onClick={() => onFinish(state)}>
                   結果を見る
@@ -363,28 +383,25 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
         </div>
 
         <aside className="explore__side">
-          <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" />
-          <Meter label="HP" value={stats.hp} max={stats.maxHp} tone="hp" />
+          <div className="explore__status">
+            <Meter label="HP" value={stats.hp} max={stats.maxHp} tone="hp" />
+            <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" />
+          </div>
 
-          <section aria-labelledby="explore-gear">
-            <h2 id="explore-gear" className="meter__head">
-              装備と持ち物
-            </h2>
-            <p className="explore__gear">
-              武器：{stats.weapon ? ITEMS[stats.weapon].name : 'なし'}
-              <br />
-              防具：{stats.armor ? ITEMS[stats.armor].name : 'なし'}
-              {stats.enchant && (
-                <>
-                  <br />
-                  付与：{TRAITS[stats.enchant.element].name}（あと{stats.enchant.hits}回）
-                </>
-              )}
-            </p>
+          <div className="explore__controls">
+            <DirectionPad hold={hold} release={release} onStep={(dir) => request({ kind: 'move', dir })} disabled={ended} />
+            <div className="explore__actions">
+              <button type="button" className="primary explore__descend" onClick={() => request({ kind: 'descend' })} disabled={!onStairs || ended}>
+                階段を降りる
+              </button>
+              <button type="button" className="explore__wait" onClick={() => request({ kind: 'wait' })} disabled={ended}>
+                その場で待つ
+              </button>
+            </div>
             {itemGroups.length === 0 ? (
-              <p className="muted">道具はない</p>
+              <p className="muted explore__items">道具はない</p>
             ) : (
-              <ul className="explore__items">
+              <ul className="explore__items" aria-label="道具">
                 {itemGroups.map((g, i) => (
                   <li key={g.id}>
                     <button
@@ -402,9 +419,30 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
                 ))}
               </ul>
             )}
+          </div>
+
+          <p className="error" role="alert">
+            {error}
+          </p>
+
+          <section className="explore__info" aria-labelledby="explore-gear">
+            <h2 id="explore-gear" className="meter__head">
+              装備
+            </h2>
+            <p className="explore__gear">
+              武器：{stats.weapon ? ITEMS[stats.weapon].name : 'なし'}
+              <br />
+              防具：{stats.armor ? ITEMS[stats.armor].name : 'なし'}
+              {stats.enchant && (
+                <>
+                  <br />
+                  付与：{TRAITS[stats.enchant.element].name}（あと{stats.enchant.hits}回）
+                </>
+              )}
+            </p>
           </section>
 
-          <section aria-labelledby="explore-enemies">
+          <section className="explore__info" aria-labelledby="explore-enemies">
             <h2 id="explore-enemies" className="meter__head">
               見えている敵
             </h2>
@@ -434,23 +472,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
             aria-label="この階の地図（歩いて見えた範囲）"
           />
 
-          <div className="pad" role="group" aria-label="操作">
-            <PadButton dir="up" label="↑" hold={hold} release={release} disabled={ended} />
-            <PadButton dir="left" label="←" hold={hold} release={release} disabled={ended} />
-            <button type="button" className="pad__btn pad__wait" onClick={() => request({ kind: 'wait' })} disabled={ended}>
-              待つ
-            </button>
-            <PadButton dir="right" label="→" hold={hold} release={release} disabled={ended} />
-            <PadButton dir="down" label="↓" hold={hold} release={release} disabled={ended} />
-          </div>
-          <button type="button" className="primary" onClick={() => request({ kind: 'descend' })} disabled={!onStairs || ended}>
-            階段を降りる
-          </button>
-          <p className="muted">
-            矢印キー／WASDで移動（押し続けると歩き続ける）、マスをクリックするとそこまで歩く、スペースで待つ、Enterで階段を降りる、数字キーで道具を使う
-          </p>
-          <p className="error" role="alert">
-            {error}
+          <p className="muted explore__help">
+            十字の上を指でなぞると、その向きに歩き続ける。マスをタップするとそこまで歩く。キーボードでは矢印キー／WASDで移動、スペースで待つ、Enterで階段を降りる、数字キーで道具を使う
           </p>
         </aside>
       </div>
@@ -472,40 +495,104 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
   );
 }
 
-/** 方向ボタン。押している間ずっと歩く（キーボードでは矢印キーを使う） */
-function PadButton({
-  dir,
-  label,
+const DIR_LABELS: Record<Dir, { arrow: string; name: string }> = {
+  up: { arrow: '▲', name: '上へ' },
+  down: { arrow: '▼', name: '下へ' },
+  left: { arrow: '◀', name: '左へ' },
+  right: { arrow: '▶', name: '右へ' },
+};
+
+/**
+ * 十字キー。パッド全体で1本の指を追い、中心から見た指の向きに歩き続ける。
+ * 指を離さずに滑らせれば向きを変えられるので、4つの小さなボタンを押し分けるより狙いやすい。
+ * キーボードでは、中のボタンを Enter・スペースで1歩ずつ押せる（歩き続けるには矢印キーを使う）
+ */
+function DirectionPad({
   hold,
   release,
+  onStep,
   disabled,
 }: {
-  dir: Dir;
-  label: string;
   hold: (d: Dir) => void;
   release: (d: Dir) => void;
+  onStep: (d: Dir) => void;
   disabled: boolean;
 }) {
-  const up = () => release(dir);
+  const [active, setActive] = useState<Dir | null>(null);
+  const activeRef = useRef<Dir | null>(null);
+  const pointerRef = useRef<number | null>(null);
+
+  const aim = (dir: Dir | null) => {
+    const prev = activeRef.current;
+    if (prev === dir) return;
+    if (prev) release(prev);
+    if (dir) hold(dir);
+    activeRef.current = dir;
+    setActive(dir);
+  };
+
+  const track = (e: PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const dx = e.clientX - (rect.left + rect.width / 2);
+    const dy = e.clientY - (rect.top + rect.height / 2);
+    aim(padDirection(dx, dy, rect.width / 2));
+  };
+
+  const end = () => {
+    pointerRef.current = null;
+    aim(null);
+  };
+
+  // 探索が終わったら、押しっぱなしの向きを忘れる
+  useEffect(() => {
+    if (disabled) end();
+  }, [disabled]);
+
   return (
-    <button
-      type="button"
-      className={`pad__btn pad__${dir}`}
-      onPointerDown={(e: PointerEvent<HTMLButtonElement>) => {
+    <div
+      className={`dpad${disabled ? ' dpad--disabled' : ''}`}
+      role="group"
+      aria-label="移動"
+      onPointerDown={(e) => {
+        if (disabled || pointerRef.current !== null) return;
+        e.preventDefault();
+        pointerRef.current = e.pointerId;
         e.currentTarget.setPointerCapture(e.pointerId);
-        hold(dir);
+        track(e);
       }}
-      onPointerUp={up}
-      onPointerCancel={up}
-      onLostPointerCapture={up}
-      disabled={disabled}
-      aria-label={{ up: '上へ', down: '下へ', left: '左へ', right: '右へ' }[dir]}
+      onPointerMove={(e) => {
+        if (e.pointerId === pointerRef.current) track(e);
+      }}
+      onPointerUp={(e) => {
+        if (e.pointerId === pointerRef.current) end();
+      }}
+      onPointerCancel={(e) => {
+        if (e.pointerId === pointerRef.current) end();
+      }}
+      onLostPointerCapture={(e) => {
+        if (e.pointerId === pointerRef.current) end();
+      }}
+      onContextMenu={(e) => e.preventDefault()}
     >
-      {label}
-    </button>
+      {(Object.keys(DIR_LABELS) as Dir[]).map((dir) => (
+        <button
+          key={dir}
+          type="button"
+          className={`dpad__btn dpad__${dir}${active === dir ? ' dpad__btn--on' : ''}`}
+          aria-label={DIR_LABELS[dir].name}
+          disabled={disabled}
+          // 指やマウスはパッド全体で受けるので、ボタンはキーボードで押されたときだけ動かす
+          onClick={(e) => {
+            if (e.detail === 0) onStep(dir);
+          }}
+        >
+          {DIR_LABELS[dir].arrow}
+        </button>
+      ))}
+      <span className="dpad__hub" aria-hidden="true" />
+    </div>
   );
 }
-
 
 function Meter({ label, value, max, tone }: { label: string; value: number; max: number; tone: 'hp' | 'satiety' }) {
   return (

@@ -517,6 +517,17 @@ button.card:disabled {
   position: relative;
 }
 
+/* 3D表示は Canvas の画面上の大きさに合わせて描くので、縦横比は CSS で決める */
+.explore__view.explore__view--3d {
+  aspect-ratio: 7 / 5;
+  image-rendering: auto;
+}
+
+/* いちばん新しい記録。スマホでだけ画面の上に重ねて出す（PCでは下の記録の欄で読める） */
+.explore__toast {
+  display: none;
+}
+
 .explore__view {
   display: block;
   width: 100%;
@@ -549,6 +560,103 @@ button.card:disabled {
 .explore__side {
   display: grid;
   gap: 1rem;
+}
+
+.explore__status {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.explore__controls {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.explore__actions {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.explore__wait {
+  padding: 0.5rem;
+  background: var(--pine-deep);
+  border: 1px solid var(--pine-line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.explore__wait:hover:not(:disabled) {
+  border-color: var(--bone-dim);
+}
+
+.explore__wait:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.explore__side .error:empty {
+  display: none;
+}
+
+/* ===== 十字キー =====
+   パッド全体で指を追う。中の4つのボタンは見た目と、キーボードで押すためのもの */
+.dpad {
+  --dpad-size: 9.5rem;
+  position: relative;
+  width: var(--dpad-size);
+  height: var(--dpad-size);
+  justify-self: center;
+  border-radius: 50%;
+  background: var(--pine-deep);
+  border: 1px solid var(--pine-line);
+  /* 長押しで文字選択やメニューが出たり、ページがスクロールしたりしないようにする */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: pointer;
+}
+
+.dpad--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dpad__btn {
+  position: absolute;
+  width: 36%;
+  height: 36%;
+  display: grid;
+  place-content: center;
+  padding: 0;
+  background: var(--pine);
+  border: 1px solid var(--pine-line);
+  border-radius: 8px;
+  color: var(--bone-dim);
+  font-size: 1.125rem;
+  line-height: 1;
+  /* 指やマウスはパッドが受ける */
+  pointer-events: none;
+  transition: background-color 80ms, color 80ms;
+}
+
+.dpad__btn--on {
+  background: var(--bone);
+  border-color: var(--bone);
+  color: var(--ink);
+}
+
+.dpad__up { top: 4%; left: 32%; }
+.dpad__down { bottom: 4%; left: 32%; }
+.dpad__left { left: 4%; top: 32%; }
+.dpad__right { right: 4%; top: 32%; }
+
+.dpad__hub {
+  position: absolute;
+  inset: 40%;
+  border-radius: 50%;
+  border: 1px solid var(--pine-line);
+  pointer-events: none;
 }
 
 .explore__side .primary:disabled {
@@ -589,49 +697,6 @@ button.card:disabled {
   background: var(--procure);
 }
 
-.pad {
-  display: grid;
-  grid-template-columns: repeat(3, 3rem);
-  grid-template-areas:
-    '. up .'
-    'left wait right'
-    '. down .';
-  gap: 0.375rem;
-  justify-content: center;
-}
-
-.pad__btn {
-  height: 3rem;
-  /* 長押しで文字選択やメニューが出ないようにする */
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  background: var(--pine-deep);
-  border: 1px solid var(--pine-line);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.pad__btn:hover:not(:disabled) {
-  border-color: var(--bone-dim);
-}
-
-.pad__btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.pad__up { grid-area: up; }
-.pad__down { grid-area: down; }
-.pad__left { grid-area: left; }
-.pad__right { grid-area: right; }
-
-.pad__wait {
-  grid-area: wait;
-  font-size: var(--step--1);
-}
-
 .explore__log {
   list-style: none;
   margin: 0;
@@ -645,9 +710,96 @@ button.card:disabled {
   color: var(--bone);
 }
 
+/* ===== スマホ：3D画面を大きく、操作を親指の届く下側にまとめる ===== */
 @media (max-width: 48rem) {
+  .explore-screen {
+    padding-top: 0.75rem;
+    gap: 1rem;
+  }
+
+  .explore-top .top__title {
+    font-size: var(--step-2);
+  }
+
   .explore {
     grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  /* 画面の端まで広げる */
+  .explore__stage {
+    margin-inline: -1rem;
+  }
+
+  .explore__view {
+    border-radius: 0;
+    border-inline: none;
+  }
+
+  .explore__view.explore__view--3d {
+    aspect-ratio: auto;
+    height: min(56dvh, 130vw);
+  }
+
+  .explore__toast {
+    display: block;
+    position: absolute;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.5rem;
+    margin: 0;
+    padding: 0.25rem 0.625rem;
+    background: rgb(11 20 19 / 0.72);
+    border-radius: 4px;
+    font-size: var(--step--1);
+    line-height: 1.5;
+    pointer-events: none;
+  }
+
+  .explore__status {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  /* 十字キーを左、行動ボタンを右に並べ、道具はその下に横並びにする */
+  .explore__controls {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'pad actions'
+      'items items';
+    align-items: center;
+    gap: 0.75rem 1rem;
+  }
+
+  .dpad {
+    --dpad-size: min(11rem, 44vw);
+    grid-area: pad;
+  }
+
+  .explore__actions {
+    grid-area: actions;
+  }
+
+  .explore__descend,
+  .explore__wait {
+    min-height: 3rem;
+  }
+
+  .explore__controls .explore__items {
+    grid-area: items;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .explore__items .explore__use {
+    width: auto;
+    min-height: 2.75rem;
+    padding-inline: 0.75rem;
+  }
+
+  .explore__help {
+    display: none;
   }
 }
 
