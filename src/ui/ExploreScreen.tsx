@@ -39,6 +39,10 @@ import { padDirection } from './dpad';
 import { DungeonView3D } from './explore3d';
 import { tilesetFor } from './tileset';
 
+// ミニマップの元の大きさ（px）がこれ以下なら、拡大してもぼかさずドットのまま見せる。
+// これより大きい（広いマップ）と縮めて表示するので、ドットのままだと細い通路が消えてしまう
+const MINI_SHARP_MAX = 96;
+
 const STEP_MS = 120; // 1マス動くのにかける時間。押し続けたときの歩く速さもこれで決まる
 const QUEUE_MAX = 2; // 動いている途中に押した操作を、いくつまで覚えておくか（多すぎると指を止めても歩き続ける）
 
@@ -106,7 +110,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
   // 3D表示ができない環境（WebGL2 が使えない、準備に失敗した）では2D表示に切り替える
   const [mode, setMode] = useState<RenderMode>(() => (renderMode === '3d' && webglAvailable() ? '3d' : '2d'));
   const [state, setState] = useState<ExploreState>(start);
-  // スマホで、装備・敵・地図・記録をまとめた「情報」を開いているか（PCでは常に横に出ている）
+  // スマホで、装備・敵・記録をまとめた画面を開いているか（PCでは常に横に出ている）
   const [infoOpen, setInfoOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const viewRef = useRef<HTMLCanvasElement>(null);
@@ -368,6 +372,15 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
           <p className="error explore__notice" role="alert">
             {error}
           </p>
+          {/* この階の地図。3D画面の右上に、小さく半透明で重ねる。広いマップは縮めて表示するので、なめらかに縮める */}
+          <canvas
+            ref={miniRef}
+            className={`explore__mini${state.map.width * MINI_CELL > MINI_SHARP_MAX ? ' explore__mini--dense' : ''}`}
+            width={state.map.width * MINI_CELL}
+            height={state.map.height * MINI_CELL}
+            role="img"
+            aria-label="この階の地図（歩いて見えた範囲）"
+          />
           {/* スマホでは記録の欄が画面の外になるので、いちばん新しい1行を画面の上に重ねて出す */}
           {!ended && lastLog && (
             <p className="explore__toast" aria-hidden="true">
@@ -412,7 +425,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
                 aria-controls="explore-more"
                 onClick={() => setInfoOpen(true)}
               >
-                装備・敵・地図
+                装備と敵
               </button>
             </div>
             {itemGroups.length === 0 ? (
@@ -438,10 +451,10 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
             )}
           </div>
 
-          {/* スマホでは画面に収まらないので、ふだんは隠して「装備・敵・地図」で重ねて開く */}
+          {/* スマホでは画面に収まらないので、ふだんは隠して「装備と敵」で重ねて開く */}
           <div id="explore-more" className={`explore__more${infoOpen ? ' explore__more--open' : ''}`}>
             <div className="explore__more-head">
-              <h2 className="panel__title">装備・敵・地図</h2>
+              <h2 className="panel__title">装備と敵</h2>
               <button type="button" className="explore__wait" onClick={() => setInfoOpen(false)}>
                 閉じる
               </button>
@@ -483,15 +496,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
                 </ul>
               )}
             </section>
-
-            <canvas
-              ref={miniRef}
-              className="explore__mini"
-              width={state.map.width * MINI_CELL}
-              height={state.map.height * MINI_CELL}
-              role="img"
-              aria-label="この階の地図（歩いて見えた範囲）"
-            />
 
             <p className="muted explore__help">
               十字の上を指でなぞると、その向きに歩き続ける。マスをタップするとそこまで歩く。キーボードでは矢印キー／WASDで移動、スペースで待つ、Enterで階段を降りる、数字キーで道具を使う
