@@ -89,10 +89,21 @@ interface ExploreScreenProps {
   start: () => ExploreState;
   run?: number; // 何回目の挑戦か。省略すると開発用の表示になる
   onFinish?: (state: ExploreState) => void; // 省略すると、終わったあと同じ条件でやり直せる
-  renderMode?: RenderMode; // 省略すると3D表示
+  renderMode?: RenderMode; // 省略すると3D表示（WebGL2 が使えない環境では2D表示）
+}
+
+/** WebGL2 が使えるか。Three.js の3D表示に必要 */
+function webglAvailable(): boolean {
+  try {
+    return document.createElement('canvas').getContext('webgl2') !== null;
+  } catch {
+    return false;
+  }
 }
 
 export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3d' }: ExploreScreenProps) {
+  // 3D表示ができない環境（WebGL2 が使えない、準備に失敗した）では2D表示に切り替える
+  const [mode, setMode] = useState<RenderMode>(() => (renderMode === '3d' && webglAvailable() ? '3d' : '2d'));
   const [state, setState] = useState<ExploreState>(start);
   const [error, setError] = useState<string | null>(null);
   const viewRef = useRef<HTMLCanvasElement>(null);
@@ -164,7 +175,15 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
   useEffect(() => {
     const colors = readColors();
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const view3d = renderMode === '3d' && viewRef.current ? new DungeonView3D(viewRef.current) : null;
+    let view3d: DungeonView3D | null = null;
+    if (mode === '3d' && viewRef.current) {
+      try {
+        view3d = new DungeonView3D(viewRef.current);
+      } catch {
+        setMode('2d');
+        return;
+      }
+    }
     view3dRef.current = view3d;
     // 視界の計算は、状態が変わったときだけやり直す
     let sight = { state: stateRef.current, visible: visibleTiles(stateRef.current.map, stateRef.current.player, EXPLORE_CONFIG.sightRadius) };
@@ -211,7 +230,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       view3d?.dispose();
       view3dRef.current = null;
     };
-  }, [perform, renderMode]);
+  }, [perform, mode]);
 
   useEffect(() => {
     if (miniRef.current) drawMinimap(miniRef.current, state, readColors());
@@ -257,7 +276,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
 
   /** マップをタップ・クリックすると、そのマスまで歩く */
   const onMapClick = (e: { clientX: number; clientY: number }) => {
-    const target = renderMode === '3d' ? view3dRef.current?.pickTile(e.clientX, e.clientY) : pickTile2d(e);
+    const target = mode === '3d' ? view3dRef.current?.pickTile(e.clientX, e.clientY) : pickTile2d(e);
     if (!target) return;
     const s = stateRef.current;
     if (s.outcome !== 'ongoing' || samePos(target, s.player)) return;
@@ -318,7 +337,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
         <div className="explore__stage">
           <canvas
             // 2Dと3Dでは Canvas の描き方（コンテキスト）が違うので、切り替えたら作り直す
-            key={renderMode}
+            key={mode}
             ref={viewRef}
             className="explore__view"
             width={VIEW_W * CELL}
