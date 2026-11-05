@@ -5,25 +5,28 @@
 //   マップがどれだけ広くても描く量は変わらない
 // - 床と壁には、ダンジョン特性ごとのテクスチャ（public/textures/{特性}.png）を貼る。読み込むまでは色で描く
 // - 霧：まだ見ていないマスは描かない。一度見たマスは暗く、今見えているマスは明るく描く
-// - 主人公と敵は、今のドット絵を常にカメラを向く板（スプライト）として立てる
+// - 主人公は立体の模型（hero3d.ts）。敵と宝箱は、今のドット絵を常にカメラを向く板（スプライト）として立てる
 
 import * as THREE from 'three';
 import { enemyDef } from '../game/enemies';
-import type { ExploreState } from '../game/explore';
+import { dirBetween, type Dir, type ExploreState } from '../game/explore';
 import type { Pos } from '../game/map';
 import type { TraitId } from '../game/types';
 import { drawSprite } from '../sprites/canvas';
-import { CLOAKS, type SpriteId } from '../sprites/data';
+import type { SpriteId } from '../sprites/data';
 import { cloakOf, ENEMY_LOOKS } from '../sprites/looks';
 import { floorVariant } from './autotile';
 import { ENEMY_MARK, lerp, type Frame } from './exploreRender';
+import { Hero3D } from './hero3d';
 
 // マスの大きさを1とした壁の高さ。高くすると通路が深く見える。
 // 今のカメラの角度（約63度）では、高さ1までなら、すぐ手前の壁は隣のマスに立つキャラクターの足元に届く程度で、体は隠れない
 const WALL_HEIGHT = 1;
-const CAMERA = { fov: 40, height: 15, back: 7.5 }; // 主人公の真上15・手前7.5から見下ろす（約63度。横長の画面で横に17マスほど映る）
-// スマホの縦長の画面では、縦の視野を広げて、横にこのマス数は映るようにする（広げすぎると手前がゆがむので上限を設ける）
-const PORTRAIT = { minAcross: 11, maxFov: 60 };
+const CAMERA = { height: 15, back: 7.5 }; // 主人公の真上15・手前7.5から見下ろす（約63度）
+// 画面の大きさによらず、主人公のいるあたりの1マスが画面上でこの大きさ（CSSピクセル）に映るよう、視野の広さを決める。
+// スマホの縦画面（幅約390px）で横に約8マス、PCの探索画面（幅約670px）で横に約14マス映る
+const TILE_PX = 48;
+const FOV_LIMIT = { min: 10, max: 75 }; // 極端に大きい・小さい画面でもゆがみすぎないように
 const REMEMBERED = 0.3; // 一度見たが今は見えていないマスの明るさ
 const FADED_WALL_OPACITY = 0.35; // 敵・宝箱・階段のすぐ手前にあって、それを隠してしまう壁の濃さ
 // 壁の根元の影：壁に接する床の辺に敷く帯。幅（マスの何倍か）と、壁際でのいちばん濃いところ、薄くなり方
@@ -36,8 +39,8 @@ const SHADOW_SIDES = [
   { dx: -1, dz: 0, angle: Math.PI / 2 },
 ] as const;
 const BACKGROUND = 0x0b1413;
-// 床と壁を描く範囲（主人公からのマス数）。画面に映る範囲（横長なら横17×縦12、縦長なら横11×縦30マスほど）より、
-// 動いている途中の分だけ広くとる
+// 床と壁を描く範囲（主人公からのマス数）。画面に映る範囲（1マス48pxで、PCなら横14×縦11、スマホの縦画面なら横8×縦16マスほど）より、
+// 動いている途中の分と、大きな画面の分だけ広くとる
 const DRAW_RANGE = { x: 13, z: 17 };
 const DRAW_CAPACITY = (DRAW_RANGE.x * 2 + 1) * (DRAW_RANGE.z * 2 + 1);
 const PATH_CAPACITY = 256; // 歩く道筋の点を、いくつまで描くか
@@ -86,7 +89,10 @@ export class DungeonView3D {
   private readonly atlases = new Map<TraitId, Atlas | null>(); // null は読み込み中か、読み込めなかった
   private appliedAtlas: Atlas | null = null;
   private readonly props = new THREE.Group(); // 階段・宝箱・目印
-  private readonly player: THREE.Sprite;
+  private readonly hero = new Hero3D(); // 主人公は立体の模型（敵や宝箱はドット絵の板のまま）
+  private heroDir: Dir = 'down'; // 最後に歩いた向き。模型をこの向きへ回す
+  private lastFrameAt = performance.now();
+  private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private readonly enemies = new Map<number, { body: THREE.Sprite; mark: THREE.Sprite; hp: THREE.Sprite; ring: THREE.Mesh | null }>();
   private readonly textures = new Map<string, THREE.Texture>();
   private readonly materials = new Map<string, THREE.SpriteMaterial>();
@@ -114,7 +120,7 @@ export class DungeonView3D {
     this.renderer.setSize(canvas.width, canvas.height, false);
     this.scene.background = new THREE.Color(BACKGROUND);
 
-    this.camera = new THREE.PerspectiveCamera(CAMERA.fov, canvas.width / canvas.height, 0.1, 100);
+    this.camera = new THREE.PerspectiveCamera(40, canvas.width / canvas.height, 0.1, 100); // 視野は resize で決め直す
     this.scene.add(new THREE.AmbientLight(0xffffff, 1.1));
     const sun = new THREE.DirectionalLight(0xffffff, 1.2); // 壁の側面に陰をつける
     sun.position.set(-3, 10, 4);
@@ -156,8 +162,6 @@ export class DungeonView3D {
       this.scene.add(mesh);
     }
 
-    this.player = new THREE.Sprite(this.spriteMaterial('hero', {}, true));
-    this.player.renderOrder = 1; // 壁より手前に描く
     this.target = new THREE.Mesh(this.shared.targetRing, this.shared.targetMat);
     this.pathDots = new THREE.InstancedMesh(
       new THREE.CircleGeometry(0.08, 12).rotateX(-Math.PI / 2),
@@ -166,21 +170,21 @@ export class DungeonView3D {
     );
     this.pathDots.frustumCulled = false;
     this.pathDots.count = 0;
-    this.scene.add(this.player, this.target, this.pathDots);
+    this.scene.add(this.hero.root, this.target, this.pathDots);
   }
 
   /**
    * 画面上の大きさ（CSSピクセル）に合わせて、描く解像度とカメラの縦横比を変える。
-   * 縦長の画面では縦の視野を広げ、横に映るマスが少なくなりすぎないようにする
+   * 視野の広さは、画面の大きさによらず1マスが画面上で TILE_PX に映るように決める
    */
   resize(width: number, height: number) {
     if (width <= 0 || height <= 0) return;
     this.renderer.setSize(width, height, false);
-    const aspect = width / height;
+    // 主人公までの距離で1マスが TILE_PX に映る視野：画面の高さの半分 ÷（距離 × TILE_PX）= tan(視野の半分)
     const distance = Math.hypot(CAMERA.height, CAMERA.back);
-    const fovForWidth = THREE.MathUtils.radToDeg(2 * Math.atan(PORTRAIT.minAcross / 2 / distance / aspect));
-    this.camera.aspect = aspect;
-    this.camera.fov = Math.min(PORTRAIT.maxFov, Math.max(CAMERA.fov, fovForWidth));
+    const fov = THREE.MathUtils.radToDeg(2 * Math.atan(height / 2 / (distance * TILE_PX)));
+    this.camera.aspect = width / height;
+    this.camera.fov = THREE.MathUtils.clamp(fov, FOV_LIMIT.min, FOV_LIMIT.max);
     this.camera.updateProjectionMatrix();
   }
 
@@ -191,13 +195,21 @@ export class DungeonView3D {
       this.updateFog(frame);
       this.updateProps(frame);
       this.updateEnemies(frame);
-      this.player.material = this.spriteMaterial('hero', CLOAKS[cloakOf(s.stats.armor)], true);
+      this.hero.setCloak(cloakOf(s.stats.armor)); // マントは装備した防具の色。準備が当たったかが見た目でわかる
       this.shownState = s;
     }
 
     // 動きの途中の位置
     const p = lerp(frame.from.player, s.player, frame.progress);
-    this.player.position.set(p.x, 0.5, p.y);
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - this.lastFrameAt) / 1000);
+    this.lastFrameAt = now;
+    const moved = frame.from.player.x !== s.player.x || frame.from.player.y !== s.player.y;
+    // 1マスずつ動くので、前の位置から今の位置への向きが歩いた向き（階を移ったときは向きを変えない）
+    if (moved && Math.abs(frame.from.player.x - s.player.x) + Math.abs(frame.from.player.y - s.player.y) === 1) {
+      this.heroDir = dirBetween(frame.from.player, s.player);
+    }
+    this.hero.update(p.x, p.y, this.heroDir, moved ? frame.progress : 1, dt, this.reduceMotion);
     this.torch.position.set(p.x, 1.6, p.y);
     this.camera.position.set(p.x, CAMERA.height, p.y + CAMERA.back);
     this.camera.lookAt(p.x, 0, p.y);
@@ -228,7 +240,7 @@ export class DungeonView3D {
    */
   hitsPlayer(clientX: number, clientY: number): boolean {
     this.aimRay(clientX, clientY);
-    return this.raycaster.intersectObject(this.player, false).length > 0;
+    return this.raycaster.intersectObject(this.hero.hitBox, false).length > 0;
   }
 
   /** 画面上の位置から、床のマスを求める（タップ・クリックで歩く先） */
@@ -245,6 +257,7 @@ export class DungeonView3D {
     this.pathDots.geometry.dispose();
     (this.pathDots.material as THREE.Material).dispose();
     this.pathDots.dispose();
+    this.hero.dispose();
     for (const mesh of [...this.floors, this.walls, this.fadedWalls, this.wallShadows]) {
       for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) mat.dispose();
       mesh.dispose();
