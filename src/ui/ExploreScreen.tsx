@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } 
 import { BODY_NAMES, ITEMS, TRAIT_IDS, TRAITS } from '../game/data';
 import { enemyDef, key } from '../game/enemies';
 import {
+  DIR_DELTA,
   EXPLORE_CONFIG,
   isBossFloor,
   samePos,
@@ -18,7 +19,7 @@ import {
   type ExploreAction,
   type ExploreState,
 } from '../game/explore';
-import type { Pos } from '../game/map';
+import { tileAt, type Pos } from '../game/map';
 import { walkPath, walkToward } from '../game/path';
 import type { ItemId } from '../game/types';
 import {
@@ -36,7 +37,7 @@ import {
   type Motion,
 } from './exploreRender';
 import { DungeonView3D } from './explore3d';
-import { knobOffset, STICK, stickDirection } from './stick';
+import { chooseDirection, knobOffset, STICK, stickDirections } from './stick';
 import { tilesetFor } from './tileset';
 
 // ミニマップの元の大きさ（px）がこれ以下なら、拡大してもぼかさずドットのまま見せる。
@@ -139,6 +140,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
   const heldRef = useRef<Dir[]>([]); // 押し続けている方向（あとから押したものが優先）
   const queueRef = useRef<ExploreAction[]>([]); // 次に1回ずつ行う行動（動いている途中に押した分）
   const walkRef = useRef<WalkGoal | null>(null); // タップ・クリックで向かっている先
+  // 仮想スティックで進みたい向きの候補（斜めなら上下・左右の2つ）。1歩ごとに、進める向きを選び直す
+  const stickRef = useRef<Dir[] | null>(null);
   const originRef = useRef<Pos>({ x: 0, y: 0 }); // 2D表示で今描いている画面の左上の座標（タップ位置の計算に使う）
   const view3dRef = useRef<DungeonView3D | null>(null);
 
@@ -278,6 +281,14 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
           perform(queued);
         } else if (held) {
           perform({ kind: 'move', dir: held });
+        } else if (stickRef.current) {
+          // 斜めに倒しているときは、壁でない方へ進む（両方進めるなら上下を優先する）
+          const s = stateRef.current;
+          const dir = chooseDirection(stickRef.current, (d) => {
+            const to = { x: s.player.x + DIR_DELTA[d].x, y: s.player.y + DIR_DELTA[d].y };
+            return tileAt(s.map, to) !== 'wall';
+          });
+          perform({ kind: 'move', dir });
         } else if (walkRef.current) {
           walkStep(walkRef.current);
         }
@@ -391,14 +402,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
   // 3D画面のどこでも、指を置いてずらすとそこにスティックが出て、ずらした向きに歩き続ける。
   // 指を動かさずに離したときは、タップとしてそのマスへ歩く
   const [stick, setStick] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
-  const touchRef = useRef<{ id: number; x: number; y: number; left: number; top: number; dragging: boolean; dir: Dir | null } | null>(null);
+  const touchRef = useRef<{ id: number; x: number; y: number; left: number; top: number; dragging: boolean } | null>(null);
 
-  const aimStick = (dir: Dir | null) => {
-    const t = touchRef.current;
-    if (!t || t.dir === dir) return;
-    if (t.dir) release(t.dir);
-    if (dir) hold(dir);
-    t.dir = dir;
+  const aimStick = (dirs: Dir[] | null) => {
+    if (dirs) walkRef.current = null; // なぞり始めたら、タップで向かっていた先は取りやめる
+    stickRef.current = dirs;
   };
 
   const endTouch = () => {
@@ -411,7 +419,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     // 終わったあとの「結果を見る」ボタンなどは、そのまま押せるようにする
     if (stateRef.current.outcome !== 'ongoing' || touchRef.current || e.button !== 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    touchRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, left: rect.left, top: rect.top, dragging: false, dir: null };
+    touchRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, left: rect.left, top: rect.top, dragging: false };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
@@ -424,7 +432,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       if (Math.hypot(dx, dy) < STICK.dragStart) return;
       t.dragging = true;
     }
-    aimStick(stickDirection(dx, dy));
+    aimStick(stickDirections(dx, dy));
     const knob = knobOffset(dx, dy);
     setStick({ x: t.x - t.left, y: t.y - t.top, dx: knob.x, dy: knob.y });
   };
@@ -460,6 +468,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     heldRef.current = [];
     queueRef.current = [];
     walkRef.current = null;
+    stickRef.current = null;
     setError(null);
     setState(fresh);
   };
