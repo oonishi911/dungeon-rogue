@@ -40,6 +40,7 @@ const BACKGROUND = 0x0b1413;
 // 動いている途中の分だけ広くとる
 const DRAW_RANGE = { x: 13, z: 17 };
 const DRAW_CAPACITY = (DRAW_RANGE.x * 2 + 1) * (DRAW_RANGE.z * 2 + 1);
+const PATH_CAPACITY = 256; // 歩く道筋の点を、いくつまで描くか
 
 /**
  * テクスチャの中の配置（128×64px、1マス32px）。詳しくは docs/textures.md。
@@ -104,6 +105,8 @@ export class DungeonView3D {
     targetMat: new THREE.MeshBasicMaterial({ color: 0x9cc46a }),
   };
   private readonly target: THREE.Mesh;
+  private readonly pathDots: THREE.InstancedMesh; // 歩く道筋の点
+  private shownPath: Pos[] | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -156,7 +159,14 @@ export class DungeonView3D {
     this.player = new THREE.Sprite(this.spriteMaterial('hero', {}, true));
     this.player.renderOrder = 1; // 壁より手前に描く
     this.target = new THREE.Mesh(this.shared.targetRing, this.shared.targetMat);
-    this.scene.add(this.player, this.target);
+    this.pathDots = new THREE.InstancedMesh(
+      new THREE.CircleGeometry(0.08, 12).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0x9cc46a, transparent: true, opacity: 0.75, depthWrite: false }),
+      PATH_CAPACITY,
+    );
+    this.pathDots.frustumCulled = false;
+    this.pathDots.count = 0;
+    this.scene.add(this.player, this.target, this.pathDots);
   }
 
   /**
@@ -201,6 +211,7 @@ export class DungeonView3D {
       view.ring?.position.set(at.x, 0.02, at.y);
     }
     this.updateWalkTarget(frame.walkTarget);
+    this.updateWalkPath(frame.walkPath);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -217,6 +228,9 @@ export class DungeonView3D {
     this.floors[0]!.geometry.dispose(); // 床の形はすべての入れ物で共通
     this.walls.geometry.dispose(); // 半透明の壁と共通
     this.wallShadows.geometry.dispose();
+    this.pathDots.geometry.dispose();
+    (this.pathDots.material as THREE.Material).dispose();
+    this.pathDots.dispose();
     for (const mesh of [...this.floors, this.walls, this.fadedWalls, this.wallShadows]) {
       for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) mat.dispose();
       mesh.dispose();
@@ -380,6 +394,17 @@ export class DungeonView3D {
       box.position.set(chest.pos.x, 0.16, chest.pos.y);
       this.props.add(box);
     }
+  }
+
+  /** 歩く道筋に点を並べる。行き先は輪で示すので除く */
+  private updateWalkPath(path: Pos[]) {
+    if (path === this.shownPath) return;
+    this.shownPath = path;
+    const dots = path.slice(0, -1).slice(0, PATH_CAPACITY);
+    const m = new THREE.Matrix4();
+    dots.forEach((p, i) => this.pathDots.setMatrixAt(i, m.makeTranslation(p.x, 0.025, p.y)));
+    this.pathDots.count = dots.length;
+    this.pathDots.instanceMatrix.needsUpdate = true;
   }
 
   private updateWalkTarget(target: Pos | null) {

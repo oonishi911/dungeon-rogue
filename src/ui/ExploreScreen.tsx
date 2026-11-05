@@ -19,7 +19,7 @@ import {
   type ExploreState,
 } from '../game/explore';
 import type { Pos } from '../game/map';
-import { walkToward } from '../game/path';
+import { findPath, walkToward } from '../game/path';
 import type { ItemId } from '../game/types';
 import {
   CELL,
@@ -35,8 +35,8 @@ import {
   type Frame,
   type Motion,
 } from './exploreRender';
-import { padDirection } from './dpad';
 import { DungeonView3D } from './explore3d';
+import { knobOffset, STICK, stickDirection } from './stick';
 import { tilesetFor } from './tileset';
 
 // ミニマップの元の大きさ（px）がこれ以下なら、拡大してもぼかさずドットのまま見せる。
@@ -76,6 +76,19 @@ const urlTrait = TRAIT_IDS.find((t) => t === traitParam);
 const urlRender: RenderMode = new URLSearchParams(location.search).get('render') === '2d' ? '2d' : '3d';
 
 export type RenderMode = '2d' | '3d';
+
+/** タップ・クリックで向かっている先 */
+interface WalkGoal {
+  pos: Pos;
+  enemy: number | null; // 敵をタップしたときはその敵（動いても追いかける）
+  seenEnemies: Set<number>; // 前の1歩のときに見えていた敵。新しく敵が見えたら立ち止まる
+}
+
+/** 今見えている敵の番号 */
+function visibleEnemyIds(state: ExploreState): Set<number> {
+  const visible = visibleTiles(state.map, state.player, EXPLORE_CONFIG.sightRadius);
+  return new Set(state.enemies.filter((e) => visible.has(e.pos.y * state.map.width + e.pos.x)).map((e) => e.uid));
+}
 
 // 開発用画面で持たせる装備と道具
 const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fire_whetstone', 'ice_whetstone'];
@@ -121,7 +134,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
   const motionRef = useRef<{ from: Motion; start: number }>({ from: motionOf(state), start: 0 });
   const heldRef = useRef<Dir[]>([]); // 押し続けている方向（あとから押したものが優先）
   const queueRef = useRef<ExploreAction[]>([]); // 次に1回ずつ行う行動（動いている途中に押した分）
-  const walkRef = useRef<Pos | null>(null); // タップ・クリックで向かっている場所
+  const walkRef = useRef<WalkGoal | null>(null); // タップ・クリックで向かっている先
   const originRef = useRef<Pos>({ x: 0, y: 0 }); // 2D表示で今描いている画面の左上の座標（タップ位置の計算に使う）
   const view3dRef = useRef<DungeonView3D | null>(null);
 
@@ -178,6 +191,38 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     heldRef.current = heldRef.current.filter((d) => d !== dir);
   }, []);
 
+  /** タップ・クリックで向かっている先へ1歩進む。着いた・進めない・攻撃した・新しく敵が見えたら止まる */
+  const walkStep = useCallback(
+    (goal: WalkGoal) => {
+      const s = stateRef.current;
+      if (goal.enemy !== null) {
+        // 敵を目指しているときは、その敵が今いる場所へ向かう。見えなくなったら止まる
+        const foe = s.enemies.find((e) => e.uid === goal.enemy);
+        if (!foe || !visibleEnemyIds(s).has(foe.uid)) {
+          walkRef.current = null;
+          return;
+        }
+        goal.pos = foe.pos;
+      }
+      const before = s.player;
+      const action = walkToward(s, goal.pos);
+      // 着いた・進めない・敵を攻撃した（その場から動かなかった）ときは止まる
+      if (!action || !perform(action) || samePos(before, stateRef.current.player)) {
+        walkRef.current = null;
+        return;
+      }
+      // 勝手に敵に近づかないよう、新しく敵が見えたら立ち止まる（敵を目指して歩いているときは除く）
+      const now = visibleEnemyIds(stateRef.current);
+      if (goal.enemy === null && [...now].some((uid) => !goal.seenEnemies.has(uid))) {
+        walkRef.current = null;
+        setError('敵が見えたので立ち止まった');
+        return;
+      }
+      goal.seenEnemies = now;
+    },
+    [perform],
+  );
+
   // 毎フレーム：前の動きが終わっていれば次の行動を1つ行い、画面を描く
   useEffect(() => {
     const colors = readColors();
@@ -204,6 +249,15 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     }
     // 視界の計算は、状態が変わったときだけやり直す
     let sight = { state: stateRef.current, visible: visibleTiles(stateRef.current.map, stateRef.current.player, EXPLORE_CONFIG.sightRadius) };
+    // 歩く道筋は、状態か行き先が変わったときだけ探し直す
+    let route: { state: ExploreState | null; goal: Pos | null; path: Pos[] } = { state: null, goal: null, path: [] };
+    const routeFor = (st: ExploreState, goal: Pos | null): Pos[] => {
+      if (!goal) return [];
+      if (route.state !== st || !route.goal || !samePos(route.goal, goal)) {
+        route = { state: st, goal, path: findPath(st, (p) => samePos(p, goal)) ?? [] };
+      }
+      return route.path;
+    };
     let frameId = 0;
     const tick = (now: number) => {
       if (now - motionRef.current.start >= STEP_MS && stateRef.current.outcome === 'ongoing') {
@@ -215,10 +269,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
         } else if (held) {
           perform({ kind: 'move', dir: held });
         } else if (walkRef.current) {
-          const before = stateRef.current.player;
-          const action = walkToward(stateRef.current, walkRef.current);
-          // 着いた・進めない・敵を攻撃した（その場から動かなかった）ときは止まる
-          if (!action || !perform(action) || samePos(before, stateRef.current.player)) walkRef.current = null;
+          walkStep(walkRef.current);
         }
       }
       const current = stateRef.current;
@@ -230,7 +281,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
         visible: sight.visible,
         from: motionRef.current.from,
         progress: reduceMotion ? 1 : Math.min(1, (now - motionRef.current.start) / STEP_MS),
-        walkTarget: walkRef.current,
+        walkTarget: walkRef.current?.pos ?? null,
+        walkPath: routeFor(current, walkRef.current?.pos ?? null),
         tileset: tilesetFor(current.trait),
       };
       if (view3d) {
@@ -248,7 +300,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       view3d?.dispose();
       view3dRef.current = null;
     };
-  }, [perform, mode]);
+  }, [perform, walkStep, mode]);
 
   useEffect(() => {
     if (miniRef.current) drawMinimap(miniRef.current, state, readColors());
@@ -292,22 +344,85 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     };
   }, [hold, release, request]);
 
-  /** マップをタップ・クリックすると、そのマスまで歩く */
-  const onMapClick = (e: { clientX: number; clientY: number }) => {
-    const target = mode === '3d' ? view3dRef.current?.pickTile(e.clientX, e.clientY) : pickTile2d(e);
-    if (!target) return;
+  /**
+   * マップをタップ・クリックすると、そのマスまで歩く。敵をタップするとその敵へ向かって攻撃する。
+   * 歩いている途中にもう一度タップすると、その場で止まる
+   */
+  const onMapTap = (e: { clientX: number; clientY: number }) => {
     const s = stateRef.current;
-    if (s.outcome !== 'ongoing' || samePos(target, s.player)) return;
+    if (s.outcome !== 'ongoing') return;
+    if (walkRef.current) {
+      walkRef.current = null;
+      return;
+    }
+    const target = mode === '3d' ? view3dRef.current?.pickTile(e.clientX, e.clientY) : pickTile2d(e);
+    if (!target || samePos(target, s.player)) return;
     const i = target.y * s.map.width + target.x;
     const known = target.x >= 0 && target.y >= 0 && target.x < s.map.width && target.y < s.map.height && s.seen[i];
     if (!known || s.map.tiles[i] === 'wall') {
       setError('まだ見ていない場所や壁へは移動できない');
       return;
     }
+    const seenEnemies = visibleEnemyIds(s);
+    const foe = s.enemies.find((en) => samePos(en.pos, target) && seenEnemies.has(en.uid));
     heldRef.current = [];
     queueRef.current = [];
-    walkRef.current = target;
+    walkRef.current = { pos: target, enemy: foe ? foe.uid : null, seenEnemies };
     setError(null);
+  };
+
+  // ===== 仮想スティック =====
+  // 3D画面のどこでも、指を置いてずらすとそこにスティックが出て、ずらした向きに歩き続ける。
+  // 指を動かさずに離したときは、タップとしてそのマスへ歩く
+  const [stick, setStick] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
+  const touchRef = useRef<{ id: number; x: number; y: number; left: number; top: number; dragging: boolean; dir: Dir | null } | null>(null);
+
+  const aimStick = (dir: Dir | null) => {
+    const t = touchRef.current;
+    if (!t || t.dir === dir) return;
+    if (t.dir) release(t.dir);
+    if (dir) hold(dir);
+    t.dir = dir;
+  };
+
+  const endTouch = () => {
+    aimStick(null);
+    touchRef.current = null;
+    setStick(null);
+  };
+
+  const onStagePointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    // 終わったあとの「結果を見る」ボタンなどは、そのまま押せるようにする
+    if (stateRef.current.outcome !== 'ongoing' || touchRef.current || e.button !== 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    touchRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, left: rect.left, top: rect.top, dragging: false, dir: null };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const onStagePointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    const t = touchRef.current;
+    if (!t || e.pointerId !== t.id) return;
+    const dx = e.clientX - t.x;
+    const dy = e.clientY - t.y;
+    if (!t.dragging) {
+      if (Math.hypot(dx, dy) < STICK.dragStart) return;
+      t.dragging = true;
+    }
+    aimStick(stickDirection(dx, dy));
+    const knob = knobOffset(dx, dy);
+    setStick({ x: t.x - t.left, y: t.y - t.top, dx: knob.x, dy: knob.y });
+  };
+
+  const onStagePointerUp = (e: PointerEvent<HTMLDivElement>) => {
+    const t = touchRef.current;
+    if (!t || e.pointerId !== t.id) return;
+    const tapped = !t.dragging;
+    endTouch();
+    if (tapped) onMapTap(e);
+  };
+
+  const onStagePointerCancel = (e: PointerEvent<HTMLDivElement>) => {
+    if (touchRef.current && e.pointerId === touchRef.current.id) endTouch();
   };
 
   /** 2D表示で、画面上の位置からマスを求める */
@@ -355,7 +470,15 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       </header>
 
       <div className="explore">
-        <div className="explore__stage">
+        <div
+          className="explore__stage"
+          onPointerDown={onStagePointerDown}
+          onPointerMove={onStagePointerMove}
+          onPointerUp={onStagePointerUp}
+          onPointerCancel={onStagePointerCancel}
+          onLostPointerCapture={onStagePointerCancel}
+          onContextMenu={(e) => e.preventDefault()}
+        >
           <canvas
             // 2Dと3Dでは Canvas の描き方（コンテキスト）が違うので、切り替えたら作り直す
             key={mode}
@@ -364,9 +487,13 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
             width={VIEW_W * CELL}
             height={VIEW_H * CELL}
             role="img"
-            aria-label={`${floorName}の周囲。マスをクリックするとそこまで歩く。${onStairs ? '足元に階段がある' : ''}`}
-            onClick={onMapClick}
+            aria-label={`${floorName}の周囲。マスをタップするとそこまで歩き、指でなぞるとその向きに歩き続ける。${onStairs ? '足元に階段がある' : ''}`}
           />
+          {stick && (
+            <div className="stick" style={{ left: stick.x, top: stick.y }} aria-hidden="true">
+              <span className="stick__knob" style={{ transform: `translate(${stick.dx}px, ${stick.dy}px)` }} />
+            </div>
+          )}
           {/* 「壁があって進めない」などの知らせは3D画面の上に重ねる。
               下に並べると、出たり消えたりするたびに3D画面の高さが変わって画面が揺れるため */}
           <p className="error explore__notice" role="alert">
@@ -410,7 +537,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
           </div>
 
           <div className="explore__controls">
-            <DirectionPad hold={hold} release={release} onStep={(dir) => request({ kind: 'move', dir })} disabled={ended} />
             <div className="explore__actions">
               <button type="button" className="primary explore__descend" onClick={() => request({ kind: 'descend' })} disabled={!onStairs || ended}>
                 階段を降りる
@@ -498,7 +624,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
             </section>
 
             <p className="muted explore__help">
-              十字の上を指でなぞると、その向きに歩き続ける。マスをタップするとそこまで歩く。キーボードでは矢印キー／WASDで移動、スペースで待つ、Enterで階段を降りる、数字キーで道具を使う
+              マスをタップするとそこまで歩く（敵をタップすると攻撃しに行く。歩いている途中にタップすると止まる）。画面を指でなぞると、なぞった向きに歩き続ける。キーボードでは矢印キー／WASDで移動、スペースで待つ、Enterで階段を降りる、数字キーで道具を使う
             </p>
             <section className="explore__more-log" aria-label="記録">
               <h3 className="meter__head">記録</h3>
@@ -515,105 +641,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
         <LogList lines={recentLog} total={state.log.length} />
       </section>
     </main>
-  );
-}
-
-const DIR_LABELS: Record<Dir, { arrow: string; name: string }> = {
-  up: { arrow: '▲', name: '上へ' },
-  down: { arrow: '▼', name: '下へ' },
-  left: { arrow: '◀', name: '左へ' },
-  right: { arrow: '▶', name: '右へ' },
-};
-
-/**
- * 十字キー。パッド全体で1本の指を追い、中心から見た指の向きに歩き続ける。
- * 指を離さずに滑らせれば向きを変えられるので、4つの小さなボタンを押し分けるより狙いやすい。
- * キーボードでは、中のボタンを Enter・スペースで1歩ずつ押せる（歩き続けるには矢印キーを使う）
- */
-function DirectionPad({
-  hold,
-  release,
-  onStep,
-  disabled,
-}: {
-  hold: (d: Dir) => void;
-  release: (d: Dir) => void;
-  onStep: (d: Dir) => void;
-  disabled: boolean;
-}) {
-  const [active, setActive] = useState<Dir | null>(null);
-  const activeRef = useRef<Dir | null>(null);
-  const pointerRef = useRef<number | null>(null);
-
-  const aim = (dir: Dir | null) => {
-    const prev = activeRef.current;
-    if (prev === dir) return;
-    if (prev) release(prev);
-    if (dir) hold(dir);
-    activeRef.current = dir;
-    setActive(dir);
-  };
-
-  const track = (e: PointerEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const dx = e.clientX - (rect.left + rect.width / 2);
-    const dy = e.clientY - (rect.top + rect.height / 2);
-    aim(padDirection(dx, dy, rect.width / 2));
-  };
-
-  const end = () => {
-    pointerRef.current = null;
-    aim(null);
-  };
-
-  // 探索が終わったら、押しっぱなしの向きを忘れる
-  useEffect(() => {
-    if (disabled) end();
-  }, [disabled]);
-
-  return (
-    <div
-      className={`dpad${disabled ? ' dpad--disabled' : ''}`}
-      role="group"
-      aria-label="移動"
-      onPointerDown={(e) => {
-        if (disabled || pointerRef.current !== null) return;
-        e.preventDefault();
-        pointerRef.current = e.pointerId;
-        e.currentTarget.setPointerCapture(e.pointerId);
-        track(e);
-      }}
-      onPointerMove={(e) => {
-        if (e.pointerId === pointerRef.current) track(e);
-      }}
-      onPointerUp={(e) => {
-        if (e.pointerId === pointerRef.current) end();
-      }}
-      onPointerCancel={(e) => {
-        if (e.pointerId === pointerRef.current) end();
-      }}
-      onLostPointerCapture={(e) => {
-        if (e.pointerId === pointerRef.current) end();
-      }}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      {(Object.keys(DIR_LABELS) as Dir[]).map((dir) => (
-        <button
-          key={dir}
-          type="button"
-          className={`dpad__btn dpad__${dir}${active === dir ? ' dpad__btn--on' : ''}`}
-          aria-label={DIR_LABELS[dir].name}
-          disabled={disabled}
-          // 指やマウスはパッド全体で受けるので、ボタンはキーボードで押されたときだけ動かす
-          onClick={(e) => {
-            if (e.detail === 0) onStep(dir);
-          }}
-        >
-          {DIR_LABELS[dir].arrow}
-        </button>
-      ))}
-      <span className="dpad__hub" aria-hidden="true" />
-    </div>
   );
 }
 
