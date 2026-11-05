@@ -21,7 +21,9 @@ import { ENEMY_MARK, lerp, type Frame } from './exploreRender';
 // マスの大きさを1とした壁の高さ。高くすると通路が深く見える。
 // 今のカメラの角度（約63度）では、高さ1までなら、すぐ手前の壁は隣のマスに立つキャラクターの足元に届く程度で、体は隠れない
 const WALL_HEIGHT = 1;
-const CAMERA = { fov: 40, height: 15, back: 7.5 }; // 主人公の真上15・手前7.5から見下ろす（約63度。横に17マスほど映る）
+const CAMERA = { fov: 40, height: 15, back: 7.5 }; // 主人公の真上15・手前7.5から見下ろす（約63度。横長の画面で横に17マスほど映る）
+// スマホの縦長の画面では、縦の視野を広げて、横にこのマス数は映るようにする（広げすぎると手前がゆがむので上限を設ける）
+const PORTRAIT = { minAcross: 11, maxFov: 60 };
 const REMEMBERED = 0.3; // 一度見たが今は見えていないマスの明るさ
 const FADED_WALL_OPACITY = 0.35; // 敵・宝箱・階段のすぐ手前にあって、それを隠してしまう壁の濃さ
 // 壁の根元の影：壁に接する床の辺に敷く帯。幅（マスの何倍か）と、壁際でのいちばん濃いところ、薄くなり方
@@ -34,8 +36,9 @@ const SHADOW_SIDES = [
   { dx: -1, dz: 0, angle: Math.PI / 2 },
 ] as const;
 const BACKGROUND = 0x0b1413;
-// 床と壁を描く範囲（主人公からのマス数）。画面に映る横17×縦12マスほどより、動いている途中の分だけ広くとる
-const DRAW_RANGE = { x: 13, z: 11 };
+// 床と壁を描く範囲（主人公からのマス数）。画面に映る範囲（横長なら横17×縦12、縦長なら横11×縦30マスほど）より、
+// 動いている途中の分だけ広くとる
+const DRAW_RANGE = { x: 13, z: 17 };
 const DRAW_CAPACITY = (DRAW_RANGE.x * 2 + 1) * (DRAW_RANGE.z * 2 + 1);
 
 /**
@@ -154,6 +157,21 @@ export class DungeonView3D {
     this.player.renderOrder = 1; // 壁より手前に描く
     this.target = new THREE.Mesh(this.shared.targetRing, this.shared.targetMat);
     this.scene.add(this.player, this.target);
+  }
+
+  /**
+   * 画面上の大きさ（CSSピクセル）に合わせて、描く解像度とカメラの縦横比を変える。
+   * 縦長の画面では縦の視野を広げ、横に映るマスが少なくなりすぎないようにする
+   */
+  resize(width: number, height: number) {
+    if (width <= 0 || height <= 0) return;
+    this.renderer.setSize(width, height, false);
+    const aspect = width / height;
+    const distance = Math.hypot(CAMERA.height, CAMERA.back);
+    const fovForWidth = THREE.MathUtils.radToDeg(2 * Math.atan(PORTRAIT.minAcross / 2 / distance / aspect));
+    this.camera.aspect = aspect;
+    this.camera.fov = Math.min(PORTRAIT.maxFov, Math.max(CAMERA.fov, fovForWidth));
+    this.camera.updateProjectionMatrix();
   }
 
   /** 1フレーム描く。状態が変わったときだけ、霧や敵の作り直しをする */
