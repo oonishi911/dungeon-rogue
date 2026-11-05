@@ -33,6 +33,7 @@ export interface Frame {
   from: Motion;
   progress: number; // 0〜1。1なら動き終わり
   walkTarget: Pos | null; // タップ・クリックで向かっている場所
+  walkPath: Pos[]; // そこまでの道筋（今いるマスを除き、行き先を含む）。歩いていなければ空
   tileset: HTMLImageElement | null; // ダンジョン特性のタイル素材。読み込み前は null（色の四角で描く）
 }
 
@@ -127,6 +128,13 @@ export function drawView(canvas: HTMLCanvasElement, frame: Frame, colors: Colors
         ctx.globalAlpha = 1;
       }
     }
+  }
+
+  // 歩く道筋は小さな点で示す（行き先は枠で示すので除く）
+  ctx.fillStyle = colors.target;
+  for (const p of frame.walkPath.slice(0, -1)) {
+    const { px, py } = toPx(p.x, p.y);
+    ctx.fillRect(px + CELL / 2 - 2, py + CELL / 2 - 2, 4, 4);
   }
 
   if (frame.walkTarget) {

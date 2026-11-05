@@ -515,6 +515,11 @@ button.card:disabled {
 
 .explore__stage {
   position: relative;
+  /* なぞって歩くので、指の動きでページがスクロールしたり拡大したりしないようにする */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /* 3D表示は Canvas の画面上の大きさに合わせて描くので、縦横比は CSS で決める */
@@ -615,65 +620,28 @@ button.card:disabled {
   display: none;
 }
 
-/* ===== 十字キー =====
-   パッド全体で指を追う。中の4つのボタンは見た目と、キーボードで押すためのもの */
-.dpad {
-  --dpad-size: 9.5rem;
-  position: relative;
-  width: var(--dpad-size);
-  height: var(--dpad-size);
-  justify-self: center;
-  border-radius: 50%;
-  background: var(--pine-deep);
-  border: 1px solid var(--pine-line);
-  /* 長押しで文字選択やメニューが出たり、ページがスクロールしたりしないようにする */
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  cursor: pointer;
-}
-
-.dpad--disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.dpad__btn {
+/* ===== 仮想スティック =====
+   3D画面を指でなぞると、指を置いた場所に出る。つまみは土台の外へは出ない（大きさは stick.ts の STICK.radius と合わせる） */
+.stick {
   position: absolute;
-  width: 36%;
-  height: 36%;
-  display: grid;
-  place-content: center;
-  padding: 0;
-  background: var(--pine);
-  border: 1px solid var(--pine-line);
-  border-radius: 8px;
-  color: var(--bone-dim);
-  font-size: 1.125rem;
-  line-height: 1;
-  /* 指やマウスはパッドが受ける */
-  pointer-events: none;
-  transition: background-color 80ms, color 80ms;
-}
-
-.dpad__btn--on {
-  background: var(--bone);
-  border-color: var(--bone);
-  color: var(--ink);
-}
-
-.dpad__up { top: 4%; left: 32%; }
-.dpad__down { bottom: 4%; left: 32%; }
-.dpad__left { left: 4%; top: 32%; }
-.dpad__right { right: 4%; top: 32%; }
-
-.dpad__hub {
-  position: absolute;
-  inset: 40%;
+  width: 112px;
+  height: 112px;
+  margin: -56px 0 0 -56px;
   border-radius: 50%;
-  border: 1px solid var(--pine-line);
+  background: rgb(236 229 211 / 0.12);
+  border: 2px solid rgb(236 229 211 / 0.35);
   pointer-events: none;
+}
+
+.stick__knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+  border-radius: 50%;
+  background: rgb(236 229 211 / 0.55);
 }
 
 .explore__side .primary:disabled {
@@ -750,8 +718,8 @@ button.card:disabled {
 }
 
 /* ===== スマホ：1画面に収める =====
-   上から、階の名前 → 3D画面（残りの高さをすべて使う） → HP・満腹度 → 十字キーと行動ボタン → 道具。
-   スクロールしなくても十字キーまで届くように、画面の高さぴったりにする */
+   上から、階の名前 → 3D画面（残りの高さをすべて使う。移動はここで行う） → HP・満腹度 → 行動ボタン → 道具。
+   スクロールしなくてもすべての操作に届くように、画面の高さぴったりにする */
 @media (max-width: 48rem) {
   .explore-screen {
     height: 100vh;
@@ -843,30 +811,21 @@ button.card:disabled {
     gap: 0.75rem;
   }
 
-  /* 十字キーを左、行動ボタンを右に並べ、道具はその下に1行で並べる */
+  /* 移動は3D画面で行うので、下には行動ボタンを1行、道具を1行だけ並べる */
   .explore__controls {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas:
-      'pad actions'
-      'items items';
-    align-items: center;
-    gap: 0.5rem 0.75rem;
-  }
-
-  /* 画面の幅と高さのどちらにも収まる大きさにする */
-  .dpad {
-    --dpad-size: clamp(7.5rem, min(40vw, 24dvh), 10.5rem);
-    grid-area: pad;
+    gap: 0.5rem;
   }
 
   .explore__actions {
-    grid-area: actions;
+    grid-template-columns: 1.4fr 1fr 1fr;
     gap: 0.375rem;
   }
 
   .explore__descend,
   .explore__wait {
     min-height: 2.75rem;
+    padding-inline: 0.25rem;
+    font-size: var(--step--1);
   }
 
   .explore__info-toggle {
@@ -875,7 +834,6 @@ button.card:disabled {
 
   /* 道具が多くても高さが増えないよう、はみ出した分は横にスクロールする */
   .explore__controls .explore__items {
-    grid-area: items;
     display: flex;
     flex-wrap: nowrap;
     gap: 0.5rem;
