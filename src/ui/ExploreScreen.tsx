@@ -43,7 +43,8 @@ import { tilesetFor } from './tileset';
 // これより大きい（広いマップ）と縮めて表示するので、ドットのままだと細い通路が消えてしまう
 const MINI_SHARP_MAX = 96;
 
-const STEP_MS = 120; // 1マス動くのにかける時間。押し続けたときの歩く速さもこれで決まる
+// 1マス動くのにかける時間。なぞり続けたとき・タップで歩くときの速さもこれで決まる（1秒に約5.5マス）
+const STEP_MS = 180;
 const QUEUE_MAX = 2; // 動いている途中に押した操作を、いくつまで覚えておくか（多すぎると指を止めても歩き続ける）
 
 const KEY_DIRS: Record<string, Dir> = {
