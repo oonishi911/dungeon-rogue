@@ -3,6 +3,7 @@
 //
 // - 床と壁は、同じ形をまとめて描く InstancedMesh で描く。主人公の周りの画面に映る範囲だけを描くので、
 //   マップがどれだけ広くても描く量は変わらない
+// - 床と壁には、ダンジョン特性ごとのテクスチャ（public/textures/{特性}.png）を貼る。読み込むまでは色で描く
 // - 霧：まだ見ていないマスは描かない。一度見たマスは暗く、今見えているマスは明るく描く
 // - 主人公と敵は、今のドット絵を常にカメラを向く板（スプライト）として立てる
 
@@ -25,7 +26,25 @@ const BACKGROUND = 0x0b1413;
 const DRAW_RANGE = { x: 13, z: 11 };
 const DRAW_CAPACITY = (DRAW_RANGE.x * 2 + 1) * (DRAW_RANGE.z * 2 + 1);
 
-/** ダンジョン特性ごとの床と壁の色。本番の素材ができたらテクスチャに置き換える */
+/**
+ * テクスチャの中の配置（128×64px、1マス32px）。詳しくは docs/textures.md。
+ * 1段目に床4種類、2段目に壁の上面と側面。壁の側面は、下から壁の高さの分（約19px）だけが見える
+ */
+export const TEXTURE_ATLAS = {
+  columns: 4,
+  rows: 2,
+  floors: [0, 1, 2, 3], // 1段目の何列目か
+  wallTop: { col: 0, row: 1 },
+  wallSide: { col: 1, row: 1 },
+} as const;
+
+interface Atlas {
+  floors: THREE.Texture[];
+  top: THREE.Texture;
+  side: THREE.Texture;
+}
+
+/** テクスチャを読み込む前（または読み込めなかったとき）の、ダンジョン特性ごとの床と壁の色 */
 const TRAIT_COLORS: Record<TraitId, { floor: number; wall: number }> = {
   fire: { floor: 0x4a2a22, wall: 0x8a3a26 },
   ice: { floor: 0x253a48, wall: 0x6a9cbc },
@@ -43,8 +62,11 @@ export class DungeonView3D {
   private readonly ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
   private shownState: ExploreState | null = null;
-  private readonly floors: THREE.InstancedMesh;
+  private readonly floors: THREE.InstancedMesh[]; // 床の模様ごとに1つ
   private readonly walls: THREE.InstancedMesh;
+  private readonly wallMaterials: { top: THREE.MeshLambertMaterial; side: THREE.MeshLambertMaterial };
+  private readonly atlases = new Map<TraitId, Atlas | null>(); // null は読み込み中か、読み込めなかった
+  private appliedAtlas: Atlas | null = null;
   private readonly props = new THREE.Group(); // 階段・宝箱・目印
   private readonly player: THREE.Sprite;
   private readonly enemies = new Map<number, { body: THREE.Sprite; mark: THREE.Sprite; hp: THREE.Sprite; ring: THREE.Mesh | null }>();
@@ -78,21 +100,22 @@ export class DungeonView3D {
     sun.position.set(-3, 10, 4);
     this.scene.add(sun, this.torch, this.props);
 
-    // 床と壁は、描く範囲のマス数ぶんの入れ物を最初に用意しておき、1歩ごとに中身を入れ替える
-    this.floors = new THREE.InstancedMesh(
-      new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
-      new THREE.MeshLambertMaterial({ color: 0xffffff }),
-      DRAW_CAPACITY,
-    );
-    this.walls = new THREE.InstancedMesh(
-      shadedBox(WALL_HEIGHT),
-      new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true }),
-      DRAW_CAPACITY,
-    );
-    // 中身を毎回入れ替えるので、最初の中身で計算された範囲で画面外と判定されないようにする
-    this.floors.frustumCulled = false;
-    this.walls.frustumCulled = false;
-    this.scene.add(this.floors, this.walls);
+    // 床と壁は、描く範囲のマス数ぶんの入れ物を最初に用意しておき、1歩ごとに中身を入れ替える。
+    // 床は模様ごとにテクスチャが違うので、模様の数だけ入れ物を分ける
+    const floorGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    this.floors = TEXTURE_ATLAS.floors.map(() => new THREE.InstancedMesh(floorGeo, new THREE.MeshLambertMaterial(), DRAW_CAPACITY));
+    // 壁は面ごとに素材を分ける。箱の面の順番は +x, -x, +y（上）, -y（下）, +z, -z
+    this.wallMaterials = {
+      top: new THREE.MeshLambertMaterial({ vertexColors: true }),
+      side: new THREE.MeshLambertMaterial({ vertexColors: true }),
+    };
+    const { top, side } = this.wallMaterials;
+    this.walls = new THREE.InstancedMesh(shadedBox(WALL_HEIGHT), [side, side, top, side, side, side], DRAW_CAPACITY);
+    for (const mesh of [...this.floors, this.walls]) {
+      // 中身を毎回入れ替えるので、最初の中身で計算された範囲で画面外と判定されないようにする
+      mesh.frustumCulled = false;
+      this.scene.add(mesh);
+    }
 
     this.player = new THREE.Sprite(this.spriteMaterial('hero', {}, true));
     this.player.renderOrder = 1; // 壁より手前に描く
@@ -140,10 +163,14 @@ export class DungeonView3D {
   }
 
   dispose() {
-    for (const mesh of [this.floors, this.walls]) {
-      mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+    this.floors[0]!.geometry.dispose(); // 床の形はすべての入れ物で共通
+    this.walls.geometry.dispose();
+    for (const mesh of [...this.floors, this.walls]) {
+      for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) mat.dispose();
       mesh.dispose();
+    }
+    for (const atlas of this.atlases.values()) {
+      for (const t of atlas ? [...atlas.floors, atlas.top, atlas.side] : []) t.dispose();
     }
     for (const r of Object.values(this.shared)) for (const d of Array.isArray(r) ? r : [r]) d.dispose();
     for (const m of this.materials.values()) m.dispose();
@@ -159,12 +186,15 @@ export class DungeonView3D {
    */
   private updateFog(frame: Frame) {
     const { map, seen, player, trait } = frame.state;
+    const atlas = this.atlasFor(trait);
+    if (atlas !== this.appliedAtlas) this.applyAtlas(atlas);
+    // テクスチャがあれば色はテクスチャに任せ、明るさだけを掛ける。なければ特性ごとの色で描く
     const colors = TRAIT_COLORS[trait];
-    const floorBase = new THREE.Color(colors.floor);
-    const wallBase = new THREE.Color(colors.wall);
+    const floorBase = new THREE.Color(atlas ? 0xffffff : colors.floor);
+    const wallBase = new THREE.Color(atlas ? 0xffffff : colors.wall);
     const m = new THREE.Matrix4();
     const c = new THREE.Color();
-    let floors = 0;
+    const floorCounts = this.floors.map(() => 0);
     let walls = 0;
     for (let z = player.y - DRAW_RANGE.z; z <= player.y + DRAW_RANGE.z; z++) {
       for (let x = player.x - DRAW_RANGE.x; x <= player.x + DRAW_RANGE.x; x++) {
@@ -176,20 +206,52 @@ export class DungeonView3D {
           this.walls.setMatrixAt(walls, m.makeTranslation(x, WALL_HEIGHT / 2, z));
           this.walls.setColorAt(walls++, c.copy(wallBase).multiplyScalar(light));
         } else {
-          // 床は場所ごとに少しだけ明るさを変えて、単調さを減らす
-          this.floors.setMatrixAt(floors, m.makeTranslation(x, 0, z));
-          this.floors.setColorAt(floors++, c.copy(floorBase).multiplyScalar(light * (0.9 + floorVariant(x, z) * 0.05)));
+          // 床の模様はマスの位置で決める（2D表示と同じ決め方）。色だけで描くときは明るさを少し変える
+          const k = floorVariant(x, z);
+          const variety = atlas ? 1 : 0.9 + k * 0.05;
+          this.floors[k]!.setMatrixAt(floorCounts[k]!, m.makeTranslation(x, 0, z));
+          this.floors[k]!.setColorAt(floorCounts[k]!++, c.copy(floorBase).multiplyScalar(light * variety));
         }
       }
     }
-    for (const [mesh, count] of [
-      [this.floors, floors],
-      [this.walls, walls],
-    ] as const) {
+    const counts = [...this.floors.map((mesh, k) => [mesh, floorCounts[k]!] as const), [this.walls, walls] as const];
+    for (const [mesh, count] of counts) {
       mesh.count = count;
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
+  }
+
+  /** ダンジョン特性のテクスチャ。まだ読み込んでいなければ読み込みを始めて null を返す */
+  private atlasFor(trait: TraitId): Atlas | null {
+    if (!this.atlases.has(trait)) {
+      this.atlases.set(trait, null);
+      new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/${trait}.png`, (image) => {
+        this.atlases.set(trait, {
+          floors: TEXTURE_ATLAS.floors.map((col) => cropTexture(image, col, 0)),
+          top: cropTexture(image, TEXTURE_ATLAS.wallTop.col, TEXTURE_ATLAS.wallTop.row),
+          // 側面は箱の高さに合わせて、マスの下から壁の高さの分だけを使う（ドット絵が縦に縮まないように）
+          side: cropTexture(image, TEXTURE_ATLAS.wallSide.col, TEXTURE_ATLAS.wallSide.row, WALL_HEIGHT),
+        });
+        image.dispose();
+        this.shownState = null; // 次のフレームで描き直す
+      });
+      // 読み込めなかったときは null のままにして、色で描き続ける
+    }
+    return this.atlases.get(trait) ?? null;
+  }
+
+  private applyAtlas(atlas: Atlas | null) {
+    this.floors.forEach((mesh, k) => {
+      const mat = mesh.material as THREE.MeshLambertMaterial;
+      mat.map = atlas?.floors[k] ?? null;
+      mat.needsUpdate = true;
+    });
+    this.wallMaterials.top.map = atlas?.top ?? null;
+    this.wallMaterials.side.map = atlas?.side ?? null;
+    this.wallMaterials.top.needsUpdate = true;
+    this.wallMaterials.side.needsUpdate = true;
+    this.appliedAtlas = atlas;
   }
 
   // ===== 階段・宝箱 =====
@@ -326,6 +388,23 @@ export class DungeonView3D {
     }
     return tex;
   }
+}
+
+/**
+ * テクスチャの中の1マス分を切り出す。visibleHeight はマスの下から何割を使うか。
+ * 画像は上下が反転して読み込まれるので、上の段ほど v（縦の座標）が大きい
+ */
+function cropTexture(image: THREE.Texture, col: number, row: number, visibleHeight = 1): THREE.Texture {
+  const t = image.clone();
+  t.repeat.set(1 / TEXTURE_ATLAS.columns, visibleHeight / TEXTURE_ATLAS.rows);
+  t.offset.set(col / TEXTURE_ATLAS.columns, 1 - (row + 1) / TEXTURE_ATLAS.rows);
+  // ドット絵なのでぼかさない。縮小用の画像（ミップマップ）を作ると隣のマスの色が混ざるので作らない
+  t.magFilter = THREE.NearestFilter;
+  t.minFilter = THREE.NearestFilter;
+  t.generateMipmaps = false;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.needsUpdate = true;
+  return t;
 }
 
 /** 上面を明るく、側面を暗くした箱（壁）。色はインスタンスごとの色と掛け合わされる */
