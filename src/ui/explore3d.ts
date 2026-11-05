@@ -24,6 +24,15 @@ const WALL_HEIGHT = 1;
 const CAMERA = { fov: 40, height: 15, back: 7.5 }; // 主人公の真上15・手前7.5から見下ろす（約63度。横に17マスほど映る）
 const REMEMBERED = 0.3; // 一度見たが今は見えていないマスの明るさ
 const FADED_WALL_OPACITY = 0.35; // 敵・宝箱・階段のすぐ手前にあって、それを隠してしまう壁の濃さ
+// 壁の根元の影：壁に接する床の辺に敷く帯。幅（マスの何倍か）と、壁際でのいちばん濃いところ、薄くなり方
+const WALL_SHADOW = { depth: 0.4, darkness: 0.8, falloff: 1.5 }; // falloff：大きいほど壁際で急に薄くなる
+// 影の帯を敷く向き。dx・dz は壁のある方向、angle は帯の暗い側をその方向へ向ける回転
+const SHADOW_SIDES = [
+  { dx: 0, dz: -1, angle: 0 },
+  { dx: 1, dz: 0, angle: -Math.PI / 2 },
+  { dx: 0, dz: 1, angle: Math.PI },
+  { dx: -1, dz: 0, angle: Math.PI / 2 },
+] as const;
 const BACKGROUND = 0x0b1413;
 // 床と壁を描く範囲（主人公からのマス数）。画面に映る横17×縦12マスほどより、動いている途中の分だけ広くとる
 const DRAW_RANGE = { x: 13, z: 11 };
@@ -68,6 +77,7 @@ export class DungeonView3D {
   private readonly floors: THREE.InstancedMesh[]; // 床の模様ごとに1つ
   private readonly walls: THREE.InstancedMesh;
   private readonly fadedWalls: THREE.InstancedMesh; // 半透明にした壁
+  private readonly wallShadows: THREE.InstancedMesh; // 壁の根元の影
   private readonly wallMaterials: { top: THREE.MeshLambertMaterial; side: THREE.MeshLambertMaterial }[]; // 0：普通、1：半透明
   private readonly atlases = new Map<TraitId, Atlas | null>(); // null は読み込み中か、読み込めなかった
   private appliedAtlas: Atlas | null = null;
@@ -118,7 +128,23 @@ export class DungeonView3D {
     const [solid, faded] = this.wallMaterials.map(({ top, side }) => [side, side, top, side, side, side]);
     this.walls = new THREE.InstancedMesh(wallGeo, solid!, DRAW_CAPACITY);
     this.fadedWalls = new THREE.InstancedMesh(wallGeo, faded!, DRAW_CAPACITY);
-    for (const mesh of [...this.floors, this.walls, this.fadedWalls]) {
+    // 壁の根元の影。帯の上側（北）が暗く、下側へ向かって消えていく。向きはインスタンスごとに回す
+    const shadowGeo = new THREE.PlaneGeometry(1, WALL_SHADOW.depth).rotateX(-Math.PI / 2);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      alphaMap: this.texture('wall-shadow', 1, 32, (ctx) => {
+        // alphaMap は明るさを濃さとして使う。壁際（上）ほど明るく、なめらかに暗くする
+        for (let y = 0; y < 32; y++) {
+          const k = Math.round(255 * WALL_SHADOW.darkness * (1 - y / 31) ** WALL_SHADOW.falloff);
+          ctx.fillStyle = `rgb(${k},${k},${k})`;
+          ctx.fillRect(0, y, 1, 1);
+        }
+      }),
+      transparent: true,
+      depthWrite: false,
+    });
+    this.wallShadows = new THREE.InstancedMesh(shadowGeo, shadowMat, DRAW_CAPACITY * SHADOW_SIDES.length);
+    for (const mesh of [...this.floors, this.walls, this.fadedWalls, this.wallShadows]) {
       // 中身を毎回入れ替えるので、最初の中身で計算された範囲で画面外と判定されないようにする
       mesh.frustumCulled = false;
       this.scene.add(mesh);
@@ -172,7 +198,8 @@ export class DungeonView3D {
   dispose() {
     this.floors[0]!.geometry.dispose(); // 床の形はすべての入れ物で共通
     this.walls.geometry.dispose(); // 半透明の壁と共通
-    for (const mesh of [...this.floors, this.walls, this.fadedWalls]) {
+    this.wallShadows.geometry.dispose();
+    for (const mesh of [...this.floors, this.walls, this.fadedWalls, this.wallShadows]) {
       for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) mat.dispose();
       mesh.dispose();
     }
@@ -204,7 +231,15 @@ export class DungeonView3D {
     const floorCounts = this.floors.map(() => 0);
     let walls = 0;
     let fadedWalls = 0;
+    let shadows = 0;
     const faded = this.wallsToFade(frame);
+    const q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    const at = new THREE.Vector3();
+    const one = new THREE.Vector3(1, 1, 1);
+    // 一度見た壁だけに影を付ける（まだ見ていない壁の影から、霧の向こうの形がわからないように）
+    const seenWall = (x: number, z: number) =>
+      x >= 0 && z >= 0 && x < map.width && z < map.height && map.tiles[z * map.width + x] === 'wall' && seen[z * map.width + x];
     for (let z = player.y - DRAW_RANGE.z; z <= player.y + DRAW_RANGE.z; z++) {
       for (let x = player.x - DRAW_RANGE.x; x <= player.x + DRAW_RANGE.x; x++) {
         if (x < 0 || z < 0 || x >= map.width || z >= map.height) continue;
@@ -227,6 +262,13 @@ export class DungeonView3D {
           const variety = atlas ? 1 : 0.9 + k * 0.05;
           this.floors[k]!.setMatrixAt(floorCounts[k]!, m.makeTranslation(x, 0, z));
           this.floors[k]!.setColorAt(floorCounts[k]!++, c.copy(floorBase).multiplyScalar(light * variety));
+          // 壁に接する辺に、影の帯を壁側へ寄せて敷く
+          for (const side of SHADOW_SIDES) {
+            if (!seenWall(x + side.dx, z + side.dz)) continue;
+            const offset = 0.5 - WALL_SHADOW.depth / 2;
+            at.set(x + side.dx * offset, 0.01, z + side.dz * offset);
+            this.wallShadows.setMatrixAt(shadows++, m.compose(at, q.setFromAxisAngle(up, side.angle), one));
+          }
         }
       }
     }
@@ -234,6 +276,7 @@ export class DungeonView3D {
       ...this.floors.map((mesh, k) => [mesh, floorCounts[k]!] as const),
       [this.walls, walls] as const,
       [this.fadedWalls, fadedWalls] as const,
+      [this.wallShadows, shadows] as const,
     ];
     for (const [mesh, count] of counts) {
       mesh.count = count;
