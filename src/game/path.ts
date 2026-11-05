@@ -47,13 +47,21 @@ export function findPath(
   return null;
 }
 
+/** target までの道。avoid のマスはできるだけ通らず、通らないと届かないときだけ通る。届かなければ null */
+export function walkPath(state: ExploreState, target: Pos, avoid: ReadonlySet<string> = new Set()): Pos[] | null {
+  const goal = (p: Pos) => samePos(p, target);
+  const rest = new Set([...avoid].filter((k) => k !== key(target)));
+  return (rest.size > 0 ? findPath(state, goal, rest) : null) ?? findPath(state, goal);
+}
+
 /**
  * タップ・クリックした場所へ向かう次の1歩。着いた・届かない・道の途中に敵がいるときは null（止まる）。
  * 勝手に攻撃しないよう、敵に向かって進むのは、その敵自身を目的地に選んだときだけ。
+ * avoid のマスはできるだけ通らない（通らないと届かないときだけ通る）。
  */
-export function walkToward(state: ExploreState, target: Pos): ExploreAction | null {
+export function walkToward(state: ExploreState, target: Pos, avoid: ReadonlySet<string> = new Set()): ExploreAction | null {
   if (state.outcome !== 'ongoing' || samePos(state.player, target)) return null;
-  const path = findPath(state, (p) => samePos(p, target));
+  const path = walkPath(state, target, avoid);
   const next = path?.[0];
   if (!next) return null;
   const blocked = state.enemies.some((e) => samePos(e.pos, next)) && !samePos(next, target);
