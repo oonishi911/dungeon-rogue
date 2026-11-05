@@ -599,7 +599,8 @@ button.card:disabled {
   top: 0.5rem;
   left: 50%;
   transform: translateX(-50%);
-  max-width: calc(100% - 1.5rem);
+  /* 右上のミニマップと重ならないよう、左右に同じだけ空ける */
+  max-width: calc(100% - 2 * (min(20%, 7rem) + 1rem));
   margin: 0;
   padding: 0.25rem 0.75rem;
   background: rgb(11 20 19 / 0.85);
@@ -681,13 +682,24 @@ button.card:disabled {
 }
 
 .explore__mini {
-  width: 100%;
-  max-width: 15rem;
-  justify-self: center;
+  /* 3D画面の右上に、小さく半透明で重ねる。指やクリックは下の3D画面へ通す */
+  --mini-size: min(20%, 7rem);
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: var(--mini-size);
   height: auto;
-  image-rendering: pixelated;
-  border: 1px solid var(--pine-line);
+  padding: 3px;
+  background: rgb(11 20 19 / 0.45);
   border-radius: 4px;
+  opacity: 0.8;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+/* 広いマップは縮めて表示するので、ドットのままだと細い通路が消える。なめらかに縮める */
+.explore__mini--dense {
+  image-rendering: auto;
 }
 
 .meter__head {
@@ -795,6 +807,15 @@ button.card:disabled {
     object-fit: contain; /* 2D表示のときに縦横比を保つ */
     border-radius: 0;
     border-inline: none;
+  }
+
+  .explore__mini {
+    --mini-size: min(24%, 5.5rem);
+    right: 0.75rem;
+  }
+
+  .explore__notice {
+    max-width: calc(100% - 2 * (min(24%, 5.5rem) + 1.25rem));
   }
 
   .explore__toast {

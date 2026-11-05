@@ -59,7 +59,7 @@ export function readColors() {
     calm: c('--bone-dim'),
     hp: c('--hp-enemy'),
     target: c('--hp-you'),
-    mini: c('--pine-line'),
+    mini: c('--bone-dim'), // 3D画面の上に半透明で重ねるので、暗い床の上でも見える明るい色にする
   };
 }
 
@@ -234,16 +234,18 @@ export function drawMinimap(canvas: HTMLCanvasElement, state: ExploreState, colo
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const { map, seen, player } = state;
-  ctx.fillStyle = colors.fog;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // 3D画面の上に重ねるので、背景は塗らずに透かす（下地の濃さは CSS で決める）
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = colors.mini;
   map.tiles.forEach((t, i) => {
     if (t === 'floor' && seen[i]) ctx.fillRect((i % map.width) * MINI_CELL, Math.floor(i / map.width) * MINI_CELL, MINI_CELL, MINI_CELL);
   });
-  if (map.stairs && seen[map.stairs.y * map.width + map.stairs.x]) {
-    ctx.fillStyle = colors.stairs;
-    ctx.fillRect(map.stairs.x * MINI_CELL - 1, map.stairs.y * MINI_CELL - 1, MINI_CELL + 2, MINI_CELL + 2);
-  }
-  ctx.fillStyle = colors.target;
-  ctx.fillRect(player.x * MINI_CELL - 1, player.y * MINI_CELL - 1, MINI_CELL + 2, MINI_CELL + 2);
+  // 広いマップほど小さく縮めて表示されるので、主人公と階段の印はマップの広さに合わせて大きくする
+  const mark = Math.max(MINI_CELL + 2, Math.round(canvas.width / 14));
+  const dot = (p: Pos, color: string) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(Math.round((p.x + 0.5) * MINI_CELL - mark / 2), Math.round((p.y + 0.5) * MINI_CELL - mark / 2), mark, mark);
+  };
+  if (map.stairs && seen[map.stairs.y * map.width + map.stairs.x]) dot(map.stairs, colors.stairs);
+  dot(player, colors.target);
 }
