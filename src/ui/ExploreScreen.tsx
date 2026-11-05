@@ -106,6 +106,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
   // 3D表示ができない環境（WebGL2 が使えない、準備に失敗した）では2D表示に切り替える
   const [mode, setMode] = useState<RenderMode>(() => (renderMode === '3d' && webglAvailable() ? '3d' : '2d'));
   const [state, setState] = useState<ExploreState>(start);
+  // スマホで、装備・敵・地図・記録をまとめた「情報」を開いているか（PCでは常に横に出ている）
+  const [infoOpen, setInfoOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const viewRef = useRef<HTMLCanvasElement>(null);
   const miniRef = useRef<HTMLCanvasElement>(null);
@@ -334,6 +336,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
   const floorName = isBossFloor(state) ? '最深部' : `地下${state.floor + 1}階`;
 
   const lastLog = state.log.at(-1);
+  const recentLog = state.log.slice(-8).reverse();
 
   return (
     <main className="screen explore-screen">
@@ -397,6 +400,15 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
               <button type="button" className="explore__wait" onClick={() => request({ kind: 'wait' })} disabled={ended}>
                 その場で待つ
               </button>
+              <button
+                type="button"
+                className="explore__wait explore__info-toggle"
+                aria-expanded={infoOpen}
+                aria-controls="explore-more"
+                onClick={() => setInfoOpen(true)}
+              >
+                装備・敵・地図
+              </button>
             </div>
             {itemGroups.length === 0 ? (
               <p className="muted explore__items">道具はない</p>
@@ -425,71 +437,77 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
             {error}
           </p>
 
-          <section className="explore__info" aria-labelledby="explore-gear">
-            <h2 id="explore-gear" className="meter__head">
-              装備
-            </h2>
-            <p className="explore__gear">
-              武器：{stats.weapon ? ITEMS[stats.weapon].name : 'なし'}
-              <br />
-              防具：{stats.armor ? ITEMS[stats.armor].name : 'なし'}
-              {stats.enchant && (
-                <>
-                  <br />
-                  付与：{TRAITS[stats.enchant.element].name}（あと{stats.enchant.hits}回）
-                </>
+          {/* スマホでは画面に収まらないので、ふだんは隠して「装備・敵・地図」で重ねて開く */}
+          <div id="explore-more" className={`explore__more${infoOpen ? ' explore__more--open' : ''}`}>
+            <div className="explore__more-head">
+              <h2 className="panel__title">装備・敵・地図</h2>
+              <button type="button" className="explore__wait" onClick={() => setInfoOpen(false)}>
+                閉じる
+              </button>
+            </div>
+            <section className="explore__info" aria-labelledby="explore-gear">
+              <h2 id="explore-gear" className="meter__head">
+                装備
+              </h2>
+              <p className="explore__gear">
+                武器：{stats.weapon ? ITEMS[stats.weapon].name : 'なし'}
+                <br />
+                防具：{stats.armor ? ITEMS[stats.armor].name : 'なし'}
+                {stats.enchant && (
+                  <>
+                    <br />
+                    付与：{TRAITS[stats.enchant.element].name}（あと{stats.enchant.hits}回）
+                  </>
+                )}
+              </p>
+            </section>
+
+            <section className="explore__info" aria-labelledby="explore-enemies">
+              <h2 id="explore-enemies" className="meter__head">
+                見えている敵
+              </h2>
+              {visibleEnemies.length === 0 ? (
+                <p className="muted">いない</p>
+              ) : (
+                <ul className="explore__enemies">
+                  {visibleEnemies.map((e) => (
+                    <li key={e.uid}>
+                      <span className={`explore__mark explore__mark--${e.mode}`} aria-hidden="true">
+                        {ENEMY_MARK[e.mode].mark}
+                      </span>
+                      {enemyDef(e).name}（{TRAITS[enemyDef(e).element].name}・{BODY_NAMES[enemyDef(e).body]}、HP {e.hp}）：
+                      {ENEMY_MARK[e.mode].text}
+                    </li>
+                  ))}
+                </ul>
               )}
+            </section>
+
+            <canvas
+              ref={miniRef}
+              className="explore__mini"
+              width={state.map.width * MINI_CELL}
+              height={state.map.height * MINI_CELL}
+              role="img"
+              aria-label="この階の地図（歩いて見えた範囲）"
+            />
+
+            <p className="muted explore__help">
+              十字の上を指でなぞると、その向きに歩き続ける。マスをタップするとそこまで歩く。キーボードでは矢印キー／WASDで移動、スペースで待つ、Enterで階段を降りる、数字キーで道具を使う
             </p>
-          </section>
-
-          <section className="explore__info" aria-labelledby="explore-enemies">
-            <h2 id="explore-enemies" className="meter__head">
-              見えている敵
-            </h2>
-            {visibleEnemies.length === 0 ? (
-              <p className="muted">いない</p>
-            ) : (
-              <ul className="explore__enemies">
-                {visibleEnemies.map((e) => (
-                  <li key={e.uid}>
-                    <span className={`explore__mark explore__mark--${e.mode}`} aria-hidden="true">
-                      {ENEMY_MARK[e.mode].mark}
-                    </span>
-                    {enemyDef(e).name}（{TRAITS[enemyDef(e).element].name}・{BODY_NAMES[enemyDef(e).body]}、HP {e.hp}）：
-                    {ENEMY_MARK[e.mode].text}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <canvas
-            ref={miniRef}
-            className="explore__mini"
-            width={state.map.width * MINI_CELL}
-            height={state.map.height * MINI_CELL}
-            role="img"
-            aria-label="この階の地図（歩いて見えた範囲）"
-          />
-
-          <p className="muted explore__help">
-            十字の上を指でなぞると、その向きに歩き続ける。マスをタップするとそこまで歩く。キーボードでは矢印キー／WASDで移動、スペースで待つ、Enterで階段を降りる、数字キーで道具を使う
-          </p>
+            <section className="explore__more-log" aria-label="記録">
+              <h3 className="meter__head">記録</h3>
+              <LogList lines={recentLog} total={state.log.length} />
+            </section>
+          </div>
         </aside>
       </div>
 
-      <section aria-labelledby="explore-log">
+      <section className="explore__log-panel" aria-labelledby="explore-log">
         <h2 id="explore-log" className="panel__title">
           記録
         </h2>
-        <ol className="explore__log">
-          {state.log
-            .slice(-8)
-            .reverse()
-            .map((line, i) => (
-              <li key={state.log.length - i}>{line}</li>
-            ))}
-        </ol>
+        <LogList lines={recentLog} total={state.log.length} />
       </section>
     </main>
   );
@@ -591,6 +609,17 @@ function DirectionPad({
       ))}
       <span className="dpad__hub" aria-hidden="true" />
     </div>
+  );
+}
+
+/** 記録（新しい順）。key は記録の通し番号にして、新しい行が増えても古い行を作り直さない */
+function LogList({ lines, total }: { lines: string[]; total: number }) {
+  return (
+    <ol className="explore__log">
+      {lines.map((line, i) => (
+        <li key={total - i}>{line}</li>
+      ))}
+    </ol>
   );
 }
 
