@@ -363,6 +363,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
             aria-label={`${floorName}の周囲。マスをクリックするとそこまで歩く。${onStairs ? '足元に階段がある' : ''}`}
             onClick={onMapClick}
           />
+          {/* 「壁があって進めない」などの知らせは3D画面の上に重ねる。
+              下に並べると、出たり消えたりするたびに3D画面の高さが変わって画面が揺れるため */}
+          <p className="error explore__notice" role="alert">
+            {error}
+          </p>
           {/* スマホでは記録の欄が画面の外になるので、いちばん新しい1行を画面の上に重ねて出す */}
           {!ended && lastLog && (
             <p className="explore__toast" aria-hidden="true">
@@ -432,10 +437,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
               </ul>
             )}
           </div>
-
-          <p className="error" role="alert">
-            {error}
-          </p>
 
           {/* スマホでは画面に収まらないので、ふだんは隠して「装備・敵・地図」で重ねて開く */}
           <div id="explore-more" className={`explore__more${infoOpen ? ' explore__more--open' : ''}`}>
