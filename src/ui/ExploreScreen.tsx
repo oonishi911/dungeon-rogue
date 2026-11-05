@@ -35,6 +35,7 @@ import {
   type Frame,
   type Motion,
 } from './exploreRender';
+import { DungeonView3D } from './explore3d';
 import { tilesetFor } from './tileset';
 
 const STEP_MS = 120; // 1マス動くのにかける時間。押し続けたときの歩く速さもこれで決まる
@@ -66,14 +67,19 @@ const urlRank = Number(new URLSearchParams(location.search).get('rank')) || 1;
 // ?trait=fire でダンジョン特性を指定できる（タイル素材の確認用）
 const traitParam = new URLSearchParams(location.search).get('trait');
 const urlTrait = TRAIT_IDS.find((t) => t === traitParam);
+// ?render=2d で、以前の2D表示に切り替えられる（3D表示との見比べ用）
+const urlRender: RenderMode = new URLSearchParams(location.search).get('render') === '2d' ? '2d' : '3d';
+
+export type RenderMode = '2d' | '3d';
 
 // 開発用画面で持たせる装備と道具
 const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fire_whetstone', 'ice_whetstone'];
 
-/** 開発用：準備フェーズを通さずに探索だけを試す。?seed=・?rank=・?trait= で条件を指定できる */
+/** 開発用：準備フェーズを通さずに探索だけを試す。?seed=・?rank=・?trait=・?render= で条件を指定できる */
 export function ExploreDevScreen() {
   return (
     <ExploreScreen
+      renderMode={urlRender}
       start={() => startExplore(Number.isInteger(urlSeed) && urlSeed > 0 ? urlSeed : newSeed(), { loadout: DEV_LOADOUT, rank: urlRank, trait: urlTrait })}
     />
   );
@@ -83,9 +89,10 @@ interface ExploreScreenProps {
   start: () => ExploreState;
   run?: number; // 何回目の挑戦か。省略すると開発用の表示になる
   onFinish?: (state: ExploreState) => void; // 省略すると、終わったあと同じ条件でやり直せる
+  renderMode?: RenderMode; // 省略すると3D表示
 }
 
-export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreenProps) {
+export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3d' }: ExploreScreenProps) {
   const [state, setState] = useState<ExploreState>(start);
   const [error, setError] = useState<string | null>(null);
   const viewRef = useRef<HTMLCanvasElement>(null);
@@ -97,7 +104,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
   const heldRef = useRef<Dir[]>([]); // 押し続けている方向（あとから押したものが優先）
   const queueRef = useRef<ExploreAction[]>([]); // 次に1回ずつ行う行動（動いている途中に押した分）
   const walkRef = useRef<Pos | null>(null); // タップ・クリックで向かっている場所
-  const originRef = useRef<Pos>({ x: 0, y: 0 }); // 今描いている画面の左上の座標（タップ位置の計算に使う）
+  const originRef = useRef<Pos>({ x: 0, y: 0 }); // 2D表示で今描いている画面の左上の座標（タップ位置の計算に使う）
+  const view3dRef = useRef<DungeonView3D | null>(null);
 
   const visible = useMemo(
     () => visibleTiles(state.map, state.player, EXPLORE_CONFIG.sightRadius),
@@ -156,6 +164,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
   useEffect(() => {
     const colors = readColors();
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const view3d = renderMode === '3d' && viewRef.current ? new DungeonView3D(viewRef.current) : null;
+    view3dRef.current = view3d;
     // 視界の計算は、状態が変わったときだけやり直す
     let sight = { state: stateRef.current, visible: visibleTiles(stateRef.current.map, stateRef.current.player, EXPLORE_CONFIG.sightRadius) };
     let frameId = 0;
@@ -187,13 +197,21 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
         walkTarget: walkRef.current,
         tileset: tilesetFor(current.trait),
       };
-      originRef.current = viewOrigin(frame);
-      if (viewRef.current) drawView(viewRef.current, frame, colors);
+      if (view3d) {
+        view3d.render(frame);
+      } else if (viewRef.current) {
+        originRef.current = viewOrigin(frame);
+        drawView(viewRef.current, frame, colors);
+      }
       frameId = requestAnimationFrame(tick);
     };
     frameId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frameId);
-  }, [perform]);
+    return () => {
+      cancelAnimationFrame(frameId);
+      view3d?.dispose();
+      view3dRef.current = null;
+    };
+  }, [perform, renderMode]);
 
   useEffect(() => {
     if (miniRef.current) drawMinimap(miniRef.current, state, readColors());
@@ -239,14 +257,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
 
   /** マップをタップ・クリックすると、そのマスまで歩く */
   const onMapClick = (e: { clientX: number; clientY: number }) => {
-    const canvas = viewRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const scale = canvas.width / rect.width; // 画面が狭いと Canvas は縮んで表示される
-    const target = {
-      x: Math.floor(originRef.current.x + ((e.clientX - rect.left) * scale) / CELL),
-      y: Math.floor(originRef.current.y + ((e.clientY - rect.top) * scale) / CELL),
-    };
+    const target = renderMode === '3d' ? view3dRef.current?.pickTile(e.clientX, e.clientY) : pickTile2d(e);
+    if (!target) return;
     const s = stateRef.current;
     if (s.outcome !== 'ongoing' || samePos(target, s.player)) return;
     const i = target.y * s.map.width + target.x;
@@ -259,6 +271,18 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
     queueRef.current = [];
     walkRef.current = target;
     setError(null);
+  };
+
+  /** 2D表示で、画面上の位置からマスを求める */
+  const pickTile2d = (e: { clientX: number; clientY: number }): Pos | null => {
+    const canvas = viewRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scale = canvas.width / rect.width; // 画面が狭いと Canvas は縮んで表示される
+    return {
+      x: Math.floor(originRef.current.x + ((e.clientX - rect.left) * scale) / CELL),
+      y: Math.floor(originRef.current.y + ((e.clientY - rect.top) * scale) / CELL),
+    };
   };
 
   const restart = () => {
@@ -293,6 +317,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish }: ExploreScreen
       <div className="explore">
         <div className="explore__stage">
           <canvas
+            // 2Dと3Dでは Canvas の描き方（コンテキスト）が違うので、切り替えたら作り直す
+            key={renderMode}
             ref={viewRef}
             className="explore__view"
             width={VIEW_W * CELL}
