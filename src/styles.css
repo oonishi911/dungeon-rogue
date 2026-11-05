@@ -577,11 +577,6 @@ button.card:disabled {
   gap: 0.75rem;
 }
 
-.explore__actions {
-  display: grid;
-  gap: 0.5rem;
-}
-
 .explore__wait {
   padding: 0.5rem;
   background: var(--pine-deep);
@@ -718,7 +713,7 @@ button.card:disabled {
 }
 
 /* ===== スマホ：1画面に収める =====
-   上から、階の名前 → 3D画面（残りの高さをすべて使う。移動はここで行う） → HP・満腹度 → 行動ボタン → 道具。
+   上から、階の名前と「装備と敵」 → 3D画面（残りの高さをすべて使う。移動・待つ・階段はここで行う） → HP・満腹度 → 道具。
    スクロールしなくてもすべての操作に届くように、画面の高さぴったりにする */
 @media (max-width: 48rem) {
   .explore-screen {
@@ -811,25 +806,19 @@ button.card:disabled {
     gap: 0.75rem;
   }
 
-  /* 移動は3D画面で行うので、下には行動ボタンを1行、道具を1行だけ並べる */
+  /* 移動・待つ・階段は3D画面で行うので、下には道具を1行だけ並べる */
   .explore__controls {
     gap: 0.5rem;
   }
 
-  .explore__actions {
-    grid-template-columns: 1.4fr 1fr 1fr;
-    gap: 0.375rem;
-  }
-
-  .explore__descend,
-  .explore__wait {
-    min-height: 2.75rem;
-    padding-inline: 0.25rem;
-    font-size: var(--step--1);
-  }
-
-  .explore__info-toggle {
+  /* 「装備と敵」は階の名前の右に置く */
+  .explore-top .explore__info-toggle {
     display: block;
+    flex: none;
+    align-self: center;
+    min-height: 2.5rem;
+    padding-inline: 0.75rem;
+    font-size: var(--step--1);
   }
 
   /* 道具が多くても高さが増えないよう、はみ出した分は横にスクロールする */

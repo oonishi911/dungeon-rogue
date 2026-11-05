@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { enemyDef, type MapEnemy } from './enemies';
 import { startExplore, type ExploreState } from './explore';
 import type { FloorMap, Pos } from './map';
-import { findPath, walkToward } from './path';
+import { findPath, walkPath, walkToward } from './path';
 
 // 横9マス×縦3マスの部屋。左下に霧の残ったマスを1つ作る
 const ROWS = ['###########', '#.........#', '#.........#', '#.........#', '###########'];
@@ -73,5 +73,30 @@ describe('walkToward', () => {
 
   it('届かない場所なら止まる', () => {
     expect(walkToward(room({ x: 1, y: 2 }), { x: 0, y: 0 })).toBeNull();
+  });
+});
+
+describe('walkPath', () => {
+  it('避けたいマスがあれば、遠回りしてでも避ける', () => {
+    const state = room({ x: 1, y: 2 });
+    const path = walkPath(state, { x: 5, y: 2 }, new Set(['3,2']))!;
+    expect(path.some((p) => p.x === 3 && p.y === 2)).toBe(false);
+    expect(path.at(-1)).toEqual({ x: 5, y: 2 });
+  });
+
+  it('避けたいマスが行き先そのものなら、そこへ向かう', () => {
+    const state = room({ x: 1, y: 2 });
+    expect(walkPath(state, { x: 3, y: 2 }, new Set(['3,2']))!.at(-1)).toEqual({ x: 3, y: 2 });
+  });
+
+  it('避けたいマスを通らないと届かないときは、通る', () => {
+    // 上下を霧でふさぎ、(3,2) を通る道しかないようにする
+    const fog = [
+      { x: 3, y: 1 },
+      { x: 3, y: 3 },
+    ];
+    const state = room({ x: 1, y: 2 }, [], fog);
+    const path = walkPath(state, { x: 5, y: 2 }, new Set(['3,2']))!;
+    expect(path.some((p) => p.x === 3 && p.y === 2)).toBe(true);
   });
 });

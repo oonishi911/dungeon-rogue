@@ -6,8 +6,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { BODY_NAMES, ITEMS, TRAIT_IDS, TRAITS } from '../game/data';
-import { enemyDef } from '../game/enemies';
+import { enemyDef, key } from '../game/enemies';
 import {
+  DIR_DELTA,
   EXPLORE_CONFIG,
   isBossFloor,
   samePos,
@@ -18,8 +19,8 @@ import {
   type ExploreAction,
   type ExploreState,
 } from '../game/explore';
-import type { Pos } from '../game/map';
-import { findPath, walkToward } from '../game/path';
+import { tileAt, type Pos } from '../game/map';
+import { walkPath, walkToward } from '../game/path';
 import type { ItemId } from '../game/types';
 import {
   CELL,
@@ -36,14 +37,15 @@ import {
   type Motion,
 } from './exploreRender';
 import { DungeonView3D } from './explore3d';
-import { knobOffset, STICK, stickDirection } from './stick';
+import { chooseDirection, knobOffset, STICK, stickDirections } from './stick';
 import { tilesetFor } from './tileset';
 
 // ミニマップの元の大きさ（px）がこれ以下なら、拡大してもぼかさずドットのまま見せる。
 // これより大きい（広いマップ）と縮めて表示するので、ドットのままだと細い通路が消えてしまう
 const MINI_SHARP_MAX = 96;
 
-const STEP_MS = 120; // 1マス動くのにかける時間。押し続けたときの歩く速さもこれで決まる
+// 1マス動くのにかける時間。なぞり続けたとき・タップで歩くときの速さもこれで決まる（1秒に約5.5マス）
+const STEP_MS = 180;
 const QUEUE_MAX = 2; // 動いている途中に押した操作を、いくつまで覚えておくか（多すぎると指を止めても歩き続ける）
 
 const KEY_DIRS: Record<string, Dir> = {
@@ -60,8 +62,6 @@ const KEY_DIRS: Record<string, Dir> = {
 const KEY_ACTIONS: Record<string, ExploreAction> = {
   ' ': { kind: 'wait' },
   '.': { kind: 'wait' },
-  Enter: { kind: 'descend' },
-  '>': { kind: 'descend' },
 };
 
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
@@ -82,6 +82,11 @@ interface WalkGoal {
   pos: Pos;
   enemy: number | null; // 敵をタップしたときはその敵（動いても追いかける）
   seenEnemies: Set<number>; // 前の1歩のときに見えていた敵。新しく敵が見えたら立ち止まる
+}
+
+/** タップで歩くときに、できるだけ通らないマス。階段は踏むと降りてしまうので、行き先でなければ避ける */
+function avoidOnWalk(state: ExploreState): Set<string> {
+  return state.map.stairs ? new Set([key(state.map.stairs)]) : new Set();
 }
 
 /** 今見えている敵の番号 */
@@ -135,6 +140,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
   const heldRef = useRef<Dir[]>([]); // 押し続けている方向（あとから押したものが優先）
   const queueRef = useRef<ExploreAction[]>([]); // 次に1回ずつ行う行動（動いている途中に押した分）
   const walkRef = useRef<WalkGoal | null>(null); // タップ・クリックで向かっている先
+  // 仮想スティックで進みたい向きの候補（斜めなら上下・左右の2つ）。1歩ごとに、進める向きを選び直す
+  const stickRef = useRef<Dir[] | null>(null);
   const originRef = useRef<Pos>({ x: 0, y: 0 }); // 2D表示で今描いている画面の左上の座標（タップ位置の計算に使う）
   const view3dRef = useRef<DungeonView3D | null>(null);
 
@@ -170,6 +177,12 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     stateRef.current = next;
     setError(null);
     setState(next);
+    // 階段を踏んだら、そのまま次の階へ降りる（踏む動きを見せてから降りるよう、次の行動として予約する）
+    const onStairs = next.map.stairs !== null && samePos(next.player, next.map.stairs);
+    if (action.kind === 'move' && next.map === prev.map && onStairs && next.outcome === 'ongoing') {
+      walkRef.current = null;
+      queueRef.current = [{ kind: 'descend' }];
+    }
     return true;
   }, []);
 
@@ -205,7 +218,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
         goal.pos = foe.pos;
       }
       const before = s.player;
-      const action = walkToward(s, goal.pos);
+      const action = walkToward(s, goal.pos, avoidOnWalk(s));
       // 着いた・進めない・敵を攻撃した（その場から動かなかった）ときは止まる
       if (!action || !perform(action) || samePos(before, stateRef.current.player)) {
         walkRef.current = null;
@@ -254,7 +267,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     const routeFor = (st: ExploreState, goal: Pos | null): Pos[] => {
       if (!goal) return [];
       if (route.state !== st || !route.goal || !samePos(route.goal, goal)) {
-        route = { state: st, goal, path: findPath(st, (p) => samePos(p, goal)) ?? [] };
+        route = { state: st, goal, path: walkPath(st, goal, avoidOnWalk(st)) ?? [] };
       }
       return route.path;
     };
@@ -268,6 +281,14 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
           perform(queued);
         } else if (held) {
           perform({ kind: 'move', dir: held });
+        } else if (stickRef.current) {
+          // 斜めに倒しているときは、壁でない方へ進む（両方進めるなら上下を優先する）
+          const s = stateRef.current;
+          const dir = chooseDirection(stickRef.current, (d) => {
+            const to = { x: s.player.x + DIR_DELTA[d].x, y: s.player.y + DIR_DELTA[d].y };
+            return tileAt(s.map, to) !== 'wall';
+          });
+          perform({ kind: 'move', dir });
         } else if (walkRef.current) {
           walkStep(walkRef.current);
         }
@@ -356,7 +377,13 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       return;
     }
     const target = mode === '3d' ? view3dRef.current?.pickTile(e.clientX, e.clientY) : pickTile2d(e);
-    if (!target || samePos(target, s.player)) return;
+    // 主人公をタップすると、その場で1ターン待つ
+    const onHero = mode === '3d' ? view3dRef.current?.hitsPlayer(e.clientX, e.clientY) : target && samePos(target, s.player);
+    if (onHero) {
+      request({ kind: 'wait' });
+      return;
+    }
+    if (!target) return;
     const i = target.y * s.map.width + target.x;
     const known = target.x >= 0 && target.y >= 0 && target.x < s.map.width && target.y < s.map.height && s.seen[i];
     if (!known || s.map.tiles[i] === 'wall') {
@@ -375,14 +402,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
   // 3D画面のどこでも、指を置いてずらすとそこにスティックが出て、ずらした向きに歩き続ける。
   // 指を動かさずに離したときは、タップとしてそのマスへ歩く
   const [stick, setStick] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
-  const touchRef = useRef<{ id: number; x: number; y: number; left: number; top: number; dragging: boolean; dir: Dir | null } | null>(null);
+  const touchRef = useRef<{ id: number; x: number; y: number; left: number; top: number; dragging: boolean } | null>(null);
 
-  const aimStick = (dir: Dir | null) => {
-    const t = touchRef.current;
-    if (!t || t.dir === dir) return;
-    if (t.dir) release(t.dir);
-    if (dir) hold(dir);
-    t.dir = dir;
+  const aimStick = (dirs: Dir[] | null) => {
+    if (dirs) walkRef.current = null; // なぞり始めたら、タップで向かっていた先は取りやめる
+    stickRef.current = dirs;
   };
 
   const endTouch = () => {
@@ -395,7 +419,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     // 終わったあとの「結果を見る」ボタンなどは、そのまま押せるようにする
     if (stateRef.current.outcome !== 'ongoing' || touchRef.current || e.button !== 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    touchRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, left: rect.left, top: rect.top, dragging: false, dir: null };
+    touchRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, left: rect.left, top: rect.top, dragging: false };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
@@ -408,7 +432,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       if (Math.hypot(dx, dy) < STICK.dragStart) return;
       t.dragging = true;
     }
-    aimStick(stickDirection(dx, dy));
+    aimStick(stickDirections(dx, dy));
     const knob = knobOffset(dx, dy);
     setStick({ x: t.x - t.left, y: t.y - t.top, dx: knob.x, dy: knob.y });
   };
@@ -444,6 +468,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     heldRef.current = [];
     queueRef.current = [];
     walkRef.current = null;
+    stickRef.current = null;
     setError(null);
     setState(fresh);
   };
@@ -467,6 +492,15 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
           </p>
           <h1 className="top__title">{floorName}</h1>
         </div>
+        <button
+          type="button"
+          className="explore__wait explore__info-toggle"
+          aria-expanded={infoOpen}
+          aria-controls="explore-more"
+          onClick={() => setInfoOpen(true)}
+        >
+          装備と敵
+        </button>
       </header>
 
       <div className="explore">
@@ -487,7 +521,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
             width={VIEW_W * CELL}
             height={VIEW_H * CELL}
             role="img"
-            aria-label={`${floorName}の周囲。マスをタップするとそこまで歩き、指でなぞるとその向きに歩き続ける。${onStairs ? '足元に階段がある' : ''}`}
+            aria-label={`${floorName}の周囲。マスをタップするとそこまで歩き、指でなぞるとその向きに歩き続ける。主人公をタップするとその場で待つ。階段は踏むと降りる。${onStairs ? '足元に階段がある' : ''}`}
           />
           {stick && (
             <div className="stick" style={{ left: stick.x, top: stick.y }} aria-hidden="true">
@@ -537,23 +571,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
           </div>
 
           <div className="explore__controls">
-            <div className="explore__actions">
-              <button type="button" className="primary explore__descend" onClick={() => request({ kind: 'descend' })} disabled={!onStairs || ended}>
-                階段を降りる
-              </button>
-              <button type="button" className="explore__wait" onClick={() => request({ kind: 'wait' })} disabled={ended}>
-                その場で待つ
-              </button>
-              <button
-                type="button"
-                className="explore__wait explore__info-toggle"
-                aria-expanded={infoOpen}
-                aria-controls="explore-more"
-                onClick={() => setInfoOpen(true)}
-              >
-                装備と敵
-              </button>
-            </div>
             {itemGroups.length === 0 ? (
               <p className="muted explore__items">道具はない</p>
             ) : (
@@ -624,7 +641,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
             </section>
 
             <p className="muted explore__help">
-              マスをタップするとそこまで歩く（敵をタップすると攻撃しに行く。歩いている途中にタップすると止まる）。画面を指でなぞると、なぞった向きに歩き続ける。キーボードでは矢印キー／WASDで移動、スペースで待つ、Enterで階段を降りる、数字キーで道具を使う
+              マスをタップするとそこまで歩く（敵をタップすると攻撃しに行く。歩いている途中にタップすると止まる）。画面を指でなぞると、なぞった向きに歩き続ける。主人公をタップするとその場で待つ。階段は踏むとそのまま降りる。キーボードでは矢印キー／WASDで移動、スペースで待つ、数字キーで道具を使う
             </p>
             <section className="explore__more-log" aria-label="記録">
               <h3 className="meter__head">記録</h3>

@@ -215,11 +215,25 @@ export class DungeonView3D {
     this.renderer.render(this.scene, this.camera);
   }
 
-  /** 画面上の位置から、床のマスを求める（タップ・クリックで歩く先） */
-  pickTile(clientX: number, clientY: number): Pos | null {
+  /** 画面上の位置へ向かう視線を、カメラから飛ばす */
+  private aimRay(clientX: number, clientY: number) {
     const rect = this.renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
+  }
+
+  /**
+   * 画面上の位置が主人公の絵に当たっているか（主人公をタップするとその場で待つ）。
+   * 主人公の絵は足元のマスより上に伸びているので、足元のマスだけでなく絵そのものに当てる
+   */
+  hitsPlayer(clientX: number, clientY: number): boolean {
+    this.aimRay(clientX, clientY);
+    return this.raycaster.intersectObject(this.player, false).length > 0;
+  }
+
+  /** 画面上の位置から、床のマスを求める（タップ・クリックで歩く先） */
+  pickTile(clientX: number, clientY: number): Pos | null {
+    this.aimRay(clientX, clientY);
     const hit = this.raycaster.ray.intersectPlane(this.ground, new THREE.Vector3());
     return hit ? { x: Math.round(hit.x), y: Math.round(hit.z) } : null;
   }

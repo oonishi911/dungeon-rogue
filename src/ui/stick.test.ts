@@ -1,28 +1,55 @@
 import { describe, expect, it } from 'vitest';
-import { knobOffset, stickDirection } from './stick';
+import type { Dir } from '../game/explore';
+import { chooseDirection, knobOffset, stickDirections } from './stick';
 
-describe('stickDirection', () => {
+describe('stickDirections', () => {
   const r = 100; // 土台の半径
 
   it('中心付近では向きを決めない', () => {
-    expect(stickDirection(0, 0, r)).toBeNull();
-    expect(stickDirection(15, -15, r)).toBeNull();
+    expect(stickDirections(0, 0, r)).toBeNull();
+    expect(stickDirections(15, -15, r)).toBeNull();
   });
 
-  it('上下左右は、指を置いた点から見た向きで決まる（画面の y は下向き）', () => {
-    expect(stickDirection(0, -60, r)).toBe('up');
-    expect(stickDirection(0, 60, r)).toBe('down');
-    expect(stickDirection(-60, 0, r)).toBe('left');
-    expect(stickDirection(60, 0, r)).toBe('right');
+  it('まっすぐ倒したら、候補はその向き1つ（画面の y は下向き）', () => {
+    expect(stickDirections(0, -60, r)).toEqual(['up']);
+    expect(stickDirections(0, 60, r)).toEqual(['down']);
+    expect(stickDirections(-60, 0, r)).toEqual(['left']);
+    expect(stickDirections(60, 0, r)).toEqual(['right']);
   });
 
-  it('斜めのときは、ずれの大きいほうの向きになる', () => {
-    expect(stickDirection(50, -30, r)).toBe('right');
-    expect(stickDirection(30, -50, r)).toBe('up');
+  it('少しだけ斜めなら、まっすぐとみなす', () => {
+    expect(stickDirections(60, -20, r)).toEqual(['right']);
+    expect(stickDirections(-15, 60, r)).toEqual(['down']);
+  });
+
+  it('斜めに倒したら、上下と左右の2つを、上下を先にして返す', () => {
+    expect(stickDirections(-50, -50, r)).toEqual(['up', 'left']);
+    expect(stickDirections(50, -40, r)).toEqual(['up', 'right']);
+    expect(stickDirections(-45, 55, r)).toEqual(['down', 'left']);
   });
 
   it('土台の外まで指を動かしても、向きは決まる', () => {
-    expect(stickDirection(-300, 20, r)).toBe('left');
+    expect(stickDirections(-300, 20, r)).toEqual(['left']);
+  });
+});
+
+describe('chooseDirection', () => {
+  const only = (...ok: Dir[]) => (d: Dir) => ok.includes(d);
+
+  it('左上に倒して、左にだけ進めるなら左', () => {
+    expect(chooseDirection(['up', 'left'], only('left'))).toBe('left');
+  });
+
+  it('左上に倒して、上にだけ進めるなら上', () => {
+    expect(chooseDirection(['up', 'left'], only('up'))).toBe('up');
+  });
+
+  it('左上に倒して、どちらにも進めるなら上', () => {
+    expect(chooseDirection(['up', 'left'], only('up', 'left'))).toBe('up');
+  });
+
+  it('どちらにも進めなければ、最初の候補（壁にぶつかって知らせる）', () => {
+    expect(chooseDirection(['up', 'left'], only())).toBe('up');
   });
 });
 
