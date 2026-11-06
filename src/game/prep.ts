@@ -2,7 +2,7 @@
 // すべて「状態を受け取り、新しい状態を返す」純粋関数。UI（React）からは独立している。
 
 import { itemSlot } from './combat';
-import { CARDS, DECK, ITEMS, PREP_CONFIG, TRAITS, TRAIT_IDS } from './data';
+import { CARDS, DECK, FAVORABLE_GEAR, ITEMS, PREP_CONFIG, START_SUPPLIES, TRAITS, TRAIT_IDS } from './data';
 import { RANK_CONFIG, rankParams, upgradeCost } from './rank';
 import { nextInt, nextRandom, shuffle } from './rng';
 import type { CardInstance, ItemId, PrepResult, PrepState, Result } from './types';
@@ -213,4 +213,24 @@ function learn(state: PrepState, source: 'rumor' | 'informant'): PrepState {
 
 function withLog(state: PrepState, message: string): PrepState {
   return { ...state, log: [...state.log, `${state.day}日目：${message}`] };
+}
+
+/**
+ * 準備フェーズを飛ばして、そのまま出発する。特性は準備フェーズと同じくシードから決め、
+ * 持ち物はそのダンジョンに有利な装備と回復薬2つ。情報は集めていないので「まだ何もわからない」のまま
+ */
+export function departWithoutPrep(
+  seed: number,
+  save: { rank: number; exp: number; carried: CardInstance[] },
+): PrepResult {
+  const trait = TRAIT_IDS[nextInt(seed, TRAIT_IDS.length).value]!;
+  return {
+    trait,
+    knowledge: { status: 'unknown' },
+    hasMap: false,
+    rank: save.rank,
+    exp: save.exp,
+    loadout: [...FAVORABLE_GEAR[trait], ...START_SUPPLIES],
+    carried: save.carried,
+  };
 }

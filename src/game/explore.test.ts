@@ -101,6 +101,41 @@ describe('step', () => {
     expect(next.seen.filter(Boolean).length).toBe(visible.size);
   });
 
+  it('1階目の入口からは上れない', () => {
+    expect(step(startExplore(4), { kind: 'ascend' }).ok).toBe(false);
+  });
+
+  it('2階目からは入口が上り階段になり、上ると前の階の下り階段の上に、離れたときの様子のまま戻る', () => {
+    const before = walkMainPath(startExplore(4, { enemyDensity: 0 }));
+    const below = act(before, { kind: 'descend' });
+    expect(step(below, { kind: 'ascend' }).ok).toBe(true);
+    const back = act(below, { kind: 'ascend' });
+    expect(back.floor).toBe(0);
+    expect(back.map).toBe(before.map);
+    expect(back.player).toEqual(before.map.stairs);
+    // 晴れた霧は覚えている（歩いた本道は見えたまま）
+    for (const p of before.map.mainPath) expect(back.seen[p.y * back.map.width + p.x]).toBe(true);
+    // もう一度降りると、さっきの階の入口に、離れたときの様子のまま出る
+    const again = act(back, { kind: 'descend' });
+    expect(again.floor).toBe(1);
+    expect(again.map).toBe(below.map);
+    expect(again.player).toEqual(below.map.start);
+    expect(again.seen.filter(Boolean).length).toBeGreaterThanOrEqual(below.seen.filter(Boolean).length);
+  });
+
+  it('上の階に戻っても、倒した敵は戻ってこない', () => {
+    // 1階目の敵をすべて倒した状態にする
+    const before = walkMainPath({ ...startExplore(4), enemies: [] });
+    const back = act(act(before, { kind: 'descend' }), { kind: 'ascend' });
+    expect(back.enemies).toHaveLength(0);
+  });
+
+  it('階段の上でなければ上れない', () => {
+    const below = act(walkMainPath(startExplore(4, { enemyDensity: 0 })), { kind: 'descend' });
+    const off = neighbors(below).open;
+    expect(step(act(below, { kind: 'move', dir: off }), { kind: 'ascend' }).ok).toBe(false);
+  });
+
   it('最後の階の階段を降りるとボス階に出る。ボス階に階段はなく、ボスが1体だけいる', () => {
     let s = startExplore(6, { enemyDensity: 0 });
     for (let f = 0; f < EXPLORE_CONFIG.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });

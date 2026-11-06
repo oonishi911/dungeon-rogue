@@ -291,6 +291,21 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
  * その属性の敵が中心で、成分の属性の敵も混ざる。体質にも傾向がある
  * （炎：柔らかい、氷：硬い、無属性：混在、光：硬い、闇：霊体）。
  */
+/**
+ * ダンジョンごとの有利な装備：その属性に効く防具と、出やすい体質の敵に効く武器。
+ * 準備フェーズを飛ばしているあいだは、これに回復薬2つを足した持ち物で始める。バランステストの「正しい準備」もこれを使う
+ */
+export const FAVORABLE_GEAR: Record<TraitId, readonly ItemId[]> = {
+  fire: ['sword', 'fire_cloak'],
+  ice: ['hammer', 'ice_cloak'],
+  neutral: ['hammer', 'plate'],
+  light: ['hammer', 'light_robe'],
+  dark: ['staff', 'dark_robe'],
+};
+
+/** 準備フェーズを飛ばしているあいだ、有利な装備に足して持たせる道具 */
+export const START_SUPPLIES: readonly ItemId[] = ['potion', 'potion'];
+
 export const TRAIT_ENEMIES: Record<TraitId, { pool: readonly EnemyId[]; boss: EnemyId }> = {
   fire: { pool: ['fire_imp', 'fire_imp', 'flame_hound', 'flame_hound', 'flame_hound', 'lava_lizard', 'goblin'], boss: 'flame_beast' },
   ice: { pool: ['ice_imp', 'ice_slime', 'ice_beetle', 'ice_beetle', 'ice_beetle', 'goblin'], boss: 'ice_colossus' },
