@@ -17,15 +17,29 @@ describe('stickDirections', () => {
     expect(stickDirections(60, 0, r)).toEqual(['right']);
   });
 
-  it('少しだけ斜めなら、まっすぐとみなす', () => {
-    expect(stickDirections(60, -20, r)).toEqual(['right']);
-    expect(stickDirections(-15, 60, r)).toEqual(['down']);
+  it('斜め45度の線から22.5度より外れていれば、まっすぐとみなす', () => {
+    // 右から20度ほど上：右だけ
+    expect(stickDirections(60, -22, r)).toEqual(['right']);
+    // 下から20度ほど左：下だけ
+    expect(stickDirections(-22, 60, r)).toEqual(['down']);
   });
 
-  it('斜めに倒したら、上下と左右の2つを、上下を先にして返す', () => {
+  it('斜め（右から22.5〜67.5度）なら、指の向きに近い方を先にした2つを返す', () => {
+    // 右上で右寄り（右から約30度）：右、だめなら上
+    expect(stickDirections(60, -35, r)).toEqual(['right', 'up']);
+    // 右上で上寄り（右から約60度）：上、だめなら右
+    expect(stickDirections(35, -60, r)).toEqual(['up', 'right']);
+    // 左下で左寄り：左、だめなら下
+    expect(stickDirections(-60, 35, r)).toEqual(['left', 'down']);
+    // 左上で上寄り：上、だめなら左
+    expect(stickDirections(-35, -60, r)).toEqual(['up', 'left']);
+    // 右下で下寄り：下、だめなら右
+    expect(stickDirections(35, 60, r)).toEqual(['down', 'right']);
+  });
+
+  it('ちょうど45度なら上下を先にする', () => {
     expect(stickDirections(-50, -50, r)).toEqual(['up', 'left']);
-    expect(stickDirections(50, -40, r)).toEqual(['up', 'right']);
-    expect(stickDirections(-45, 55, r)).toEqual(['down', 'left']);
+    expect(stickDirections(50, 50, r)).toEqual(['down', 'right']);
   });
 
   it('土台の外まで指を動かしても、向きは決まる', () => {
@@ -36,16 +50,17 @@ describe('stickDirections', () => {
 describe('chooseDirection', () => {
   const only = (...ok: Dir[]) => (d: Dir) => ok.includes(d);
 
-  it('左上に倒して、左にだけ進めるなら左', () => {
-    expect(chooseDirection(['up', 'left'], only('left'))).toBe('left');
+  it('右寄りの右上で、右に進めないなら上', () => {
+    expect(chooseDirection(['right', 'up'], only('up'))).toBe('up');
   });
 
-  it('左上に倒して、上にだけ進めるなら上', () => {
-    expect(chooseDirection(['up', 'left'], only('up'))).toBe('up');
+  it('右寄りの右上で、上に進めないなら右', () => {
+    expect(chooseDirection(['right', 'up'], only('right'))).toBe('right');
   });
 
-  it('左上に倒して、どちらにも進めるなら上', () => {
-    expect(chooseDirection(['up', 'left'], only('up', 'left'))).toBe('up');
+  it('どちらにも進めるなら、指の向きに近い方（先の候補）', () => {
+    expect(chooseDirection(['right', 'up'], only('up', 'right'))).toBe('right');
+    expect(chooseDirection(['up', 'right'], only('up', 'right'))).toBe('up');
   });
 
   it('どちらにも進めなければ、最初の候補（壁にぶつかって知らせる）', () => {
