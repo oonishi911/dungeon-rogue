@@ -5,11 +5,12 @@
     python3 scripts/build-photo-textures.py ice assets/texture-sources/ice.jpg
 
 - 元の画像は、端どうしがつながる（並べても継ぎ目が出ない）正方形の画像にする。1024×1024px くらいがよい
-- 書き出し先は public/textures/{特性}/。1枚 256×256px（写真の細かい模様を生かすため、仮の素材の128pxより大きくしている）
-- 床：画像の別々の場所を4か所切り出し、壁より明るくならないよう少し暗くして、縁を目地へなだらかに沈ませる
-  （種類の違う床が隣り合っても、継ぎ目が板の目地に見えるように）
-- 壁の上面：縁を明るく面取りした切り石
-- 壁の側面：大きなブロックを2段、段ごとに半分ずらして積み、継ぎ目を深い色にする
+- 書き出し先は public/textures/{特性}/
+- 床（1枚1マス、256×256px。写真の細かい模様を生かすため、仮の素材の128pxより大きい）：画像の別々の場所を4か所切り出し、
+  壁より明るくならないよう少し暗くして、縁を目地へなだらかに沈ませる（種類の違う床が隣り合っても、継ぎ目が板の目地に見えるように）
+- 壁の上面（1枚で4×4マス、512×512px）：元の画像全体をそのまま使う。元の画像は端どうしがつながるので、マスの境目に縁取りのない
+  ひと続きの岩肌になる
+- 壁の側面（1枚で横4マス、512×128px）：元の画像の横いっぱいの帯。上側を少し明るくする
 """
 import sys
 from pathlib import Path
@@ -17,7 +18,9 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-SIZE = 256
+SIZE = 256  # 1マスの大きさ（px）
+WALL_SPAN = 4  # 壁の絵1枚が、何マス分にまたがるか（src/ui/explore3d.ts の WALL_TEXTURE_SPAN と合わせる）
+WALL_TILE = 128  # 壁の1マスの大きさ（px）。壁の絵は大きいので、スマホで読み込みが重くならないよう床より小さくする
 # 継ぎ目や陰に使う深い色（特性ごと）。足りない特性は無属性の色を使う
 DEEP = {
     'ice': (0x16, 0x2A, 0x3A),
@@ -61,24 +64,16 @@ def main(trait: str, source: str) -> None:
         b = smooth(edge / 0.11)[..., None]
         save(a * (0.45 + 0.55 * b) + deep * (1 - b) * 0.35, f'floor{k + 1}.png')
 
-    # 壁の上面
-    a = crop(0.293, 0.254, 0.375) * 0.95
-    rim = (1 - smooth(edge / 0.05))[..., None]
-    inner = (1 - smooth(edge / 0.14))[..., None]
-    save(a * (1 - (inner - rim) * 0.18) + rim * 0.25, 'wall-top.png')
+    # 壁の上面：元の画像全体（端どうしがつながる）を、4×4マス分の大きさにする
+    wall = WALL_TILE * WALL_SPAN
+    top = np.asarray(src.resize((wall, wall), Image.LANCZOS)).astype(np.float32) / 255
+    save(top * 0.95, 'wall-top.png')
 
-    # 壁の側面：2段のブロック
-    a = crop(0.41, 0.371, 0.5) * 0.82
-    row_h = SIZE / 2
-    row = np.floor(yy / row_h)
-    bx = (xx + np.where(row % 2 == 0, 0, SIZE / 2)) % SIZE
-    ly = yy - row * row_h
-    d = np.minimum.reduce([bx, ly, SIZE - bx, row_h - ly]) / SIZE
-    bevel = smooth(d / 0.08)[..., None]
-    joint = (1 - smooth((d - 0.012) / 0.02))[..., None]
-    a = a * (1.06 - (ly / row_h)[..., None] * 0.14)  # ブロックの上側は光が当たって明るい
-    a = a * (0.72 + 0.28 * bevel)
-    save(a * (1 - joint * 0.85) + deep * joint * 0.85, 'wall-side.png')
+    # 壁の側面：元の画像の横いっぱいの帯（高さは画像の1/4）を、横4マス分の大きさにする。左右の端でつながる
+    band = src.crop((0, int(h * 0.371), w, int(h * 0.371) + h // WALL_SPAN)).resize((wall, WALL_TILE), Image.LANCZOS)
+    side = np.asarray(band).astype(np.float32) / 255 * 0.82
+    ly = (np.arange(WALL_TILE, dtype=np.float32) + 0.5)[:, None, None] / WALL_TILE
+    save(side * (1.06 - ly * 0.14), 'wall-side.png')  # 上側は光が当たって明るい
     print(f'wrote public/textures/{trait}/ (floor1-4, wall-top, wall-side)')
 
 
