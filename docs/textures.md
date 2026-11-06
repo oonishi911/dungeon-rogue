@@ -82,12 +82,15 @@ python3 scripts/build-enemy-textures.py ogre_chief # 1体だけ作る
 
 | 敵 | 元の画像 | 画像 | 画面での高さ |
 |---|---|---|---|
-| 鬼の首領（`ogre_chief`） | `assets/texture-sources/enemies/ogre_chief.jpg` | `ogre_chief.png`（567×384px） | 1.25マス |
+| ゴブリン（`goblin`） | `assets/texture-sources/enemies/goblin.jpg` | `goblin.png`（555×384px） | 1マス |
+| 大ネズミ（`giant_rat`） | `assets/texture-sources/enemies/giant_rat.jpg` | `giant_rat.png`（415×384px） | 0.8マス |
+| 石ゴーレム（`stone_golem`） | `assets/texture-sources/enemies/stone_golem.jpg` | `stone_golem.png`（375×384px） | 1.15マス |
+| 鬼の首領（`ogre_chief`） | `assets/texture-sources/enemies/ogre_chief.jpg` | `ogre_chief.png`（536×384px） | 1.3マス |
 
-- 元の画像は `assets/texture-sources/enemies/{敵のID}.jpg` に置く。背景はスクリプトが OpenCV の GrabCut で切り抜く。写真ごとに、敵がいる範囲・大まかな形・確実に敵の一部である線を、スクリプトの `SUBJECTS` に書いておく
+- 元の画像は `assets/texture-sources/enemies/{敵のID}.jpg` に置く。背景はスクリプトが OpenCV の GrabCut で切り抜く。写真ごとに、敵がいる範囲・大まかな形・確実に敵の一部である線や形・確実に背景である形（空の色を背景とみなすかも）を、スクリプトの `SUBJECTS` に書いておく
 - 背景を透明にしたPNG（高さ384px）。写真の下の端で体が切れているときは、下の端をなめらかに透明にして、足元が闇に溶けて見えるようにする
 - 画面ではドット絵と同じく、カメラの方を向けた板に貼り、たいまつの光と霧をかける。絵の大きさと、足元（マスの中心に置く位置）は `src/ui/explore3d.ts` の `ENEMY_PHOTOS` で決める
-- 新しい敵を足すときは、`SUBJECTS` と `ENEMY_PHOTOS` の両方に書き足す
+- 新しい敵を足すときは、`SUBJECTS` と `ENEMY_PHOTOS` の両方に書き足す。スクリプトが表示する `aspect`（絵の横:縦）と `footX`（足元の位置）を `ENEMY_PHOTOS` に書く
 
 ## 画像から作る（`scripts/build-photo-textures.py`）
 
