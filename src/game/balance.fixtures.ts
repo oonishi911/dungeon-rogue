@@ -1,21 +1,22 @@
 // バランステストで共通に使う「正しい準備」と「外れた準備」。
 // テストを複数のファイルに分けて並列に実行するため、テストファイルの外に置いている。
 
+import { FAVORABLE_GEAR, START_SUPPLIES } from './data';
 import type { ItemId, TraitId } from './types';
 
 export const TRIALS = 40;
-export const SUPPLIES: ItemId[] = ['potion', 'potion'];
+export const SUPPLIES: ItemId[] = [...START_SUPPLIES];
 
 /**
  * ダンジョンごとの正しい準備と、外れた準備。
- * 正しい準備：その属性に効く防具＋出やすい体質に効く武器。外れた準備：効かない防具と武器。
+ * 正しい準備：その属性に効く防具＋出やすい体質に効く武器（data.ts の FAVORABLE_GEAR）。外れた準備：効かない防具と武器。
  */
 export const PREPS: Record<TraitId, { right: ItemId[]; wrong: ItemId[] }> = {
-  fire: { right: ['sword', 'fire_cloak'], wrong: ['staff', 'ice_cloak'] },
-  ice: { right: ['hammer', 'ice_cloak'], wrong: ['sword', 'fire_cloak'] },
-  neutral: { right: ['hammer', 'plate'], wrong: ['sword', 'light_robe'] },
-  light: { right: ['hammer', 'light_robe'], wrong: ['staff', 'dark_robe'] },
-  dark: { right: ['staff', 'dark_robe'], wrong: ['sword', 'light_robe'] },
+  fire: { right: [...FAVORABLE_GEAR.fire], wrong: ['staff', 'ice_cloak'] },
+  ice: { right: [...FAVORABLE_GEAR.ice], wrong: ['sword', 'fire_cloak'] },
+  neutral: { right: [...FAVORABLE_GEAR.neutral], wrong: ['sword', 'light_robe'] },
+  light: { right: [...FAVORABLE_GEAR.light], wrong: ['staff', 'dark_robe'] },
+  dark: { right: [...FAVORABLE_GEAR.dark], wrong: ['sword', 'light_robe'] },
 };
 
 /**

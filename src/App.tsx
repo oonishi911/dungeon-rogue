@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { PREP_CONFIG } from './game/data';
 import { startExplore, toResult, type ExploreResult } from './game/explore';
-import { buyItem, createPrep, endDay, finishPrep, playCard, upgradeRank } from './game/prep';
+import { buyItem, createPrep, departWithoutPrep, endDay, finishPrep, playCard, upgradeRank } from './game/prep';
 import { newSave, type SaveData } from './game/save';
 import type { ItemId, PrepResult, PrepState, Result } from './game/types';
 import { clearSave, loadSave, writeSave } from './storage';
@@ -21,6 +21,10 @@ type Stage =
 
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 
+// 準備フェーズを一旦飛ばす。true のあいだは、毎回そのダンジョンに有利な装備と回復薬2つで、すぐダンジョンから始まる。
+// 準備フェーズの画面とロジックは残してあるので、false に戻せば元の流れ（準備 → 出発の朝 → ダンジョン → 結果）になる
+const SKIP_PREP = true;
+
 /** セーブデータ（持ち越したカード・持ち帰った金貨・ランク・経験）から準備フェーズを始める */
 function prepFrom(save: SaveData): PrepState {
   return createPrep(newSeed(), save.carried, {
@@ -35,9 +39,18 @@ function nextSave(save: SaveData, outcome: PrepResult): SaveData {
   return { ...save, run: save.run + 1, rank: outcome.rank, exp: outcome.exp, carried: outcome.carried, bonusGold: 0 };
 }
 
+/** 挑戦の始まり。準備フェーズを飛ばしているときは、出発した時点で保存してダンジョンから始める */
+function firstStage(save: SaveData): Stage {
+  if (!SKIP_PREP) return { kind: 'prep', prep: prepFrom(save) };
+  const seed = newSeed();
+  const outcome = departWithoutPrep(seed, save);
+  writeSave(nextSave(save, outcome));
+  return { kind: 'dungeon', outcome, seed };
+}
+
 export function App() {
   const [save, setSave] = useState<SaveData>(() => loadSave() ?? newSave());
-  const [stage, setStage] = useState<Stage>(() => ({ kind: 'prep', prep: prepFrom(save) }));
+  const [stage, setStage] = useState<Stage>(() => firstStage(save));
   const [error, setError] = useState<string | null>(null);
 
   // ロジックの Result を受け取り、成功なら状態を更新、失敗ならメッセージを出す
@@ -54,7 +67,7 @@ export function App() {
   const begin = (next: SaveData) => {
     setSave(next);
     setError(null);
-    setStage({ kind: 'prep', prep: prepFrom(next) });
+    setStage(firstStage(next));
   };
 
   switch (stage.kind) {

@@ -9,7 +9,7 @@
 
 import * as THREE from 'three';
 import { enemyDef } from '../game/enemies';
-import { dirBetween, type Dir, type ExploreState } from '../game/explore';
+import { dirBetween, upStairs, type Dir, type ExploreState } from '../game/explore';
 import type { Pos } from '../game/map';
 import type { TraitId } from '../game/types';
 import { drawSprite } from '../sprites/canvas';
@@ -101,11 +101,14 @@ export class DungeonView3D {
     hole: new THREE.PlaneGeometry(0.8, 0.8).rotateX(-Math.PI / 2),
     bars: [0, 1, 2].map((step) => new THREE.PlaneGeometry(0.7 - step * 0.15, 0.08).rotateX(-Math.PI / 2)),
     chest: new THREE.BoxGeometry(0.5, 0.32, 0.38),
+    // 上り階段：奥（上の画面側）へ向かって高くなる3段の石段
+    upSteps: [0, 1, 2].map((step) => new THREE.BoxGeometry(0.7, 0.07 * (step + 1), 0.24).translate(0, 0.035 * (step + 1), 0)),
     ring: new THREE.RingGeometry(0.4, 0.48, 24).rotateX(-Math.PI / 2),
     targetRing: new THREE.RingGeometry(0.32, 0.42, 24).rotateX(-Math.PI / 2),
     holeMat: new THREE.MeshBasicMaterial({ color: 0x05080a }),
     barMat: [1, REMEMBERED].map((k) => new THREE.MeshBasicMaterial({ color: new THREE.Color(0xece5d3).multiplyScalar(k) })),
     chestMat: [1, REMEMBERED].map((k) => new THREE.MeshLambertMaterial({ color: new THREE.Color(0xe2c178).multiplyScalar(k) })),
+    stepMat: [1, REMEMBERED].map((k) => new THREE.MeshLambertMaterial({ color: new THREE.Color(0xc9c3b3).multiplyScalar(k) })),
     eliteMat: new THREE.MeshBasicMaterial({ color: 0xd9653b }),
     bossMat: new THREE.MeshBasicMaterial({ color: 0xb48d35 }),
     targetMat: new THREE.MeshBasicMaterial({ color: 0x9cc46a }),
@@ -359,6 +362,8 @@ export class DungeonView3D {
     for (const e of enemies) behind(e.pos);
     for (const c of chests) behind(c.pos);
     if (map.stairs) behind(map.stairs);
+    const up = upStairs(frame.state);
+    if (up) behind(up);
     return result;
   }
 
@@ -413,6 +418,15 @@ export class DungeonView3D {
         const bar = new THREE.Mesh(geo, this.shared.barMat[dim(map.stairs!)]);
         bar.position.set(map.stairs!.x, 0.02, map.stairs!.y - 0.25 + step * 0.22);
         this.props.add(bar);
+      });
+    }
+    const up = upStairs(frame.state);
+    if (up && seen[up.y * map.width + up.x]) {
+      // 上り階段：床から奥へ向かって高くなる石段
+      this.shared.upSteps.forEach((geo, step) => {
+        const block = new THREE.Mesh(geo, this.shared.stepMat[dim(up)]);
+        block.position.set(up.x, 0, up.y + 0.25 - step * 0.25);
+        this.props.add(block);
       });
     }
     for (const chest of chests) {

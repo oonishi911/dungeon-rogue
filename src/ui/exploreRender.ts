@@ -2,7 +2,7 @@
 // 1歩ごとの状態の変化を、前の位置から新しい位置へ少しずつ動かして描くことで、滑らかにスクロールさせる。
 
 import { enemyDef, type EnemyMode, type MapEnemy } from '../game/enemies';
-import type { ExploreState } from '../game/explore';
+import { upStairs, type ExploreState } from '../game/explore';
 import type { Pos } from '../game/map';
 import { drawSprite } from '../sprites/canvas';
 import { CLOAKS } from '../sprites/data';
@@ -89,6 +89,7 @@ export function drawView(canvas: HTMLCanvasElement, frame: Frame, colors: Colors
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingEnabled = false; // ドット絵をぼかさない
   const tiles = frame.tileset;
+  const up = upStairs(state);
 
   // スクロールの途中は端のマスが半分ずつ見えるので、1マス余分に描く
   const x0 = Math.floor(origin.x);
@@ -100,12 +101,14 @@ export function drawView(canvas: HTMLCanvasElement, frame: Frame, colors: Colors
       if (!seen[i]) continue;
       const { px, py } = toPx(x, y);
       const isStairs = map.stairs !== null && x === map.stairs.x && y === map.stairs.y;
+      const isUp = up !== null && x === up.x && y === up.y;
       // まだ空になっていない宝箱だけを描く
       const hasChest = state.chests.some((c) => c.pos.x === x && c.pos.y === y);
       if (tiles) {
         drawTile(ctx, tiles, TILESET.floors[floorVariant(x, y)]!, px, py);
         if (map.tiles[i] === 'wall') drawWall(ctx, tiles, state, x, y, px, py);
         if (isStairs) drawTile(ctx, tiles, TILESET.stairs, px, py);
+        if (isUp) drawUpStairs(ctx, px, py, colors.stairs);
         if (hasChest) drawTile(ctx, tiles, TILESET.chest, px, py);
       } else {
         if (map.tiles[i] === 'wall') {
@@ -118,6 +121,7 @@ export function drawView(canvas: HTMLCanvasElement, frame: Frame, colors: Colors
           ctx.fillRect(px, py, CELL, CELL);
         }
         if (isStairs) drawStairs(ctx, px, py, colors.stairs);
+        if (isUp) drawUpStairs(ctx, px, py, colors.stairs);
         if (hasChest) drawChest(ctx, px, py, colors.treasure, colors.fog);
       }
       // 一度見たが今は見えていないマスは暗くする
@@ -230,6 +234,15 @@ function drawChest(ctx: CanvasRenderingContext2D, px: number, py: number, color:
   ctx.fillRect(px + CELL / 2 - 2, py + m + 9, 4, 4);
 }
 
+/** 上り階段：下り階段の段を上下逆にした形（上ほど広い） */
+function drawUpStairs(ctx: CanvasRenderingContext2D, px: number, py: number, color: string) {
+  ctx.fillStyle = color;
+  for (let k = 0; k < 4; k++) {
+    const inset = 4 + (3 - k) * 3;
+    ctx.fillRect(px + inset, py + 6 + k * 6, CELL - inset * 2, 3);
+  }
+}
+
 function drawStairs(ctx: CanvasRenderingContext2D, px: number, py: number, color: string) {
   ctx.fillStyle = color;
   for (let k = 0; k < 4; k++) {
@@ -255,5 +268,7 @@ export function drawMinimap(canvas: HTMLCanvasElement, state: ExploreState, colo
     ctx.fillRect(Math.round((p.x + 0.5) * MINI_CELL - mark / 2), Math.round((p.y + 0.5) * MINI_CELL - mark / 2), mark, mark);
   };
   if (map.stairs && seen[map.stairs.y * map.width + map.stairs.x]) dot(map.stairs, colors.stairs);
+  const up = upStairs(state);
+  if (up && seen[up.y * map.width + up.x]) dot(up, colors.treasure); // 上り階段は、床と見分けられる金色
   dot(player, colors.target);
 }

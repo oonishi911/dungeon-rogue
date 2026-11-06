@@ -14,6 +14,7 @@ import {
   samePos,
   startExplore,
   step,
+  upStairs,
   visibleTiles,
   type Dir,
   type ExploreAction,
@@ -84,9 +85,10 @@ interface WalkGoal {
   seenEnemies: Set<number>; // 前の1歩のときに見えていた敵。新しく敵が見えたら立ち止まる
 }
 
-/** タップで歩くときに、できるだけ通らないマス。階段は踏むと降りてしまうので、行き先でなければ避ける */
+/** タップで歩くときに、できるだけ通らないマス。階段は踏むと階を移ってしまうので、行き先でなければ避ける */
 function avoidOnWalk(state: ExploreState): Set<string> {
-  return state.map.stairs ? new Set([key(state.map.stairs)]) : new Set();
+  const up = upStairs(state);
+  return new Set([state.map.stairs, up].filter((p): p is Pos => p !== null).map(key));
 }
 
 /** 今見えている敵の番号 */
@@ -168,7 +170,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     const prev = stateRef.current;
     const result = step(prev, action);
     if (!result.ok) {
-      setError(result.error);
+      // 壁にぶつかったときは知らせない（なぞって歩いていると何度もぶつかるので、うるさいだけ）
+      const bumped =
+        action.kind === 'move' &&
+        tileAt(prev.map, { x: prev.player.x + DIR_DELTA[action.dir].x, y: prev.player.y + DIR_DELTA[action.dir].y }) === 'wall';
+      if (!bumped) setError(result.error);
       return false;
     }
     const next = result.value;
@@ -177,11 +183,15 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     stateRef.current = next;
     setError(null);
     setState(next);
-    // 階段を踏んだら、そのまま次の階へ降りる（踏む動きを見せてから降りるよう、次の行動として予約する）
-    const onStairs = next.map.stairs !== null && samePos(next.player, next.map.stairs);
-    if (action.kind === 'move' && next.map === prev.map && onStairs && next.outcome === 'ongoing') {
-      walkRef.current = null;
-      queueRef.current = [{ kind: 'descend' }];
+    // 階段を踏んだら、そのまま次の階へ降りる・上の階へ戻る（踏む動きを見せてから移るよう、次の行動として予約する）
+    if (action.kind === 'move' && next.map === prev.map && next.outcome === 'ongoing' && !samePos(prev.player, next.player)) {
+      const up = upStairs(next);
+      const onDown = next.map.stairs !== null && samePos(next.player, next.map.stairs);
+      const onUp = up !== null && samePos(next.player, up);
+      if (onDown || onUp) {
+        walkRef.current = null;
+        queueRef.current = [{ kind: onDown ? 'descend' : 'ascend' }];
+      }
     }
     return true;
   }, []);
@@ -528,7 +538,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
               <span className="stick__knob" style={{ transform: `translate(${stick.dx}px, ${stick.dy}px)` }} />
             </div>
           )}
-          {/* 「壁があって進めない」などの知らせは3D画面の上に重ねる。
+          {/* 「まだ見ていない場所や壁へは移動できない」などの知らせは3D画面の上に重ねる。
               下に並べると、出たり消えたりするたびに3D画面の高さが変わって画面が揺れるため */}
           <p className="error explore__notice" role="alert">
             {error}

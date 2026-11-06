@@ -42,6 +42,7 @@ export type ExploreAction =
   | { kind: 'move'; dir: Dir }
   | { kind: 'wait' }
   | { kind: 'descend' }
+  | { kind: 'ascend' } // 上り階段（2階目からの入口）から、1つ上の階へ戻る
   | { kind: 'use_item'; item: ItemId };
 
 export type ExploreOutcome = 'ongoing' | 'cleared' | 'defeated';
@@ -51,6 +52,14 @@ export interface Chest {
   pos: Pos;
   gold: number;
   item: ItemId | null;
+}
+
+/** 一度離れた階の様子。戻ってきたら、倒した敵・開けた宝箱・晴れた霧はそのまま */
+export interface FloorMemory {
+  map: FloorMap;
+  enemies: MapEnemy[];
+  chests: Chest[];
+  seen: boolean[];
 }
 
 export interface ExploreState {
@@ -77,6 +86,7 @@ export interface ExploreState {
   rngState: number;
   outcome: ExploreOutcome;
   log: string[];
+  visited: Record<number, FloorMemory>; // 一度離れた階（階の番号ごと）。今いる階は入らない
 }
 
 export interface ExploreOptions {
@@ -96,6 +106,11 @@ const err = <T>(error: string): Result<T> => ({ ok: false, error });
 /** 階ごとのマップのシード。同じ挑戦なら同じ並びになる */
 export function floorSeed(seed: number, floor: number): number {
   return (seed + Math.imul(floor + 1, 0x9e3779b1)) >>> 0;
+}
+
+/** シードから決まるダンジョンの特性（startExplore で特性を指定しなかったときと同じ） */
+export function traitForSeed(seed: number): TraitId {
+  return TRAIT_IDS[nextInt(seed, TRAIT_IDS.length).value]!;
 }
 
 export function startExplore(seed: number, options: ExploreOptions = {}): ExploreState {
@@ -127,6 +142,7 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     rngState: traitRoll.state,
     outcome: 'ongoing',
     log: [],
+    visited: {},
   };
   return enterFloor(state, 0, state.map);
 }
@@ -163,10 +179,22 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
     }
     case 'descend': {
       if (!state.map.stairs || !samePos(state.player, state.map.stairs)) return err('ここに階段はない');
-      // 最後の通常の階の階段はボス階へ続く。階を移ったターンは敵が動かない
+      // 最後の通常の階の階段はボス階へ続く。階を移ったターンは敵が動かない。
+      // 一度来たことのある階なら、離れたときの様子のまま、上り階段（入口）に立つ
       const floor = state.floor + 1;
+      const left = leaveFloor(state);
+      const memory = state.visited[floor];
+      if (memory) return ok(spendAction(returnToFloor(left, floor, memory, memory.map.start, `地下${floor + 1}階に降りた`)));
       const map = floor >= state.floors ? generateBossFloor() : floorMap(state.seed, floor, state.mapSize);
-      return ok(spendAction(enterFloor(state, floor, map)));
+      return ok(spendAction(enterFloor(left, floor, map)));
+    }
+    case 'ascend': {
+      const up = upStairs(state);
+      if (!up || !samePos(state.player, up)) return err('ここに上り階段はない');
+      // 1つ上の階の、下り階段の上に戻る。上の階は必ず一度通っているので、離れたときの様子のまま
+      const floor = state.floor - 1;
+      const memory = state.visited[floor]!;
+      return ok(spendAction(returnToFloor(leaveFloor(state), floor, memory, memory.map.stairs!, `地下${floor + 1}階に戻った`)));
     }
     default: {
       const unreachable: never = action;
@@ -183,6 +211,35 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
 
 function floorMap(seed: number, floor: number, mapSize: number): FloorMap {
   return generateFloor(floorSeed(seed, floor), { width: mapSize, height: mapSize });
+}
+
+/** 上り階段の場所。2階目からは、降りてきた入口が上り階段になる（1階目の入口はダンジョンの外への出口なので上れない） */
+export function upStairs(state: Pick<ExploreState, 'floor' | 'map'>): Pos | null {
+  return state.floor > 0 ? state.map.start : null;
+}
+
+/** 今の階の様子を覚えて、階を離れる準備をする */
+function leaveFloor(state: ExploreState): ExploreState {
+  const memory: FloorMemory = { map: state.map, enemies: state.enemies, chests: state.chests, seen: state.seen };
+  return { ...state, visited: { ...state.visited, [state.floor]: memory } };
+}
+
+/** 一度離れた階に戻る。敵は追うのをやめ、うろつきに戻っている */
+function returnToFloor(state: ExploreState, floor: number, memory: FloorMemory, at: Pos, message: string): ExploreState {
+  const visited = { ...state.visited };
+  delete visited[floor]; // 今いる階は覚えておく一覧に入れない
+  const enemies = memory.enemies.map((e) => ({ ...e, mode: 'wander' as const, justNoticed: false, lastSeen: null, searchTurns: 0 }));
+  return reveal({
+    ...state,
+    floor,
+    map: memory.map,
+    player: at,
+    enemies,
+    chests: memory.chests,
+    seen: memory.seen,
+    visited,
+    log: [...state.log, message],
+  });
 }
 
 /** 新しい階に入る：入口に立ち、敵と宝箱を配置し、霧をリセットする。地図があれば本道は最初から見える */

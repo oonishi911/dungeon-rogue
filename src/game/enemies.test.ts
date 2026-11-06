@@ -226,3 +226,23 @@ describe('報酬とボス', () => {
     expect(enemyDef(boss)).toEqual(ENEMIES.dark_lord);
   });
 });
+
+describe('敵の強さ', () => {
+  it('通常の敵の HP・攻撃力は data.ts の値の半分（四捨五入）、防御力はそのまま', () => {
+    const def = enemyDef({ id: 'goblin', elite: false });
+    expect(def.hp).toBe(Math.round(ENEMIES.goblin.hp * ENEMY_CONFIG.strengthRate));
+    expect(def.atk).toBe(Math.round(ENEMIES.goblin.atk * ENEMY_CONFIG.strengthRate));
+    expect(def.def).toBe(ENEMIES.goblin.def);
+  });
+
+  it('強敵は、半分にした通常の敵の能力から上げる', () => {
+    const normal = enemyDef({ id: 'stone_golem', elite: false });
+    const elite = enemyDef({ id: 'stone_golem', elite: true });
+    expect(elite.hp).toBe(Math.round(normal.hp * ENEMY_CONFIG.eliteHpRate));
+    expect(elite.atk).toBe(Math.round(normal.atk * ENEMY_CONFIG.eliteAtkRate));
+  });
+
+  it('ボスは data.ts の能力のまま', () => {
+    expect(enemyDef({ id: 'flame_beast', elite: true })).toEqual(ENEMIES.flame_beast);
+  });
+});
