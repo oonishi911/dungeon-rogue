@@ -1,7 +1,7 @@
 # 3D表示のテクスチャの仕様
 
 3D表示の床と壁に貼る画像。ダンジョン特性ごとに見た目を変える。
-氷は、AIで作ったシームレスな氷の画像（`assets/texture-sources/ice.jpg`）から作った素材。ほかの特性は、`scripts/build-textures.ts` で作った仮の素材が入っている。
+氷と炎は、端でつながる画像（`assets/texture-sources/ice.jpg`・`fire.jpg`）から作った素材。ほかの特性（無属性・光・闇）は、`scripts/build-textures.ts` で作った仮の素材が入っている。
 同じ名前のPNGに差し替えれば、そのまま画面に反映される（大きさはコードでは決めていない）。
 
 ## ファイル
