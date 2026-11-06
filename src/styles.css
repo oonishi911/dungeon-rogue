@@ -520,6 +520,9 @@ button.card:disabled {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  /* スマホのブラウザが、指が触れているあいだ画面全体に重ねる半透明の色（タップの強調表示）を消す。
+     暗いダンジョンの上では画面が白く光ったように見えるため。操作したことは道筋の点やスティックで伝わる */
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* 3D表示は Canvas の画面上の大きさに合わせて描くので、縦横比は CSS で決める */
@@ -538,10 +541,15 @@ button.card:disabled {
   width: 100%;
   height: auto;
   image-rendering: pixelated;
-  cursor: pointer;
-  touch-action: manipulation;
   border: 1px solid var(--pine-line);
   border-radius: 4px;
+}
+
+/* マウスで操作するときだけ、クリックで歩けることを指の形のカーソルで示す（スマホでは強調表示の目印になるため付けない） */
+@media (hover: hover) and (pointer: fine) {
+  .explore__view {
+    cursor: pointer;
+  }
 }
 
 .explore__ending {
