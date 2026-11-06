@@ -35,7 +35,7 @@ const HIT_PULSE = {
 export type HitPulse = keyof typeof HIT_PULSE;
 // ダメージの数字：受けた側の頭の上に小さく出て、なめらかに大きくなりながら少し浮かび、透けて消える
 const DAMAGE_POP = {
-  ms: 550, // 出てから消えるまで
+  ms: 250, // 出てから消えるまで
   from: 0.6, // 出たときの大きさ（マス）
   to: 1.3, // 消えるときの大きさ（マス）
   height: 1.05, // 出る高さ（マス）
