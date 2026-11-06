@@ -35,9 +35,9 @@ const HIT_PULSE = {
 export type HitPulse = keyof typeof HIT_PULSE;
 // ダメージの数字：受けた側の頭の上に小さく出て、なめらかに大きくなりながら少し浮かび、透けて消える
 const DAMAGE_POP = {
-  ms: 900, // 出てから消えるまで
-  from: 0.35, // 出たときの大きさ（マス）
-  to: 0.8, // 消えるときの大きさ（マス）
+  ms: 550, // 出てから消えるまで
+  from: 0.6, // 出たときの大きさ（マス）
+  to: 1.3, // 消えるときの大きさ（マス）
   height: 1.05, // 出る高さ（マス）
   rise: 0.35, // 消えるまでに浮かぶ高さ（マス）
   colors: { dealt: '#ece5d3', taken: '#e5624f' }, // 与えた：明るい生成り / 受けた：赤
@@ -295,7 +295,7 @@ export class DungeonView3D {
     sprite.renderOrder = 20; // 壁や敵より手前に出す
     const now = performance.now();
     const crowd = this.damagePops.filter((p) => p.sprite.userData.tile === `${at.x},${at.y}` && now - p.start < DAMAGE_POP.ms / 2).length;
-    sprite.userData = { tile: `${at.x},${at.y}`, x: at.x + crowd * 0.25, z: at.y };
+    sprite.userData = { tile: `${at.x},${at.y}`, x: at.x + crowd * 0.45, z: at.y };
     this.scene.add(sprite);
     this.damagePops.push({ sprite, start: now });
     this.updateDamagePops(now);
