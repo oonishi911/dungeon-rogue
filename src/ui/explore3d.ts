@@ -64,16 +64,15 @@ const DRAW_CAPACITY = (DRAW_RANGE.x * 2 + 1) * (DRAW_RANGE.z * 2 + 1);
 const PATH_CAPACITY = 256; // 歩く道筋の点を、いくつまで描くか
 
 /**
- * テクスチャの中の配置（128×64px、1マス32px）。詳しくは docs/textures.md。
- * 1段目に床4種類、2段目に壁の上面と側面。壁の側面は、マスの下から壁の高さの分が使われる（高さ1なら全体）
+ * テクスチャの画像（public/textures/{特性}/ の中）。1マスに1枚、128×128px の、なめらかな質感の絵。詳しくは docs/textures.md。
+ * 床は4種類をマスの位置で使い分ける。壁の側面は、壁の高さ1につき画像1枚分を貼る
  */
-export const TEXTURE_ATLAS = {
-  columns: 4,
-  rows: 2,
-  floors: [0, 1, 2, 3], // 1段目の何列目か
-  wallTop: { col: 0, row: 1 },
-  wallSide: { col: 1, row: 1 },
+export const TEXTURE_FILES = {
+  floors: ['floor1.png', 'floor2.png', 'floor3.png', 'floor4.png'],
+  wallTop: 'wall-top.png',
+  wallSide: 'wall-side.png',
 } as const;
+const MAX_ANISOTROPY = 8; // 斜めから見た床がぼけないようにする強さの上限（スマホで重くなりすぎないように）
 
 interface Atlas {
   floors: THREE.Texture[];
@@ -157,7 +156,7 @@ export class DungeonView3D {
     // 床と壁は、描く範囲のマス数ぶんの入れ物を最初に用意しておき、1歩ごとに中身を入れ替える。
     // 床は模様ごとにテクスチャが違うので、模様の数だけ入れ物を分ける
     const floorGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
-    this.floors = TEXTURE_ATLAS.floors.map(() => new THREE.InstancedMesh(floorGeo, new THREE.MeshLambertMaterial(), DRAW_CAPACITY));
+    this.floors = TEXTURE_FILES.floors.map(() => new THREE.InstancedMesh(floorGeo, new THREE.MeshLambertMaterial(), DRAW_CAPACITY));
     // 壁は面ごとに素材を分ける。箱の面の順番は +x, -x, +y（上）, -y（下）, +z, -z。
     // 敵などを隠してしまう手前の壁は、半透明の素材で別に描く
     this.wallMaterials = [{}, { transparent: true, opacity: FADED_WALL_OPACITY, depthWrite: false }].map((extra) => ({
@@ -521,19 +520,35 @@ export class DungeonView3D {
   private atlasFor(trait: TraitId): Atlas | null {
     if (!this.atlases.has(trait)) {
       this.atlases.set(trait, null);
-      new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/${trait}.png`, (image) => {
-        this.atlases.set(trait, {
-          floors: TEXTURE_ATLAS.floors.map((col) => cropTexture(image, col, 0)),
-          top: cropTexture(image, TEXTURE_ATLAS.wallTop.col, TEXTURE_ATLAS.wallTop.row),
-          // 側面は箱の高さに合わせて、マスの下から壁の高さの分だけを使う（ドット絵が縦に縮まないように）
-          side: cropTexture(image, TEXTURE_ATLAS.wallSide.col, TEXTURE_ATLAS.wallSide.row, WALL_HEIGHT),
-        });
-        image.dispose();
-        this.shownState = null; // 次のフレームで描き直す
-      });
-      // 読み込めなかったときは null のままにして、色で描き続ける
+      const loader = new THREE.TextureLoader();
+      const dir = `${import.meta.env.BASE_URL}textures/${trait}/`;
+      const load = (file: string, repeatY = 1) => loader.loadAsync(dir + file).then((t) => this.smoothTexture(t, repeatY));
+      Promise.all([Promise.all(TEXTURE_FILES.floors.map((f) => load(f))), load(TEXTURE_FILES.wallTop), load(TEXTURE_FILES.wallSide, WALL_HEIGHT)])
+        .then(([floors, top, side]) => {
+          this.atlases.set(trait, { floors, top, side });
+          this.shownState = null; // 次のフレームで描き直す
+        })
+        // 1枚でも読み込めなかったときは null のままにして、色で描き続ける
+        .catch(() => undefined);
     }
     return this.atlases.get(trait) ?? null;
+  }
+
+  /**
+   * なめらかな質感のテクスチャとして使う設定。拡大・縮小ともになめらかに補間し、縮小用の画像（ミップマップ）を作って、
+   * 歩いて画面が動いたときに模様がちらつかないようにする。斜めから見る床がぼけないよう、異方性フィルタリングもかける
+   */
+  private smoothTexture(t: THREE.Texture, repeatY: number): THREE.Texture {
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(1, repeatY);
+    t.magFilter = THREE.LinearFilter;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.generateMipmaps = true;
+    t.anisotropy = Math.min(MAX_ANISOTROPY, this.renderer.capabilities.getMaxAnisotropy());
+    t.needsUpdate = true;
+    return t;
   }
 
   private applyAtlas(atlas: Atlas | null) {
@@ -705,23 +720,6 @@ export class DungeonView3D {
     }
     return tex;
   }
-}
-
-/**
- * テクスチャの中の1マス分を切り出す。visibleHeight はマスの下から何割を使うか。
- * 画像は上下が反転して読み込まれるので、上の段ほど v（縦の座標）が大きい
- */
-function cropTexture(image: THREE.Texture, col: number, row: number, visibleHeight = 1): THREE.Texture {
-  const t = image.clone();
-  t.repeat.set(1 / TEXTURE_ATLAS.columns, visibleHeight / TEXTURE_ATLAS.rows);
-  t.offset.set(col / TEXTURE_ATLAS.columns, 1 - (row + 1) / TEXTURE_ATLAS.rows);
-  // ドット絵なのでぼかさない。縮小用の画像（ミップマップ）を作ると隣のマスの色が混ざるので作らない
-  t.magFilter = THREE.NearestFilter;
-  t.minFilter = THREE.NearestFilter;
-  t.generateMipmaps = false;
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.needsUpdate = true;
-  return t;
 }
 
 /** 上面を明るく、側面を暗くした箱（壁）。色はインスタンスごとの色と掛け合わされる */
