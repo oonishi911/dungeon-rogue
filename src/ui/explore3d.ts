@@ -44,7 +44,8 @@ const DAMAGE_POP = {
 } as const;
 const REMEMBERED = 0.3; // 一度見たが今は見えていないマスの明るさ
 // 見える範囲の明るさ。主人公のそばは1で、視界の端へ向かってなめらかに edge まで暗くする。
-// マスの明るさは、見え始め・見えなくなるときに fade の速さ（1秒あたり）で少しずつ変える
+// マスの明るさは、見え始め・見えなくなるときに fade の速さ（1秒あたり）で少しずつ変える。
+// 明るさはピクセルごとに決める（霧の地図 → FogState と applyFog）ので、マスの形の段は出ない
 const SIGHT_LIGHT = { edge: 0.5, fade: 9 };
 const FADED_WALL_OPACITY = 0.35; // 敵・宝箱・階段のすぐ手前にあって、それを隠してしまう壁の濃さ
 // 壁の根元の影：壁に接する床の辺に敷く帯。幅（マスの何倍か）と、壁際でのいちばん濃いところ、薄くなり方
@@ -135,10 +136,8 @@ export class DungeonView3D {
   private pulse: { kind: HitPulse; start: number } | null = null;
   private readonly damagePops: { sprite: THREE.Sprite; start: number }[] = [];
   // 霧：描いている床と壁の1つ1つ（どの入れ物の何番目か・どのマスか・元の色）と、マスごとの今の明るさ
-  private fogTiles: { mesh: THREE.InstancedMesh; slot: number; tile: number; x: number; z: number; base: THREE.Color }[] = [];
-  private readonly brightness = new Map<number, number>();
-  private brightnessMap: unknown = null; // brightness がどの階のものか
-  private fogVisible: Set<number> = new Set();
+  // 霧：マスごとの「見えている」「一度見た」を1マス1ドットの小さな画像にして、描くときにピクセルごとになめらかに読む
+  private readonly fog = createFog();
   private readonly enemies = new Map<number, { body: THREE.Mesh; mark: THREE.Sprite; hp: THREE.Sprite; ring: THREE.Mesh | null }>();
   private readonly textures = new Map<string, THREE.Texture>();
   private readonly materials = new Map<string, THREE.SpriteMaterial>();
@@ -155,9 +154,9 @@ export class DungeonView3D {
     ring: new THREE.RingGeometry(0.4, 0.48, 24).rotateX(-Math.PI / 2),
     targetRing: new THREE.RingGeometry(0.32, 0.42, 24).rotateX(-Math.PI / 2),
     holeMat: new THREE.MeshBasicMaterial({ color: 0x05080a }),
-    barMat: [1, REMEMBERED].map((k) => new THREE.MeshLambertMaterial({ color: new THREE.Color(0xece5d3).multiplyScalar(k) })),
-    chestMat: [1, REMEMBERED].map((k) => new THREE.MeshLambertMaterial({ color: new THREE.Color(0xe2c178).multiplyScalar(k) })),
-    stepMat: [1, REMEMBERED].map((k) => new THREE.MeshLambertMaterial({ color: new THREE.Color(0xc9c3b3).multiplyScalar(k) })),
+    barMat: new THREE.MeshLambertMaterial({ color: 0xece5d3 }),
+    chestMat: new THREE.MeshLambertMaterial({ color: 0xe2c178 }),
+    stepMat: new THREE.MeshLambertMaterial({ color: 0xc9c3b3 }),
     eliteMat: new THREE.MeshLambertMaterial({ color: 0xd9653b }),
     bossMat: new THREE.MeshLambertMaterial({ color: 0xb48d35 }),
     targetMat: new THREE.MeshBasicMaterial({ color: 0x9cc46a }),
@@ -194,13 +193,13 @@ export class DungeonView3D {
     const floorGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
     this.floors = Array.from(
       { length: FLOOR_KINDS },
-      () => new THREE.InstancedMesh(floorGeo, worldMapped(new THREE.MeshLambertMaterial(), 'floor'), DRAW_CAPACITY),
+      () => new THREE.InstancedMesh(floorGeo, worldMapped(new THREE.MeshLambertMaterial(), 'floor', this.fog), DRAW_CAPACITY),
     );
     // 壁は面ごとに素材を分ける。箱の面の順番は +x, -x, +y（上）, -y（下）, +z, -z。
     // 敵などを隠してしまう手前の壁は、半透明の素材で別に描く
     this.wallMaterials = [{}, { transparent: true, opacity: FADED_WALL_OPACITY, depthWrite: false }].map((extra) => ({
-      top: worldMapped(new THREE.MeshLambertMaterial({ vertexColors: true, ...extra }), 'top'),
-      side: worldMapped(new THREE.MeshLambertMaterial({ vertexColors: true, ...extra }), 'side'),
+      top: worldMapped(new THREE.MeshLambertMaterial({ vertexColors: true, ...extra }), 'top', this.fog),
+      side: worldMapped(new THREE.MeshLambertMaterial({ vertexColors: true, ...extra }), 'side', this.fog),
     }));
     const wallGeo = shadedBox(WALL_HEIGHT);
     const [solid, faded] = this.wallMaterials.map(({ top, side }) => [side, side, top, side, side, side]);
@@ -227,7 +226,11 @@ export class DungeonView3D {
       transparent: true,
       depthWrite: false,
     });
-    this.wallShadows = new THREE.InstancedMesh(shadowGeo, shadowMat, DRAW_CAPACITY * SHADOW_SIDES.length);
+    // 影の帯は黒の半透明なので、霧の外では濃さを消す（まだ見ていない場所との境目で、背景より黒くならないように）
+    this.wallShadows = new THREE.InstancedMesh(shadowGeo, applyFog(shadowMat, this.fog, 'fade-alpha'), DRAW_CAPACITY * SHADOW_SIDES.length);
+    // 階段・宝箱・強敵の足元の輪も、床や壁と同じ霧をかける
+    const { holeMat, barMat, chestMat, stepMat, eliteMat, bossMat } = this.shared;
+    for (const mat of [holeMat, barMat, chestMat, stepMat, eliteMat, bossMat]) applyFog(mat, this.fog);
     for (const mesh of [...this.floors, this.walls, this.fadedWalls, this.wallShadows]) {
       // 中身を毎回入れ替えるので、最初の中身で計算された範囲で画面外と判定されないようにする
       mesh.frustumCulled = false;
@@ -282,7 +285,7 @@ export class DungeonView3D {
       this.heroDir = dirBetween(frame.from.player, s.player);
     }
     this.hero.update(p.x, p.y, this.heroDir, moved ? frame.progress : 1, dt, this.reduceMotion);
-    this.updateLight(p, dt);
+    this.fog.update(p, dt, this.reduceMotion);
     this.updateDamagePops(now);
     const zoom = this.pulseZoom(now);
     if (zoom !== this.camera.zoom) {
@@ -435,6 +438,7 @@ export class DungeonView3D {
     for (const m of this.materials.values()) m.dispose();
     for (const m of this.litMaterials.values()) m.dispose();
     this.billboard.dispose();
+    this.fog.dispose();
     for (const t of this.textures.values()) t.dispose();
     this.renderer.dispose();
   }
@@ -461,14 +465,7 @@ export class DungeonView3D {
     let fadedWalls = 0;
     let shadows = 0;
     const faded = this.wallsToFade(frame);
-    if (this.brightnessMap !== map) {
-      this.brightness.clear(); // 階が変わったら、明るさの記憶をやり直す
-      this.brightnessMap = map;
-    }
-    this.fogTiles = [];
-    this.fogVisible = frame.visible;
-    const remember = (mesh: THREE.InstancedMesh, slot: number, tile: number, x: number, z: number, base: THREE.Color) =>
-      this.fogTiles.push({ mesh, slot, tile, x, z, base: base.clone() });
+    this.fog.setTargets(frame.state, frame.visible);
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
     const at = new THREE.Vector3();
@@ -481,22 +478,22 @@ export class DungeonView3D {
         if (x < 0 || z < 0 || x >= map.width || z >= map.height) continue;
         const i = z * map.width + x;
         if (!seen[i]) continue;
-        // 明るさは毎フレーム updateLight で掛ける。ここでは元の色だけを覚えておく
+        // 明るさは霧（applyFog）がピクセルごとに付けるので、ここでは元の色だけを入れる
         if (map.tiles[i] === 'wall') {
           m.makeTranslation(x, WALL_HEIGHT / 2, z);
           if (faded.has(i)) {
             this.fadedWalls.setMatrixAt(fadedWalls, m);
-            remember(this.fadedWalls, fadedWalls++, i, x, z, wallBase);
+            this.fadedWalls.setColorAt(fadedWalls++, wallBase);
           } else {
             this.walls.setMatrixAt(walls, m);
-            remember(this.walls, walls++, i, x, z, wallBase);
+            this.walls.setColorAt(walls++, wallBase);
           }
         } else {
           // テクスチャがないときは、マスの位置で明るさを少し変えて描き分ける（2D表示と同じ決め方）
           const k = floorVariant(x, z) % FLOOR_KINDS;
           const variety = atlas ? 1 : 0.9 + k * 0.05;
           this.floors[k]!.setMatrixAt(floorCounts[k]!, m.makeTranslation(x, 0, z));
-          remember(this.floors[k]!, floorCounts[k]!++, i, x, z, c.copy(floorBase).multiplyScalar(variety));
+          this.floors[k]!.setColorAt(floorCounts[k]!++, c.copy(floorBase).multiplyScalar(variety));
           // 壁に接する辺に、影の帯を壁側へ寄せて敷く
           for (const side of SHADOW_SIDES) {
             if (!seenWall(x + side.dx, z + side.dz)) continue;
@@ -516,39 +513,9 @@ export class DungeonView3D {
     for (const [mesh, count] of counts) {
       mesh.count = count;
       mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
     if (this.shadows) this.renderer.shadowMap.needsUpdate = true; // 壁の並びが変わったので影も描き直す
-  }
-
-  /**
-   * 床と壁の明るさを毎フレーム決める。見えているマスは、主人公（動いている途中の位置）から離れるほど
-   * なめらかに暗く、見えていないマスは REMEMBERED。マスの明るさは、目標の明るさへ少しずつ近づける
-   */
-  private updateLight(at: Pos, dt: number) {
-    const radius = EXPLORE_CONFIG.sightRadius + 0.5;
-    const step = this.reduceMotion ? 1 : Math.min(1, dt * SIGHT_LIGHT.fade);
-    const c = new THREE.Color();
-    const touched = new Set<THREE.InstancedMesh>();
-    const done = new Set<number>(); // 同じマスの明るさを1フレームに2回進めない
-    for (const t of this.fogTiles) {
-      let light = this.brightness.get(t.tile);
-      if (!done.has(t.tile)) {
-        let target = REMEMBERED;
-        if (this.fogVisible.has(t.tile)) {
-          const d = Math.min(1, Math.hypot(t.x - at.x, t.z - at.y) / radius);
-          const smooth = d * d * (3 - 2 * d); // なめらかに変わる曲線（smoothstep）
-          target = 1 - (1 - SIGHT_LIGHT.edge) * smooth;
-        }
-        // 初めて見えたマスは暗いところから明るくする
-        light = light === undefined ? (this.reduceMotion ? target : 0) : light;
-        light += (target - light) * step;
-        this.brightness.set(t.tile, light);
-        done.add(t.tile);
-      }
-      t.mesh.setColorAt(t.slot, c.copy(t.base).multiplyScalar(light!));
-      touched.add(t.mesh);
-    }
-    for (const mesh of touched) if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }
 
   /**
@@ -625,8 +592,7 @@ export class DungeonView3D {
   private updateProps(frame: Frame) {
     const { map, seen, chests } = frame.state;
     this.props.clear();
-    // 今見えていれば明るい素材（0番）、一度見ただけなら暗い素材（1番）
-    const dim = (p: Pos) => (frame.visible.has(p.y * map.width + p.x) ? 0 : 1);
+    // 一度見ただけの場所にあるときの暗さは、霧（applyFog）が床や壁と同じようにピクセルごとに付ける
 
     if (map.stairs && seen[map.stairs.y * map.width + map.stairs.x]) {
       // 下り階段：床に開いた穴と、段の線
@@ -634,7 +600,7 @@ export class DungeonView3D {
       hole.position.set(map.stairs.x, 0.01, map.stairs.y);
       this.props.add(hole);
       this.shared.bars.forEach((geo, step) => {
-        const bar = new THREE.Mesh(geo, this.shared.barMat[dim(map.stairs!)]);
+        const bar = new THREE.Mesh(geo, this.shared.barMat);
         bar.position.set(map.stairs!.x, 0.02, map.stairs!.y - 0.25 + step * 0.22);
         bar.receiveShadow = true;
         this.props.add(bar);
@@ -644,7 +610,7 @@ export class DungeonView3D {
     if (up && seen[up.y * map.width + up.x]) {
       // 上り階段：床から奥へ向かって高くなる石段
       this.shared.upSteps.forEach((geo, step) => {
-        const block = new THREE.Mesh(geo, this.shared.stepMat[dim(up)]);
+        const block = new THREE.Mesh(geo, this.shared.stepMat);
         block.position.set(up.x, 0, up.y + 0.25 - step * 0.25);
         block.receiveShadow = true;
         this.props.add(block);
@@ -652,7 +618,7 @@ export class DungeonView3D {
     }
     for (const chest of chests) {
       if (!seen[chest.pos.y * map.width + chest.pos.x]) continue;
-      const box = new THREE.Mesh(this.shared.chest, this.shared.chestMat[dim(chest.pos)]);
+      const box = new THREE.Mesh(this.shared.chest, this.shared.chestMat);
       box.position.set(chest.pos.x, 0.16, chest.pos.y);
       box.castShadow = true;
       box.receiveShadow = true;
@@ -751,7 +717,7 @@ export class DungeonView3D {
     let mat = this.litMaterials.get(key);
     if (!mat) {
       const map = this.texture(key, 32, 32, (ctx) => drawSprite(ctx, id, 0, 0, 32, colors));
-      mat = new THREE.MeshLambertMaterial({ map, alphaTest: 0.5, side: THREE.DoubleSide });
+      mat = applyFog(new THREE.MeshLambertMaterial({ map, alphaTest: 0.5, side: THREE.DoubleSide }), this.fog);
       this.litMaterials.set(key, mat);
     }
     return mat;
@@ -816,38 +782,177 @@ function litBillboard(): THREE.PlaneGeometry {
 /**
  * 床と壁の素材の、テクスチャの貼り方を変える。普通は面ごとに絵全体を貼るが、ここでは面のダンジョンの中の位置から、
  * 絵のどこを使うかを決める（床と壁の上面は x・z、壁の側面は壁に沿った向きの位置と高さ）。絵は TEXTURE_SPAN マスごとに繰り返す。
- * こうすると隣り合うマスの模様がつながり、マスの境目に縁取りや目地のような線が出ない
+ * こうすると隣り合うマスの模様がつながり、マスの境目に縁取りや目地のような線が出ない。霧（applyFog）もかける
  */
-function worldMapped(material: THREE.MeshLambertMaterial, face: 'floor' | 'top' | 'side'): THREE.MeshLambertMaterial {
+function worldMapped(material: THREE.MeshLambertMaterial, face: 'floor' | 'top' | 'side', fog: Fog): THREE.MeshLambertMaterial {
   const defines: Record<string, string> = { TEXTURE_SPAN: TEXTURE_SPAN.toFixed(1), WALL_HEIGHT_F: WALL_HEIGHT.toFixed(1) };
   defines[`MAPPED_${face.toUpperCase()}`] = '';
   material.defines = { ...material.defines, ...defines };
-  material.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader.replace(
-      '#include <uv_vertex>',
-      `#include <uv_vertex>
-      #ifdef USE_MAP
-      {
-        vec4 world = vec4( position, 1.0 );
-        #ifdef USE_INSTANCING
-          world = instanceMatrix * world;
-        #endif
-        world = modelMatrix * world;
-        #if defined( MAPPED_FLOOR )
-          // 画像から作った素材は、床と壁の上面が同じ絵なので、床は90度回して位置もずらし、模様がそろわないようにする
-          vMapUv = vec2( -world.z, world.x ) / TEXTURE_SPAN + vec2( 0.37, 0.61 );
-        #elif defined( MAPPED_TOP )
-          // 上から見て、絵の上が奥（-z）になるように
-          vMapUv = vec2( world.x, -world.z ) / TEXTURE_SPAN;
-        #else
-          // 外から見て、絵が左右反転しないように、面の向きで進む向きを決める
-          float along = abs( normal.x ) > 0.5 ? -world.z * sign( normal.x ) : world.x * sign( normal.z );
-          vMapUv = vec2( along / TEXTURE_SPAN, world.y / WALL_HEIGHT_F );
-        #endif
-      }
-      #endif`,
-    );
+  return applyFog(material, fog, 'darken', `world-mapped-${face}`);
+}
+
+// ===== 霧（ピクセル単位） =====
+
+/**
+ * 霧の地図と、描くときに使う値。地図は1マス1ドットで、R が「今見えている」、G が「一度見た」の度合い（0〜255）。
+ * 描くときはこの地図をなめらかに引き伸ばして読むので、見えている・一度見た・まだ見ていない場所の境目が、
+ * マスの形ではなく1マスほどのなだらかなグラデーションになる
+ */
+interface Fog {
+  readonly uniforms: {
+    fogMap: { value: THREE.DataTexture };
+    fogSize: { value: THREE.Vector2 };
+    fogPlayer: { value: THREE.Vector2 };
   };
-  material.customProgramCacheKey = () => `world-mapped-${face}`;
+  /** 状態が変わったときに、目標の見え方を入れる（階が変わったら地図を作り直し、今の見え方にすぐ合わせる） */
+  setTargets(state: ExploreState, visible: Set<number>): void;
+  /** 毎フレーム：主人公の位置（動いている途中）を伝え、見え方を目標へ少しずつ近づける */
+  update(player: Pos, dt: number, reduceMotion: boolean): void;
+  dispose(): void;
+}
+
+function createFog(): Fog {
+  let map: unknown = null;
+  let width = 1;
+  let height = 1;
+  let visible = new Float32Array(1); // 今の見え方（0〜1）。目標へ少しずつ近づける
+  let seen = new Float32Array(1);
+  let visibleTarget = new Uint8Array(1); // 目標（0 か 1）
+  let seenTarget = new Uint8Array(1);
+  let dirty = true;
+  let texture = new THREE.DataTexture(new Uint8Array(4), 1, 1);
+  const uniforms = {
+    fogMap: { value: texture },
+    fogSize: { value: new THREE.Vector2(1, 1) },
+    fogPlayer: { value: new THREE.Vector2() },
+  };
+  const write = () => {
+    const data = texture.image.data as Uint8Array;
+    for (let i = 0; i < width * height; i++) {
+      data[i * 4] = Math.round(visible[i]! * 255);
+      data[i * 4 + 1] = Math.round(seen[i]! * 255);
+    }
+    texture.needsUpdate = true;
+  };
+  return {
+    uniforms,
+    setTargets(state, visibleTiles) {
+      const fresh = state.map !== map;
+      if (fresh) {
+        map = state.map;
+        width = state.map.width;
+        height = state.map.height;
+        visible = new Float32Array(width * height);
+        seen = new Float32Array(width * height);
+        visibleTarget = new Uint8Array(width * height);
+        seenTarget = new Uint8Array(width * height);
+        texture.dispose();
+        texture = new THREE.DataTexture(new Uint8Array(width * height * 4), width, height);
+        // なめらかに引き伸ばして読む（マスとマスのあいだが、なだらかにつながる）
+        texture.magFilter = THREE.LinearFilter;
+        texture.minFilter = THREE.LinearFilter;
+        uniforms.fogMap.value = texture;
+        uniforms.fogSize.value.set(width, height);
+      }
+      for (let i = 0; i < width * height; i++) {
+        visibleTarget[i] = visibleTiles.has(i) ? 1 : 0;
+        seenTarget[i] = state.seen[i] ? 1 : 0;
+      }
+      // 階を移ったとき（戻ったときも）は、ゆっくり変えずに今の見え方にすぐ合わせる
+      if (fresh) {
+        visible.set(visibleTarget);
+        seen.set(seenTarget);
+      }
+      dirty = true;
+    },
+    update(player, dt, reduceMotion) {
+      uniforms.fogPlayer.value.set(player.x, player.y);
+      if (!dirty) return;
+      const step = reduceMotion ? 1 : Math.min(1, dt * SIGHT_LIGHT.fade);
+      let moving = false;
+      for (let i = 0; i < width * height; i++) {
+        const v = visible[i]! + (visibleTarget[i]! - visible[i]!) * step;
+        const s = seen[i]! + (seenTarget[i]! - seen[i]!) * step;
+        visible[i] = Math.abs(visibleTarget[i]! - v) < 0.004 ? visibleTarget[i]! : v;
+        seen[i] = Math.abs(seenTarget[i]! - s) < 0.004 ? seenTarget[i]! : s;
+        if (visible[i] !== visibleTarget[i] || seen[i] !== seenTarget[i]) moving = true;
+      }
+      write();
+      dirty = moving; // 目標に着いたら、次に状態が変わるまで書き直さない
+    },
+    dispose() {
+      texture.dispose();
+    },
+  };
+}
+
+const FOG_BACKGROUND = new THREE.Color(BACKGROUND); // 画面の色空間（sRGB）のまま、シェーダで背景と混ぜる
+
+/**
+ * 素材に霧をかける。ピクセルごとに、霧の地図から「今見えている」「一度見た」の度合いを読み、
+ * - 見えている場所は、主人公から離れるほどなめらかに暗く（端で SIGHT_LIGHT.edge）
+ * - 一度見ただけの場所は REMEMBERED の明るさ
+ * - まだ見ていない場所へ向かっては、背景の色に溶け込ませる（mode が 'fade-alpha' なら、色ではなく濃さを消す）
+ * worldMapped の素材では、テクスチャの貼り方の変更（MAPPED_* の定義）も一緒に行う
+ */
+function applyFog<T extends THREE.Material>(material: T, fog: Fog, mode: 'darken' | 'fade-alpha' = 'darken', key = ''): T {
+  const bg = FOG_BACKGROUND.clone().convertLinearToSRGB();
+  material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, fog.uniforms);
+    shader.vertexShader =
+      'varying vec3 vFogWorld;\n' +
+      shader.vertexShader.replace(
+        '#include <uv_vertex>',
+        `#include <uv_vertex>
+        {
+          vec4 world = vec4( position, 1.0 );
+          #ifdef USE_INSTANCING
+            world = instanceMatrix * world;
+          #endif
+          world = modelMatrix * world;
+          vFogWorld = world.xyz;
+          #ifdef USE_MAP
+            #if defined( MAPPED_FLOOR )
+              // 画像から作った素材は、床と壁の上面が同じ絵なので、床は90度回して位置もずらし、模様がそろわないようにする
+              vMapUv = vec2( -world.z, world.x ) / TEXTURE_SPAN + vec2( 0.37, 0.61 );
+            #elif defined( MAPPED_TOP )
+              // 上から見て、絵の上が奥（-z）になるように
+              vMapUv = vec2( world.x, -world.z ) / TEXTURE_SPAN;
+            #elif defined( MAPPED_SIDE )
+              // 外から見て、絵が左右反転しないように、面の向きで進む向きを決める
+              float along = abs( normal.x ) > 0.5 ? -world.z * sign( normal.x ) : world.x * sign( normal.z );
+              vMapUv = vec2( along / TEXTURE_SPAN, world.y / WALL_HEIGHT_F );
+            #endif
+          #endif
+        }`,
+      );
+    shader.fragmentShader =
+      `varying vec3 vFogWorld;
+      uniform sampler2D fogMap;
+      uniform vec2 fogSize;
+      uniform vec2 fogPlayer;
+      ` +
+      shader.fragmentShader
+        .replace(
+          '#include <opaque_fragment>',
+          `// マスの中心が整数の座標なので、半マスずらして霧の地図のドットの中心に合わせる
+          vec2 fogTexel = texture2D( fogMap, ( vFogWorld.xz + 0.5 ) / fogSize ).rg;
+          float fogD = clamp( length( vFogWorld.xz - fogPlayer ) / ${(EXPLORE_CONFIG.sightRadius + 0.5).toFixed(2)}, 0.0, 1.0 );
+          float fogNear = 1.0 - ${(1 - SIGHT_LIGHT.edge).toFixed(2)} * fogD * fogD * ( 3.0 - 2.0 * fogD );
+          float fogSeen = smoothstep( 0.5, 1.0, fogTexel.g ); // マスの境目（0.5）で、ちょうど背景に溶け込む
+          ${mode === 'darken' ? `outgoingLight *= mix( ${REMEMBERED.toFixed(2)}, fogNear, smoothstep( 0.0, 1.0, fogTexel.r ) );` : ''}
+          #include <opaque_fragment>`,
+        )
+        .replace(
+          '#include <colorspace_fragment>',
+          `#include <colorspace_fragment>
+          ${
+            mode === 'darken'
+              ? `gl_FragColor.rgb = mix( vec3( ${bg.r.toFixed(4)}, ${bg.g.toFixed(4)}, ${bg.b.toFixed(4)} ), gl_FragColor.rgb, fogSeen );`
+              : 'gl_FragColor.a *= fogSeen;'
+          }`,
+        );
+  };
+  material.customProgramCacheKey = () => `fog-${mode}-${key}`;
   return material;
 }
