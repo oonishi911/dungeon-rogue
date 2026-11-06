@@ -9,7 +9,7 @@
 
 import * as THREE from 'three';
 import { enemyDef } from '../game/enemies';
-import { dirBetween, upStairs, type Dir, type ExploreState } from '../game/explore';
+import { dirBetween, EXPLORE_CONFIG, upStairs, type Dir, type ExploreState } from '../game/explore';
 import type { Pos } from '../game/map';
 import type { TraitId } from '../game/types';
 import { drawSprite } from '../sprites/canvas';
@@ -27,7 +27,16 @@ const CAMERA = { height: 15, back: 7.5 }; // 主人公の真上15・手前7.5か
 // スマホの縦画面（幅約390px）で横に約8マス、PCの探索画面（幅約670px）で横に約14マス映る
 const TILE_PX = 48;
 const FOV_LIMIT = { min: 10, max: 75 }; // 極端に大きい・小さい画面でもゆがみすぎないように
+// 攻撃したとき・攻撃されたときの画面効果：カメラを少し寄せて戻す（拡大縮小）。zoom は 1 からのずれの最大、ms は長さ
+const HIT_PULSE = {
+  attack: { zoom: 0.05, ms: 180 }, // 自分の攻撃：ぐっと寄って戻る
+  hurt: { zoom: 0.08, ms: 260 }, // 敵の攻撃：寄ったあと少し引いて戻る
+} as const;
+export type HitPulse = keyof typeof HIT_PULSE;
 const REMEMBERED = 0.3; // 一度見たが今は見えていないマスの明るさ
+// 見える範囲の明るさ。主人公のそばは1で、視界の端へ向かってなめらかに edge まで暗くする。
+// マスの明るさは、見え始め・見えなくなるときに fade の速さ（1秒あたり）で少しずつ変える
+const SIGHT_LIGHT = { edge: 0.5, fade: 9 };
 const FADED_WALL_OPACITY = 0.35; // 敵・宝箱・階段のすぐ手前にあって、それを隠してしまう壁の濃さ
 // 壁の根元の影：壁に接する床の辺に敷く帯。幅（マスの何倍か）と、壁際でのいちばん濃いところ、薄くなり方
 const WALL_SHADOW = { depth: 0.4, darkness: 0.8, falloff: 1.5 }; // falloff：大きいほど壁際で急に薄くなる
@@ -93,6 +102,12 @@ export class DungeonView3D {
   private heroDir: Dir = 'down'; // 最後に歩いた向き。模型をこの向きへ回す
   private lastFrameAt = performance.now();
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  private pulse: { kind: HitPulse; start: number } | null = null;
+  // 霧：描いている床と壁の1つ1つ（どの入れ物の何番目か・どのマスか・元の色）と、マスごとの今の明るさ
+  private fogTiles: { mesh: THREE.InstancedMesh; slot: number; tile: number; x: number; z: number; base: THREE.Color }[] = [];
+  private readonly brightness = new Map<number, number>();
+  private brightnessMap: unknown = null; // brightness がどの階のものか
+  private fogVisible: Set<number> = new Set();
   private readonly enemies = new Map<number, { body: THREE.Sprite; mark: THREE.Sprite; hp: THREE.Sprite; ring: THREE.Mesh | null }>();
   private readonly textures = new Map<string, THREE.Texture>();
   private readonly materials = new Map<string, THREE.SpriteMaterial>();
@@ -213,6 +228,12 @@ export class DungeonView3D {
       this.heroDir = dirBetween(frame.from.player, s.player);
     }
     this.hero.update(p.x, p.y, this.heroDir, moved ? frame.progress : 1, dt, this.reduceMotion);
+    this.updateLight(p, dt);
+    const zoom = this.pulseZoom(now);
+    if (zoom !== this.camera.zoom) {
+      this.camera.zoom = zoom;
+      this.camera.updateProjectionMatrix();
+    }
     this.torch.position.set(p.x, 1.6, p.y);
     this.camera.position.set(p.x, CAMERA.height, p.y + CAMERA.back);
     this.camera.lookAt(p.x, 0, p.y);
@@ -228,6 +249,29 @@ export class DungeonView3D {
     this.updateWalkTarget(frame.walkTarget);
     this.updateWalkPath(frame.walkPath);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /** 攻撃したとき・攻撃されたときに、画面を少し拡大縮小する。動きを減らす設定では何もしない */
+  hitPulse(kind: HitPulse) {
+    if (this.reduceMotion) return;
+    // 敵の攻撃は、自分の攻撃より目立たせる（同時に起きたら敵の攻撃の効果にする）
+    if (this.pulse?.kind === 'hurt' && kind === 'attack' && performance.now() - this.pulse.start < HIT_PULSE.hurt.ms) return;
+    this.pulse = { kind, start: performance.now() };
+  }
+
+  /** 今のカメラの倍率。効果のあいだだけ 1 からずれる */
+  private pulseZoom(now: number): number {
+    if (!this.pulse) return 1;
+    const { zoom, ms } = HIT_PULSE[this.pulse.kind];
+    const t = (now - this.pulse.start) / ms;
+    if (t >= 1) {
+      this.pulse = null;
+      return 1;
+    }
+    // 自分の攻撃は寄って戻るだけ。敵の攻撃は、寄ったあと少し引いてから戻る（揺さぶられる感じ）
+    return this.pulse.kind === 'attack'
+      ? 1 + zoom * Math.sin(Math.PI * t)
+      : 1 + zoom * Math.sin(2 * Math.PI * t) * (1 - t);
   }
 
   /** 画面上の位置へ向かう視線を、カメラから飛ばす */
@@ -295,6 +339,14 @@ export class DungeonView3D {
     let fadedWalls = 0;
     let shadows = 0;
     const faded = this.wallsToFade(frame);
+    if (this.brightnessMap !== map) {
+      this.brightness.clear(); // 階が変わったら、明るさの記憶をやり直す
+      this.brightnessMap = map;
+    }
+    this.fogTiles = [];
+    this.fogVisible = frame.visible;
+    const remember = (mesh: THREE.InstancedMesh, slot: number, tile: number, x: number, z: number, base: THREE.Color) =>
+      this.fogTiles.push({ mesh, slot, tile, x, z, base: base.clone() });
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
     const at = new THREE.Vector3();
@@ -307,23 +359,22 @@ export class DungeonView3D {
         if (x < 0 || z < 0 || x >= map.width || z >= map.height) continue;
         const i = z * map.width + x;
         if (!seen[i]) continue;
-        const light = frame.visible.has(i) ? 1 : REMEMBERED;
+        // 明るさは毎フレーム updateLight で掛ける。ここでは元の色だけを覚えておく
         if (map.tiles[i] === 'wall') {
-          c.copy(wallBase).multiplyScalar(light);
           m.makeTranslation(x, WALL_HEIGHT / 2, z);
           if (faded.has(i)) {
             this.fadedWalls.setMatrixAt(fadedWalls, m);
-            this.fadedWalls.setColorAt(fadedWalls++, c);
+            remember(this.fadedWalls, fadedWalls++, i, x, z, wallBase);
           } else {
             this.walls.setMatrixAt(walls, m);
-            this.walls.setColorAt(walls++, c);
+            remember(this.walls, walls++, i, x, z, wallBase);
           }
         } else {
           // 床の模様はマスの位置で決める（2D表示と同じ決め方）。色だけで描くときは明るさを少し変える
           const k = floorVariant(x, z);
           const variety = atlas ? 1 : 0.9 + k * 0.05;
           this.floors[k]!.setMatrixAt(floorCounts[k]!, m.makeTranslation(x, 0, z));
-          this.floors[k]!.setColorAt(floorCounts[k]!++, c.copy(floorBase).multiplyScalar(light * variety));
+          remember(this.floors[k]!, floorCounts[k]!++, i, x, z, c.copy(floorBase).multiplyScalar(variety));
           // 壁に接する辺に、影の帯を壁側へ寄せて敷く
           for (const side of SHADOW_SIDES) {
             if (!seenWall(x + side.dx, z + side.dz)) continue;
@@ -343,8 +394,38 @@ export class DungeonView3D {
     for (const [mesh, count] of counts) {
       mesh.count = count;
       mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
+  }
+
+  /**
+   * 床と壁の明るさを毎フレーム決める。見えているマスは、主人公（動いている途中の位置）から離れるほど
+   * なめらかに暗く、見えていないマスは REMEMBERED。マスの明るさは、目標の明るさへ少しずつ近づける
+   */
+  private updateLight(at: Pos, dt: number) {
+    const radius = EXPLORE_CONFIG.sightRadius + 0.5;
+    const step = this.reduceMotion ? 1 : Math.min(1, dt * SIGHT_LIGHT.fade);
+    const c = new THREE.Color();
+    const touched = new Set<THREE.InstancedMesh>();
+    const done = new Set<number>(); // 同じマスの明るさを1フレームに2回進めない
+    for (const t of this.fogTiles) {
+      let light = this.brightness.get(t.tile);
+      if (!done.has(t.tile)) {
+        let target = REMEMBERED;
+        if (this.fogVisible.has(t.tile)) {
+          const d = Math.min(1, Math.hypot(t.x - at.x, t.z - at.y) / radius);
+          const smooth = d * d * (3 - 2 * d); // なめらかに変わる曲線（smoothstep）
+          target = 1 - (1 - SIGHT_LIGHT.edge) * smooth;
+        }
+        // 初めて見えたマスは暗いところから明るくする
+        light = light === undefined ? (this.reduceMotion ? target : 0) : light;
+        light += (target - light) * step;
+        this.brightness.set(t.tile, light);
+        done.add(t.tile);
+      }
+      t.mesh.setColorAt(t.slot, c.copy(t.base).multiplyScalar(light!));
+      touched.add(t.mesh);
+    }
+    for (const mesh of touched) if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }
 
   /**

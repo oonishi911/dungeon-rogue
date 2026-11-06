@@ -93,7 +93,8 @@ describe('プレイヤーの攻撃', () => {
   });
 
   it('気付いていない敵への攻撃は不意打ちになり、ダメージが増える', () => {
-    const s0 = arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 })]);
+    // 1発で倒れないよう、HPの多い敵にする
+    const s0 = arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { hp: 99 })]);
     const s = act(s0, { kind: 'move', dir: 'right' });
     const normal = playerHitDamage(s0.stats, enemyDef(s0.enemies[0]!));
     expect(s0.enemies[0]!.hp - s.enemies[0]!.hp).toBe(normal * ENEMY_CONFIG.surpriseMultiplier);
