@@ -92,6 +92,22 @@ describe('プレイヤーの攻撃', () => {
     expect(s.enemies[0]!.hp).toBe(enemyDef({ id: 'goblin', elite: false }).hp - playerHitDamage(s.stats, enemyDef(s.enemies[0]!)));
   });
 
+  it('与えたダメージは、敵のいたマスと量を hits に記録する（画面に数字を出すため）', () => {
+    const s0 = arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { mode: 'chase', hp: 99 })]);
+    const s = act(s0, { kind: 'move', dir: 'right' });
+    const dealt = s.hits.filter((h) => h.kind === 'dealt');
+    expect(dealt).toEqual([{ kind: 'dealt', at: { x: 2, y: 2 }, amount: 99 - s.enemies[0]!.hp }]);
+    // 追っている敵はそのまま反撃してくるので、受けたダメージも記録される
+    const taken = s.hits.filter((h) => h.kind === 'taken');
+    expect(taken.reduce((sum, h) => sum + h.amount, 0)).toBe(s0.stats.hp - s.stats.hp);
+  });
+
+  it('次の行動では hits は空からやり直す', () => {
+    const s0 = arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 6, y: 2 }, { hp: 99 })]);
+    const s = act(s0, { kind: 'move', dir: 'right' }, { kind: 'wait' });
+    expect(s.hits).toEqual([]);
+  });
+
   it('気付いていない敵への攻撃は不意打ちになり、ダメージが増える', () => {
     // 1発で倒れないよう、HPの多い敵にする
     const s0 = arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { hp: 99 })]);
