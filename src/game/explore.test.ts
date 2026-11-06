@@ -58,11 +58,12 @@ describe('startExplore', () => {
     expect(startExplore(5)).toEqual(startExplore(5));
   });
 
-  it('最初は周りしか見えていない', () => {
+  it('最初は周りしか見えていない（入口から視界の半径以内だけ）', () => {
     const s = startExplore(2);
-    const seen = s.seen.filter(Boolean).length;
-    expect(seen).toBeGreaterThan(0);
-    expect(seen).toBeLessThan(s.seen.length / 4);
+    const r = EXPLORE_CONFIG.sightRadius;
+    const seen = s.seen.flatMap((v, i) => (v ? [{ x: i % s.map.width, y: Math.floor(i / s.map.width) }] : []));
+    expect(seen.length).toBeGreaterThan(0);
+    for (const p of seen) expect((p.x - s.player.x) ** 2 + (p.y - s.player.y) ** 2).toBeLessThanOrEqual(r * r);
   });
 });
 
