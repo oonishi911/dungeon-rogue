@@ -41,7 +41,7 @@ export class Hero3D {
       tunic: lambert(PALETTE.t!),
       belt: lambert(PALETTE.b!),
       boots: lambert(PALETTE.B!),
-      eyes: new THREE.MeshBasicMaterial({ color: PALETTE.k! }),
+      eyes: lambert(PALETTE.k!),
       shadow: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
       hit: new THREE.MeshBasicMaterial({ visible: false }),
     };

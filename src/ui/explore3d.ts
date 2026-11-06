@@ -133,9 +133,12 @@ export class DungeonView3D {
   private readonly brightness = new Map<number, number>();
   private brightnessMap: unknown = null; // brightness がどの階のものか
   private fogVisible: Set<number> = new Set();
-  private readonly enemies = new Map<number, { body: THREE.Sprite; mark: THREE.Sprite; hp: THREE.Sprite; ring: THREE.Mesh | null }>();
+  private readonly enemies = new Map<number, { body: THREE.Mesh; mark: THREE.Sprite; hp: THREE.Sprite; ring: THREE.Mesh | null }>();
   private readonly textures = new Map<string, THREE.Texture>();
   private readonly materials = new Map<string, THREE.SpriteMaterial>();
+  private readonly litMaterials = new Map<string, THREE.MeshLambertMaterial>(); // たいまつで照らされるドット絵（敵）
+  // 敵のドット絵を立てる板。いつもカメラの方を向けるが、光の当たり方は足元の床と同じになるよう、面の向き（法線）を真上にしてある
+  private readonly billboard = litBillboard();
   // 階段・宝箱・目印は形も素材も決まっているので、最初に1回だけ作って使い回す
   private readonly shared = {
     hole: new THREE.PlaneGeometry(0.8, 0.8).rotateX(-Math.PI / 2),
@@ -146,11 +149,11 @@ export class DungeonView3D {
     ring: new THREE.RingGeometry(0.4, 0.48, 24).rotateX(-Math.PI / 2),
     targetRing: new THREE.RingGeometry(0.32, 0.42, 24).rotateX(-Math.PI / 2),
     holeMat: new THREE.MeshBasicMaterial({ color: 0x05080a }),
-    barMat: [1, REMEMBERED].map((k) => new THREE.MeshBasicMaterial({ color: new THREE.Color(0xece5d3).multiplyScalar(k) })),
+    barMat: [1, REMEMBERED].map((k) => new THREE.MeshLambertMaterial({ color: new THREE.Color(0xece5d3).multiplyScalar(k) })),
     chestMat: [1, REMEMBERED].map((k) => new THREE.MeshLambertMaterial({ color: new THREE.Color(0xe2c178).multiplyScalar(k) })),
     stepMat: [1, REMEMBERED].map((k) => new THREE.MeshLambertMaterial({ color: new THREE.Color(0xc9c3b3).multiplyScalar(k) })),
-    eliteMat: new THREE.MeshBasicMaterial({ color: 0xd9653b }),
-    bossMat: new THREE.MeshBasicMaterial({ color: 0xb48d35 }),
+    eliteMat: new THREE.MeshLambertMaterial({ color: 0xd9653b }),
+    bossMat: new THREE.MeshLambertMaterial({ color: 0xb48d35 }),
     targetMat: new THREE.MeshBasicMaterial({ color: 0x9cc46a }),
   };
   private readonly target: THREE.Mesh;
@@ -290,6 +293,7 @@ export class DungeonView3D {
       if (!view) continue;
       const at = lerp(frame.from.enemies.get(e.uid) ?? e.pos, e.pos, frame.progress);
       view.body.position.set(at.x, 0.5, at.y);
+      view.body.quaternion.copy(this.camera.quaternion); // カメラの方を向ける
       view.mark.position.set(at.x, 1.15, at.y);
       view.hp.position.set(at.x, 0.06, at.y);
       view.ring?.position.set(at.x, 0.02, at.y);
@@ -420,6 +424,8 @@ export class DungeonView3D {
     }
     for (const r of Object.values(this.shared)) for (const d of Array.isArray(r) ? r : [r]) d.dispose();
     for (const m of this.materials.values()) m.dispose();
+    for (const m of this.litMaterials.values()) m.dispose();
+    this.billboard.dispose();
     for (const t of this.textures.values()) t.dispose();
     this.renderer.dispose();
   }
@@ -621,6 +627,7 @@ export class DungeonView3D {
       this.shared.bars.forEach((geo, step) => {
         const bar = new THREE.Mesh(geo, this.shared.barMat[dim(map.stairs!)]);
         bar.position.set(map.stairs!.x, 0.02, map.stairs!.y - 0.25 + step * 0.22);
+        bar.receiveShadow = true;
         this.props.add(bar);
       });
     }
@@ -630,6 +637,7 @@ export class DungeonView3D {
       this.shared.upSteps.forEach((geo, step) => {
         const block = new THREE.Mesh(geo, this.shared.stepMat[dim(up)]);
         block.position.set(up.x, 0, up.y + 0.25 - step * 0.25);
+        block.receiveShadow = true;
         this.props.add(block);
       });
     }
@@ -637,6 +645,8 @@ export class DungeonView3D {
       if (!seen[chest.pos.y * map.width + chest.pos.x]) continue;
       const box = new THREE.Mesh(this.shared.chest, this.shared.chestMat[dim(chest.pos)]);
       box.position.set(chest.pos.x, 0.16, chest.pos.y);
+      box.castShadow = true;
+      box.receiveShadow = true;
       this.props.add(box);
     }
   }
@@ -672,7 +682,10 @@ export class DungeonView3D {
         const def = enemyDef(e);
         // 強敵は赤い輪、ボスは金の輪を足元に置く
         const ring = e.elite ? new THREE.Mesh(this.shared.ring, def.boss ? this.shared.bossMat : this.shared.eliteMat) : null;
-        view = { body: new THREE.Sprite(this.spriteMaterial(look.sprite, look.recolor ?? {})), mark: new THREE.Sprite(), hp: new THREE.Sprite(), ring };
+        const body = new THREE.Mesh(this.billboard, this.litSpriteMaterial(look.sprite, look.recolor ?? {}));
+        body.receiveShadow = true; // 壁の影に入れば暗くなる
+        if (ring) ring.receiveShadow = true;
+        view = { body, mark: new THREE.Sprite(), hp: new THREE.Sprite(), ring };
         this.scene.add(view.body, view.mark, view.hp);
         if (ring) this.scene.add(ring);
         this.enemies.set(e.uid, view);
@@ -694,16 +707,6 @@ export class DungeonView3D {
   }
 
   // ===== 素材 =====
-
-  /**
-   * ドット絵をテクスチャにする。ぼかさずに拡大する。
-   * alwaysOnTop にすると、手前の壁に隠れずに描く（主人公を見失わないため）
-   */
-  private spriteMaterial(id: SpriteId, colors: Record<string, string>, alwaysOnTop = false): THREE.SpriteMaterial {
-    const key = `sprite:${id}:${JSON.stringify(colors)}`;
-    const map = this.texture(key, 32, 32, (ctx) => drawSprite(ctx, id, 0, 0, 32, colors));
-    return this.material(`${key}:${alwaysOnTop}`, { map, alphaTest: 0.5, depthTest: !alwaysOnTop });
-  }
 
   /** 敵の頭上のマーク。壁の向こうでも隠れないよう、奥行きを無視して手前に描く */
   private textMaterial(text: string, color: string): THREE.SpriteMaterial {
@@ -731,6 +734,18 @@ export class DungeonView3D {
       ctx.fillRect(0, 0, tenths * 2, 2);
     });
     return this.material(key, { map, depthTest: false });
+  }
+
+  /** たいまつで照らされる敵のドット絵の素材。種類ごとに1回だけ作って使い回す */
+  private litSpriteMaterial(id: SpriteId, colors: Record<string, string>): THREE.MeshLambertMaterial {
+    const key = `sprite:${id}:${JSON.stringify(colors)}`;
+    let mat = this.litMaterials.get(key);
+    if (!mat) {
+      const map = this.texture(key, 32, 32, (ctx) => drawSprite(ctx, id, 0, 0, 32, colors));
+      mat = new THREE.MeshLambertMaterial({ map, alphaTest: 0.5, side: THREE.DoubleSide });
+      this.litMaterials.set(key, mat);
+    }
+    return mat;
   }
 
   /** 板の素材も、種類ごとに1回だけ作って使い回す */
@@ -769,5 +784,22 @@ function shadedBox(height: number): THREE.BoxGeometry {
   const colors: number[] = [];
   for (const k of shade) for (let v = 0; v < 4; v++) colors.push(k, k, k);
   geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  return geo;
+}
+
+/**
+ * 敵のドット絵を立てる板（1×1、中心が原点）。板はカメラの方へ向けて使うが、そのままだと面の向きがカメラを向くので、
+ * 主人公とカメラのあいだにいる敵は、たいまつの光を背中から受けて真っ暗になる。
+ * そこで面の向き（法線）を、カメラの方へ向けたときにちょうど真上になるようにしておき、足元の床と同じ当たり方にする
+ */
+function litBillboard(): THREE.PlaneGeometry {
+  const geo = new THREE.PlaneGeometry(1, 1);
+  const camera = new THREE.PerspectiveCamera();
+  camera.position.set(0, CAMERA.height, CAMERA.back);
+  camera.lookAt(0, 0, 0);
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion.clone().invert());
+  const normals = geo.getAttribute('normal') as THREE.BufferAttribute;
+  for (let i = 0; i < normals.count; i++) normals.setXYZ(i, up.x, up.y, up.z);
+  normals.needsUpdate = true;
   return geo;
 }
