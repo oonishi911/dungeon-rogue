@@ -54,6 +54,13 @@ export interface Chest {
   item: ItemId | null;
 }
 
+/** この行動で入ったダメージ。画面に数字を出すために使う（ルールには使わない） */
+export interface HitEvent {
+  kind: 'dealt' | 'taken'; // dealt：プレイヤーが敵に与えた / taken：プレイヤーが受けた
+  at: Pos; // ダメージを受けた側がいたマス
+  amount: number;
+}
+
 /** 一度離れた階の様子。戻ってきたら、倒した敵・開けた宝箱・晴れた霧はそのまま */
 export interface FloorMemory {
   map: FloorMap;
@@ -87,6 +94,7 @@ export interface ExploreState {
   outcome: ExploreOutcome;
   log: string[];
   visited: Record<number, FloorMemory>; // 一度離れた階（階の番号ごと）。今いる階は入らない
+  hits: HitEvent[]; // 直前の行動で入ったダメージ（行動のたびに空からやり直す）
 }
 
 export interface ExploreOptions {
@@ -143,6 +151,7 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     outcome: 'ongoing',
     log: [],
     visited: {},
+    hits: [],
   };
   return enterFloor(state, 0, state.map);
 }
@@ -150,6 +159,7 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
 /** 1行動進める。壁への移動など行動にならない操作はエラーを返し、ターンも満腹度も消費しない */
 export function step(state: ExploreState, action: ExploreAction): Result<ExploreState> {
   if (state.outcome !== 'ongoing') return err('探索は終わっています');
+  state = { ...state, hits: [] };
 
   let next: ExploreState;
   switch (action.kind) {
@@ -382,6 +392,7 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
   const dmg = playerHitDamage(state.stats, def) * (surprise ? ENEMY_CONFIG.surpriseMultiplier : 1);
   const hp = target.hp - dmg;
   const log = [...state.log, surprise ? `${def.name}に不意打ち！ ${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`];
+  state = { ...state, hits: [...state.hits, { kind: 'dealt', at: target.pos, amount: dmg }] };
 
   // 属性付与はダメージを計算したあとで1回減らし、0回になると消える
   let stats = state.stats;
@@ -505,6 +516,7 @@ function withEnemy(state: ExploreState, enemy: MapEnemy): ExploreState {
 function damagePlayer(state: ExploreState, dmg: number, message: string, by: string): ExploreState {
   const hp = Math.max(0, state.stats.hp - dmg);
   const log = [...state.log, `${message}で${dmg}のダメージ`];
+  state = { ...state, hits: [...state.hits, { kind: 'taken', at: state.player, amount: dmg }] };
   if (hp === 0) {
     return { ...state, stats: { ...state.stats, hp }, outcome: 'defeated', log: [...log, `${by}に倒された…`] };
   }

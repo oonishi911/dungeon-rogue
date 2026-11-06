@@ -178,14 +178,10 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       return false;
     }
     const next = result.value;
-    // 攻撃したとき・攻撃されたときは、画面を少し拡大縮小する（3D表示のみ）
-    if (next.map === prev.map) {
-      const attacked =
-        action.kind === 'move' &&
-        prev.enemies.some((e) => samePos(e.pos, { x: prev.player.x + DIR_DELTA[action.dir].x, y: prev.player.y + DIR_DELTA[action.dir].y }));
-      const hurt = next.stats.hp < prev.stats.hp && next.enemies.some((e) => Math.abs(e.pos.x - next.player.x) + Math.abs(e.pos.y - next.player.y) <= 1);
-      if (attacked) view3dRef.current?.hitPulse('attack');
-      if (hurt) view3dRef.current?.hitPulse('hurt');
+    // 攻撃したとき・攻撃されたときは、画面を少し拡大縮小し、ダメージの数字を出す（3D表示のみ）
+    for (const hit of next.hits) {
+      view3dRef.current?.hitPulse(hit.kind === 'dealt' ? 'attack' : 'hurt');
+      view3dRef.current?.popDamage(hit.at, hit.amount, hit.kind);
     }
     // 階を移ったときは動かさずに切り替える
     motionRef.current = { from: motionOf(next.map === prev.map ? prev : next), start: performance.now() };

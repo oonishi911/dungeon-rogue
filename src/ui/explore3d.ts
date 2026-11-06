@@ -33,6 +33,15 @@ const HIT_PULSE = {
   hurt: { zoom: 0.08, ms: 260 }, // 敵の攻撃：寄ったあと少し引いて戻る
 } as const;
 export type HitPulse = keyof typeof HIT_PULSE;
+// ダメージの数字：受けた側の頭の上に小さく出て、なめらかに大きくなりながら少し浮かび、透けて消える
+const DAMAGE_POP = {
+  ms: 900, // 出てから消えるまで
+  from: 0.35, // 出たときの大きさ（マス）
+  to: 0.8, // 消えるときの大きさ（マス）
+  height: 1.05, // 出る高さ（マス）
+  rise: 0.35, // 消えるまでに浮かぶ高さ（マス）
+  colors: { dealt: '#ece5d3', taken: '#e5624f' }, // 与えた：明るい生成り / 受けた：赤
+} as const;
 const REMEMBERED = 0.3; // 一度見たが今は見えていないマスの明るさ
 // 見える範囲の明るさ。主人公のそばは1で、視界の端へ向かってなめらかに edge まで暗くする。
 // マスの明るさは、見え始め・見えなくなるときに fade の速さ（1秒あたり）で少しずつ変える
@@ -103,6 +112,7 @@ export class DungeonView3D {
   private lastFrameAt = performance.now();
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private pulse: { kind: HitPulse; start: number } | null = null;
+  private readonly damagePops: { sprite: THREE.Sprite; start: number }[] = [];
   // 霧：描いている床と壁の1つ1つ（どの入れ物の何番目か・どのマスか・元の色）と、マスごとの今の明るさ
   private fogTiles: { mesh: THREE.InstancedMesh; slot: number; tile: number; x: number; z: number; base: THREE.Color }[] = [];
   private readonly brightness = new Map<number, number>();
@@ -229,6 +239,7 @@ export class DungeonView3D {
     }
     this.hero.update(p.x, p.y, this.heroDir, moved ? frame.progress : 1, dt, this.reduceMotion);
     this.updateLight(p, dt);
+    this.updateDamagePops(now);
     const zoom = this.pulseZoom(now);
     if (zoom !== this.camera.zoom) {
       this.camera.zoom = zoom;
@@ -257,6 +268,60 @@ export class DungeonView3D {
     // 敵の攻撃は、自分の攻撃より目立たせる（同時に起きたら敵の攻撃の効果にする）
     if (this.pulse?.kind === 'hurt' && kind === 'attack' && performance.now() - this.pulse.start < HIT_PULSE.hurt.ms) return;
     this.pulse = { kind, start: performance.now() };
+  }
+
+  /**
+   * ダメージの数字を出す。at は受けた側のマス、kind は与えた（dealt）か受けた（taken）か。
+   * 同じマスに続けて出るときは、少しずつ横にずらして重ならないようにする
+   */
+  popDamage(at: Pos, amount: number, kind: 'dealt' | 'taken') {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.font = '900 46px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = 'rgba(11, 20, 19, 0.9)';
+    ctx.strokeText(String(amount), 64, 34);
+    ctx.fillStyle = DAMAGE_POP.colors[kind];
+    ctx.fillText(String(amount), 64, 34);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false }));
+    sprite.renderOrder = 20; // 壁や敵より手前に出す
+    const now = performance.now();
+    const crowd = this.damagePops.filter((p) => p.sprite.userData.tile === `${at.x},${at.y}` && now - p.start < DAMAGE_POP.ms / 2).length;
+    sprite.userData = { tile: `${at.x},${at.y}`, x: at.x + crowd * 0.25, z: at.y };
+    this.scene.add(sprite);
+    this.damagePops.push({ sprite, start: now });
+    this.updateDamagePops(now);
+  }
+
+  /** ダメージの数字を動かし、消え終わったものを片付ける */
+  private updateDamagePops(now: number) {
+    for (let k = this.damagePops.length - 1; k >= 0; k--) {
+      const { sprite, start } = this.damagePops[k]!;
+      const t = Math.min(1, (now - start) / DAMAGE_POP.ms);
+      if (t >= 1) {
+        this.scene.remove(sprite);
+        sprite.material.map?.dispose();
+        sprite.material.dispose();
+        this.damagePops.splice(k, 1);
+        continue;
+      }
+      const grow = 1 - (1 - t) ** 3; // 出だしは速く、だんだんゆっくり大きくなる
+      const size = this.reduceMotion ? DAMAGE_POP.to * 0.75 : DAMAGE_POP.from + (DAMAGE_POP.to - DAMAGE_POP.from) * grow;
+      sprite.scale.set(size * 2, size, 1); // 字の画像は横長（2:1）
+      const { x, z } = sprite.userData as { x: number; z: number };
+      sprite.position.set(x, DAMAGE_POP.height + (this.reduceMotion ? 0 : DAMAGE_POP.rise * grow), z);
+      // はじめははっきり見せ、後半でなめらかに透けていく
+      const fade = t < 0.35 ? 1 : 1 - ((t - 0.35) / 0.65) ** 2;
+      sprite.material.opacity = Math.max(0, fade);
+    }
   }
 
   /** 今のカメラの倍率。効果のあいだだけ 1 からずれる */
@@ -305,6 +370,10 @@ export class DungeonView3D {
     (this.pathDots.material as THREE.Material).dispose();
     this.pathDots.dispose();
     this.hero.dispose();
+    for (const { sprite } of this.damagePops) {
+      sprite.material.map?.dispose();
+      sprite.material.dispose();
+    }
     for (const mesh of [...this.floors, this.walls, this.fadedWalls, this.wallShadows]) {
       for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) mat.dispose();
       mesh.dispose();
