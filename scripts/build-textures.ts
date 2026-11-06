@@ -5,7 +5,7 @@
 //
 // 模様は、端でつながる（タイルとして並べても継ぎ目が出ない）ノイズを重ねて作る。
 // 乱数は使わず、位置から決まる値を使うので、作り直しても同じ絵になる。
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { PALETTES, PixelImage, type Palette, type RGB } from './pixels';
 
 const SIZE = 128;
@@ -152,7 +152,13 @@ function wallSideTexture(p: Palette): PixelImage {
 // ===== 書き出し =====
 
 const root = new URL('../public/textures/', import.meta.url);
+const sources = new URL('../assets/texture-sources/', import.meta.url);
 for (const [trait, palette] of Object.entries(PALETTES)) {
+  // 元の画像から作った特性（scripts/build-photo-textures.py）は、仮の素材で上書きしない
+  if (['jpg', 'png'].some((ext) => existsSync(new URL(`${trait}.${ext}`, sources)))) {
+    console.log(`skip public/textures/${trait}/ (assets/texture-sources/ の画像から作っている)`);
+    continue;
+  }
   const dir = new URL(`${trait}/`, root);
   mkdirSync(dir, { recursive: true });
   const files: [string, PixelImage][] = [
