@@ -297,7 +297,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
         } else if (held) {
           perform({ kind: 'move', dir: held });
         } else if (stickRef.current) {
-          // 斜めに倒しているときは、壁でない方へ進む（両方進めるなら上下を優先する）
+          // 斜めに倒しているときは、指の向きに近い方へ進み、そちらが壁ならもう一方へ進む
           const s = stateRef.current;
           const dir = chooseDirection(stickRef.current, (d) => {
             const to = { x: s.player.x + DIR_DELTA[d].x, y: s.player.y + DIR_DELTA[d].y };

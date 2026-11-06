@@ -6,13 +6,15 @@ export const STICK = {
   radius: 56, // スティックの土台の半径（px）。つまみはこれより外へは出ない
   deadzone: 0.25, // 中心からこの割合（半径に対して）より内側では歩かない
   dragStart: 12, // 指がこれ（px）より動いたらスティック、動かずに離したらタップとして扱う
-  // 斜めとみなす範囲。小さいほうのずれが大きいほうのこの割合以上なら斜め（上下左右から30度より外れたら斜め）
-  diagonal: Math.tan(Math.PI / 6),
+  // 斜めとみなす範囲。小さいほうのずれが大きいほうのこの割合以上なら斜め
+  // （斜め45度の線から±22.5度。たとえば右上なら、右から22.5〜67.5度）
+  diagonal: Math.tan(Math.PI / 8),
 } as const;
 
 /**
  * 指を置いた点からのずれ（画面の y は下向き）で、進みたい向きの候補を決める。中心付近なら null。
- * まっすぐなら候補は1つ。斜めなら上下と左右の2つで、上下を先にする（両方進めるときは上下を優先する）
+ * まっすぐなら候補は1つ。斜めなら上下と左右の2つで、指の向きに近い方を先にする
+ * （近い方に進めなければ、もう一方へ進む）。ちょうど45度なら上下を先にする
  */
 export function stickDirections(dx: number, dy: number, radius: number = STICK.radius): Dir[] | null {
   if (Math.hypot(dx, dy) < radius * STICK.deadzone) return null;
@@ -20,8 +22,9 @@ export function stickDirections(dx: number, dy: number, radius: number = STICK.r
   const horizontal: Dir = dx > 0 ? 'right' : 'left';
   const ax = Math.abs(dx);
   const ay = Math.abs(dy);
-  if (Math.min(ax, ay) >= Math.max(ax, ay) * STICK.diagonal) return [vertical, horizontal];
-  return [ax > ay ? horizontal : vertical];
+  const nearer = ax > ay ? horizontal : vertical;
+  if (Math.min(ax, ay) >= Math.max(ax, ay) * STICK.diagonal) return [nearer, nearer === vertical ? horizontal : vertical];
+  return [nearer];
 }
 
 /** 候補のうち、進めるいちばん最初の向き。どれも進めなければ最初の候補（壁なら「進めない」と知らせるため） */
