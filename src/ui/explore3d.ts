@@ -97,7 +97,11 @@ const CHEST = { width: 0.56, height: 0.3, depth: 0.38 };
  * height は画面での高さ（マス）、aspect は絵の横:縦、footX は足元（マスの中心に置く位置）が絵の左から何割のところか
  */
 const ENEMY_PHOTOS: Partial<Record<EnemyId, { file: string; height: number; aspect: number; footX: number }>> = {
-  ogre_chief: { file: 'ogre_chief.png', height: 1.25, aspect: 1.477, footX: 0.72 }, // 金棒を左に大きく構えている
+  // 無属性のダンジョン。ボスは少し大きく、ネズミは低く描く
+  goblin: { file: 'goblin.png', height: 1.0, aspect: 1.445, footX: 0.61 }, // 棍棒を左に構えている
+  giant_rat: { file: 'giant_rat.png', height: 0.8, aspect: 1.081, footX: 0.45 },
+  stone_golem: { file: 'stone_golem.png', height: 1.15, aspect: 0.977, footX: 0.47 },
+  ogre_chief: { file: 'ogre_chief.png', height: 1.3, aspect: 1.396, footX: 0.65 }, // 金棒を左に構えている
 };
 const TEXTURE_SPAN = 4; // 床と壁の絵1枚が何マス分にまたがるか（scripts/build-textures.ts・build-photo-textures.py と合わせる）
 const FLOOR_KINDS = 4; // テクスチャがないとき、床を何通りの明るさで描き分けるか
