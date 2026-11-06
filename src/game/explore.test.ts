@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { enemyDef } from './enemies';
 import {
+  canSee,
   dirBetween,
   EXPLORE_CONFIG,
   isBossFloor,
@@ -197,10 +198,15 @@ describe('visibleTiles', () => {
   };
   const i = (x: number, y: number) => y * 7 + x;
 
-  it('壁そのものは見えるが、壁の向こうは見えない', () => {
+  it('半径以内なら、壁の向こうも見える（主人公の視界は壁にさえぎられない）', () => {
     const v = visibleTiles(map, { x: 1, y: 1 }, 6);
     expect(v.has(i(3, 1))).toBe(true);
-    expect(v.has(i(5, 1))).toBe(false);
+    expect(v.has(i(5, 1))).toBe(true);
+  });
+
+  it('敵の視界（canSee）は、今までどおり壁にさえぎられる', () => {
+    expect(canSee(map, { x: 1, y: 1 }, { x: 5, y: 1 }, 6)).toBe(false);
+    expect(canSee(map, { x: 1, y: 4 }, { x: 5, y: 4 }, 6)).toBe(true);
   });
 
   it('視界の半径より遠くは見えない', () => {

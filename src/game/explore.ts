@@ -587,16 +587,18 @@ function reveal(state: ExploreState): ExploreState {
 }
 
 /**
- * from から半径 radius 以内で見えるマスの番号。
- * 間に壁がなければ見える（見えた壁そのものも含む）。直線はブレゼンハムのアルゴリズムでたどる。
+ * 主人公の視界：from から半径 radius 以内のマスの番号。壁にさえぎられず、壁の向こうや曲がり角の先も見える。
+ * 敵の視界は canSee で、こちらは今までどおり壁にさえぎられる。
  */
 export function visibleTiles(map: FloorMap, from: Pos, radius: number): Set<number> {
   const result = new Set<number>();
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
-      const target = { x: from.x + dx, y: from.y + dy };
-      if (target.x < 0 || target.y < 0 || target.x >= map.width || target.y >= map.height) continue;
-      if (canSee(map, from, target, radius)) result.add(target.y * map.width + target.x);
+      const x = from.x + dx;
+      const y = from.y + dy;
+      if (x < 0 || y < 0 || x >= map.width || y >= map.height) continue;
+      // 主人公の視界は壁にさえぎられない（壁の向こう・曲がり角の先も、半径以内ならすべて見える）
+      if (dx * dx + dy * dy <= radius * radius) result.add(y * map.width + x);
     }
   }
   return result;
