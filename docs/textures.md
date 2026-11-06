@@ -70,6 +70,25 @@ python3 scripts/build-chest-textures.py
 - 写真の中の面を、斜めから見た形をまっすぐに直して切り出す（切り出す四隅はスクリプトの `QUADS`）
 - 読み込めなかったときは、金色で描く
 
+## 敵の写真（`public/textures/enemies/`）
+
+写真（AIで作った画像など）から作った敵の絵。ある敵はドット絵の代わりにこの絵で描き、ない敵はドット絵のまま。
+
+```bash
+pip install pillow numpy opencv-python-headless
+python3 scripts/build-enemy-textures.py            # すべて作る
+python3 scripts/build-enemy-textures.py ogre_chief # 1体だけ作る
+```
+
+| 敵 | 元の画像 | 画像 | 画面での高さ |
+|---|---|---|---|
+| 鬼の首領（`ogre_chief`） | `assets/texture-sources/enemies/ogre_chief.jpg` | `ogre_chief.png`（567×384px） | 1.25マス |
+
+- 元の画像は `assets/texture-sources/enemies/{敵のID}.jpg` に置く。背景はスクリプトが OpenCV の GrabCut で切り抜く。写真ごとに、敵がいる範囲・大まかな形・確実に敵の一部である線を、スクリプトの `SUBJECTS` に書いておく
+- 背景を透明にしたPNG（高さ384px）。写真の下の端で体が切れているときは、下の端をなめらかに透明にして、足元が闇に溶けて見えるようにする
+- 画面ではドット絵と同じく、カメラの方を向けた板に貼り、たいまつの光と霧をかける。絵の大きさと、足元（マスの中心に置く位置）は `src/ui/explore3d.ts` の `ENEMY_PHOTOS` で決める
+- 新しい敵を足すときは、`SUBJECTS` と `ENEMY_PHOTOS` の両方に書き足す
+
 ## 画像から作る（`scripts/build-photo-textures.py`）
 
 端どうしがつながる（並べても継ぎ目が出ない）正方形の画像1枚から、3枚をまとめて作る。
