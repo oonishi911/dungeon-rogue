@@ -72,6 +72,18 @@ export const TEXTURE_FILES = {
   wallTop: 'wall-top.png',
   wallSide: 'wall-side.png',
 } as const;
+// たいまつの光と影。環境光と上からの光を弱くして、たいまつの光が見える範囲を決めるようにする。
+// 影の地図（シャドウマップ）は6方向から描くので重い。たいまつが動いたときと、壁が入れ替わったときだけ描き直す
+const TORCH = {
+  intensity: 10,
+  distance: 9, // 光が届く距離（マス）。視界の半径6より少し遠くまで
+  decay: 1,
+  height: 0.85, // 手に持った高さ（壁の上面1より低い）
+  forward: 0.3, // 主人公より少し手前（カメラ側）に掲げる。主人公の体の中に光があると、体が照らされず暗くなるため
+  shadowMapSize: 512,
+};
+const AMBIENT = 0.3; // 全体を均等に照らす弱い光。光の届かない場所や、一度見ただけのマスがかろうじて見える明るさ
+const SUN = 0.25; // 上からの弱い光。壁の側面に陰をつける
 const MAX_ANISOTROPY = 8; // 斜めから見た床がぼけないようにする強さの上限（スマホで重くなりすぎないように）
 
 interface Atlas {
@@ -93,7 +105,11 @@ export class DungeonView3D {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;
-  private readonly torch = new THREE.PointLight(0xffd9a0, 6, 8, 1.2);
+  // たいまつ：主人公の手元の高さの光。壁の上面より低いので、壁にさえぎられて影ができる（曲がり角の先や、
+  // 入口から部屋の奥は暗いまま）。見える範囲の明るさは、ほぼこの光で決まる
+  private readonly torch = new THREE.PointLight(0xffd9a0, TORCH.intensity, TORCH.distance, TORCH.decay);
+  private torchAt = new THREE.Vector3(Number.NaN, 0, 0); // 影を最後に描いたときの、たいまつの位置
+  private readonly shadows = new URLSearchParams(location.search).get('shadow') !== 'off'; // ?shadow=off で影を切って比べられる
   private readonly raycaster = new THREE.Raycaster();
   private readonly ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
@@ -145,11 +161,22 @@ export class DungeonView3D {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(canvas.width, canvas.height, false);
+    if (this.shadows) {
+      this.renderer.shadowMap.enabled = true;
+      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 影の縁を少しぼかす
+      this.renderer.shadowMap.autoUpdate = false; // 描き直すときを自分で決める（render の中）
+      this.torch.castShadow = true;
+      this.torch.shadow.mapSize.set(TORCH.shadowMapSize, TORCH.shadowMapSize);
+      this.torch.shadow.camera.near = 0.1;
+      this.torch.shadow.camera.far = TORCH.distance;
+      this.torch.shadow.bias = -0.002;
+      this.torch.shadow.normalBias = 0.02;
+    }
     this.scene.background = new THREE.Color(BACKGROUND);
 
     this.camera = new THREE.PerspectiveCamera(40, canvas.width / canvas.height, 0.1, 100); // 視野は resize で決め直す
-    this.scene.add(new THREE.AmbientLight(0xffffff, 1.1));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.2); // 壁の側面に陰をつける
+    this.scene.add(new THREE.AmbientLight(0xffffff, AMBIENT));
+    const sun = new THREE.DirectionalLight(0xffffff, SUN); // 壁の側面に陰をつける
     sun.position.set(-3, 10, 4);
     this.scene.add(sun, this.torch, this.props);
 
@@ -167,6 +194,12 @@ export class DungeonView3D {
     const [solid, faded] = this.wallMaterials.map(({ top, side }) => [side, side, top, side, side, side]);
     this.walls = new THREE.InstancedMesh(wallGeo, solid!, DRAW_CAPACITY);
     this.fadedWalls = new THREE.InstancedMesh(wallGeo, faded!, DRAW_CAPACITY);
+    // 壁は光をさえぎって影を落とし、床と壁は影を受ける（半透明にした手前の壁も、光はさえぎる）
+    for (const wall of [this.walls, this.fadedWalls]) {
+      wall.castShadow = true;
+      wall.receiveShadow = true;
+    }
+    for (const floor of this.floors) floor.receiveShadow = true;
     // 壁の根元の影。帯の上側（北）が暗く、下側へ向かって消えていく。向きはインスタンスごとに回す
     const shadowGeo = new THREE.PlaneGeometry(1, WALL_SHADOW.depth).rotateX(-Math.PI / 2);
     const shadowMat = new THREE.MeshBasicMaterial({
@@ -244,7 +277,12 @@ export class DungeonView3D {
       this.camera.zoom = zoom;
       this.camera.updateProjectionMatrix();
     }
-    this.torch.position.set(p.x, 1.6, p.y);
+    this.torch.position.set(p.x, TORCH.height, p.y + TORCH.forward);
+    // たいまつが動いたときだけ影を描き直す（壁が入れ替わったときは updateFog で描き直しを頼む）
+    if (this.shadows && !this.torch.position.equals(this.torchAt)) {
+      this.torchAt.copy(this.torch.position);
+      this.renderer.shadowMap.needsUpdate = true;
+    }
     this.camera.position.set(p.x, CAMERA.height, p.y + CAMERA.back);
     this.camera.lookAt(p.x, 0, p.y);
     for (const e of s.enemies) {
@@ -463,6 +501,7 @@ export class DungeonView3D {
       mesh.count = count;
       mesh.instanceMatrix.needsUpdate = true;
     }
+    if (this.shadows) this.renderer.shadowMap.needsUpdate = true; // 壁の並びが変わったので影も描き直す
   }
 
   /**
