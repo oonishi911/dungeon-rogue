@@ -90,6 +90,8 @@ const TORCH = {
 const AMBIENT = 0.3; // 全体を均等に照らす弱い光。光の届かない場所や、一度見ただけのマスがかろうじて見える明るさ
 const SUN = 0.25; // 上からの弱い光。壁の側面に陰をつける
 const MAX_ANISOTROPY = 8; // 斜めから見た床がぼけないようにする強さの上限（スマホで重くなりすぎないように）
+// 宝箱の大きさ（マス）。ふたは奥行きを直径とするかまぼこ形で、本体の上に載る（いちばん上は高さ + 奥行き/2）
+const CHEST = { width: 0.56, height: 0.3, depth: 0.38 };
 const TEXTURE_SPAN = 4; // 床と壁の絵1枚が何マス分にまたがるか（scripts/build-textures.ts・build-photo-textures.py と合わせる）
 const FLOOR_KINDS = 4; // テクスチャがないとき、床を何通りの明るさで描き分けるか
 
@@ -148,14 +150,21 @@ export class DungeonView3D {
   private readonly shared = {
     hole: new THREE.PlaneGeometry(0.8, 0.8).rotateX(-Math.PI / 2),
     bars: [0, 1, 2].map((step) => new THREE.PlaneGeometry(0.7 - step * 0.15, 0.08).rotateX(-Math.PI / 2)),
-    chest: new THREE.BoxGeometry(0.5, 0.32, 0.38),
+    // 宝箱：箱の本体と、かまぼこ形のふた（写真の宝箱の形）。正面は +z（画面の手前）
+    chestBody: new THREE.BoxGeometry(CHEST.width, CHEST.height, CHEST.depth).translate(0, CHEST.height / 2, 0),
+    chestLid: new THREE.CylinderGeometry(CHEST.depth / 2, CHEST.depth / 2, CHEST.width, 16, 1, false, 0, Math.PI)
+      .rotateZ(Math.PI / 2) // 円柱の軸を左右（x）に向け、半分の丸みが上に来るようにする
+      .translate(0, CHEST.height, 0),
     // 上り階段：奥（上の画面側）へ向かって高くなる3段の石段
     upSteps: [0, 1, 2].map((step) => new THREE.BoxGeometry(0.7, 0.07 * (step + 1), 0.24).translate(0, 0.035 * (step + 1), 0)),
     ring: new THREE.RingGeometry(0.4, 0.48, 24).rotateX(-Math.PI / 2),
     targetRing: new THREE.RingGeometry(0.32, 0.42, 24).rotateX(-Math.PI / 2),
     holeMat: new THREE.MeshBasicMaterial({ color: 0x05080a }),
     barMat: new THREE.MeshLambertMaterial({ color: 0xece5d3 }),
-    chestMat: new THREE.MeshLambertMaterial({ color: 0xe2c178 }),
+    // 宝箱の素材。テクスチャ（public/textures/chest/）を読み込むまでは金色で描く
+    chestFront: new THREE.MeshLambertMaterial({ color: 0xe2c178 }),
+    chestSide: new THREE.MeshLambertMaterial({ color: 0xe2c178 }),
+    chestLidMat: new THREE.MeshLambertMaterial({ color: 0xe2c178 }),
     stepMat: new THREE.MeshLambertMaterial({ color: 0xc9c3b3 }),
     eliteMat: new THREE.MeshLambertMaterial({ color: 0xd9653b }),
     bossMat: new THREE.MeshLambertMaterial({ color: 0xb48d35 }),
@@ -229,8 +238,9 @@ export class DungeonView3D {
     // 影の帯は黒の半透明なので、霧の外では濃さを消す（まだ見ていない場所との境目で、背景より黒くならないように）
     this.wallShadows = new THREE.InstancedMesh(shadowGeo, applyFog(shadowMat, this.fog, 'fade-alpha'), DRAW_CAPACITY * SHADOW_SIDES.length);
     // 階段・宝箱・強敵の足元の輪も、床や壁と同じ霧をかける
-    const { holeMat, barMat, chestMat, stepMat, eliteMat, bossMat } = this.shared;
-    for (const mat of [holeMat, barMat, chestMat, stepMat, eliteMat, bossMat]) applyFog(mat, this.fog);
+    const { holeMat, barMat, chestFront, chestSide, chestLidMat, stepMat, eliteMat, bossMat } = this.shared;
+    for (const mat of [holeMat, barMat, chestFront, chestSide, chestLidMat, stepMat, eliteMat, bossMat]) applyFog(mat, this.fog);
+    this.loadChestTextures();
     for (const mesh of [...this.floors, this.walls, this.fadedWalls, this.wallShadows]) {
       // 中身を毎回入れ替えるので、最初の中身で計算された範囲で画面外と判定されないようにする
       mesh.frustumCulled = false;
@@ -434,6 +444,7 @@ export class DungeonView3D {
     for (const atlas of this.atlases.values()) {
       for (const t of atlas ? [atlas.floor, atlas.top, atlas.side] : []) t.dispose();
     }
+    for (const m of [this.shared.chestFront, this.shared.chestSide, this.shared.chestLidMat]) m.map?.dispose();
     for (const r of Object.values(this.shared)) for (const d of Array.isArray(r) ? r : [r]) d.dispose();
     for (const m of this.materials.values()) m.dispose();
     for (const m of this.litMaterials.values()) m.dispose();
@@ -538,6 +549,31 @@ export class DungeonView3D {
     return result;
   }
 
+  /** 宝箱のテクスチャ（どのダンジョンでも共通）。読み込めたら金色をやめてテクスチャで描く。読み込めなければ金色のまま */
+  private loadChestTextures() {
+    const loader = new THREE.TextureLoader();
+    const dir = `${import.meta.env.BASE_URL}textures/chest/`;
+    const { chestFront, chestSide, chestLidMat } = this.shared;
+    const parts: [string, THREE.MeshLambertMaterial][] = [
+      ['front.png', chestFront],
+      ['side.png', chestSide],
+      ['lid.png', chestLidMat],
+    ];
+    Promise.all(parts.map(([file]) => loader.loadAsync(dir + file)))
+      .then((textures) => {
+        textures.forEach((t, k) => {
+          const mat = parts[k]![1];
+          t.colorSpace = THREE.SRGBColorSpace;
+          t.anisotropy = Math.min(MAX_ANISOTROPY, this.renderer.capabilities.getMaxAnisotropy());
+          mat.map = t;
+          mat.color.set(0xffffff);
+          mat.needsUpdate = true;
+        });
+        this.shownState = null; // 次のフレームで描き直す
+      })
+      .catch(() => undefined);
+  }
+
   /** ダンジョン特性のテクスチャ。まだ読み込んでいなければ読み込みを始めて null を返す */
   private atlasFor(trait: TraitId): Atlas | null {
     if (!this.atlases.has(trait)) {
@@ -618,11 +654,16 @@ export class DungeonView3D {
     }
     for (const chest of chests) {
       if (!seen[chest.pos.y * map.width + chest.pos.x]) continue;
-      const box = new THREE.Mesh(this.shared.chest, this.shared.chestMat);
-      box.position.set(chest.pos.x, 0.16, chest.pos.y);
-      box.castShadow = true;
-      box.receiveShadow = true;
-      this.props.add(box);
+      const { chestBody, chestLid, chestFront, chestSide } = this.shared;
+      // 本体の面の順番は +x, -x, +y（上）, -y（下）, +z（正面）, -z（背面）。ふたは曲面・両端の順
+      const body = new THREE.Mesh(chestBody, [chestSide, chestSide, chestSide, chestSide, chestFront, chestFront]);
+      const lid = new THREE.Mesh(chestLid, [this.shared.chestLidMat, chestSide, chestSide]);
+      for (const part of [body, lid]) {
+        part.position.set(chest.pos.x, 0, chest.pos.y);
+        part.castShadow = true;
+        part.receiveShadow = true;
+        this.props.add(part);
+      }
     }
   }
 
