@@ -65,12 +65,11 @@ const PATH_CAPACITY = 256; // 歩く道筋の点を、いくつまで描くか
 
 /**
  * テクスチャの画像（public/textures/{特性}/ の中）。なめらかな質感の絵。詳しくは docs/textures.md。
- * 床は1枚1マスで、4種類をマスの位置で使い分ける。
- * 壁は、1枚の絵を何マスにもまたがって貼る（上面は WALL_TEXTURE_SPAN×WALL_TEXTURE_SPAN マス、側面は横 WALL_TEXTURE_SPAN マス×高さ1）。
- * マスごとに絵のどこを使うかはダンジョンの中の位置で決めるので、隣り合う壁の模様がつながり、マスの境目が見えない
+ * 床も壁も、1枚の絵を何マスにもまたがって貼る（床と壁の上面は TEXTURE_SPAN×TEXTURE_SPAN マス、壁の側面は横 TEXTURE_SPAN マス×高さ1）。
+ * マスごとに絵のどこを使うかはダンジョンの中の位置で決めるので、隣り合うマスの模様がつながり、マスの境目が見えない
  */
 export const TEXTURE_FILES = {
-  floors: ['floor1.png', 'floor2.png', 'floor3.png', 'floor4.png'],
+  floor: 'floor.png',
   wallTop: 'wall-top.png',
   wallSide: 'wall-side.png',
 } as const;
@@ -90,10 +89,11 @@ const TORCH = {
 const AMBIENT = 0.3; // 全体を均等に照らす弱い光。光の届かない場所や、一度見ただけのマスがかろうじて見える明るさ
 const SUN = 0.25; // 上からの弱い光。壁の側面に陰をつける
 const MAX_ANISOTROPY = 8; // 斜めから見た床がぼけないようにする強さの上限（スマホで重くなりすぎないように）
-const WALL_TEXTURE_SPAN = 4; // 壁の絵1枚が何マス分にまたがるか（scripts/build-textures.ts・build-photo-textures.py と合わせる）
+const TEXTURE_SPAN = 4; // 床と壁の絵1枚が何マス分にまたがるか（scripts/build-textures.ts・build-photo-textures.py と合わせる）
+const FLOOR_KINDS = 4; // テクスチャがないとき、床を何通りの明るさで描き分けるか
 
 interface Atlas {
-  floors: THREE.Texture[];
+  floor: THREE.Texture;
   top: THREE.Texture;
   side: THREE.Texture;
 }
@@ -190,14 +190,17 @@ export class DungeonView3D {
     this.scene.add(sun, this.torch, this.props);
 
     // 床と壁は、描く範囲のマス数ぶんの入れ物を最初に用意しておき、1歩ごとに中身を入れ替える。
-    // 床は模様ごとにテクスチャが違うので、模様の数だけ入れ物を分ける
+    // 床はテクスチャがないときに明るさを少し変えて描き分けるので、FLOOR_KINDS 種類の入れ物に分ける（テクスチャは共通）
     const floorGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
-    this.floors = TEXTURE_FILES.floors.map(() => new THREE.InstancedMesh(floorGeo, new THREE.MeshLambertMaterial(), DRAW_CAPACITY));
+    this.floors = Array.from(
+      { length: FLOOR_KINDS },
+      () => new THREE.InstancedMesh(floorGeo, worldMapped(new THREE.MeshLambertMaterial(), 'floor'), DRAW_CAPACITY),
+    );
     // 壁は面ごとに素材を分ける。箱の面の順番は +x, -x, +y（上）, -y（下）, +z, -z。
     // 敵などを隠してしまう手前の壁は、半透明の素材で別に描く
     this.wallMaterials = [{}, { transparent: true, opacity: FADED_WALL_OPACITY, depthWrite: false }].map((extra) => ({
-      top: worldMappedWall(new THREE.MeshLambertMaterial({ vertexColors: true, ...extra }), 'top'),
-      side: worldMappedWall(new THREE.MeshLambertMaterial({ vertexColors: true, ...extra }), 'side'),
+      top: worldMapped(new THREE.MeshLambertMaterial({ vertexColors: true, ...extra }), 'top'),
+      side: worldMapped(new THREE.MeshLambertMaterial({ vertexColors: true, ...extra }), 'side'),
     }));
     const wallGeo = shadedBox(WALL_HEIGHT);
     const [solid, faded] = this.wallMaterials.map(({ top, side }) => [side, side, top, side, side, side]);
@@ -426,7 +429,7 @@ export class DungeonView3D {
       mesh.dispose();
     }
     for (const atlas of this.atlases.values()) {
-      for (const t of atlas ? [...atlas.floors, atlas.top, atlas.side] : []) t.dispose();
+      for (const t of atlas ? [atlas.floor, atlas.top, atlas.side] : []) t.dispose();
     }
     for (const r of Object.values(this.shared)) for (const d of Array.isArray(r) ? r : [r]) d.dispose();
     for (const m of this.materials.values()) m.dispose();
@@ -489,8 +492,8 @@ export class DungeonView3D {
             remember(this.walls, walls++, i, x, z, wallBase);
           }
         } else {
-          // 床の模様はマスの位置で決める（2D表示と同じ決め方）。色だけで描くときは明るさを少し変える
-          const k = floorVariant(x, z);
+          // テクスチャがないときは、マスの位置で明るさを少し変えて描き分ける（2D表示と同じ決め方）
+          const k = floorVariant(x, z) % FLOOR_KINDS;
           const variety = atlas ? 1 : 0.9 + k * 0.05;
           this.floors[k]!.setMatrixAt(floorCounts[k]!, m.makeTranslation(x, 0, z));
           remember(this.floors[k]!, floorCounts[k]!++, i, x, z, c.copy(floorBase).multiplyScalar(variety));
@@ -575,9 +578,9 @@ export class DungeonView3D {
       const loader = new THREE.TextureLoader();
       const dir = `${import.meta.env.BASE_URL}textures/${trait}/`;
       const load = (file: string) => loader.loadAsync(dir + file).then((t) => this.smoothTexture(t));
-      Promise.all([Promise.all(TEXTURE_FILES.floors.map((f) => load(f))), load(TEXTURE_FILES.wallTop), load(TEXTURE_FILES.wallSide)])
-        .then(([floors, top, side]) => {
-          this.atlases.set(trait, { floors, top, side });
+      Promise.all([load(TEXTURE_FILES.floor), load(TEXTURE_FILES.wallTop), load(TEXTURE_FILES.wallSide)])
+        .then(([floor, top, side]) => {
+          this.atlases.set(trait, { floor, top, side });
           this.shownState = null; // 次のフレームで描き直す
         })
         // 1枚でも読み込めなかったときは null のままにして、色で描き続ける
@@ -603,9 +606,9 @@ export class DungeonView3D {
   }
 
   private applyAtlas(atlas: Atlas | null) {
-    this.floors.forEach((mesh, k) => {
+    this.floors.forEach((mesh) => {
       const mat = mesh.material as THREE.MeshLambertMaterial;
-      mat.map = atlas?.floors[k] ?? null;
+      mat.map = atlas?.floor ?? null;
       mat.needsUpdate = true;
     });
     for (const { top, side } of this.wallMaterials) {
@@ -811,13 +814,13 @@ function litBillboard(): THREE.PlaneGeometry {
 }
 
 /**
- * 壁の素材の、テクスチャの貼り方を変える。普通は箱の面ごとに絵全体を貼るが、ここでは面のダンジョンの中の位置から、
- * 絵のどこを使うかを決める（上面は x・z、側面は壁に沿った向きの位置と高さ）。絵は WALL_TEXTURE_SPAN マスごとに繰り返す。
- * こうすると隣り合う壁の模様がつながり、マスの境目に縁取りのような線が出ない
+ * 床と壁の素材の、テクスチャの貼り方を変える。普通は面ごとに絵全体を貼るが、ここでは面のダンジョンの中の位置から、
+ * 絵のどこを使うかを決める（床と壁の上面は x・z、壁の側面は壁に沿った向きの位置と高さ）。絵は TEXTURE_SPAN マスごとに繰り返す。
+ * こうすると隣り合うマスの模様がつながり、マスの境目に縁取りや目地のような線が出ない
  */
-function worldMappedWall(material: THREE.MeshLambertMaterial, face: 'top' | 'side'): THREE.MeshLambertMaterial {
-  const defines: Record<string, string> = { WALL_SPAN: WALL_TEXTURE_SPAN.toFixed(1), WALL_HEIGHT_F: WALL_HEIGHT.toFixed(1) };
-  if (face === 'top') defines.WALL_TOP = '';
+function worldMapped(material: THREE.MeshLambertMaterial, face: 'floor' | 'top' | 'side'): THREE.MeshLambertMaterial {
+  const defines: Record<string, string> = { TEXTURE_SPAN: TEXTURE_SPAN.toFixed(1), WALL_HEIGHT_F: WALL_HEIGHT.toFixed(1) };
+  defines[`MAPPED_${face.toUpperCase()}`] = '';
   material.defines = { ...material.defines, ...defines };
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace(
@@ -825,23 +828,26 @@ function worldMappedWall(material: THREE.MeshLambertMaterial, face: 'top' | 'sid
       `#include <uv_vertex>
       #ifdef USE_MAP
       {
-        vec4 wallWorld = vec4( position, 1.0 );
+        vec4 world = vec4( position, 1.0 );
         #ifdef USE_INSTANCING
-          wallWorld = instanceMatrix * wallWorld;
+          world = instanceMatrix * world;
         #endif
-        wallWorld = modelMatrix * wallWorld;
-        #ifdef WALL_TOP
+        world = modelMatrix * world;
+        #if defined( MAPPED_FLOOR )
+          // 画像から作った素材は、床と壁の上面が同じ絵なので、床は90度回して位置もずらし、模様がそろわないようにする
+          vMapUv = vec2( -world.z, world.x ) / TEXTURE_SPAN + vec2( 0.37, 0.61 );
+        #elif defined( MAPPED_TOP )
           // 上から見て、絵の上が奥（-z）になるように
-          vMapUv = vec2( wallWorld.x, -wallWorld.z ) / WALL_SPAN;
+          vMapUv = vec2( world.x, -world.z ) / TEXTURE_SPAN;
         #else
           // 外から見て、絵が左右反転しないように、面の向きで進む向きを決める
-          float along = abs( normal.x ) > 0.5 ? -wallWorld.z * sign( normal.x ) : wallWorld.x * sign( normal.z );
-          vMapUv = vec2( along / WALL_SPAN, wallWorld.y / WALL_HEIGHT_F );
+          float along = abs( normal.x ) > 0.5 ? -world.z * sign( normal.x ) : world.x * sign( normal.z );
+          vMapUv = vec2( along / TEXTURE_SPAN, world.y / WALL_HEIGHT_F );
         #endif
       }
       #endif`,
     );
   };
-  material.customProgramCacheKey = () => `world-mapped-wall-${face}`;
+  material.customProgramCacheKey = () => `world-mapped-${face}`;
   return material;
 }

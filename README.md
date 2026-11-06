@@ -41,7 +41,7 @@ scripts/
   build-sprites.ts  src/sprites/data.ts を生成する
   build-tiles.ts    2D表示の仮のタイル素材（public/tiles/*.png）を生成する（仕様は docs/tiles.md）
   build-textures.ts 3D表示の仮のテクスチャ（public/textures/{特性}/*.png、128px・なめらかな質感）を生成する（仕様は docs/textures.md）
-  build-photo-textures.py 端でつながる画像1枚（assets/texture-sources/）から、3D表示のテクスチャ6枚を作る（Python・Pillow）
+  build-photo-textures.py 端でつながる画像1枚（assets/texture-sources/）から、3D表示のテクスチャ3枚（床・壁の上面・壁の側面）を作る（Python・Pillow）
   pixels.ts         素材を作るスクリプトの共通部品（色・PNGの書き出し）
 ```
 

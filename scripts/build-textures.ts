@@ -1,7 +1,7 @@
 // 3D表示の仮のテクスチャ（public/textures/{特性}/*.png）を作るスクリプト。
-// なめらかな質感（ドット絵ではない）で、1マスあたり128px。床4種類（1枚1マス、128×128px）・
+// なめらかな質感（ドット絵ではない）で、1マスあたり128px。床（1枚で4×4マス、512×512px）・
 // 壁の上面（1枚で4×4マス、512×512px）・壁の側面（1枚で横4マス、512×128px）を、別々の画像として書き出す。
-// 壁は1枚の絵を何マスにもまたがって貼るので、マスの境目に縁取りを付けず、絵の端どうしがつながるように描く。
+// どれも1枚の絵を何マスにもまたがって貼るので、マスの境目に縁取りや目地を付けず、絵の端どうしがつながるように描く。
 // 本番の画像ができたら、同じ名前・同じ大きさのPNGに差し替える。仕様は docs/textures.md を参照。
 // 実行：npx tsx scripts/build-textures.ts
 //
@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { PALETTES, PixelImage, type Palette, type RGB } from './pixels';
 
 const SIZE = 128; // 1マスの大きさ（px）
-const WALL_SPAN = 4; // 壁の絵1枚が、何マス分にまたがるか（src/ui/explore3d.ts の WALL_TEXTURE_SPAN と合わせる）
+const WALL_SPAN = 4; // 床と壁の絵1枚が、何マス分にまたがるか（src/ui/explore3d.ts の TEXTURE_SPAN と合わせる）
 
 // ===== ノイズ =====
 
@@ -81,27 +81,28 @@ function bevel(x: number, y: number, w: number, h: number, width: number): numbe
 // ===== 床 =====
 
 /**
- * 床1マス：1枚の敷石。中ほどは明るく、縁は目地へ向かってなめらかに沈む。
- * 種類ごとに、まだら模様の出方と、ひび・小石の位置を変える。縁はどの種類も同じ暗さなので、並べても継ぎ目が目立たない
+ * 床：4×4マスにまたがる1枚の石の床。マスごとの目地は付けず、上下左右の端でつながるように描く
+ * （床がマスに分かれず、ひと続きの地面に見えるように）。まだら模様に、うっすらしたひびと明るいしみを散らす
  */
-function floorTexture(p: Palette, variant: number): PixelImage {
-  const seed = 11 + variant * 31;
-  // ひび：ノイズが細い帯になるところを暗くする（種類ごとに場所が変わる）
-  return paint((x, y) => {
-    const mottled = fbm(x, y, seed, 4);
-    const grain = fbm(x, y, seed + 7, 16, 3);
-    let c = mix(p.floor, p.speck, clamp01(mottled * 1.6 - 0.35));
-    c = shade(c, 0.88 + grain * 0.24);
-    const crack = Math.abs(fbm(x, y, seed + 13, 2, 3) - 0.5);
-    if (variant % 2 === 1 && crack < 0.03) c = mix(c, p.edge, 0.3 * smooth(1 - crack / 0.03));
-    // 小石：明るいしみをぼかして散らす
-    const pebble = valueNoise(x, y, 24, seed + 29);
-    if (variant >= 2 && pebble > 0.78) c = mix(c, shade(p.speck, 1.25), smooth((pebble - 0.78) / 0.22) * 0.5);
-    // 縁の面取りと目地
-    const b = bevel(x, y, SIZE, SIZE, 14);
-    c = mix(shade(p.edge, 1.1), c, 0.35 + 0.65 * b);
-    return shade(c, 0.92 + 0.1 * b);
-  });
+function floorTexture(p: Palette): PixelImage {
+  const size = SIZE * WALL_SPAN;
+  return paint(
+    (x, y) => {
+      const mottled = fbm(x, y, 11, 4, 5, WALL_SPAN);
+      const grain = fbm(x, y, 18, 16, 3, WALL_SPAN);
+      let c = mix(p.floor, p.speck, clamp01(mottled * 1.6 - 0.35));
+      c = shade(c, 0.88 + grain * 0.24);
+      // ひび：ノイズが細い帯になるところを暗くする
+      const crack = Math.abs(fbm(x, y, 24, 2, 3, WALL_SPAN) - 0.5);
+      if (crack < 0.03) c = mix(c, p.edge, 0.3 * smooth(1 - crack / 0.03));
+      // 小石：明るいしみをぼかして散らす
+      const pebble = valueNoise(x, y, 24, 40, WALL_SPAN);
+      if (pebble > 0.8) c = mix(c, shade(p.speck, 1.25), smooth((pebble - 0.8) / 0.2) * 0.5);
+      return c;
+    },
+    size,
+    size,
+  );
 }
 
 // ===== 壁 =====
@@ -170,7 +171,7 @@ for (const [trait, palette] of Object.entries(PALETTES)) {
   const dir = new URL(`${trait}/`, root);
   mkdirSync(dir, { recursive: true });
   const files: [string, PixelImage][] = [
-    ...[0, 1, 2, 3].map((v): [string, PixelImage] => [`floor${v + 1}.png`, floorTexture(palette, v)]),
+    ['floor.png', floorTexture(palette)],
     ['wall-top.png', wallTopTexture(palette)],
     ['wall-side.png', wallSideTexture(palette)],
   ];
