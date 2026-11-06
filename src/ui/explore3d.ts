@@ -75,6 +75,9 @@ export const TEXTURE_FILES = {
 // たいまつの光と影。環境光と上からの光を弱くして、たいまつの光が見える範囲を決めるようにする。
 // 影の地図（シャドウマップ）は6方向から描くので重い。たいまつが動いたときと、壁が入れ替わったときだけ描き直す
 const TORCH = {
+  color: 0xffd9a0, // 暖かいオレンジ色の炎
+  // 特性ごとに光の色を変えるときの色。暖かい光は氷の青を打ち消して黄色っぽい灰色に見せてしまうので、氷は青白い光にする
+  colorByTrait: { ice: 0xd6ecff } as Partial<Record<TraitId, number>>,
   intensity: 10,
   distance: 9, // 光が届く距離（マス）。視界の半径6より少し遠くまで
   decay: 1,
@@ -107,7 +110,7 @@ export class DungeonView3D {
   private readonly camera: THREE.PerspectiveCamera;
   // たいまつ：主人公の手元の高さの光。壁の上面より低いので、壁にさえぎられて影ができる（曲がり角の先や、
   // 入口から部屋の奥は暗いまま）。見える範囲の明るさは、ほぼこの光で決まる
-  private readonly torch = new THREE.PointLight(0xffd9a0, TORCH.intensity, TORCH.distance, TORCH.decay);
+  private readonly torch = new THREE.PointLight(TORCH.color, TORCH.intensity, TORCH.distance, TORCH.decay);
   private torchAt = new THREE.Vector3(Number.NaN, 0, 0); // 影を最後に描いたときの、たいまつの位置
   private readonly shadows = new URLSearchParams(location.search).get('shadow') !== 'off'; // ?shadow=off で影を切って比べられる
   private readonly raycaster = new THREE.Raycaster();
@@ -440,6 +443,7 @@ export class DungeonView3D {
     const { map, seen, player, trait } = frame.state;
     const atlas = this.atlasFor(trait);
     if (atlas !== this.appliedAtlas) this.applyAtlas(atlas);
+    this.torch.color.setHex(TORCH.colorByTrait[trait] ?? TORCH.color);
     // テクスチャがあれば色はテクスチャに任せ、明るさだけを掛ける。なければ特性ごとの色で描く
     const colors = TRAIT_COLORS[trait];
     const floorBase = new THREE.Color(atlas ? 0xffffff : colors.floor);
