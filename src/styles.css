@@ -720,6 +720,75 @@ button.card:disabled {
   display: none;
 }
 
+/* 画面の上のボタン（効果音の設定・装備と敵） */
+.explore-top__actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  align-self: center;
+}
+
+.sound {
+  position: relative;
+}
+
+.sound__toggle {
+  display: grid;
+  place-items: center;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  color: var(--bone);
+}
+
+/* 効果音の設定：ボタンの下に重ねて開く */
+.sound__panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: 0.6rem;
+  width: 14rem;
+  padding: 0.75rem;
+  background: var(--pine-deep);
+  border: 1px solid var(--pine-line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+}
+
+.sound__title {
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.sound__switch {
+  justify-self: start;
+  min-width: 4.5rem;
+  min-height: 2.25rem;
+  color: var(--bone);
+}
+
+.sound__switch[aria-pressed='true'] {
+  background: var(--funds);
+  border-color: var(--funds);
+}
+
+.sound__volume {
+  display: grid;
+  gap: 0.35rem;
+  font-size: var(--step--1);
+}
+
+.sound__volume input {
+  width: 100%;
+  accent-color: var(--procure);
+}
+
+.sound__volume input:disabled {
+  opacity: 0.4;
+}
+
 /* ===== スマホ：1画面に収める =====
    上から、階の名前と「装備と敵」 → 3D画面（残りの高さをすべて使う。移動・待つ・階段はここで行う） → HP・満腹度 → 道具。
    スクロールしなくてもすべての操作に届くように、画面の高さぴったりにする */
@@ -742,6 +811,11 @@ button.card:disabled {
 
   .explore-top > div {
     min-width: 0;
+  }
+
+  /* 右のボタンは縮めず、左の文字の方を省略する */
+  .explore-top > .explore-top__actions {
+    flex: none;
   }
 
   .explore-top .top__run {
