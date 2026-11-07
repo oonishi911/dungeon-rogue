@@ -291,8 +291,112 @@ def ambient_wind(length=24.0, seed=3):
     return y / np.max(np.abs(y)) * AMBIENT_PEAK
 
 
+def ambient_ice(length=24.0, seed=5):
+    """氷の環境音：氷の洞窟（左右2チャンネル、length 秒でつながるループ）。
+    - 冷たく細い風：無属性の風より高く細いヒュウという音と、かすかなサーという空気の音。低いゴォーはほとんどない
+    - 氷がきしむ音：遠くで、低くギィ…と長くきしむ（ループの中で2回）
+    - 氷が割れる音：遠くで、ピシッと短く割れる（1回）
+    - 水が滴る音：ポチャン…と高く澄んだ水滴が、洞窟に響く（ところどころ）
+    - きらめき：氷の粒がふれ合うような、とても小さく高いチリン（まばら）
+    ときどき鳴る音は決まった時刻に置き、ループの終わりからはみ出した響きは最初に回して、継ぎ目を消す"""
+    rng = np.random.default_rng(seed)
+    over = 3.0
+    n = int(length * SR)
+    m = n + int(over * SR)
+    t = np.arange(m) / SR
+
+    def lfo(cycles, phase):
+        return np.sin(2 * np.pi * cycles * t / length + phase)
+
+    # 冷たく細い風
+    wind = []
+    for side in range(2):
+        ph = rng.random(6) * 2 * np.pi
+        gust = 0.65 + 0.2 * lfo(2, ph[0]) + 0.1 * lfo(7, ph[1])
+        whistle1 = resonant_sweep(rng.standard_normal(m), 780 + 160 * lfo(3, ph[2]) + 120 * (gust - 0.65), 24)
+        whistle2 = resonant_sweep(rng.standard_normal(m), 1450 + 260 * lfo(5, ph[3]) + 200 * (gust - 0.65), 30)
+        w1 = np.clip(0.5 + 0.5 * lfo(3, ph[4]), 0, 1) ** 1.5
+        w2 = np.clip(0.3 + 0.7 * lfo(4, ph[5]), 0, 1) ** 2.5
+        air = band(rng.standard_normal(m), 2000, 7000) * gust * 0.05
+        base = low(rng.standard_normal(m), 150) * gust * 0.35
+        y = high(whistle1 * w1 * gust * 5 + whistle2 * w2 * gust * 3 + air + base, 40)
+        k = int(over * SR)
+        fade = np.sin(np.linspace(0, np.pi / 2, k)) ** 2
+        loop = y[:n].copy()
+        loop[:k] = y[:k] * np.sqrt(fade) + y[n:n + k] * np.sqrt(1 - fade)
+        wind.append(loop)
+    wind = np.stack(wind, axis=1)
+
+    # ときどき鳴る音：左右の位置（-1：左、1：右）を決めて置き、まとめて洞窟に響かせる
+    dry = np.zeros((n + int(4 * SR), 2))
+    send = np.zeros(len(dry))
+
+    def place(sound, at, pan, wet=1.0):
+        i = int(at * SR)
+        left, right = np.cos((pan + 1) * np.pi / 4), np.sin((pan + 1) * np.pi / 4)
+        dry[i:i + len(sound), 0] += sound * left
+        dry[i:i + len(sound), 1] += sound * right
+        send[i:i + len(sound)] += sound * wet
+
+    def creak(dur):
+        """氷がきしむ：低い音が、こすれるように細かく途切れながら、ゆっくり高さを変える"""
+        k = int(dur * SR)
+        tt = np.arange(k) / SR
+        f = 95 + 40 * np.sin(np.pi * tt / dur) + 15 * np.sin(2 * np.pi * 1.3 * tt)
+        tone = np.sin(2 * np.pi * np.cumsum(f) / SR) + 0.5 * np.sin(4 * np.pi * np.cumsum(f) / SR)
+        # こすれ：速さの揺れる、細かい途切れ
+        rate = 18 + 10 * np.sin(np.pi * tt / dur)
+        stick = 0.5 + 0.5 * np.sign(np.sin(2 * np.pi * np.cumsum(rate) / SR))
+        shape = np.sin(np.pi * tt / dur) ** 0.8
+        return low(band(tone * (0.4 + 0.6 * stick), 70, 900), 700) * shape * 0.28
+
+    def crack():
+        """氷が割れる：鋭い一撃と、氷の高い響き"""
+        k = int(0.6 * SR)
+        noise = rng.standard_normal(k)
+        snap = band(noise, 1200, 7000) * env(k, 0.0003, 0.012) * 1.5
+        body = sum(ring(k, f, 0.12, rng) * g for f, g in [(1870, 0.25), (2960, 0.18), (4410, 0.1)])
+        return low(snap + body * env(k, 0.0005, 0.15), 6000) * 0.5
+
+    def drip(pitch):
+        """水滴：高さが一瞬で下がる、澄んだポチャン"""
+        k = int(0.25 * SR)
+        tt = np.arange(k) / SR
+        f = pitch * (1 + 0.6 * np.exp(-tt / 0.008))
+        return np.sin(2 * np.pi * np.cumsum(f) / SR) * env(k, 0.0005, 0.035) * 0.6
+
+    def tinkle():
+        """きらめき：氷の粒がふれ合う、小さく高いチリン"""
+        k = int(0.4 * SR)
+        f = 4200 + 2500 * rng.random()
+        return (ring(k, f, 0.08, rng) + ring(k, f * 1.53, 0.05, rng) * 0.4) * 0.1
+
+    place(creak(1.6), 5.3, -0.6, 0.8)
+    place(creak(1.2), 16.8, 0.5, 0.8)
+    place(crack() * 0.6, 11.4, 0.7)
+    for at, pan, pitch in [(2.1, 0.3, 1650), (2.75, 0.3, 1600), (8.6, -0.4, 1900), (13.9, -0.1, 1500), (19.4, 0.6, 1750), (22.3, -0.7, 1820)]:
+        place(drip(pitch), at, pan)
+    for at in np.sort(rng.random(14) * (length - 0.5)):
+        place(tinkle(), at, rng.random() * 1.6 - 0.8, 0.6)
+    wet = cave(send, 2.2, 7000, 1.0)[:len(dry)] - np.stack([send, send], axis=1)[: len(dry)]
+    events = dry + wet[: len(dry)] * 0.9
+    # ループの終わりからはみ出した響きは、最初に回す
+    loop_events = events[:n].copy()
+    rest = events[n:]
+    loop_events[: len(rest)] += rest[:n]
+
+    y = wind + loop_events
+    # 無属性の風と同じくらいの大きさにそろえる（割れる音などが大きすぎないよう、いちばん大きいところも抑える）
+    y = y * (AMBIENT_RMS / float(np.sqrt(np.mean(y ** 2))))
+    return y * min(1.0, AMBIENT_MAX / float(np.max(np.abs(y))))
+
+
 # 環境音のいちばん大きいところ。足音や宝箱の音のじゃまにならないよう、小さめにする
 AMBIENT_PEAK = 0.35
+# 無属性の風の音の、平均の大きさ。ほかの特性の環境音も、この大きさにそろえる
+AMBIENT_RMS = 0.0424
+# ほかの特性の環境音で、ときどき鳴る音（割れる音など）のいちばん大きいところの上限
+AMBIENT_MAX = 0.45
 
 # 宝箱の音のいちばん大きいところ。たまにしか鳴らない大事な音なので、足音よりはっきり聞こえる大きさにする
 CHEST_PEAK = 0.6
@@ -371,6 +475,8 @@ def main():
     print('wrote public/sounds/chest-open.mp3')
     write_mp3(ambient_wind(), OUT / 'ambient-neutral.mp3')
     print('wrote public/sounds/ambient-neutral.mp3')
+    write_mp3(ambient_ice(), OUT / 'ambient-ice.mp3')
+    print('wrote public/sounds/ambient-ice.mp3')
 
 
 if __name__ == '__main__':
