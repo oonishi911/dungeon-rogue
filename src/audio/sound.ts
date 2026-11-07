@@ -7,10 +7,12 @@ import { loadSoundSettings, writeSoundSettings } from '../storage';
 import { gainOf, type SoundSettings } from './settings';
 
 // 特性ごとの足音（一歩ごとにこの中から選ぶ。scripts/build-sounds.py の VARIATIONS と数を合わせる）。
-// 無属性は土、炎は焼けた岩と灰（少しこもった音）、氷は雪、光は磨かれた石の神殿、闇は硬い石の洞窟
+// 光は磨かれた石の神殿、闇は硬い石の洞窟。無属性（土）・炎（灰）・氷（雪）の足音は調整中なので、まだ鳴らさない
+// （音のファイルは public/sounds/ にある。決まったら、ここに特性を足す）
 const STEP_VARIATIONS = 4;
+const STEP_TRAITS: readonly TraitId[] = ['light', 'dark'];
 const STEP_SOUNDS: Partial<Record<TraitId, string[]>> = Object.fromEntries(
-  (['neutral', 'fire', 'ice', 'light', 'dark'] as const).map((trait) => [
+  STEP_TRAITS.map((trait) => [
     trait,
     Array.from({ length: STEP_VARIATIONS }, (_, i) => `step-${trait}-${i + 1}.mp3`),
   ]),
