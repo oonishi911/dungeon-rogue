@@ -128,8 +128,8 @@ def step_ice(rng, foot):
         crunch = low(band(grains(n, 6000, 0.13, rng, 0.004, 0.002), 500, 3500), 3000) * env(n, 0.03, 0.08) * 1.6
         shari = band(grains(n, 1600, 0.16, rng, 0.006, 0.0004), 2500, 9000) * 2.2
         y = high(crunch + shari, 150) * 0.55  # シャリと同じくらいの大きさに聞こえるように
-    # 氷の洞窟に響く：閉じた空間で、硬い氷の壁に反射して、明るい響きが約1秒残る
-    return cave(y * (0.85 + 0.3 * rng.random()), 1.1, 5000, 0.9)
+    # 氷の洞窟に響く：閉じた空間で、硬い氷の壁に反射して、明るく強い響きが長く残る
+    return cave(y * (0.85 + 0.3 * rng.random()), 1.8, 9000, 1.4)
 
 
 def step_light(rng, foot):
