@@ -28,6 +28,7 @@ let master: GainNode | null = null;
 const files = new Map<string, Promise<ArrayBuffer | null>>(); // 読み込んだ音のファイル（音の準備の前から読み込める）
 const buffers = new Map<string, Promise<AudioBuffer | null>>(); // 鳴らせる形にした音
 let lastStep: string | null = null;
+let foot = 0; // 次に鳴らす足（0 と 1 を交互に）
 
 export function soundSettings(): SoundSettings {
   return settings;
@@ -58,10 +59,13 @@ export function preloadSounds(trait: TraitId) {
   for (const name of STEP_SOUNDS[trait] ?? []) fetchFile(name);
 }
 
-/** 主人公が1歩進んだときの足音 */
+/** 主人公が1歩進んだときの足音。左右の足で交互に鳴らす（奇数番が片方の足、偶数番がもう片方の足の音） */
 export function playFootstep(trait: TraitId) {
-  const names = STEP_SOUNDS[trait];
-  if (!names?.length) return;
+  const all = STEP_SOUNDS[trait];
+  if (!all?.length) return;
+  const names = all.filter((_, i) => i % 2 === foot);
+  foot = (foot + 1) % 2;
+  if (!names.length) return;
   // 同じ音が続かないように選ぶ
   const choices = names.length > 1 ? names.filter((n) => n !== lastStep) : names;
   const name = choices[Math.floor(Math.random() * choices.length)]!;
