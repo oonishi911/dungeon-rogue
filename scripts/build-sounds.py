@@ -10,6 +10,7 @@
   ゲームでは左右の足で交互に、その足の音から選び、音の高さも少し変えて、同じ音のくり返しに聞こえないようにする
 - 乱数の種を決めているので、作り直しても同じ音になる
 - 宝箱の音（chest-open.mp3）：宝箱から中身を取ったときに鳴らす
+- 環境音（ambient-{特性}.mp3）：ダンジョンにいるあいだ、くり返し鳴らす。最後と最初が継ぎ目なくつながる
 - 足音は特性ごとに地面を変える：無属性は土、炎は焼けて尖った細かい石、氷は雪、光は磨かれた石の神殿、闇は硬い石の洞窟
 """
 import subprocess
@@ -236,6 +237,63 @@ def chest_open():
     return y
 
 
+def resonant_sweep(x, centers, q):
+    """中心の高さが時間とともに動く、狭い帯域のフィルタ（風が穴や岩のすき間で鳴る「ヒュウ」「ウォー」）。
+    centers は1サンプルごとの中心の高さ（Hz）。256サンプルごとに係数を変える"""
+    out = np.zeros_like(x)
+    block = 256
+    z = np.zeros(2)
+    for i in range(0, len(x), block):
+        f = float(np.mean(centers[i:i + block]))
+        w = 2 * np.pi * f / SR
+        alpha = np.sin(w) / (2 * q)
+        b = np.array([alpha, 0, -alpha])
+        a = np.array([1 + alpha, -2 * np.cos(w), 1 - alpha])
+        out[i:i + block], z = lfilter(b / a[0], a / a[0], x[i:i + block], zi=z)
+    return out
+
+
+def ambient_wind(length=24.0, seed=3):
+    """無属性の環境音：洞窟を吹き抜ける風のうなり（左右2チャンネル、length 秒でつながるループ）。
+    - 低いゴォーという風の音：低い音だけのノイズを、ゆっくりした強弱（突風）で揺らす
+    - うなり：狭い帯域のフィルタに通したノイズ。中心の高さがゆっくり上下し、ウォー・ヒュウと鳴る
+    - 強弱や高さの揺れは、どれも length 秒でちょうど元に戻る周期にする。最後の数秒を最初に重ねて、継ぎ目を消す"""
+    rng = np.random.default_rng(seed)
+    over = 3.0  # 継ぎ目を重ねる長さ（秒）
+    n = int(length * SR)
+    m = n + int(over * SR)
+    t = np.arange(m) / SR
+
+    def lfo(cycles, phase):
+        """length 秒にちょうど cycles 回まわる、ゆっくりした揺れ（-1〜1）"""
+        return np.sin(2 * np.pi * cycles * t / length + phase)
+
+    channels = []
+    for side in range(2):
+        ph = rng.random(8) * 2 * np.pi
+        # 突風：いくつかの遅い揺れを重ねた強弱（0.35〜1）
+        gust = 0.68 + 0.2 * lfo(2, ph[0]) + 0.08 * lfo(5, ph[1]) + 0.05 * lfo(9, ph[2])
+        rumble = low(low(rng.standard_normal(m), 180), 180) * gust * 1.3
+        # うなり：2つの穴が、それぞれの高さで鳴る。風が強いほど少し高くなる
+        howl1 = resonant_sweep(rng.standard_normal(m), 260 + 70 * lfo(3, ph[3]) + 60 * (gust - 0.68), 14)
+        howl2 = resonant_sweep(rng.standard_normal(m), 520 + 120 * lfo(4, ph[4]) + 90 * (gust - 0.68), 18)
+        h1 = np.clip(0.55 + 0.45 * lfo(3, ph[5]), 0, 1) ** 1.5  # うなりは、出たり消えたりする
+        h2 = np.clip(0.4 + 0.6 * lfo(5, ph[6]), 0, 1) ** 2
+        air = band(rng.standard_normal(m), 800, 2500) * (gust - 0.3) * 0.08  # 吹き抜ける空気のかすかなサー
+        y = high(rumble + howl1 * h1 * gust * 6 + howl2 * h2 * gust * 4 + air, 30)
+        # 継ぎ目：最後の over 秒を、最初の over 秒になめらかに重ねる（音の大きさが変わらない重ね方）
+        k = int(over * SR)
+        fade = np.sin(np.linspace(0, np.pi / 2, k)) ** 2
+        loop = y[:n].copy()
+        loop[:k] = y[:k] * np.sqrt(fade) + y[n:n + k] * np.sqrt(1 - fade)
+        channels.append(loop)  # フィルタは重ねる前にかける（重ねたあとにかけると、ループの頭で音が跳ねる）
+    y = np.stack(channels, axis=1)
+    return y / np.max(np.abs(y)) * AMBIENT_PEAK
+
+
+# 環境音のいちばん大きいところ。足音や宝箱の音のじゃまにならないよう、小さめにする
+AMBIENT_PEAK = 0.35
+
 # 宝箱の音のいちばん大きいところ。たまにしか鳴らない大事な音なので、足音よりはっきり聞こえる大きさにする
 CHEST_PEAK = 0.6
 
@@ -311,6 +369,8 @@ def main():
         print(f'wrote public/sounds/step-{trait}-1〜{VARIATIONS}.mp3')
     write_mp3(chest_open(), OUT / 'chest-open.mp3')
     print('wrote public/sounds/chest-open.mp3')
+    write_mp3(ambient_wind(), OUT / 'ambient-neutral.mp3')
+    print('wrote public/sounds/ambient-neutral.mp3')
 
 
 if __name__ == '__main__':
