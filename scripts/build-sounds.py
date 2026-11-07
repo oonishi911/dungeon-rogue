@@ -189,12 +189,12 @@ def cave(x, size, damp, mix, predelay=0.012):
 
 
 def chest_open():
-    """宝箱を開けて中身を取ったときの音（約0.5秒）：木の宝箱のふたが、ギィッと短くきしんで、パカッと開く。
-    - きしみ：木どうしがこすれて引っかかる細かい衝撃の列を、木の響き（金属より低く、すぐ止まる）に通す。
-      こすれる間隔が速くなっていくので、ギィッと音が上がる
-    - パカッ：ふたが外れて開く、乾いた中空の音。箱の中の空気が鳴る低めの響きと、短い木の打音を重ねる
+    """宝箱を開けて中身を取ったときの音（約0.9秒）：木の宝箱のふたが「ぎー」ときしみながら開き、「ガコッ」と重く当たって止まる。
+    - ぎー：蝶番の木がこすれて鳴る、伸びるきしみ。こすれて引っかかる間隔をきしみの音の高さ（約300Hz）にして、
+      「い」の声に近い響き（低い響きと、高い響き）に通し、声のように「ぎー」と聞こえるようにする。高さは少し揺れながら下がる
+    - ガコッ：開き切ったふたが、重く当たる「ガ」と、すぐあとに跳ね返って当たる中空の「コッ」
     - 小さな部屋の短い反射を少し付ける"""
-    rng = np.random.default_rng(21)
+    rng = np.random.default_rng(23)
 
     def resonate(x, freqs, decays, gains):
         """衝撃の列を、減衰する固有振動（共鳴器）に通す"""
@@ -205,35 +205,36 @@ def chest_open():
             y += lfilter([1], [1, -2 * r * np.cos(w), r * r], x) * g * (1 - r)
         return y
 
-    total = 0.5
+    total = 0.9
     n = int(SR * total)
-    # きしみ（0.03〜0.3秒）：こすれる間隔がだんだん速くなる（音が上がる）
+    # ぎー（0.02〜0.55秒）
     exc = np.zeros(n)
-    creak_from, creak_to = 0.03, 0.3
+    creak_from, creak_to = 0.02, 0.55
     t = creak_from
     while t < creak_to:
         u = (t - creak_from) / (creak_to - creak_from)
-        rate = 70 + 160 * u ** 1.3
-        exc[int(t * SR)] += (np.sin(np.pi * min(u * 1.2, 1)) ** 0.6) * (0.6 + 0.4 * rng.random())
-        t += 1 / rate * (0.9 + 0.2 * rng.random())
-    creak = resonate(exc, [420, 760, 1180, 1900], [0.012, 0.01, 0.008, 0.005], [1.0, 0.8, 0.5, 0.25])
-    creak += resonate(exc, [190], [0.02], [0.6])  # 箱の胴鳴り
-    # パカッ（0.31秒）：乾いた木の打音と、中空の箱が鳴る響き
-    pop_at = int(0.31 * SR)
+        pitch = 330 - 40 * u + 18 * np.sin(2 * np.pi * 7 * u) + 8 * rng.standard_normal()
+        level = min(u / 0.06, 1) * (1 - max(u - 0.9, 0) / 0.1) * (0.85 + 0.15 * np.sin(2 * np.pi * 3 * u))
+        exc[int(t * SR)] += level * (0.8 + 0.2 * rng.random())
+        t += 1 / pitch
+    gii = resonate(exc, [340, 1150, 2350, 3300], [0.006, 0.004, 0.004, 0.002], [1.0, 1.6, 4.5, 1.5])
+    gii += band(rng.standard_normal(n), 1500, 4000) * np.convolve(np.abs(exc), np.ones(200) / 200, 'same') * 0.15  # こすれるざらつき
+    # ガコッ：ガ（0.57秒）、コッ（0.64秒）
+    ga_at, ko_at = int(0.57 * SR), int(0.64 * SR)
     hit = np.zeros(n)
-    hit[pop_at] = 1.0
-    hit[pop_at + int(0.006 * SR)] = 0.45  # ふたの両端が少しずれて当たる
-    knock = low(resonate(hit, [290, 520, 900, 1500], [0.05, 0.035, 0.02, 0.01], [1.5, 1.1, 0.6, 0.25]), 2500)
-    noise = rng.standard_normal(n)
-    air = np.zeros(n)
-    k = int(0.03 * SR)
-    air[pop_at:pop_at + k] = band(noise[:k], 400, 3000) * env(k, 0.0005, 0.006)  # パッという空気
-    y = creak * 1.0 + knock * 2.4 + air * 0.1
-    # 小さな部屋の短い反射
+    hit[ga_at] = 1.0
+    hit[ga_at + int(0.004 * SR)] = 0.6
+    ga = resonate(hit, [120, 210, 380, 650], [0.06, 0.045, 0.03, 0.02], [1.6, 1.3, 0.9, 0.5])
+    k = int(0.05 * SR)
+    ga[ga_at:ga_at + k] += low(band(rng.standard_normal(k), 200, 2500), 1500) * env(k, 0.0005, 0.012) * 0.12  # 当たったときのガッというざらつき
+    hit2 = np.zeros(n)
+    hit2[ko_at] = 0.7
+    ko = resonate(hit2, [780, 1250, 1900], [0.03, 0.018, 0.01], [1.0, 0.5, 0.25])
+    y = gii * 0.55 + ga * 3.2 + ko * 1.4
     for d, g in [(0.017, 0.22), (0.029, 0.15), (0.047, 0.09)]:
         k = int(d * SR)
         y[k:] += y[:-k] * g
-    y = high(y, 80)
+    y = high(y, 60)
     y = y / np.max(np.abs(y)) * CHEST_PEAK
     fade = int(0.08 * SR)
     y[-fade:] *= np.linspace(1, 0, fade)
