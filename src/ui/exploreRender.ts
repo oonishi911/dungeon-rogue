@@ -6,7 +6,7 @@ import { upStairs, type ExploreState } from '../game/explore';
 import type { Pos } from '../game/map';
 import { drawSprite } from '../sprites/canvas';
 import { CLOAKS } from '../sprites/data';
-import { cloakOf, ENEMY_LOOKS } from '../sprites/looks';
+import { cloakOf, lookOf } from '../sprites/looks';
 import { floorVariant, QUARTER, TILESET, wallPieces } from './autotile';
 
 export const VIEW_W = 21; // 画面に映すマス数（主人公が中央に来るよう奇数）。画面の大きさに関係なく固定
@@ -200,7 +200,7 @@ function drawEnemy(ctx: CanvasRenderingContext2D, enemy: MapEnemy, px: number, p
     ctx.strokeRect(px + 1, py + 1, CELL - 2, CELL - 2);
     if (def.boss) ctx.strokeRect(px - 2, py - 2, CELL + 4, CELL + 4);
   }
-  const look = ENEMY_LOOKS[enemy.id];
+  const look = lookOf(enemy.id);
   drawSprite(ctx, look.sprite, px, py, CELL, look.recolor);
 
   if (enemy.hp < def.hp) {

@@ -12,6 +12,8 @@ import type {
   TraitId,
   WeaponType,
 } from './types';
+import enemyMasterJson from './enemies.json';
+import { enemyDefs, parseEnemyMaster } from './enemyMaster';
 
 // ===== MVPの設定値 =====
 // 数値は仮。遊んでみてバランス調整する。
@@ -254,43 +256,21 @@ export const ENCHANT_VS_ELEMENT: Record<Element, Partial<Record<Element, number>
   neutral: {},
 };
 
-// 攻撃力は自動プレイのバランステスト（balance.test.ts）を満たすように調整している
-export const ENEMIES: Record<EnemyId, EnemyDef> = {
-  // 無属性
-  goblin: { id: 'goblin', name: 'ゴブリン', hp: 14, atk: 8, def: 1, element: 'neutral', body: 'normal' },
-  giant_rat: { id: 'giant_rat', name: '大ネズミ', hp: 10, atk: 6, def: 0, element: 'neutral', body: 'soft' },
-  stone_golem: { id: 'stone_golem', name: '石ゴーレム', hp: 22, atk: 10, def: 3, element: 'neutral', body: 'hard' },
-  // 炎
-  fire_imp: { id: 'fire_imp', name: '火の小鬼', hp: 12, atk: 13, def: 0, element: 'fire', body: 'normal' },
-  flame_hound: { id: 'flame_hound', name: '炎の猟犬', hp: 16, atk: 14, def: 1, element: 'fire', body: 'soft' },
-  lava_lizard: { id: 'lava_lizard', name: '溶岩トカゲ', hp: 22, atk: 14, def: 3, element: 'fire', body: 'hard' },
-  // 氷
-  ice_imp: { id: 'ice_imp', name: '氷の小鬼', hp: 12, atk: 13, def: 0, element: 'ice', body: 'normal' },
-  ice_slime: { id: 'ice_slime', name: '氷のスライム', hp: 16, atk: 11, def: 0, element: 'ice', body: 'soft' },
-  ice_beetle: { id: 'ice_beetle', name: '氷の甲虫', hp: 20, atk: 13, def: 3, element: 'ice', body: 'hard' },
-  // 光（炎＋無属性）
-  light_bird: { id: 'light_bird', name: '光の鳥', hp: 12, atk: 13, def: 0, element: 'light', body: 'soft' },
-  holy_armor: { id: 'holy_armor', name: '聖なる甲冑', hp: 24, atk: 14, def: 3, element: 'light', body: 'hard' },
-  light_wisp: { id: 'light_wisp', name: '光の精', hp: 14, atk: 13, def: 0, element: 'light', body: 'spirit' },
-  // 闇（氷＋無属性）
-  dark_bat: { id: 'dark_bat', name: '闇コウモリ', hp: 10, atk: 13, def: 0, element: 'dark', body: 'soft' },
-  shadow: { id: 'shadow', name: '影', hp: 16, atk: 14, def: 1, element: 'dark', body: 'spirit' },
-  phantom: { id: 'phantom', name: '亡霊', hp: 18, atk: 14, def: 1, element: 'dark', body: 'spirit' },
-  // ボス：ダンジョンの属性と体質の傾向に合わせる。動かない。
-  // 正しい準備で挑んだとき、ボス戦で受ける合計ダメージがどのボスでも40前後になるようにそろえている
-  flame_beast: { id: 'flame_beast', name: '炎の魔獣', hp: 60, atk: 18, def: 2, element: 'fire', body: 'soft', boss: true },
-  ice_colossus: { id: 'ice_colossus', name: '氷の巨像', hp: 60, atk: 18, def: 2, element: 'ice', body: 'hard', boss: true },
-  ogre_chief: { id: 'ogre_chief', name: '鬼の首領', hp: 60, atk: 9, def: 1, element: 'neutral', body: 'normal', boss: true },
-  // 光のダンジョンは、光の衣で防げない炎・無属性の敵も混ざり道中で消耗するので、ボスを少し弱くしている
-  light_guardian: { id: 'light_guardian', name: '光の守護者', hp: 50, atk: 14, def: 2, element: 'light', body: 'hard', boss: true },
-  dark_lord: { id: 'dark_lord', name: '闇の王', hp: 60, atk: 18, def: 2, element: 'dark', body: 'spirit', boss: true },
-};
+// 敵のマスターデータは src/game/enemies.json にある（開発用の管理画面 ?view=enemies から書き換えて公開できる）。
+// 攻撃力は自動プレイのバランステスト（balance.test.ts）を満たすように調整している。
+// ボス：ダンジョンの属性と体質の傾向に合わせる。動かない。正しい準備で挑んだとき、ボス戦で受ける合計ダメージが
+// どのボスでも40前後になるようにそろえている。光のダンジョンは、光の衣で防げない炎・無属性の敵も混ざり道中で消耗するので、
+// ボスを少し弱くしている
+export const ENEMY_MASTER = parseEnemyMaster(enemyMasterJson);
+export const ENEMIES: Record<EnemyId, EnemyDef> = enemyDefs(ENEMY_MASTER);
 
-/**
- * ダンジョン特性ごとに出る敵。同じ敵を複数並べると出やすくなる。
- * その属性の敵が中心で、成分の属性の敵も混ざる。体質にも傾向がある
- * （炎：柔らかい、氷：硬い、無属性：混在、光：硬い、闇：霊体）。
- */
+/** 敵の能力（data の値。ボス以外はゲームの中で弱める前の値）。データにない敵の ID ならエラーにする */
+export function enemyBase(id: EnemyId): EnemyDef {
+  const def = ENEMIES[id];
+  if (!def) throw new Error(`敵のデータ（enemies.json）にない敵：${id}`);
+  return def;
+}
+
 /**
  * ダンジョンごとの有利な装備：その属性に効く防具と、出やすい体質の敵に効く武器。
  * 準備フェーズを飛ばしているあいだは、これに回復薬2つを足した持ち物で始める。バランステストの「正しい準備」もこれを使う
@@ -306,13 +286,13 @@ export const FAVORABLE_GEAR: Record<TraitId, readonly ItemId[]> = {
 /** 準備フェーズを飛ばしているあいだ、有利な装備に足して持たせる道具 */
 export const START_SUPPLIES: readonly ItemId[] = ['potion', 'potion'];
 
-export const TRAIT_ENEMIES: Record<TraitId, { pool: readonly EnemyId[]; boss: EnemyId }> = {
-  fire: { pool: ['fire_imp', 'fire_imp', 'flame_hound', 'flame_hound', 'flame_hound', 'lava_lizard', 'goblin'], boss: 'flame_beast' },
-  ice: { pool: ['ice_imp', 'ice_slime', 'ice_beetle', 'ice_beetle', 'ice_beetle', 'goblin'], boss: 'ice_colossus' },
-  neutral: { pool: ['goblin', 'goblin', 'giant_rat', 'giant_rat', 'stone_golem', 'stone_golem'], boss: 'ogre_chief' },
-  light: { pool: ['light_bird', 'holy_armor', 'holy_armor', 'holy_armor', 'light_wisp', 'fire_imp', 'stone_golem'], boss: 'light_guardian' },
-  dark: { pool: ['dark_bat', 'shadow', 'shadow', 'phantom', 'phantom', 'ice_imp', 'giant_rat'], boss: 'dark_lord' },
-};
+/**
+ * ダンジョン特性ごとに出る敵。同じ敵を複数並べると出やすくなる。
+ * その属性の敵が中心で、成分の属性の敵も混ざる。体質にも傾向がある
+ * （炎：柔らかい、氷：硬い、無属性：混在、光：硬い、闇：霊体）。
+ * データは src/game/enemies.json の dungeons。
+ */
+export const TRAIT_ENEMIES: Record<TraitId, { pool: readonly EnemyId[]; boss: EnemyId }> = ENEMY_MASTER.dungeons;
 
 // ===== 宝箱と金貨（仮） =====
 export const TREASURE_CONFIG = {

@@ -19,8 +19,8 @@ describe('ドット絵のデータ', () => {
   }
 
   it('すべての敵に見た目があり、色の差し替えは絵で使っている文字だけ', () => {
-    for (const id of Object.keys(ENEMIES) as (keyof typeof ENEMIES)[]) {
-      const look = ENEMY_LOOKS[id];
+    for (const id of Object.keys(ENEMIES)) {
+      const look = ENEMY_LOOKS[id]!;
       expect(look.sprite in SPRITES).toBe(true);
       const used = new Set(SPRITES[look.sprite].join(''));
       for (const ch of Object.keys(look.recolor ?? {})) expect(used.has(ch)).toBe(true);

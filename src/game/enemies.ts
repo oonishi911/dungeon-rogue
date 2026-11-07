@@ -1,7 +1,7 @@
 // マップ上の敵：配置・能力・移動の経路。
 // 敵の手番の進め方（気付く・追う・攻撃する）は explore.ts にある。
 
-import { ENEMIES, TRAIT_ENEMIES } from './data';
+import { enemyBase, TRAIT_ENEMIES } from './data';
 import { tileAt, type FloorMap, type Pos } from './map';
 import { nextInt, nextRandom } from './rng';
 import type { EnemyDef, EnemyId, TraitId } from './types';
@@ -44,7 +44,7 @@ export interface MapEnemy {
  * 通常の敵は HP・攻撃力を strengthRate 倍にし、強敵はさらにそこから能力を上げる（防御力はそのまま）
  */
 export function enemyDef(enemy: Pick<MapEnemy, 'id' | 'elite'>): EnemyDef {
-  const base = ENEMIES[enemy.id];
+  const base = enemyBase(enemy.id);
   if (base.boss) return base;
   const scale = (n: number) => Math.max(1, Math.round(n * ENEMY_CONFIG.strengthRate));
   const normal = { ...base, hp: scale(base.hp), atk: scale(base.atk) };
@@ -60,7 +60,7 @@ export function enemyDef(enemy: Pick<MapEnemy, 'id' | 'elite'>): EnemyDef {
 /** 特性の敵のうち、いちばん強いもの。強敵の元にする */
 function strongestOf(trait: TraitId): EnemyId {
   const pool = TRAIT_ENEMIES[trait].pool;
-  return [...pool].sort((a, b) => ENEMIES[b].hp * ENEMIES[b].atk - ENEMIES[a].hp * ENEMIES[a].atk)[0]!;
+  return [...pool].sort((a, b) => enemyBase(b).hp * enemyBase(b).atk - enemyBase(a).hp * enemyBase(a).atk)[0]!;
 }
 
 /**
@@ -122,7 +122,7 @@ export function spawnBoss(pos: Pos, trait: TraitId, uid: number): MapEnemy {
     id,
     elite: true,
     pos,
-    hp: ENEMIES[id].hp,
+    hp: enemyBase(id).hp,
     mode: 'wander',
     justNoticed: false,
     lastSeen: null,

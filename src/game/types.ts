@@ -123,28 +123,8 @@ export interface PrepResult {
 }
 
 // ===== 敵 =====
-export type EnemyId =
-  | 'goblin'
-  | 'giant_rat'
-  | 'stone_golem'
-  | 'fire_imp'
-  | 'flame_hound'
-  | 'lava_lizard'
-  | 'ice_imp'
-  | 'ice_slime'
-  | 'ice_beetle'
-  | 'light_bird'
-  | 'holy_armor'
-  | 'light_wisp'
-  | 'dark_bat'
-  | 'shadow'
-  | 'phantom'
-  // ボス
-  | 'flame_beast'
-  | 'ice_colossus'
-  | 'ogre_chief'
-  | 'light_guardian'
-  | 'dark_lord';
+// 敵の ID。敵の種類はプログラムに決め打ちせず、src/game/enemies.json にある敵がすべて（管理画面 ?view=enemies で足す・消すことができる）
+export type EnemyId = string;
 
 export interface EnemyDef {
   id: EnemyId;

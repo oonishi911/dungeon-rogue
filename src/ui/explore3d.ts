@@ -14,7 +14,7 @@ import type { Pos } from '../game/map';
 import type { EnemyId, TraitId } from '../game/types';
 import { drawSprite } from '../sprites/canvas';
 import type { SpriteId } from '../sprites/data';
-import { cloakOf, ENEMY_LOOKS } from '../sprites/looks';
+import { cloakOf, lookOf } from '../sprites/looks';
 import { floorVariant } from './autotile';
 import { ENEMY_MARK, lerp, type Frame } from './exploreRender';
 import { Hero3D } from './hero3d';
@@ -768,7 +768,7 @@ export class DungeonView3D {
       shown.add(e.uid);
       let view = this.enemies.get(e.uid);
       if (!view) {
-        const look = ENEMY_LOOKS[e.id];
+        const look = lookOf(e.id);
         const def = enemyDef(e);
         // 強敵は赤い輪、ボスは金の輪を足元に置く
         const ring = e.elite ? new THREE.Mesh(this.shared.ring, def.boss ? this.shared.bossMat : this.shared.eliteMat) : null;

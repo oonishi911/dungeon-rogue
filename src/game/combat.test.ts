@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildPlayer, enemyHitDamage, playerHitDamage } from './combat';
-import { COMBAT_CONFIG, ENEMIES } from './data';
+import { COMBAT_CONFIG } from './data';
+import { ARMORED_ENEMY } from './enemies.fixtures';
 import type { Element, EnemyDef, ItemId, PlayerStats } from './types';
 
 /** 属性だけを変えた、攻撃力11・防御0の敵（プレイヤーの防御1を引くと基礎ダメージ10） */
@@ -91,7 +92,7 @@ describe('playerHitDamage（武器と体質）', () => {
 
   it('防御の高い敵ほど通りにくい', () => {
     const p = buildPlayer(['hammer']);
-    expect(playerHitDamage(p, ENEMIES.stone_golem)).toBeLessThan(playerHitDamage(p, { ...ENEMIES.stone_golem, def: 0 }));
+    expect(playerHitDamage(p, ARMORED_ENEMY)).toBeLessThan(playerHitDamage(p, { ...ARMORED_ENEMY, def: 0 }));
   });
 });
 
