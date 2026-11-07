@@ -391,6 +391,101 @@ def ambient_ice(length=24.0, seed=5):
     return y * min(1.0, AMBIENT_MAX / float(np.max(np.abs(y))))
 
 
+def ambient_fire(length=24.0, seed=9):
+    """炎の環境音：溶岩の流れる火山の洞窟（左右2チャンネル、length 秒でつながるループ）。
+    - 溶岩の流れ：低く重いゴォーという地鳴りが、ゆっくりうねる
+    - 溶岩の泡：ボコッ…と、粘りのある泡がふくらんで弾ける（ところどころ。左右のいろいろな位置）
+    - 火のはぜる音：パチッ・パチパチと、まばらにはぜる（ずっと、ときどき固まって）
+    - 蒸気：遠くで、シューッと蒸気が噴き出す（2回）
+    ときどき鳴る音は決まった時刻に置き、ループの終わりからはみ出した響きは最初に回して、継ぎ目を消す"""
+    rng = np.random.default_rng(seed)
+    over = 3.0
+    n = int(length * SR)
+    m = n + int(over * SR)
+    t = np.arange(m) / SR
+
+    def lfo(cycles, phase):
+        return np.sin(2 * np.pi * cycles * t / length + phase)
+
+    # 溶岩の流れ（ずっと鳴る低い音）
+    flow = []
+    for side in range(2):
+        ph = rng.random(5) * 2 * np.pi
+        swell = 0.7 + 0.18 * lfo(2, ph[0]) + 0.1 * lfo(5, ph[1])
+        rumble = low(low(rng.standard_normal(m), 110), 110) * swell * 0.7
+        # 低いうなり：狭い帯域を、ゆっくり上下させる（流れが岩にぶつかる音）
+        churn = resonant_sweep(rng.standard_normal(m), 210 + 40 * lfo(3, ph[2]), 5) * swell * 2.2
+        # 熱気のかすかなサー
+        heat = band(rng.standard_normal(m), 900, 3000) * (0.5 + 0.5 * lfo(4, ph[3])) * 0.05
+        y = high(rumble + churn + heat, 30)
+        k = int(over * SR)
+        fade = np.sin(np.linspace(0, np.pi / 2, k)) ** 2
+        loop = y[:n].copy()
+        loop[:k] = y[:k] * np.sqrt(fade) + y[n:n + k] * np.sqrt(1 - fade)
+        flow.append(loop)
+    flow = np.stack(flow, axis=1)
+
+    dry = np.zeros((n + int(4 * SR), 2))
+    send = np.zeros(len(dry))
+
+    def place(sound, at, pan, wet=1.0):
+        i = int(at * SR)
+        left, right = np.cos((pan + 1) * np.pi / 4), np.sin((pan + 1) * np.pi / 4)
+        dry[i:i + len(sound), 0] += sound * left
+        dry[i:i + len(sound), 1] += sound * right
+        send[i:i + len(sound)] += sound * wet
+
+    def bubble(size):
+        """溶岩の泡：泡がふくらむあいだ音が少し上がり、弾けるとボコッと鳴る"""
+        k = int((0.12 + 0.1 * size) * SR)
+        tt = np.arange(k) / SR
+        f0 = 70 + 50 * (1 - size)
+        f = f0 * (1 + 0.8 * tt / tt[-1])
+        grow = np.sin(2 * np.pi * np.cumsum(f) / SR) * (tt / tt[-1]) ** 1.5 * 0.5
+        pop_k = int(0.08 * SR)
+        pop = band(rng.standard_normal(pop_k), 120, 900) * env(pop_k, 0.001, 0.02) * 0.9
+        y = np.concatenate([grow, np.zeros(pop_k)])
+        y[k - int(0.004 * SR):k - int(0.004 * SR) + pop_k] += pop
+        return low(y, 1200) * (0.6 + 0.4 * size)
+
+    def crackle(count):
+        """火のはぜる音：短く鋭い粒を、まばらに並べる"""
+        k = int(0.6 * SR)
+        y = np.zeros(k)
+        at = 0.0
+        for _ in range(count):
+            i = int(at * SR)
+            g = int(0.002 * SR)
+            if i + g < k:
+                y[i:i + g] += rng.standard_normal(g) * np.exp(-np.arange(g) / (g / 4)) * (0.4 + 0.6 * rng.random())
+            at += rng.exponential(0.06)
+        return band(y, 1500, 7000) * 1.0
+
+    def steam(dur):
+        """蒸気：シューッと噴き出して、だんだん弱まる"""
+        k = int(dur * SR)
+        tt = np.arange(k) / SR
+        shape = np.minimum(tt / 0.15, 1) * np.exp(-tt / (dur * 0.45))
+        return band(rng.standard_normal(k), 2500, 8000) * shape * 0.3
+
+    for at, pan, size in [(1.4, -0.5, 0.8), (3.1, 0.4, 0.4), (3.5, 0.45, 0.3), (6.8, -0.2, 1.0), (9.9, 0.7, 0.5),
+                          (12.2, -0.7, 0.7), (12.6, -0.65, 0.4), (15.8, 0.1, 0.9), (18.3, 0.6, 0.6), (21.0, -0.4, 0.5), (22.6, 0.3, 0.8)]:
+        place(bubble(size), at, pan, 0.5)
+    for at in np.sort(rng.random(26) * (length - 0.7)):
+        place(crackle(int(1 + rng.integers(0, 4))), at, rng.random() * 1.6 - 0.8, 0.3)
+    place(steam(2.2), 7.9, 0.75, 0.8)
+    place(steam(1.6), 19.6, -0.8, 0.8)
+    wet = cave(send, 1.2, 2500, 1.0)[: len(dry)] - np.stack([send, send], axis=1)[: len(dry)]
+    events = dry + wet[: len(dry)] * 0.6
+    loop_events = events[:n].copy()
+    rest = events[n:]
+    loop_events[: len(rest)] += rest[:n]
+
+    y = flow + loop_events
+    y = y * (AMBIENT_RMS / float(np.sqrt(np.mean(y ** 2))))
+    return y * min(1.0, AMBIENT_MAX / float(np.max(np.abs(y))))
+
+
 # 環境音のいちばん大きいところ。足音や宝箱の音のじゃまにならないよう、小さめにする
 AMBIENT_PEAK = 0.35
 # 無属性の風の音の、平均の大きさ。ほかの特性の環境音も、この大きさにそろえる
@@ -477,6 +572,8 @@ def main():
     print('wrote public/sounds/ambient-neutral.mp3')
     write_mp3(ambient_ice(), OUT / 'ambient-ice.mp3')
     print('wrote public/sounds/ambient-ice.mp3')
+    write_mp3(ambient_fire(), OUT / 'ambient-fire.mp3')
+    print('wrote public/sounds/ambient-fire.mp3')
 
 
 if __name__ == '__main__':
