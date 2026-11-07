@@ -230,7 +230,7 @@ def chest_open():
     hit2 = np.zeros(n)
     hit2[ko_at] = 0.7
     ko = resonate(hit2, [780, 1250, 1900], [0.03, 0.018, 0.01], [1.0, 0.5, 0.25])
-    y = gii * 0.55 + ga * 3.2 + ko * 1.4
+    y = gii * 0.9 + ga * 3.2 + ko * 1.4
     for d, g in [(0.017, 0.22), (0.029, 0.15), (0.047, 0.09)]:
         k = int(d * SR)
         y[k:] += y[:-k] * g
