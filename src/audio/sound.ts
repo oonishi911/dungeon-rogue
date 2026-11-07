@@ -20,15 +20,18 @@ const STEP_SOUNDS: Partial<Record<TraitId, string[]>> = Object.fromEntries(
 );
 // 足音の高さを一歩ごとに少し変える範囲（再生の速さの倍率）
 const STEP_PITCH = { min: 0.96, max: 1.04 };
-// 宝箱から中身を取ったときの音（カチッ → ギギギ… → ゴトッ）
+// 宝箱から中身を取ったときの音（カチッ → ギギギ… → ゴトッ、約1.1秒）
 const CHEST_SOUND = 'chest-open.mp3';
 // 特性ごとの環境音（ダンジョンにいるあいだ、くり返し流す）。ない特性は流さない
 // 無属性は洞窟を吹き抜ける風のうなり、炎は溶岩の流れる火山の洞窟（地鳴り・溶岩の泡・火のはぜる音・蒸気）、
-// 氷は氷の洞窟（細い風・氷のきしみ・水滴・きらめき）
+// 氷は氷の洞窟（細い風・氷のきしみ・水滴・きらめき）、光は神殿の広間（合唱のような和音・鐘・そよ風）、
+// 闇は光の届かない洞窟の奥（不気味なうなり・ささやき・うめき声・石の音）
 const AMBIENT_SOUNDS: Partial<Record<TraitId, string>> = {
   neutral: 'ambient-neutral.mp3',
   fire: 'ambient-fire.mp3',
   ice: 'ambient-ice.mp3',
+  light: 'ambient-light.mp3',
+  dark: 'ambient-dark.mp3',
 };
 // 環境音のくり返す長さ（秒。scripts/build-sounds.py の ambient_wind の length と合わせる）
 const AMBIENT_LOOP_SECONDS = 24;

@@ -189,7 +189,7 @@ def cave(x, size, damp, mix, predelay=0.012):
 
 
 def chest_open():
-    """宝箱を開けて中身を取ったときの音（約2秒）：留め金が外れるカチッ → 蝶番が軋むギギギ… → 開き切ったふたが止まるゴトッ。
+    """宝箱を開けて中身を取ったときの音（約1.1秒）：留め金が外れるカチッ → 蝶番が軋むギギギ… → 開き切ったふたが止まるゴトッ。
     蝶番の軋みは、金属どうしがこすれて引っかかる動き（スティックスリップ）を、間隔の揺れる細かい衝撃の列で表し、
     それに金属と木の箱の響きを付ける"""
     rng = np.random.default_rng(7)
@@ -203,21 +203,23 @@ def chest_open():
             y += lfilter([1], [1, -2 * r * np.cos(w), r * r], x) * g * (1 - r)
         return y
 
-    n = int(SR * 2.0)
+    # 鳴る時刻（秒）：軋み始め・軋み終わり・ふたが止まる・音の終わり。すばやく開くので、軋みは短い
+    creak_from, creak_to, thud_time, total = 0.12, 0.7, 0.76, 1.1
+    n = int(SR * total)
     exc = np.zeros(n)
     # 留め金が外れる音（カチッ）
     exc[int(0.03 * SR)] = 1.0
     exc[int(0.045 * SR)] = 0.5
     # 蝶番の軋み：開く速さで、こすれる間隔が変わる
-    t = 0.22
-    while t < 1.55:
-        u = (t - 0.22) / 1.33
+    t = creak_from
+    while t < creak_to:
+        u = (t - creak_from) / (creak_to - creak_from)
         rate = 38 + 70 * np.sin(np.pi * u) ** 1.5 + 18 * np.sin(2 * np.pi * 3.1 * u)
         amp = (np.sin(np.pi * u) ** 0.7) * (0.6 + 0.4 * rng.random())
         exc[int(t * SR)] += amp * 0.55
         t += 1 / rate * (0.85 + 0.3 * rng.random())
     # 開き切ってふたが止まる音（ゴトッ）
-    thud_at = int(1.62 * SR)
+    thud_at = int(thud_time * SR)
     exc[thud_at] += 0.9
 
     metal = resonate(exc, [820, 1310, 2140, 3380, 4870], [0.09, 0.07, 0.05, 0.035, 0.02], [1.0, 0.8, 0.55, 0.35, 0.2])
