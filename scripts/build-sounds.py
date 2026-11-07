@@ -9,6 +9,7 @@
   奇数番が片方の足、偶数番がもう片方の足の音（氷は、片方がシャリッ、もう片方がジャリッ）。
   ゲームでは左右の足で交互に、その足の音から選び、音の高さも少し変えて、同じ音のくり返しに聞こえないようにする
 - 乱数の種を決めているので、作り直しても同じ音になる
+- 宝箱の音（chest-open.mp3）：宝箱から中身を取ったときに鳴らす
 - 足音は特性ごとに地面を変える：無属性は土、炎は焼けて尖った細かい石、氷は雪、光は磨かれた石の神殿、闇は硬い石の洞窟
 """
 import subprocess
@@ -186,6 +187,58 @@ def cave(x, size, damp, mix, predelay=0.012):
     return np.stack([dry + c * mix for c in channels], axis=1)
 
 
+def chest_open():
+    """宝箱を開けて中身を取ったときの音（約2秒）：留め金が外れるカチッ → 蝶番が軋むギギギ… → 開き切ったふたが止まるゴトッ。
+    蝶番の軋みは、金属どうしがこすれて引っかかる動き（スティックスリップ）を、間隔の揺れる細かい衝撃の列で表し、
+    それに金属と木の箱の響きを付ける"""
+    rng = np.random.default_rng(7)
+
+    def resonate(x, freqs, decays, gains):
+        """衝撃の列を、減衰する固有振動（共鳴器）に通す"""
+        y = np.zeros_like(x)
+        for f, d, g in zip(freqs, decays, gains):
+            r = np.exp(-1 / (d * SR))
+            w = 2 * np.pi * f / SR
+            y += lfilter([1], [1, -2 * r * np.cos(w), r * r], x) * g * (1 - r)
+        return y
+
+    n = int(SR * 2.0)
+    exc = np.zeros(n)
+    # 留め金が外れる音（カチッ）
+    exc[int(0.03 * SR)] = 1.0
+    exc[int(0.045 * SR)] = 0.5
+    # 蝶番の軋み：開く速さで、こすれる間隔が変わる
+    t = 0.22
+    while t < 1.55:
+        u = (t - 0.22) / 1.33
+        rate = 38 + 70 * np.sin(np.pi * u) ** 1.5 + 18 * np.sin(2 * np.pi * 3.1 * u)
+        amp = (np.sin(np.pi * u) ** 0.7) * (0.6 + 0.4 * rng.random())
+        exc[int(t * SR)] += amp * 0.55
+        t += 1 / rate * (0.85 + 0.3 * rng.random())
+    # 開き切ってふたが止まる音（ゴトッ）
+    thud_at = int(1.62 * SR)
+    exc[thud_at] += 0.9
+
+    metal = resonate(exc, [820, 1310, 2140, 3380, 4870], [0.09, 0.07, 0.05, 0.035, 0.02], [1.0, 0.8, 0.55, 0.35, 0.2])
+    wood = resonate(exc, [140, 230, 410], [0.12, 0.08, 0.05], [1.4, 1.0, 0.6])  # 木の箱の胴鳴り
+    click = resonate(np.where(np.arange(n) < int(0.06 * SR), exc, 0), [3900, 6100], [0.015, 0.01], [1.0, 0.7])
+    thud = np.zeros(n)
+    thud[thud_at] = 1
+    thud = resonate(thud, [90, 160], [0.09, 0.06], [1.6, 1.0])
+    y = metal + wood * 0.9 + click * 0.8 + thud * 1.2
+    # 石の部屋の、短い反射
+    for d, g in [(0.043, 0.25), (0.071, 0.18), (0.113, 0.12), (0.167, 0.08)]:
+        k = int(d * SR)
+        y[k:] += y[:-k] * g
+    y = y / np.max(np.abs(y)) * CHEST_PEAK
+    fade = int(0.15 * SR)
+    y[-fade:] *= np.linspace(1, 0, fade)
+    return y
+
+
+# 宝箱の音のいちばん大きいところ。たまにしか鳴らない大事な音なので、足音よりはっきり聞こえる大きさにする
+CHEST_PEAK = 0.6
+
 STEPS = {'neutral': step_neutral, 'fire': step_fire, 'ice': step_ice, 'light': step_light, 'dark': step_dark}
 
 
@@ -256,6 +309,8 @@ def main():
             s[-fade:] *= ramp if s.ndim == 1 else ramp[:, None]
             write_mp3(s, OUT / f'step-{trait}-{i}.mp3')
         print(f'wrote public/sounds/step-{trait}-1〜{VARIATIONS}.mp3')
+    write_mp3(chest_open(), OUT / 'chest-open.mp3')
+    print('wrote public/sounds/chest-open.mp3')
 
 
 if __name__ == '__main__':

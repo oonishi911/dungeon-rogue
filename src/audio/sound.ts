@@ -20,6 +20,8 @@ const STEP_SOUNDS: Partial<Record<TraitId, string[]>> = Object.fromEntries(
 );
 // 足音の高さを一歩ごとに少し変える範囲（再生の速さの倍率）
 const STEP_PITCH = { min: 0.96, max: 1.04 };
+// 宝箱から中身を取ったときの音（カチッ → ギギギ… → ゴトッ）
+const CHEST_SOUND = 'chest-open.mp3';
 // 設定画面で音量を試すときに鳴らす音
 const SAMPLE_SOUND = STEP_SOUNDS.light?.[0] ?? null;
 
@@ -58,6 +60,12 @@ export function unlockSound() {
 /** この特性で使う音を、前もって読み込んでおく（最初の一歩から遅れずに鳴るように） */
 export function preloadSounds(trait: TraitId) {
   for (const name of STEP_SOUNDS[trait] ?? []) fetchFile(name);
+  fetchFile(CHEST_SOUND);
+}
+
+/** 宝箱から中身（金貨か道具）を取ったときの音 */
+export function playChestOpen() {
+  play(CHEST_SOUND, 1);
 }
 
 /** 主人公が1歩進んだときの足音。左右の足で交互に鳴らす（奇数番が片方の足、偶数番がもう片方の足の音） */

@@ -5,7 +5,7 @@
 // キーを押し続けたときの歩く速さが、OS のキーリピートの設定に左右されず一定になる。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { playFootstep, preloadSounds } from '../audio/sound';
+import { playChestOpen, playFootstep, preloadSounds } from '../audio/sound';
 import { BODY_NAMES, ITEMS, TRAIT_IDS, TRAITS } from '../game/data';
 import { enemyDef, key } from '../game/enemies';
 import {
@@ -187,6 +187,10 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     }
     // 同じ階で1歩進んだら足音を鳴らす（階を移ったとき・その場で戦ったときは鳴らさない）
     if (next.map === prev.map && !samePos(prev.player, next.player)) playFootstep(next.trait);
+    // 宝箱から金貨か道具を取ったら、宝箱の音を鳴らす（持ち物がいっぱいで何も取れなかったときは鳴らさない）
+    if (next.map === prev.map && next.chests !== prev.chests && (next.gold > prev.gold || next.stats.items.length > prev.stats.items.length)) {
+      playChestOpen();
+    }
     // 階を移ったときは動かさずに切り替える
     motionRef.current = { from: motionOf(next.map === prev.map ? prev : next), start: performance.now() };
     stateRef.current = next;
