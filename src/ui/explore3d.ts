@@ -8,7 +8,7 @@
 // - 主人公は立体の模型（hero3d.ts）。敵と宝箱は、今のドット絵を常にカメラを向く板（スプライト）として立てる
 
 import * as THREE from 'three';
-import { enemyDef } from '../game/enemies';
+import { enemyDef, isAdjacent } from '../game/enemies';
 import { dirBetween, EXPLORE_CONFIG, upStairs, type Dir, type ExploreState } from '../game/explore';
 import type { Pos } from '../game/map';
 import type { EnemyId, TraitId } from '../game/types';
@@ -33,6 +33,10 @@ const HIT_PULSE = {
   hurt: { zoom: 0.08, ms: 260 }, // 敵の攻撃：寄ったあと少し引いて戻る
 } as const;
 export type HitPulse = keyof typeof HIT_PULSE;
+// 戦闘中は、主人公を中心に画面を寄せる。戦闘中とは、追ってきた敵が主人公の隣（上下左右）にいるか、攻撃が起きてから
+// holdMs 以内のこと（敵を倒した直後や、敵が1歩離れてまた来たときに、寄ったり引いたりをくり返さないように）。
+// zoom は寄せたときの倍率。inSec・outSec は寄せる・戻すときのなめらかさで、その3倍ほどの時間でほぼ着く（寄せるのは約0.4秒、戻すのは約0.75秒）
+const COMBAT_ZOOM = { zoom: 1.35, inSec: 0.12, outSec: 0.25, holdMs: 900 } as const;
 // ダメージの数字：受けた側の頭の上に小さく出て、なめらかに大きくなりながら少し浮かび、透けて消える
 const DAMAGE_POP = {
   ms: 250, // 出てから消えるまで
@@ -147,6 +151,8 @@ export class DungeonView3D {
   private lastFrameAt = performance.now();
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private pulse: { kind: HitPulse; start: number } | null = null;
+  private combatZoom = 1; // 戦闘中に寄せている倍率（なめらかに変わる）
+  private lastCombatAt = -Infinity; // 最後に戦闘中だった時刻
   private readonly damagePops: { sprite: THREE.Sprite; start: number }[] = [];
   // 霧：描いている床と壁の1つ1つ（どの入れ物の何番目か・どのマスか・元の色）と、マスごとの今の明るさ
   // 霧：マスごとの「見えている」「一度見た」を1マス1ドットの小さな画像にして、描くときにピクセルごとになめらかに読む
@@ -311,8 +317,8 @@ export class DungeonView3D {
     this.hero.update(p.x, p.y, this.heroDir, moved ? frame.progress : 1, dt, this.reduceMotion);
     this.fog.update(p, dt, this.reduceMotion);
     this.updateDamagePops(now);
-    const zoom = this.pulseZoom(now);
-    if (zoom !== this.camera.zoom) {
+    const zoom = this.updateCombatZoom(s, now, dt) * this.pulseZoom(now);
+    if (Math.abs(zoom - this.camera.zoom) > 1e-4) {
       this.camera.zoom = zoom;
       this.camera.updateProjectionMatrix();
     }
@@ -341,6 +347,7 @@ export class DungeonView3D {
 
   /** 攻撃したとき・攻撃されたときに、画面を少し拡大縮小する。動きを減らす設定では何もしない */
   hitPulse(kind: HitPulse) {
+    this.lastCombatAt = performance.now();
     if (this.reduceMotion) return;
     // 敵の攻撃は、自分の攻撃より目立たせる（同時に起きたら敵の攻撃の効果にする）
     if (this.pulse?.kind === 'hurt' && kind === 'attack' && performance.now() - this.pulse.start < HIT_PULSE.hurt.ms) return;
@@ -401,7 +408,21 @@ export class DungeonView3D {
     }
   }
 
-  /** 今のカメラの倍率。効果のあいだだけ 1 からずれる */
+  /** 戦闘中に寄せる倍率を、目標へなめらかに近づける。動きを減らす設定では、すぐに切り替える */
+  private updateCombatZoom(s: ExploreState, now: number, dt: number): number {
+    if (s.enemies.some((e) => e.mode !== 'wander' && isAdjacent(e.pos, s.player))) this.lastCombatAt = now;
+    const target = now - this.lastCombatAt < COMBAT_ZOOM.holdMs ? COMBAT_ZOOM.zoom : 1;
+    if (this.reduceMotion) {
+      this.combatZoom = target;
+    } else {
+      const tau = target > this.combatZoom ? COMBAT_ZOOM.inSec : COMBAT_ZOOM.outSec;
+      this.combatZoom += (target - this.combatZoom) * (1 - Math.exp(-dt / tau));
+      if (Math.abs(target - this.combatZoom) < 1e-3) this.combatZoom = target;
+    }
+    return this.combatZoom;
+  }
+
+  /** 攻撃したとき・攻撃されたときの効果の倍率。効果のあいだだけ 1 からずれる */
   private pulseZoom(now: number): number {
     if (!this.pulse) return 1;
     const { zoom, ms } = HIT_PULSE[this.pulse.kind];
