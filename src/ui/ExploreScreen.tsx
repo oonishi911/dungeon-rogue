@@ -5,7 +5,7 @@
 // キーを押し続けたときの歩く速さが、OS のキーリピートの設定に左右されず一定になる。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { playChestOpen, playFootstep, preloadSounds } from '../audio/sound';
+import { playChestOpen, playFootstep, preloadSounds, setAmbient } from '../audio/sound';
 import { BODY_NAMES, ITEMS, TRAIT_IDS, TRAITS } from '../game/data';
 import { enemyDef, key } from '../game/enemies';
 import {
@@ -348,6 +348,12 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
 
   // このダンジョンの足音を、最初の一歩から鳴るように読み込んでおく
   useEffect(() => preloadSounds(state.trait), [state.trait]);
+
+  // ダンジョンにいるあいだ、特性の環境音を流す（探索画面を離れたら止める）
+  useEffect(() => {
+    setAmbient(state.trait);
+    return () => setAmbient(null);
+  }, [state.trait]);
 
   useEffect(() => {
     if (miniRef.current) drawMinimap(miniRef.current, state, readColors());

@@ -1,4 +1,4 @@
-// 効果音の設定。画面の上のボタンで開き、オン・オフと音量を変える。変えた設定はブラウザに保存する
+// 音の設定。画面の上のボタンで開き、音のオン・オフと、効果音・環境音それぞれの音量を変える。変えた設定はブラウザに保存する
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { playSample, setSoundSettings, soundSettings, unlockSound } from '../audio/sound';
@@ -9,7 +9,7 @@ export function SoundButton() {
   const [settings, setSettings] = useState<SoundSettings>(soundSettings);
   const rootRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
-  const muted = !settings.enabled || settings.volume === 0;
+  const muted = !settings.enabled || (settings.volume === 0 && settings.ambient === 0);
 
   const change = (next: SoundSettings) => {
     setSettings(next);
@@ -40,14 +40,14 @@ export function SoundButton() {
         className="explore__wait sound__toggle"
         aria-expanded={open}
         aria-controls={panelId}
-        aria-label="効果音の設定"
+        aria-label="音の設定"
         onClick={() => setOpen((v) => !v)}
       >
         <SpeakerIcon muted={muted} />
       </button>
       {open && (
-        <div id={panelId} className="sound__panel" role="group" aria-label="効果音の設定">
-          <p className="sound__title">効果音</p>
+        <div id={panelId} className="sound__panel" role="group" aria-label="音の設定">
+          <p className="sound__title">音</p>
           <button
             type="button"
             className="explore__wait sound__switch"
@@ -65,7 +65,7 @@ export function SoundButton() {
           </button>
           <label className="sound__volume">
             <span>
-              音量 <output>{Math.round(settings.volume * 100)}%</output>
+              効果音 <output>{Math.round(settings.volume * 100)}%</output>
             </span>
             <input
               type="range"
@@ -78,6 +78,21 @@ export function SoundButton() {
               // つまみを離したときに、その音量で試しに鳴らす
               onPointerUp={() => playSample()}
               onKeyUp={() => playSample()}
+            />
+          </label>
+          {/* 環境音はダンジョンにいるあいだ流れているので、つまみを動かすとそのまま大きさが変わる */}
+          <label className="sound__volume">
+            <span>
+              環境音 <output>{Math.round(settings.ambient * 100)}%</output>
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={Math.round(settings.ambient * 100)}
+              disabled={!settings.enabled}
+              onChange={(e) => change({ ...settings, ambient: Number(e.target.value) / 100 })}
             />
           </label>
         </div>
