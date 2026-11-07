@@ -486,6 +486,156 @@ def ambient_fire(length=24.0, seed=9):
     return y * min(1.0, AMBIENT_MAX / float(np.max(np.abs(y))))
 
 
+def loop_layer(make, length, over=3.0):
+    """ずっと鳴る音（左右2チャンネル）を length 秒のループにする。make(m, t, lfo, side) で m サンプル分を作り、
+    最後の over 秒を最初になめらかに重ねて継ぎ目を消す"""
+    n = int(length * SR)
+    m = n + int(over * SR)
+    t = np.arange(m) / SR
+
+    def lfo(cycles, phase):
+        return np.sin(2 * np.pi * cycles * t / length + phase)
+
+    out = []
+    for side in range(2):
+        y = make(m, t, lfo, side)
+        k = int(over * SR)
+        fade = np.sin(np.linspace(0, np.pi / 2, k)) ** 2
+        loop = y[:n].copy()
+        loop[:k] = y[:k] * np.sqrt(fade) + y[n:n + k] * np.sqrt(1 - fade)
+        out.append(loop)
+    return np.stack(out, axis=1)
+
+
+class Events:
+    """ときどき鳴る音を、左右の位置を決めて置き、まとめて響かせる。ループの終わりからはみ出した響きは、最初に回す"""
+
+    def __init__(self, length):
+        self.n = int(length * SR)
+        self.dry = np.zeros((self.n + int(8 * SR), 2))
+        self.send = np.zeros(len(self.dry))
+
+    def place(self, sound, at, pan, wet=1.0):
+        i = int(at * SR)
+        sound = sound[: len(self.dry) - i]
+        left, right = np.cos((pan + 1) * np.pi / 4), np.sin((pan + 1) * np.pi / 4)
+        self.dry[i:i + len(sound), 0] += sound * left
+        self.dry[i:i + len(sound), 1] += sound * right
+        self.send[i:i + len(sound)] += sound * wet
+
+    def mix(self, size, damp, amount):
+        wet = cave(self.send, size, damp, 1.0)[: len(self.dry)] - np.stack([self.send, self.send], axis=1)
+        events = self.dry + wet * amount
+        loop = events[: self.n].copy()
+        rest = events[self.n:]
+        while len(rest):
+            loop[: min(len(rest), self.n)] += rest[: self.n]
+            rest = rest[self.n:]
+        return loop
+
+
+def level_ambient(y):
+    """環境音を、無属性の風と同じくらいの大きさにそろえる（いちばん大きいところも抑える）"""
+    y = y * (AMBIENT_RMS / float(np.sqrt(np.mean(y ** 2))))
+    return y * min(1.0, AMBIENT_MAX / float(np.max(np.abs(y))))
+
+
+def ambient_light(length=24.0, seed=13):
+    """光の環境音：磨かれた石の神殿の広間（左右2チャンネル、length 秒でつながるループ）。
+    - 聖なる響き：遠くの合唱のような、やわらかく澄んだ和音が、ゆっくり満ち引きする（明るい長調の和音）
+    - 鐘：遠くで、小さな鐘がひとつ鳴り、広い広間に長く響く（2回）
+    - そよ風：高い窓から入る、やわらかな空気の音
+    - きらめき：光の粒のような、とても小さく高い音（まばら）"""
+    rng = np.random.default_rng(seed)
+    # 和音の音（Hz）。length 秒でちょうど元に戻るよう、1/length の倍数にする
+    notes = [round(f * length) / length for f in (220.0, 277.18, 329.63, 440.0, 554.37)]
+
+    def pad(m, t, lfo, side):
+        ph = rng.random(12) * 2 * np.pi
+        y = np.zeros(m)
+        for i, f in enumerate(notes):
+            # 合唱らしく、少しずつ高さのずれた声を重ねる（ゆっくりうなる）
+            for d in (-0.4, 0.4):
+                f2 = f + d + (0.15 if side else -0.15)
+                f2 = round(f2 * length) / length
+                voice = np.sin(2 * np.pi * f2 * t + ph[i]) + 0.3 * np.sin(4 * np.pi * f2 * t + ph[i + 5])
+                y += voice * (0.55 + 0.45 * lfo(1 + i % 3, ph[(i + 2) % 12])) * (1.0 if i < 3 else 0.6)
+        y = low(y, 2500) * (0.75 + 0.25 * lfo(2, ph[11]))
+        breeze = band(rng.standard_normal(m), 1500, 6000) * (0.5 + 0.5 * lfo(3, ph[10])) * 0.6
+        return high(y * 0.05 + breeze * 0.05, 60)
+
+    base = loop_layer(pad, length)
+    ev = Events(length)
+
+    def bell(f):
+        k = int(5.0 * SR)
+        y = sum(ring(k, f * r, d, rng) * g for r, d, g in [(1, 2.2, 1.0), (2.01, 1.4, 0.45), (2.76, 0.9, 0.3), (5.4, 0.4, 0.12)])
+        return y * env(k, 0.002, 2.0) * 0.12
+
+    def sparkle():
+        k = int(0.6 * SR)
+        f = 3500 + 3000 * rng.random()
+        return ring(k, f, 0.15, rng) * 0.04
+
+    ev.place(bell(880), 4.2, -0.4, 1.0)
+    ev.place(bell(659.25), 15.6, 0.5, 1.0)
+    for at in np.sort(rng.random(16) * length):
+        ev.place(sparkle(), at, rng.random() * 1.8 - 0.9, 0.8)
+    return level_ambient(base + ev.mix(3.0, 7000, 0.8))
+
+
+def ambient_dark(length=24.0, seed=17):
+    """闇の環境音：光の届かない、硬い石の洞窟の奥（左右2チャンネル、length 秒でつながるループ）。
+    - 低い不気味なうなり：わずかに高さのずれた低い音が、ゆっくりうなり合う（落ち着かない響きの組み合わせ）
+    - ささやき：人の声のようにも聞こえる、かすかな息づかいの風が、ゆっくり満ち引きする
+    - うめき声：遠くで、低い声のような音が、ゆっくり上がって下がる（2回）
+    - 石の音：暗がりの奥で、石が落ちる・転がる音が、こもって長く響く（ところどころ）"""
+    rng = np.random.default_rng(seed)
+
+    def drone(m, t, lfo, side):
+        ph = rng.random(10) * 2 * np.pi
+        y = np.zeros(m)
+        # 低い音と、そこから少し外れた不安な音を重ねる。length 秒でちょうど元に戻る高さにする
+        for f, g in [(55.0, 0.45), (55.5, 0.35), (77.75, 0.3), (110.0, 0.8), (110.6, 0.6), (155.5, 0.6), (233.0, 0.3), (311.0, 0.12)]:
+            f = round(f * length) / length
+            y += np.sin(2 * np.pi * f * t + ph[int(f) % 10]) * g
+        y = y * (0.7 + 0.3 * lfo(2, ph[0]))
+        # ささやき：声の響きに近い帯域を、ゆっくり動かしたノイズ
+        whisper = resonant_sweep(rng.standard_normal(m), 700 + 250 * lfo(3, ph[1]) + (60 if side else -60), 4)
+        whisper = whisper * np.clip(0.35 + 0.65 * lfo(4, ph[2]), 0, 1) ** 2
+        air = low(rng.standard_normal(m), 400) * 0.3
+        return high(y * 0.12 + whisper * 0.9 + air * 0.25, 30)
+
+    base = loop_layer(drone, length)
+    ev = Events(length)
+
+    def moan(dur):
+        k = int(dur * SR)
+        tt = np.arange(k) / SR
+        f = 160 + 70 * np.sin(np.pi * tt / dur) ** 1.5
+        voice = np.sin(2 * np.pi * np.cumsum(f) / SR) + 0.5 * np.sin(4 * np.pi * np.cumsum(f) / SR) + 0.25 * np.sin(6 * np.pi * np.cumsum(f) / SR)
+        breath = band(rng.standard_normal(k), 300, 1500) * 0.3
+        return low(voice + breath, 1200) * np.sin(np.pi * tt / dur) ** 2 * 0.12
+
+    def stone(count):
+        k = int(1.2 * SR)
+        y = np.zeros(k)
+        at = 0.0
+        for _ in range(count):
+            i = int(at * SR)
+            hit = band(rng.standard_normal(int(0.05 * SR)), 300, 2500) * env(int(0.05 * SR), 0.0005, 0.01)
+            hit = hit + ring(len(hit), 180 + 200 * rng.random(), 0.03, rng) * 0.3
+            y[i:i + len(hit)] += hit * (0.4 + 0.6 * rng.random())
+            at += 0.12 + 0.25 * rng.random()
+        return low(y, 1800) * 0.25
+
+    ev.place(moan(3.0), 6.5, -0.7, 0.9)
+    ev.place(moan(2.4), 17.2, 0.6, 0.9)
+    for at, pan, c in [(2.8, 0.5, 2), (11.3, -0.3, 4), (14.6, 0.8, 1), (21.1, -0.6, 3)]:
+        ev.place(stone(c), at, pan, 1.0)
+    return level_ambient(base + ev.mix(2.6, 1800, 0.9))
+
+
 # 環境音のいちばん大きいところ。足音や宝箱の音のじゃまにならないよう、小さめにする
 AMBIENT_PEAK = 0.35
 # 無属性の風の音の、平均の大きさ。ほかの特性の環境音も、この大きさにそろえる
@@ -574,6 +724,10 @@ def main():
     print('wrote public/sounds/ambient-ice.mp3')
     write_mp3(ambient_fire(), OUT / 'ambient-fire.mp3')
     print('wrote public/sounds/ambient-fire.mp3')
+    write_mp3(ambient_light(), OUT / 'ambient-light.mp3')
+    print('wrote public/sounds/ambient-light.mp3')
+    write_mp3(ambient_dark(), OUT / 'ambient-dark.mp3')
+    print('wrote public/sounds/ambient-dark.mp3')
 
 
 if __name__ == '__main__':
