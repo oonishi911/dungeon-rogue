@@ -114,17 +114,15 @@ def step_fire(rng, foot):
 
 def step_ice(rng, foot):
     """氷：霜の降りた雪を踏む、シャリシャリという音。細かい氷の粒が1つずつ砕ける、乾いた明るい音を重ねる。
-    雪が音を吸うので、響きはほとんどない"""
+    弾むように聞こえないよう、踏んだときの低い「ボン」という音と、部屋の残響は入れない（雪が音を吸うので、響きもほとんどない）"""
     n = int(0.3 * SR)
-    noise = rng.standard_normal(n)
-    thud = low(noise, 350) * env(n, 0.006, 0.05) * 1.2  # 雪に沈む鈍い音
     # 雪が押し固められる音（ザクッ）
     crunch = low(band(grains(n, 6000, 0.13, rng, 0.004, 0.002), 500, 3500), 3000) * env(n, 0.03, 0.08) * 1.6
     # 氷の粒が砕ける音（シャリシャリ）：1つずつ聞こえるくらいの間隔で、短く乾いた高い粒を、足が沈むあいだ並べる
     shari = band(grains(n, 1600, 0.16, rng, 0.006, 0.0004), 2500, 9000) * 2.2
-    y = thud + crunch + shari
+    y = crunch + shari
     y *= 0.85 + 0.3 * rng.random()
-    return reverb(high(y, 60), 0.2, 6000, 0.06)
+    return high(y, 150)
 
 
 def step_light(rng, foot):
