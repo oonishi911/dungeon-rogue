@@ -189,10 +189,12 @@ def cave(x, size, damp, mix, predelay=0.012):
 
 
 def chest_open():
-    """宝箱を開けて中身を取ったときの音（約1.1秒）：留め金が外れるカチッ → 蝶番が軋むギギギ… → 開き切ったふたが止まるゴトッ。
-    蝶番の軋みは、金属どうしがこすれて引っかかる動き（スティックスリップ）を、間隔の揺れる細かい衝撃の列で表し、
-    それに金属と木の箱の響きを付ける"""
-    rng = np.random.default_rng(7)
+    """宝箱を開けて中身を取ったときの音（約0.5秒）：木の宝箱のふたが、ギィッと短くきしんで、パカッと開く。
+    - きしみ：木どうしがこすれて引っかかる細かい衝撃の列を、木の響き（金属より低く、すぐ止まる）に通す。
+      こすれる間隔が速くなっていくので、ギィッと音が上がる
+    - パカッ：ふたが外れて開く、乾いた中空の音。箱の中の空気が鳴る低めの響きと、短い木の打音を重ねる
+    - 小さな部屋の短い反射を少し付ける"""
+    rng = np.random.default_rng(21)
 
     def resonate(x, freqs, decays, gains):
         """衝撃の列を、減衰する固有振動（共鳴器）に通す"""
@@ -203,38 +205,37 @@ def chest_open():
             y += lfilter([1], [1, -2 * r * np.cos(w), r * r], x) * g * (1 - r)
         return y
 
-    # 鳴る時刻（秒）：軋み始め・軋み終わり・ふたが止まる・音の終わり。すばやく開くので、軋みは短い
-    creak_from, creak_to, thud_time, total = 0.12, 0.7, 0.76, 1.1
+    total = 0.5
     n = int(SR * total)
+    # きしみ（0.03〜0.3秒）：こすれる間隔がだんだん速くなる（音が上がる）
     exc = np.zeros(n)
-    # 留め金が外れる音（カチッ）
-    exc[int(0.03 * SR)] = 1.0
-    exc[int(0.045 * SR)] = 0.5
-    # 蝶番の軋み：開く速さで、こすれる間隔が変わる
+    creak_from, creak_to = 0.03, 0.3
     t = creak_from
     while t < creak_to:
         u = (t - creak_from) / (creak_to - creak_from)
-        rate = 38 + 70 * np.sin(np.pi * u) ** 1.5 + 18 * np.sin(2 * np.pi * 3.1 * u)
-        amp = (np.sin(np.pi * u) ** 0.7) * (0.6 + 0.4 * rng.random())
-        exc[int(t * SR)] += amp * 0.55
-        t += 1 / rate * (0.85 + 0.3 * rng.random())
-    # 開き切ってふたが止まる音（ゴトッ）
-    thud_at = int(thud_time * SR)
-    exc[thud_at] += 0.9
-
-    metal = resonate(exc, [820, 1310, 2140, 3380, 4870], [0.09, 0.07, 0.05, 0.035, 0.02], [1.0, 0.8, 0.55, 0.35, 0.2])
-    wood = resonate(exc, [140, 230, 410], [0.12, 0.08, 0.05], [1.4, 1.0, 0.6])  # 木の箱の胴鳴り
-    click = resonate(np.where(np.arange(n) < int(0.06 * SR), exc, 0), [3900, 6100], [0.015, 0.01], [1.0, 0.7])
-    thud = np.zeros(n)
-    thud[thud_at] = 1
-    thud = resonate(thud, [90, 160], [0.09, 0.06], [1.6, 1.0])
-    y = metal + wood * 0.9 + click * 0.8 + thud * 1.2
-    # 石の部屋の、短い反射
-    for d, g in [(0.043, 0.25), (0.071, 0.18), (0.113, 0.12), (0.167, 0.08)]:
+        rate = 70 + 160 * u ** 1.3
+        exc[int(t * SR)] += (np.sin(np.pi * min(u * 1.2, 1)) ** 0.6) * (0.6 + 0.4 * rng.random())
+        t += 1 / rate * (0.9 + 0.2 * rng.random())
+    creak = resonate(exc, [420, 760, 1180, 1900], [0.012, 0.01, 0.008, 0.005], [1.0, 0.8, 0.5, 0.25])
+    creak += resonate(exc, [190], [0.02], [0.6])  # 箱の胴鳴り
+    # パカッ（0.31秒）：乾いた木の打音と、中空の箱が鳴る響き
+    pop_at = int(0.31 * SR)
+    hit = np.zeros(n)
+    hit[pop_at] = 1.0
+    hit[pop_at + int(0.006 * SR)] = 0.45  # ふたの両端が少しずれて当たる
+    knock = low(resonate(hit, [290, 520, 900, 1500], [0.05, 0.035, 0.02, 0.01], [1.5, 1.1, 0.6, 0.25]), 2500)
+    noise = rng.standard_normal(n)
+    air = np.zeros(n)
+    k = int(0.03 * SR)
+    air[pop_at:pop_at + k] = band(noise[:k], 400, 3000) * env(k, 0.0005, 0.006)  # パッという空気
+    y = creak * 1.0 + knock * 2.4 + air * 0.1
+    # 小さな部屋の短い反射
+    for d, g in [(0.017, 0.22), (0.029, 0.15), (0.047, 0.09)]:
         k = int(d * SR)
         y[k:] += y[:-k] * g
+    y = high(y, 80)
     y = y / np.max(np.abs(y)) * CHEST_PEAK
-    fade = int(0.15 * SR)
+    fade = int(0.08 * SR)
     y[-fade:] *= np.linspace(1, 0, fade)
     return y
 
