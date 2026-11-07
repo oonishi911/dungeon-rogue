@@ -6,10 +6,15 @@ import type { TraitId } from '../game/types';
 import { loadSoundSettings, writeSoundSettings } from '../storage';
 import { gainOf, type SoundSettings } from './settings';
 
-// 特性ごとの足音（一歩ごとにこの中から選ぶ）。足音のない特性は鳴らさない
-const STEP_SOUNDS: Partial<Record<TraitId, string[]>> = {
-  light: ['step-light-1.mp3', 'step-light-2.mp3', 'step-light-3.mp3', 'step-light-4.mp3'],
-};
+// 特性ごとの足音（一歩ごとにこの中から選ぶ。scripts/build-sounds.py の VARIATIONS と数を合わせる）。
+// 無属性は土、炎は焼けた岩と灰（少しこもった音）、氷は雪、光は磨かれた石の神殿、闇は硬い石の洞窟
+const STEP_VARIATIONS = 4;
+const STEP_SOUNDS: Partial<Record<TraitId, string[]>> = Object.fromEntries(
+  (['neutral', 'fire', 'ice', 'light', 'dark'] as const).map((trait) => [
+    trait,
+    Array.from({ length: STEP_VARIATIONS }, (_, i) => `step-${trait}-${i + 1}.mp3`),
+  ]),
+);
 // 足音の高さを一歩ごとに少し変える範囲（再生の速さの倍率）
 const STEP_PITCH = { min: 0.96, max: 1.04 };
 // 設定画面で音量を試すときに鳴らす音

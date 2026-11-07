@@ -3,13 +3,15 @@
 使い方（Python 3 と NumPy・SciPy、mp3 に変換する ffmpeg が必要。npm のスクリプトとは別）:
     pip install numpy scipy
     python3 scripts/build-sounds.py
+    python3 scripts/build-sounds.py --preview <書き出し先>   # 聞き比べ用に、特性ごとに7歩分の音を書き出す
 
 - 足音は、ダンジョン特性ごとに一歩分の音を VARIATIONS 種類ずつ書き出す（step-{特性}-{番号}.mp3）。
   ゲームでは一歩ごとにこの中から選び、音の高さも少し変えて、同じ音のくり返しに聞こえないようにする
 - 乱数の種を決めているので、作り直しても同じ音になる
-- 今あるのは光のダンジョンの足音だけ（磨かれた石の神殿を、硬い靴で歩く音。残響が長い）。ほかの特性は足音を鳴らさない
+- 足音は特性ごとに地面を変える：無属性は土、炎は焼けた岩と灰（こもった音）、氷は雪、光は磨かれた石の神殿、闇は硬い石の洞窟
 """
 import subprocess
+import sys
 import wave
 from pathlib import Path
 
@@ -19,7 +21,10 @@ from scipy.signal import butter, lfilter, sosfilt
 SR = 44100
 OUT = Path(__file__).resolve().parent.parent / 'public' / 'sounds'
 VARIATIONS = 4  # 足音の種類の数（src/audio/sound.ts の STEP_SOUNDS と合わせる）
-PEAK = 0.7  # いちばん大きい音の大きさ（1で割れる）。種類どうしの大きさの違いは残す
+PEAK = 0.7  # 光の足音の、いちばん大きい音の大きさ（1で割れる）。種類どうしの大きさの違いは残す
+# ほかの特性の足音は、光の足音と同じくらいの大きさに聞こえるようにそろえる（音のエネルギーで比べる）。
+# 光の足音の大きさを基準にするのは、最初にゲームに入れて、音量の設定もそれで決めたため
+REFERENCE = 'light'
 
 
 def env(n, attack, decay):
@@ -45,6 +50,29 @@ def ring(n, f, decay, rng):
     return np.sin(2 * np.pi * f * t + rng.random() * 6) * np.exp(-t / decay)
 
 
+def grains(n, rate, length, rng, start=0.0, grain=0.0015):
+    """細かい粒が砕ける音（土・灰・雪）。まばらな短いノイズの粒を、だんだん減らしながら並べる"""
+    x = np.zeros(n)
+    t = start
+    while t < start + length:
+        i = int(t * SR)
+        if i < n:
+            x[i] += (rng.random() * 2 - 1) * np.exp(-(t - start) / (length * 0.5))
+        t += rng.exponential(1 / rate)
+    k = max(int(grain * SR), 1)
+    kernel = rng.standard_normal(k) * np.exp(-np.arange(k) / (k / 3))
+    return np.convolve(x, kernel)[:n]
+
+
+def heel_toe(make, rng, n):
+    """かかと → つま先の順に、同じ音を2回（つま先は弱く）鳴らす"""
+    heel = make()
+    toe = int((0.028 + 0.012 * rng.random()) * SR)
+    y = heel.copy()
+    y[toe:] += heel[: n - toe] * 0.55
+    return y
+
+
 def reverb(x, size, damp, mix):
     """部屋の残響（くし形フィルタを並べた簡単なもの）。size は残響の長さ（秒）、damp は響きのこもり具合（Hz）"""
     out = np.zeros(len(x) + int(SR * size * 1.2))
@@ -57,8 +85,45 @@ def reverb(x, size, damp, mix):
     return xx + low(out, damp) / 4 * mix
 
 
+def step_neutral(rng, foot):
+    """無属性：土の上を歩く、やわらかくこもった足音。土がくずれるかすかなザッという音が混ざる。響きは少ない"""
+    n = int(0.25 * SR)
+    noise = rng.standard_normal(n)
+    y = heel_toe(lambda: low(noise, 700) * env(n, 0.003, 0.035) * 2.0 + ring(n, 85 + 10 * foot, 0.04, rng) * 0.8, rng, n)
+    y += band(grains(n, 1500, 0.08, rng, 0.004), 600, 2400) * 0.45  # 土の粒がこすれる
+    y *= 0.85 + 0.3 * rng.random()
+    return reverb(high(y, 40), 0.35, 2000, 0.18)
+
+
+def step_fire(rng, foot):
+    """炎：焼けた岩の上の灰と燃えかすを踏む音。熱気でこもったように、高い音を削る"""
+    n = int(0.25 * SR)
+    noise = rng.standard_normal(n)
+    y = heel_toe(lambda: band(noise, 200, 1600) * env(n, 0.001, 0.022) + ring(n, 95, 0.03, rng), rng, n)
+    y += band(grains(n, 1400, 0.09, rng), 1200, 3800) * 1.4  # 灰がくずれる
+    y += band(grains(n, 90, 0.12, rng, 0.01, 0.0008), 2000, 5000) * 1.6  # 燃えかすがはぜる
+    y = low(y, 2600)  # 少しこもらせる
+    y *= 0.85 + 0.3 * rng.random()
+    return reverb(high(y, 40), 0.45, 1800, 0.28)
+
+
+def step_ice(rng, foot):
+    """氷：積もった雪を踏みしめる、ギュッ・ザクッという音。雪が音を吸うので、響きはほとんどない"""
+    n = int(0.3 * SR)
+    noise = rng.standard_normal(n)
+    thud = low(noise, 350) * env(n, 0.006, 0.05) * 1.6  # 雪に沈む鈍い音
+    # 雪が押し固められる音：粒がぎっしり並び、足が沈むあいだ（約0.15秒）続く
+    crunch = grains(n, 9000, 0.15, rng, 0.004, 0.002)
+    crunch = low(band(crunch, 500, 3500), 3000) * env(n, 0.03, 0.09) * 2.4
+    # 押し固められるときのきしみ（ギュッ）：狭い高さのノイズを、粒の強さで揺らす
+    squeak = band(noise, 900 + 120 * foot, 1400 + 120 * foot) * np.abs(low(crunch, 60)) * 9
+    y = thud + crunch + squeak
+    y *= 0.85 + 0.3 * rng.random()
+    return reverb(high(y, 60), 0.2, 2500, 0.08)
+
+
 def step_light(rng, foot):
-    """光のダンジョン：磨かれた石の神殿を歩く、硬く澄んだ足音（かかと → つま先）"""
+    """光：磨かれた石の神殿を歩く、硬く澄んだ足音。広い広間なので残響が長い"""
     n = int(0.22 * SR)
     noise = rng.standard_normal(n)
     heel = (band(noise, 900, 4500) * env(n, 0.0005, 0.009) * 1.3
@@ -71,7 +136,38 @@ def step_light(rng, foot):
     return reverb(high(y, 40), 1.4, 6000, 0.55)
 
 
-STEPS = {'light': step_light}
+def step_dark(rng, foot):
+    """闇：硬い石の上を歩く、カツッという固い足音。暗い洞窟に、こもった残響が長く残る"""
+    n = int(0.22 * SR)
+    noise = rng.standard_normal(n)
+    y = heel_toe(lambda: band(noise, 500, 3500) * env(n, 0.0005, 0.012) * 1.4
+                 + ring(n, 760 + 40 * foot, 0.02, rng) * 0.15 + ring(n, 120, 0.025, rng) * 0.6, rng, n)
+    y *= 0.85 + 0.3 * rng.random()
+    return reverb(high(y, 40), 1.1, 2200, 0.5)
+
+
+STEPS = {'neutral': step_neutral, 'fire': step_fire, 'ice': step_ice, 'light': step_light, 'dark': step_dark}
+
+
+def loudness(steps):
+    """一歩分（0.27秒）の音のエネルギー"""
+    return float(np.sqrt(np.mean([np.mean(s[: int(0.27 * SR)] ** 2) for s in steps])))
+
+
+def make_steps():
+    """特性ごとの足音（VARIATIONS 種類ずつ）を作り、大きさをそろえる"""
+    made = {}
+    for trait, make in STEPS.items():
+        rng = np.random.default_rng(11)
+        made[trait] = [make(rng, i % 2) for i in range(VARIATIONS)]
+    ref = made[REFERENCE]
+    ref_scale = PEAK / max(np.max(np.abs(s)) for s in ref)
+    target = loudness(ref) * ref_scale
+    for trait, steps in made.items():
+        scale = ref_scale if trait == REFERENCE else target / loudness(steps)
+        scale = min(scale, 0.95 / max(np.max(np.abs(s)) for s in steps))  # 割れないように
+        made[trait] = [s * scale for s in steps]
+    return made
 
 
 def write_mp3(y, path):
@@ -85,16 +181,29 @@ def write_mp3(y, path):
     wav.unlink()
 
 
+def preview(out_dir):
+    """聞き比べ用：特性ごとに、ゲームと同じ0.27秒間隔で7歩鳴らした音を書き出す"""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for trait, steps in make_steps().items():
+        total = np.zeros(int(SR * 3.6))
+        for k in range(7):
+            s = steps[k % VARIATIONS]
+            at = int((0.05 + 0.27 * k) * SR)
+            total[at:at + len(s)] += s[: len(total) - at]
+        write_mp3(total, out_dir / f'preview-{trait}.mp3')
+    print(f'wrote {out_dir}/preview-*.mp3')
+
+
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == '--preview':
+        preview(Path(sys.argv[2]))
+        return
     OUT.mkdir(parents=True, exist_ok=True)
-    for trait, make in STEPS.items():
-        rng = np.random.default_rng(11)
-        steps = [make(rng, i % 2) for i in range(VARIATIONS)]
-        scale = PEAK / max(np.max(np.abs(s)) for s in steps)
+    for trait, steps in make_steps().items():
         for i, s in enumerate(steps, 1):
             # 残響の終わりはなめらかに消す
             fade = int(0.1 * SR)
-            s = s * scale
+            s = s.copy()
             s[-fade:] *= np.linspace(1, 0, fade)
             write_mp3(s, OUT / f'step-{trait}-{i}.mp3')
         print(f'wrote public/sounds/step-{trait}-1〜{VARIATIONS}.mp3')
