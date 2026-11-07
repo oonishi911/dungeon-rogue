@@ -115,7 +115,8 @@ def step_fire(rng, foot):
 
 def step_ice(rng, foot):
     """氷：霜の降りた雪を踏む音。左右の足で、シャリッ（軽く細かい音）とジャリッ（粗く砕ける音）を交互に鳴らす。
-    弾むように聞こえないよう、踏んだときの低い「ボン」という音と、部屋の残響は入れない"""
+    氷の洞窟の閉じた空間に響かせる（左右で少し違う響きにして広がりを出す）。
+    弾むように聞こえないよう、踏んだときの低い「ボン」という音は入れず、残響は反射の多いなめらかなもの（cave）にする"""
     n = int(0.3 * SR)
     if foot == 0:
         # シャリ：とても短い氷の粒をぎっしり並べ（粒どうしが溶け合ってサラッと聞こえる）、少し低い粒をまばらに混ぜる
@@ -127,7 +128,8 @@ def step_ice(rng, foot):
         crunch = low(band(grains(n, 6000, 0.13, rng, 0.004, 0.002), 500, 3500), 3000) * env(n, 0.03, 0.08) * 1.6
         shari = band(grains(n, 1600, 0.16, rng, 0.006, 0.0004), 2500, 9000) * 2.2
         y = high(crunch + shari, 150) * 0.55  # シャリと同じくらいの大きさに聞こえるように
-    return y * (0.85 + 0.3 * rng.random())
+    # 氷の洞窟に響く：閉じた空間で、硬い氷の壁に反射して、明るい響きが約1秒残る
+    return cave(y * (0.85 + 0.3 * rng.random()), 1.1, 5000, 0.9)
 
 
 def step_light(rng, foot):
@@ -154,12 +156,44 @@ def step_dark(rng, foot):
     return reverb(high(y, 40), 1.1, 2200, 0.5)
 
 
+def cave(x, size, damp, mix, predelay=0.012):
+    """閉じた空間（洞窟）の残響。左右で少しずつ違う響きにして、音に広がりを出す（左右2チャンネルを返す）。
+    reverb より反射を多く重ね、響きをなめらかにする（反射が少ないと、ビヨンと弾むように聞こえる）"""
+    pre = int(predelay * SR)
+    tail = int(SR * size * 1.3)
+    xx = np.concatenate([np.zeros(pre), x, np.zeros(tail)])
+    channels = []
+    for delays in ([0.0297, 0.0371, 0.0411, 0.0437, 0.0503, 0.0571], [0.0313, 0.0353, 0.0427, 0.0461, 0.0527, 0.0593]):
+        wet = np.zeros(len(xx))
+        for d in delays:
+            k = int(d * SR)
+            a = np.zeros(k + 1)
+            a[0], a[k] = 1, -(0.001 ** (d / size))
+            wet += lfilter([1], a, xx)
+        # 反射をさらに細かく散らす（オールパス）
+        for d, g in [(0.0051, 0.7), (0.0017, 0.7)]:
+            k = int(d * SR)
+            b = np.zeros(k + 1)
+            b[0], b[k] = -g, 1
+            a = np.zeros(k + 1)
+            a[0], a[k] = 1, -g
+            wet = lfilter(b, a, wet)
+        channels.append(low(wet, damp) / len(delays))
+    dry = np.concatenate([x, np.zeros(len(xx) - len(x))])
+    return np.stack([dry + c * mix for c in channels], axis=1)
+
+
 STEPS = {'neutral': step_neutral, 'fire': step_fire, 'ice': step_ice, 'light': step_light, 'dark': step_dark}
 
 
 def loudness(steps):
-    """一歩分（0.27秒）の音のエネルギー"""
+    """一歩分（0.27秒）の音のエネルギー（左右2チャンネルの音は、両方の平均）"""
     return float(np.sqrt(np.mean([np.mean(s[: int(0.27 * SR)] ** 2) for s in steps])))
+
+
+def stereo(y):
+    """左右2チャンネルにそろえる（1チャンネルの音は、左右に同じ音を置く）"""
+    return y if y.ndim == 2 else np.stack([y, y], axis=1)
 
 
 def make_steps():
@@ -179,9 +213,10 @@ def make_steps():
 
 
 def write_mp3(y, path):
+    """1チャンネル（形が (n,)）か、左右2チャンネル（形が (n, 2)）の音を mp3 で書き出す"""
     wav = path.with_suffix('.wav')
     with wave.open(str(wav), 'wb') as w:
-        w.setnchannels(1)
+        w.setnchannels(1 if y.ndim == 1 else 2)
         w.setsampwidth(2)
         w.setframerate(SR)
         w.writeframes((np.clip(y, -1, 1) * 32767).astype(np.int16).tobytes())
@@ -193,11 +228,13 @@ def preview(out_dir):
     """聞き比べ用：特性ごとに、ゲームと同じ0.27秒間隔で7歩鳴らした音を書き出す"""
     out_dir.mkdir(parents=True, exist_ok=True)
     for trait, steps in make_steps().items():
-        total = np.zeros(int(SR * 3.6))
+        total = np.zeros((int(SR * 3.6), 2))
         for k in range(7):
-            s = steps[k % VARIATIONS]
+            s = stereo(steps[k % VARIATIONS])
             at = int((0.05 + 0.27 * k) * SR)
             total[at:at + len(s)] += s[: len(total) - at]
+        if all(s.ndim == 1 for s in steps):
+            total = total[:, 0]
         write_mp3(total, out_dir / f'preview-{trait}.mp3')
     print(f'wrote {out_dir}/preview-*.mp3')
 
@@ -212,7 +249,8 @@ def main():
             # 残響の終わりはなめらかに消す
             fade = int(0.1 * SR)
             s = s.copy()
-            s[-fade:] *= np.linspace(1, 0, fade)
+            ramp = np.linspace(1, 0, fade)
+            s[-fade:] *= ramp if s.ndim == 1 else ramp[:, None]
             write_mp3(s, OUT / f'step-{trait}-{i}.mp3')
         print(f'wrote public/sounds/step-{trait}-1〜{VARIATIONS}.mp3')
 
