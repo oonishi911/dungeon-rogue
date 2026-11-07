@@ -190,7 +190,7 @@ def cave(x, size, damp, mix, predelay=0.012):
 
 def chest_open():
     """宝箱を開けて中身を取ったときの音（約0.9秒）：木の宝箱のふたが「ぎー」ときしみながら開き、「ガコッ」と重く当たって止まる。
-    - ぎー：蝶番の木がこすれて鳴る、伸びるきしみ。こすれて引っかかる間隔をきしみの音の高さ（約300Hz）にして、
+    - ぎー：蝶番の木がこすれて鳴る、低く伸びるきしみ。こすれて引っかかる間隔をきしみの音の高さ（約190Hz）にして、
       「い」の声に近い響き（低い響きと、高い響き）に通し、声のように「ぎー」と聞こえるようにする。高さは少し揺れながら下がる
     - ガコッ：開き切ったふたが、重く当たる「ガ」と、すぐあとに跳ね返って当たる中空の「コッ」
     - 小さな部屋の短い反射を少し付ける"""
@@ -213,12 +213,12 @@ def chest_open():
     t = creak_from
     while t < creak_to:
         u = (t - creak_from) / (creak_to - creak_from)
-        pitch = 330 - 40 * u + 18 * np.sin(2 * np.pi * 7 * u) + 8 * rng.standard_normal()
+        pitch = 205 - 25 * u + 11 * np.sin(2 * np.pi * 7 * u) + 5 * rng.standard_normal()
         level = min(u / 0.06, 1) * (1 - max(u - 0.9, 0) / 0.1) * (0.85 + 0.15 * np.sin(2 * np.pi * 3 * u))
         exc[int(t * SR)] += level * (0.8 + 0.2 * rng.random())
         t += 1 / pitch
-    gii = resonate(exc, [340, 1150, 2350, 3300], [0.006, 0.004, 0.004, 0.002], [1.0, 1.6, 4.5, 1.5])
-    gii += band(rng.standard_normal(n), 1500, 4000) * np.convolve(np.abs(exc), np.ones(200) / 200, 'same') * 0.15  # こすれるざらつき
+    gii = resonate(exc, [230, 820, 1750, 2500], [0.007, 0.005, 0.004, 0.002], [1.0, 1.6, 4.5, 1.5])
+    gii += band(rng.standard_normal(n), 1000, 3000) * np.convolve(np.abs(exc), np.ones(200) / 200, 'same') * 0.15  # こすれるざらつき
     # ガコッ：ガ（0.57秒）、コッ（0.64秒）
     ga_at, ko_at = int(0.57 * SR), int(0.64 * SR)
     hit = np.zeros(n)
