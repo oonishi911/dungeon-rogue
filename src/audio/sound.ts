@@ -23,8 +23,8 @@ const STEP_PITCH = { min: 0.96, max: 1.04 };
 // 宝箱から中身を取ったときの音（カチッ → ギギギ… → ゴトッ）
 const CHEST_SOUND = 'chest-open.mp3';
 // 特性ごとの環境音（ダンジョンにいるあいだ、くり返し流す）。ない特性は流さない
-// 無属性は、洞窟を吹き抜ける風のうなり
-const AMBIENT_SOUNDS: Partial<Record<TraitId, string>> = { neutral: 'ambient-neutral.mp3' };
+// 無属性は洞窟を吹き抜ける風のうなり、氷は氷の洞窟（細い風・氷のきしみ・水滴・きらめき）
+const AMBIENT_SOUNDS: Partial<Record<TraitId, string>> = { neutral: 'ambient-neutral.mp3', ice: 'ambient-ice.mp3' };
 // 環境音のくり返す長さ（秒。scripts/build-sounds.py の ambient_wind の length と合わせる）
 const AMBIENT_LOOP_SECONDS = 24;
 // mp3 は頭に短い無音が入ることがある（ブラウザによっては取り除かれない）。その長さ（サンプル数、44.1kHz）
