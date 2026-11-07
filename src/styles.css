@@ -1073,3 +1073,210 @@ button.card:disabled {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* ===== 開発用：敵のマスターデータの管理画面（?view=enemies） ===== */
+.admin {
+  max-width: 64rem;
+  /* 横に長い表に合わせて画面が広がらないよう、列の幅を画面に合わせる（表の中だけ横にスクロールする） */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.admin code {
+  overflow-wrap: anywhere;
+}
+
+.admin__lead,
+.admin__note {
+  margin: 0 0 1rem;
+  color: var(--bone-dim);
+  font-size: var(--step--1);
+  line-height: 1.7;
+}
+
+.admin__section {
+  margin-bottom: 2rem;
+}
+
+.admin__heading {
+  margin: 0 0 0.75rem;
+  font-family: var(--serif);
+  font-size: var(--step-1);
+}
+
+/* 表は横に長いので、表の中だけ横にスクロールする */
+.admin__scroll {
+  overflow-x: auto;
+  border: 1px solid var(--pine-line);
+  border-radius: 8px;
+}
+
+.admin__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--step--1);
+}
+
+.admin__table th,
+.admin__table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--pine-line);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.admin__table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--pine-deep);
+  color: var(--bone-dim);
+  font-weight: normal;
+}
+
+.admin__table tbody tr:last-child > * {
+  border-bottom: none;
+}
+
+.admin__table--grid td,
+.admin__table--grid thead th:not(:first-child) {
+  text-align: center;
+}
+
+/* 表を横にスクロールしても、どの敵の行かわかるよう、左の列（名前）は動かさない */
+.admin__table tbody th,
+.admin__table thead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--pine);
+}
+
+.admin__table thead th:first-child {
+  z-index: 2;
+  background: var(--pine-deep);
+}
+
+.admin__boss-row > * {
+  background: rgb(180 141 53 / 0.08);
+}
+
+.admin__name,
+.admin__number,
+.admin__select,
+.admin__token input {
+  font: inherit;
+  color: var(--bone);
+  background: var(--pine-deep);
+  border: 1px solid var(--pine-line);
+  border-radius: 4px;
+  padding: 0.3rem 0.4rem;
+}
+
+.admin__name {
+  width: 8.5rem;
+}
+
+.admin__number {
+  width: 3.75rem;
+}
+
+.admin__id,
+.admin__ingame {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--bone-dim);
+  font-size: 0.6875rem;
+}
+
+/* 公開版から変えたところ */
+.admin .is-changed {
+  border-color: var(--procure);
+  box-shadow: 0 0 0 1px var(--procure);
+}
+
+.admin__check {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--procure);
+}
+
+.admin__check.is-changed {
+  outline: 2px solid var(--procure);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.admin__changes,
+.admin__problems {
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+  font-size: var(--step--1);
+  line-height: 1.8;
+}
+
+.admin__problems {
+  color: var(--alert);
+}
+
+.admin__token {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 28rem;
+  font-size: var(--step--1);
+}
+
+.admin__remember {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.6rem 0;
+  font-size: var(--step--1);
+}
+
+.admin__help {
+  max-width: 40rem;
+  margin-bottom: 1rem;
+  color: var(--bone-dim);
+  font-size: var(--step--1);
+  line-height: 1.7;
+}
+
+.admin__help summary {
+  cursor: pointer;
+  color: var(--bone);
+}
+
+.admin__actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.admin__actions button {
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  color: var(--bone);
+}
+
+.admin__actions button:disabled {
+  opacity: 0.45;
+}
+
+.admin__go:not(:disabled) {
+  background: var(--funds);
+  border-color: var(--funds);
+}
+
+.admin__status {
+  margin: 1rem 0 0;
+  font-size: var(--step--1);
+  line-height: 1.7;
+}
+
+.admin__status a {
+  color: var(--bone);
+}
+
+.admin__status--bad {
+  color: var(--alert);
+}

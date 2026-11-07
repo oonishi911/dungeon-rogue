@@ -1,0 +1,93 @@
+// 管理画面から、リポジトリのファイルを書き換えて公開する（GitHub の API を使う）。
+// 書き換えると main に保存され、CI（自動チェック → 公開）が動く。自動チェックが通らなければ公開されない。
+// GitHub のトークンは、使う人のブラウザにだけ保存する（このリポジトリへの書き込みだけを許した、期限つきのものを使う）
+
+export const REPO = { owner: 'oonishi911', repo: 'dungeon-rogue', branch: 'main' } as const;
+const API = `https://api.github.com/repos/${REPO.owner}/${REPO.repo}`;
+const TOKEN_KEY = 'dungeon-prep/github-token';
+
+export function loadToken(): string {
+  try {
+    return localStorage.getItem(TOKEN_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export function saveToken(token: string | null) {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // 保存できなくても、この画面を開いているあいだは使える
+  }
+}
+
+export class PublishError extends Error {}
+
+async function api(token: string, path: string, init?: RequestInit): Promise<unknown> {
+  const res = await fetch(`${API}${path}`, {
+    ...init,
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+    },
+  });
+  if (res.status === 401) throw new PublishError('トークンが正しくないか、期限が切れています');
+  if (res.status === 403 || res.status === 404) {
+    throw new PublishError('このトークンでは、リポジトリに書き込めません（トークンの権限を確かめてください）');
+  }
+  if (res.status === 409 || res.status === 422) throw new PublishError('ほかの変更と重なりました。画面を読み込み直してから、もう一度試してください');
+  if (!res.ok) throw new PublishError(`GitHub への接続に失敗しました（${res.status}）`);
+  return res.json();
+}
+
+const decode = (base64: string) => new TextDecoder().decode(Uint8Array.from(atob(base64.replace(/\n/g, '')), (c) => c.charCodeAt(0)));
+const encode = (text: string) => btoa(Array.from(new TextEncoder().encode(text), (b) => String.fromCharCode(b)).join(''));
+
+/**
+ * ファイルを書き換えて main に保存する。今リポジトリにある中身が base と違う（ほかの変更が先に入っている）ときは、
+ * 上書きしないで止める。返すのは保存したコミット
+ */
+export async function publishFile(token: string, path: string, text: string, base: string, message: string): Promise<string> {
+  const current = (await api(token, `/contents/${path}?ref=${REPO.branch}`)) as { sha: string; content: string };
+  if (decode(current.content) !== base) {
+    throw new PublishError('公開版より新しい変更が、すでにリポジトリに入っています。公開が終わるのを待ち、画面を読み込み直してから変更してください');
+  }
+  const saved = (await api(token, `/contents/${path}`, {
+    method: 'PUT',
+    body: JSON.stringify({ message, content: encode(text), sha: current.sha, branch: REPO.branch }),
+  })) as { commit: { sha: string } };
+  return saved.commit.sha;
+}
+
+export type DeployStage =
+  | { stage: 'waiting' } // 自動チェックが始まるのを待っている
+  | { stage: 'checking'; url: string } // 自動チェック中（型・テスト・ビルド）
+  | { stage: 'deploying'; url: string } // 公開中
+  | { stage: 'done'; url: string } // 公開した
+  | { stage: 'failed'; url: string; reason: string };
+
+/** コミットの CI（自動チェック → 公開）が、今どこまで進んだか */
+export async function deployStage(token: string, commit: string): Promise<DeployStage> {
+  const runs = (await api(token, `/actions/runs?head_sha=${commit}&per_page=5`)) as {
+    workflow_runs: { id: number; html_url: string; event: string }[];
+  };
+  const run = runs.workflow_runs.find((r) => r.event === 'push') ?? runs.workflow_runs[0];
+  if (!run) return { stage: 'waiting' };
+  const { jobs } = (await api(token, `/actions/runs/${run.id}/jobs`)) as {
+    jobs: { name: string; status: string; conclusion: string | null }[];
+  };
+  const check = jobs.find((j) => j.name === 'check');
+  const deploy = jobs.find((j) => j.name === 'deploy');
+  const url = run.html_url;
+  if (!check || check.status !== 'completed') return { stage: 'checking', url };
+  if (check.conclusion !== 'success') {
+    return { stage: 'failed', url, reason: '自動チェックが通らなかったので、公開しませんでした（バランスのテストの基準を外れた可能性があります）' };
+  }
+  if (!deploy || deploy.status !== 'completed') return { stage: 'deploying', url };
+  if (deploy.conclusion !== 'success') return { stage: 'failed', url, reason: '公開に失敗しました（GitHub 側の一時的な失敗のことが多いので、少し待ってやり直してください）' };
+  return { stage: 'done', url };
+}
