@@ -5,6 +5,7 @@
 // キーを押し続けたときの歩く速さが、OS のキーリピートの設定に左右されず一定になる。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { playFootstep, preloadSounds } from '../audio/sound';
 import { BODY_NAMES, ITEMS, TRAIT_IDS, TRAITS } from '../game/data';
 import { enemyDef, key } from '../game/enemies';
 import {
@@ -21,6 +22,7 @@ import {
   type ExploreState,
 } from '../game/explore';
 import { tileAt, type Pos } from '../game/map';
+import { SoundButton } from './SoundButton';
 import { walkPath, walkToward } from '../game/path';
 import type { ItemId } from '../game/types';
 import {
@@ -183,6 +185,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       view3dRef.current?.hitPulse(hit.kind === 'dealt' ? 'attack' : 'hurt');
       view3dRef.current?.popDamage(hit.at, hit.amount, hit.kind);
     }
+    // 同じ階で1歩進んだら足音を鳴らす（階を移ったとき・その場で戦ったときは鳴らさない）
+    if (next.map === prev.map && !samePos(prev.player, next.player)) playFootstep(next.trait);
     // 階を移ったときは動かさずに切り替える
     motionRef.current = { from: motionOf(next.map === prev.map ? prev : next), start: performance.now() };
     stateRef.current = next;
@@ -337,6 +341,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       view3dRef.current = null;
     };
   }, [perform, walkStep, mode]);
+
+  // このダンジョンの足音を、最初の一歩から鳴るように読み込んでおく
+  useEffect(() => preloadSounds(state.trait), [state.trait]);
 
   useEffect(() => {
     if (miniRef.current) drawMinimap(miniRef.current, state, readColors());
@@ -507,15 +514,18 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
           </p>
           <h1 className="top__title">{floorName}</h1>
         </div>
-        <button
-          type="button"
-          className="explore__wait explore__info-toggle"
-          aria-expanded={infoOpen}
-          aria-controls="explore-more"
-          onClick={() => setInfoOpen(true)}
-        >
-          装備と敵
-        </button>
+        <div className="explore-top__actions">
+          <SoundButton />
+          <button
+            type="button"
+            className="explore__wait explore__info-toggle"
+            aria-expanded={infoOpen}
+            aria-controls="explore-more"
+            onClick={() => setInfoOpen(true)}
+          >
+            装備と敵
+          </button>
+        </div>
       </header>
 
       <div className="explore">
