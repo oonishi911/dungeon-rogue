@@ -9,6 +9,8 @@ interface SpriteProps {
   scale?: number;
   /** 主人公のマントの色 */
   cloak?: CloakColor;
+  /** 色の差し替え（ドット絵の文字ごとの色。敵の見た目に使う） */
+  recolor?: Record<string, string>;
   label: string;
   className?: string;
 }
@@ -17,8 +19,8 @@ interface SpriteProps {
  * 文字列のドット絵をSVGで描く。
  * 横に同じ色が続く部分は1つの rect にまとめ、要素数を減らしている。
  */
-export const Sprite = memo(function Sprite({ id, scale = 4, cloak = 'none', label, className }: SpriteProps) {
-  const palette: Record<string, string> = { ...PALETTE, ...CLOAKS[cloak] };
+export const Sprite = memo(function Sprite({ id, scale = 4, cloak = 'none', recolor, label, className }: SpriteProps) {
+  const palette: Record<string, string> = { ...PALETTE, ...CLOAKS[cloak], ...recolor };
   const rows = SPRITES[id];
   const rects: ReactElement[] = [];
 

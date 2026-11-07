@@ -1,24 +1,30 @@
 // 開発用：敵のマスターデータ（src/game/enemies.json）を管理する画面。?view=enemies で開く。
-// 変えた値は「変更を公開」でリポジトリに保存され、自動チェックが通れば数分で公開版に反映される
+// 敵の値を変える・敵を足す・消すことができる。
+// 変えた内容は「変更を公開」でリポジトリに保存され、自動チェックが通れば数分で公開版に反映される
 
 import { useEffect, useMemo, useState } from 'react';
 import { BODY_NAMES, ENEMY_MASTER } from '../game/data';
 import { ENEMY_CONFIG } from '../game/enemies';
 import {
+  addEnemy,
   BODIES,
   describeChanges,
+  dungeonsWithBoss,
   ELEMENTS,
-  ENEMY_IDS,
+  enemyIds,
   LIMITS,
   MASTER_TRAITS,
   masterProblems,
+  removeEnemy,
   serializeEnemyMaster,
   setWeight,
   TRAIT_LABELS,
   weightOf,
+  type EnemyLook,
   type EnemyMaster,
   type EnemyRecord,
 } from '../game/enemyMaster';
+import { Sprite } from '../sprites/Sprite';
 import type { Body, Element, EnemyId, TraitId } from '../game/types';
 import { deployStage, loadToken, publishFile, PublishError, REPO, saveToken, type DeployStage } from './githubPublish';
 
@@ -43,12 +49,15 @@ export function EnemyAdmin() {
 
   const changes = useMemo(() => describeChanges(base, draft), [base, draft]);
   const problems = useMemo(() => masterProblems(draft), [draft]);
-  const bossIds = ENEMY_IDS.filter((id) => draft.enemies[id].boss);
-  const fieldIds = ENEMY_IDS.filter((id) => !draft.enemies[id].boss);
+  const ids = enemyIds(draft);
+  const bossIds = ids.filter((id) => draft.enemies[id]!.boss);
+  const fieldIds = ids.filter((id) => !draft.enemies[id]!.boss);
+  // 見た目の候補：今いる敵の見た目（同じ見た目はまとめる）
+  const looks = useMemo(() => lookChoices(draft), [draft]);
   const busy = publish.state === 'sending' || (publish.state === 'watching' && !['done', 'failed'].includes(publish.stage.stage));
 
   const setEnemy = (id: EnemyId, patch: Partial<EnemyRecord>) =>
-    setDraft((d) => ({ ...d, enemies: { ...d.enemies, [id]: { ...d.enemies[id], ...patch } } }));
+    setDraft((d) => ({ ...d, enemies: { ...d.enemies, [id]: { ...d.enemies[id]!, ...patch } } }));
   const setDungeon = (trait: TraitId, patch: Partial<EnemyMaster['dungeons'][TraitId]>) =>
     setDraft((d) => ({ ...d, dungeons: { ...d.dungeons, [trait]: { ...d.dungeons[trait], ...patch } } }));
 
@@ -108,24 +117,38 @@ export function EnemyAdmin() {
                 <th scope="col">属性</th>
                 <th scope="col">体質</th>
                 <th scope="col">ボス</th>
+                <th scope="col">見た目</th>
+                <th scope="col">
+                  <span className="visually-hidden">消す</span>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {ENEMY_IDS.map((id) => {
-                const e = draft.enemies[id];
-                const b = base.enemies[id];
+              {ids.map((id) => {
+                const e = draft.enemies[id]!;
+                // 足したばかりの敵は、公開版にない（どの値も「変えた」として印を付ける）
+                const b = base.enemies[id] ?? { ...e, name: '', hp: -1, atk: -1, def: -1, look: { sprite: e.look.sprite, recolor: { _: '' } } };
+                const added = !(id in base.enemies);
                 const weak = !e.boss;
+                const bossOf = dungeonsWithBoss(draft, id);
+                const lookKey = JSON.stringify(e.look);
                 return (
-                  <tr key={id}>
+                  <tr key={id} className={added ? 'admin__row--new' : undefined}>
                     <th scope="row">
-                      <input
-                        className={cls('admin__name', e.name !== b.name)}
+                      <span className="admin__who">
+                        <Sprite id={e.look.sprite} recolor={e.look.recolor} scale={1} label={`${e.name}の見た目`} className="admin__sprite" />
+                        <input
+                          className={cls('admin__name', e.name !== b.name)}
                         value={e.name}
                         maxLength={LIMITS.name.max}
                         aria-label={`${id} の名前`}
-                        onChange={(ev) => setEnemy(id, { name: ev.target.value })}
-                      />
-                      <span className="admin__id">{id}</span>
+                          onChange={(ev) => setEnemy(id, { name: ev.target.value })}
+                        />
+                      </span>
+                      <span className="admin__id">
+                        {id}
+                        {added && '（足す）'}
+                      </span>
                     </th>
                     {(['hp', 'atk', 'def'] as const).map((key) => (
                       <td key={key}>
@@ -177,12 +200,42 @@ export function EnemyAdmin() {
                         onChange={(ev) => setEnemy(id, { boss: ev.target.checked || undefined })}
                       />
                     </td>
+                    <td>
+                      <select
+                        className={cls('admin__select admin__look', lookKey !== JSON.stringify(b.look))}
+                        value={lookKey}
+                        aria-label={`${e.name}の見た目`}
+                        onChange={(ev) => setEnemy(id, { look: JSON.parse(ev.target.value) as EnemyLook })}
+                      >
+                        {looks.map((l) => (
+                          <option key={l.key} value={l.key}>
+                            {l.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="explore__wait admin__remove"
+                        disabled={busy || bossOf.length > 0}
+                        title={bossOf.length ? `${bossOf.map((t) => TRAIT_LABELS[t]).join('・')}のダンジョンのボスなので消せません（先にボスを変えてください）` : undefined}
+                        aria-label={`${e.name}を消す`}
+                        onClick={() => setDraft((d) => removeEnemy(d, id))}
+                      >
+                        消す
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+        <AddEnemy master={draft} disabled={busy} onAdd={(id, record) => setDraft((d) => addEnemy(d, id, record))} />
+        <p className="admin__note">
+          ボスにしているダンジョンがある敵は消せません。消すと、その敵はどのダンジョンにも出なくなります。足した敵は、下の表で出やすさを決めるまで、どのダンジョンにも出ません。
+        </p>
       </section>
 
       <section className="admin__section" aria-labelledby="admin-dungeons">
@@ -203,7 +256,7 @@ export function EnemyAdmin() {
             <tbody>
               {fieldIds.map((id) => (
                 <tr key={id}>
-                  <th scope="row">{draft.enemies[id].name}</th>
+                  <th scope="row">{draft.enemies[id]!.name}</th>
                   {MASTER_TRAITS.map((t) => {
                     const w = weightOf(draft.dungeons[t].pool, id);
                     const total = draft.dungeons[t].pool.length;
@@ -214,7 +267,7 @@ export function EnemyAdmin() {
                           min={0}
                           max={LIMITS.weight.max}
                           changed={w !== weightOf(base.dungeons[t].pool, id)}
-                          label={`${TRAIT_LABELS[t]}のダンジョンでの${draft.enemies[id].name}の出やすさ`}
+                          label={`${TRAIT_LABELS[t]}のダンジョンでの${draft.enemies[id]!.name}の出やすさ`}
                           onChange={(v) => setDungeon(t, { pool: setWeight(draft.dungeons[t].pool, id, v) })}
                         />
                         {w > 0 && total > 0 && <span className="admin__ingame">{Math.round((w / total) * 100)}%</span>}
@@ -236,7 +289,7 @@ export function EnemyAdmin() {
                       {!bossIds.includes(draft.dungeons[t].boss) && <option value={draft.dungeons[t].boss}>（ボスではない敵）</option>}
                       {bossIds.map((id) => (
                         <option key={id} value={id}>
-                          {draft.enemies[id].name}
+                          {draft.enemies[id]!.name}
                         </option>
                       ))}
                     </select>
@@ -355,6 +408,73 @@ function NumberField(props: { value: number; min: number; max: number; changed: 
       onBlur={() => setText(String(props.value))}
     />
   );
+}
+
+/** 敵を足すところ。ID と名前を決め、見た目と強さは今いる敵から写す */
+function AddEnemy({ master, disabled, onAdd }: { master: EnemyMaster; disabled: boolean; onAdd: (id: EnemyId, record: EnemyRecord) => void }) {
+  const ids = enemyIds(master);
+  const [id, setId] = useState('');
+  const [name, setName] = useState('');
+  const [from, setFrom] = useState(ids[0] ?? '');
+  const template = master.enemies[from] ?? master.enemies[ids[0] ?? ''];
+  const names = new Set(Object.values(master.enemies).map((e) => e.name));
+  const problem = !id
+    ? null
+    : !LIMITS.id.pattern.test(id)
+      ? `ID は英小文字で始まり、英小文字・数字・_ だけの2〜${LIMITS.id.max}文字にします`
+      : id in master.enemies
+        ? 'その ID の敵はもういます'
+        : name && names.has(name.trim())
+          ? '同じ名前の敵がもういます'
+          : null;
+  const ready = Boolean(id && name.trim() && template && !problem);
+  return (
+    <div className="admin__add" role="group" aria-label="敵を足す">
+      <p className="admin__add-title">敵を足す</p>
+      <label>
+        <span>ID（英小文字・数字・_）</span>
+        <input className="admin__name" value={id} maxLength={LIMITS.id.max} spellCheck={false} onChange={(e) => setId(e.target.value.trim())} placeholder="cave_bat" />
+      </label>
+      <label>
+        <span>名前</span>
+        <input className="admin__name" value={name} maxLength={LIMITS.name.max} onChange={(e) => setName(e.target.value)} placeholder="洞窟コウモリ" />
+      </label>
+      <label>
+        <span>見た目と強さのもと</span>
+        <select className="admin__select" value={from} onChange={(e) => setFrom(e.target.value)}>
+          {ids.map((i) => (
+            <option key={i} value={i}>
+              {master.enemies[i]!.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="button"
+        className="explore__wait admin__add-button"
+        disabled={disabled || !ready}
+        onClick={() => {
+          if (!template) return;
+          onAdd(id, { ...JSON.parse(JSON.stringify(template)), name: name.trim() } as EnemyRecord);
+          setId('');
+          setName('');
+        }}
+      >
+        足す
+      </button>
+      {problem && <p className="admin__add-problem">{problem}</p>}
+    </div>
+  );
+}
+
+/** 見た目の候補（今いる敵の見た目。同じ見た目は1つにまとめる） */
+function lookChoices(master: EnemyMaster): { key: string; label: string }[] {
+  const out = new Map<string, string[]>();
+  for (const id of enemyIds(master)) {
+    const key = JSON.stringify(master.enemies[id]!.look);
+    out.set(key, [...(out.get(key) ?? []), master.enemies[id]!.name]);
+  }
+  return [...out].map(([key, names]) => ({ key, label: `${names[0]}${names.length > 1 ? `ほか${names.length - 1}体` : ''}の見た目` }));
 }
 
 function cls(base: string, on: boolean, extra = 'is-changed'): string {

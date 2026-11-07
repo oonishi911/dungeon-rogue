@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { enemyHitDamage, playerHitDamage } from './combat';
-import { ENEMIES, TREASURE_CONFIG } from './data';
+import { enemyBase, TRAIT_ENEMIES, TREASURE_CONFIG } from './data';
+import { BOSS_ENEMY, FIELD_ENEMY } from './enemies.fixtures';
 import { ENEMY_CONFIG, enemyDef, key, spawnBoss, type MapEnemy } from './enemies';
 import { startExplore, step, type ExploreAction, type ExploreState } from './explore';
 import { tileAt, type FloorMap, type Pos } from './map';
@@ -21,10 +22,10 @@ function enemy(pos: Pos, overrides: Partial<MapEnemy> = {}): MapEnemy {
   const elite = overrides.elite ?? false;
   return {
     uid: 0,
-    id: 'goblin',
+    id: FIELD_ENEMY,
     elite,
     pos,
-    hp: enemyDef({ id: 'goblin', elite }).hp,
+    hp: enemyDef({ id: FIELD_ENEMY, elite }).hp,
     mode: 'wander',
     justNoticed: false,
     lastSeen: null,
@@ -89,7 +90,7 @@ describe('プレイヤーの攻撃', () => {
       dir: 'right',
     });
     expect(s.player).toEqual({ x: 1, y: 2 });
-    expect(s.enemies[0]!.hp).toBe(enemyDef({ id: 'goblin', elite: false }).hp - playerHitDamage(s.stats, enemyDef(s.enemies[0]!)));
+    expect(s.enemies[0]!.hp).toBe(enemyDef({ id: FIELD_ENEMY, elite: false }).hp - playerHitDamage(s.stats, enemyDef(s.enemies[0]!)));
   });
 
   it('与えたダメージは、敵のいたマスと量を hits に記録する（画面に数字を出すため）', () => {
@@ -240,26 +241,27 @@ describe('報酬とボス', () => {
 
   it('ボスの能力は強敵の倍率で上がらない', () => {
     const boss = spawnBoss({ x: 0, y: 0 }, 'dark', 0);
-    expect(enemyDef(boss)).toEqual(ENEMIES.dark_lord);
+    expect(enemyDef(boss)).toEqual(enemyBase(TRAIT_ENEMIES.dark.boss));
   });
 });
 
 describe('敵の強さ', () => {
   it('通常の敵の HP・攻撃力は data.ts の値の半分（四捨五入）、防御力はそのまま', () => {
-    const def = enemyDef({ id: 'goblin', elite: false });
-    expect(def.hp).toBe(Math.round(ENEMIES.goblin.hp * ENEMY_CONFIG.strengthRate));
-    expect(def.atk).toBe(Math.round(ENEMIES.goblin.atk * ENEMY_CONFIG.strengthRate));
-    expect(def.def).toBe(ENEMIES.goblin.def);
+    const def = enemyDef({ id: FIELD_ENEMY, elite: false });
+    const base = enemyBase(FIELD_ENEMY);
+    expect(def.hp).toBe(Math.round(base.hp * ENEMY_CONFIG.strengthRate));
+    expect(def.atk).toBe(Math.round(base.atk * ENEMY_CONFIG.strengthRate));
+    expect(def.def).toBe(base.def);
   });
 
   it('強敵は、半分にした通常の敵の能力から上げる', () => {
-    const normal = enemyDef({ id: 'stone_golem', elite: false });
-    const elite = enemyDef({ id: 'stone_golem', elite: true });
+    const normal = enemyDef({ id: FIELD_ENEMY, elite: false });
+    const elite = enemyDef({ id: FIELD_ENEMY, elite: true });
     expect(elite.hp).toBe(Math.round(normal.hp * ENEMY_CONFIG.eliteHpRate));
     expect(elite.atk).toBe(Math.round(normal.atk * ENEMY_CONFIG.eliteAtkRate));
   });
 
   it('ボスは data.ts の能力のまま', () => {
-    expect(enemyDef({ id: 'flame_beast', elite: true })).toEqual(ENEMIES.flame_beast);
+    expect(enemyDef({ id: BOSS_ENEMY, elite: true })).toEqual(enemyBase(BOSS_ENEMY));
   });
 });

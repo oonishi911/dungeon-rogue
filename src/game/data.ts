@@ -264,6 +264,13 @@ export const ENCHANT_VS_ELEMENT: Record<Element, Partial<Record<Element, number>
 export const ENEMY_MASTER = parseEnemyMaster(enemyMasterJson);
 export const ENEMIES: Record<EnemyId, EnemyDef> = enemyDefs(ENEMY_MASTER);
 
+/** 敵の能力（data の値。ボス以外はゲームの中で弱める前の値）。データにない敵の ID ならエラーにする */
+export function enemyBase(id: EnemyId): EnemyDef {
+  const def = ENEMIES[id];
+  if (!def) throw new Error(`敵のデータ（enemies.json）にない敵：${id}`);
+  return def;
+}
+
 /**
  * ダンジョンごとの有利な装備：その属性に効く防具と、出やすい体質の敵に効く武器。
  * 準備フェーズを飛ばしているあいだは、これに回復薬2つを足した持ち物で始める。バランステストの「正しい準備」もこれを使う
