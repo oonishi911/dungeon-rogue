@@ -86,13 +86,18 @@ def reverb(x, size, damp, mix):
 
 
 def step_neutral(rng, foot):
-    """無属性：土の上を歩く、やわらかくこもった足音。土がくずれるかすかなザッという音が混ざる。響きは少ない"""
-    n = int(0.25 * SR)
+    """無属性：土の上を歩く、低く重い足音（ドスッ）。土がくずれるかすかな音が混ざる。響きは少ない。
+    スマホのスピーカーはとても低い音を鳴らせないので、いちばん低い音（約55Hz）に、少し上の胴鳴り（約120〜250Hz）を重ね、
+    スマホでも低く重い音に聞こえるようにする"""
+    n = int(0.28 * SR)
     noise = rng.standard_normal(n)
-    y = heel_toe(lambda: low(noise, 700) * env(n, 0.003, 0.035) * 2.0 + ring(n, 85 + 10 * foot, 0.04, rng) * 0.8, rng, n)
-    y += band(grains(n, 1500, 0.08, rng, 0.004), 600, 2400) * 0.45  # 土の粒がこすれる
+    y = heel_toe(lambda: low(noise, 260) * env(n, 0.004, 0.045) * 3.0
+                 + ring(n, 55 + 6 * foot, 0.07, rng) * 0.9
+                 + ring(n, 125 + 10 * foot, 0.04, rng) * 1.6
+                 + band(noise, 160, 420) * env(n, 0.003, 0.035) * 4.0, rng, n)
+    y += band(grains(n, 900, 0.07, rng, 0.006), 300, 1100) * 0.25  # 土の粒がこすれる（低めに、控えめに）
     y *= 0.85 + 0.3 * rng.random()
-    return reverb(high(y, 40), 0.35, 2000, 0.18)
+    return reverb(high(y, 30), 0.3, 900, 0.15)
 
 
 def step_fire(rng, foot):
@@ -108,18 +113,18 @@ def step_fire(rng, foot):
 
 
 def step_ice(rng, foot):
-    """氷：積もった雪を踏みしめる、ギュッ・ザクッという音。雪が音を吸うので、響きはほとんどない"""
+    """氷：霜の降りた雪を踏む、シャリシャリという音。細かい氷の粒が1つずつ砕ける、乾いた明るい音を重ねる。
+    雪が音を吸うので、響きはほとんどない"""
     n = int(0.3 * SR)
     noise = rng.standard_normal(n)
-    thud = low(noise, 350) * env(n, 0.006, 0.05) * 1.6  # 雪に沈む鈍い音
-    # 雪が押し固められる音：粒がぎっしり並び、足が沈むあいだ（約0.15秒）続く
-    crunch = grains(n, 9000, 0.15, rng, 0.004, 0.002)
-    crunch = low(band(crunch, 500, 3500), 3000) * env(n, 0.03, 0.09) * 2.4
-    # 押し固められるときのきしみ（ギュッ）：狭い高さのノイズを、粒の強さで揺らす
-    squeak = band(noise, 900 + 120 * foot, 1400 + 120 * foot) * np.abs(low(crunch, 60)) * 9
-    y = thud + crunch + squeak
+    thud = low(noise, 350) * env(n, 0.006, 0.05) * 1.2  # 雪に沈む鈍い音
+    # 雪が押し固められる音（ザクッ）
+    crunch = low(band(grains(n, 6000, 0.13, rng, 0.004, 0.002), 500, 3500), 3000) * env(n, 0.03, 0.08) * 1.6
+    # 氷の粒が砕ける音（シャリシャリ）：1つずつ聞こえるくらいの間隔で、短く乾いた高い粒を、足が沈むあいだ並べる
+    shari = band(grains(n, 1600, 0.16, rng, 0.006, 0.0004), 2500, 9000) * 2.2
+    y = thud + crunch + shari
     y *= 0.85 + 0.3 * rng.random()
-    return reverb(high(y, 60), 0.2, 2500, 0.08)
+    return reverb(high(y, 60), 0.2, 6000, 0.06)
 
 
 def step_light(rng, foot):
