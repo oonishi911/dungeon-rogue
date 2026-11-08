@@ -103,6 +103,14 @@ describe('プレイヤーの攻撃', () => {
     expect(taken.reduce((sum, h) => sum + h.amount, 0)).toBe(s0.stats.hp - s.stats.hp);
   });
 
+  it('敵に攻撃されたときは、攻撃してきた敵を hits に記録する（敵ごとの攻撃の音を鳴らすため）', () => {
+    const s0 = arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { mode: 'chase', hp: 99 })]);
+    const s = act(s0, { kind: 'wait' });
+    const taken = s.hits.filter((h) => h.kind === 'taken');
+    expect(taken.length).toBeGreaterThan(0);
+    for (const h of taken) expect(h.by).toBe(FIELD_ENEMY);
+  });
+
   it('次の行動では hits は空からやり直す', () => {
     const s0 = arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 6, y: 2 }, { hp: 99 })]);
     const s = act(s0, { kind: 'move', dir: 'right' }, { kind: 'wait' });

@@ -5,8 +5,8 @@
 // キーを押し続けたときの歩く速さが、OS のキーリピートの設定に左右されず一定になる。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { playAttack, playChestOpen, playFootstep, preloadSounds, setAmbient } from '../audio/sound';
-import { BODY_NAMES, ITEMS, TRAIT_IDS, TRAITS } from '../game/data';
+import { playAttack, playChestOpen, playEnemyAttack, playFootstep, preloadSounds, setAmbient } from '../audio/sound';
+import { BODY_NAMES, enemyBase, ITEMS, TRAIT_IDS, TRAITS } from '../game/data';
 import { enemyDef, key } from '../game/enemies';
 import {
   DIR_DELTA,
@@ -50,6 +50,8 @@ const MINI_SHARP_MAX = 96;
 // 1マス動くのにかける時間。なぞり続けたとき・タップで歩くときの速さもこれで決まる（1秒に約3.7マス）
 const STEP_MS = 270;
 const DOUBLE_TAP_MS = 350; // この時間（ミリ秒）以内に主人公を2回タップすると、ダブルタップとしてその場で待つ
+// 敵の攻撃の音を鳴らす間合い（秒）。afterAttack：主人公も攻撃したとき、その音のあとに鳴らすまで。gap：敵が何体も攻撃したとき、1体ずつずらす間。max：1回の行動で鳴らす数
+const ENEMY_SOUND = { afterAttack: 0.2, gap: 0.12, max: 3 } as const;
 const QUEUE_MAX = 2; // 動いている途中に押した操作を、いくつまで覚えておくか（多すぎると指を止めても歩き続ける）
 
 const KEY_DIRS: Record<string, Dir> = {
@@ -188,6 +190,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       view3dRef.current?.heroAttack(struck.at);
       playAttack(weaponOf(next.stats.weapon));
     }
+    // 敵に攻撃されたときは、敵の体質ごとの音を鳴らす。主人公の攻撃の音のあと、敵ごとに少しずつずらして鳴らす
+    const attackers = next.hits.flatMap((hit) => (hit.kind === 'taken' && hit.by ? [enemyBase(hit.by)] : [])).slice(0, ENEMY_SOUND.max);
+    attackers.forEach((enemy, i) => playEnemyAttack(enemy, (struck ? ENEMY_SOUND.afterAttack : 0) + i * ENEMY_SOUND.gap));
     for (const hit of next.hits) {
       view3dRef.current?.hitPulse(hit.kind === 'dealt' ? 'attack' : 'hurt');
       view3dRef.current?.popDamage(hit.at, hit.amount, hit.kind);
