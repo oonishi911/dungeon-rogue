@@ -8,10 +8,11 @@
 // - 主人公は立体の模型（hero3d.ts）。敵と宝箱は、今のドット絵を常にカメラを向く板（スプライト）として立てる
 
 import * as THREE from 'three';
+import { ITEMS } from '../game/data';
 import { enemyDef, isAdjacent } from '../game/enemies';
 import { dirBetween, EXPLORE_CONFIG, upStairs, type Dir, type ExploreState } from '../game/explore';
 import type { Pos } from '../game/map';
-import type { EnemyId, TraitId } from '../game/types';
+import type { EnemyId, ItemId, TraitId, WeaponType } from '../game/types';
 import { drawSprite } from '../sprites/canvas';
 import type { SpriteId } from '../sprites/data';
 import { cloakOf, lookOf } from '../sprites/looks';
@@ -301,6 +302,7 @@ export class DungeonView3D {
       this.updateProps(frame);
       this.updateEnemies(frame);
       this.hero.setCloak(cloakOf(s.stats.armor)); // マントは装備した防具の色。準備が当たったかが見た目でわかる
+      this.hero.setWeapon(weaponOf(s.stats.weapon)); // 装備した武器を左手に持つ
       this.shownState = s;
     }
 
@@ -1073,4 +1075,11 @@ function applyFog<T extends THREE.Material>(material: T, fog: Fog, mode: 'darken
   };
   material.customProgramCacheKey = () => `fog-${mode}-${key}`;
   return material;
+}
+
+/** 装備している武器の種類（武器でなければ null） */
+function weaponOf(item: ItemId | null): WeaponType | null {
+  if (!item) return null;
+  const effect = ITEMS[item].effect;
+  return effect.kind === 'weapon' ? effect.weapon : null;
 }

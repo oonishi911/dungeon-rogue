@@ -1,12 +1,15 @@
 // 主人公の立体の模型。ドット絵（sprites/data.ts の hero）と同じ色・同じ形の要素で組み立てる：
-// フード付きのマント（装備した防具の色）、肌色の顔、マントの前の開きから見える服とベルト、茶色の靴。
-// 面を平らに塗る（flatShading）少ない面数の形にして、ドット絵の素朴さに合わせる。
+// フード付きのマント（装備した防具の色）、フードの前の開きから見える肌色の顔と焦げ茶色の長めの髪、
+// マントの前の開きから見える服とベルト、開きから前へ出した腕（服の袖と手）、茶色の靴。
+// フォンシェーディング（MeshPhongMaterial）で、陰影をなめらかにし、うっすらツヤを出す（武器の金属は強く光る。weapon3d.ts）。
 //
 // 模型は足元が原点で、高さは約0.95マス。正面は +z（画面の手前）。歩いた向きへ体を回す。
 
 import * as THREE from 'three';
 import type { Dir } from '../game/explore';
+import type { WeaponType } from '../game/types';
 import { CLOAKS, PALETTE } from '../sprites/data';
+import { Weapon3D } from './weapon3d';
 
 export type CloakId = keyof typeof CLOAKS;
 
@@ -18,10 +21,27 @@ const FACING: Record<Dir, number> = {
   left: -Math.PI / 2,
 };
 
+// 左手（主人公から見て左、+x の側）に持った武器の傾き（ラジアン）。
+// 刃先を少し後ろへ倒し（back）、少し外へ開く（outward）。ゲームのカメラは斜め上の手前から見下ろすので、
+// 前へ倒すとカメラの方を向いて短く見えてしまう。後ろへ倒すと、上から見ても武器の長さがわかる
+const WEAPON_GRIP = { back: 0.45, outward: 0.25 };
+
 const TURN_SPEED = 14; // 体を回す速さ（大きいほど速く向きが変わる）
 const BOB = { height: 0.05, sway: 0.08 }; // 歩くときの上下の揺れ（マス）と、左右の傾き（ラジアン）
 
-const lambert = (color: string, side: THREE.Side = THREE.FrontSide) => new THREE.MeshLambertMaterial({ color, flatShading: true, side });
+/** 2点のあいだをつなぐ円柱（腕など）。a の太さが ra、b の太さが rb */
+function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number): THREE.BufferGeometry {
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const geo = new THREE.CylinderGeometry(rb, ra, dir.length(), 10);
+  // 円柱は y 軸向きなので、a から b の向きへ回して、真ん中に置く
+  geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()));
+  const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
+  return geo.translate(mid.x, mid.y, mid.z);
+}
+
+// 体の素材：フォンシェーディングで、なめらかな陰影と、うっすらしたツヤ（布や肌なので弱く、色も暗め）
+const PHONG = { shininess: 18, specular: 0x2a2622 } as const;
+const phong = (color: string, side: THREE.Side = THREE.FrontSide) => new THREE.MeshPhongMaterial({ color, side, ...PHONG });
 
 export class Hero3D {
   /** シーンに置く入れ物。位置と向きはこれで決まる */
@@ -30,26 +50,29 @@ export class Hero3D {
   readonly hitBox: THREE.Mesh;
 
   private readonly body = new THREE.Group(); // 歩く揺れを付ける部分
-  private readonly cloakMats: Record<'H' | 'C' | 'c', THREE.MeshLambertMaterial>;
+  private readonly cloakMats: Record<'H' | 'C' | 'c', THREE.MeshPhongMaterial>;
   private readonly disposables: { dispose(): void }[] = [];
   private cloak: CloakId | null = null;
+  private readonly leftHand = new THREE.Group(); // 左手の位置。持っている武器をここに付ける
+  private weapon: Weapon3D | null = null;
   private facing = 0;
 
   constructor() {
     const mats = {
-      skin: lambert(PALETTE.s!),
-      tunic: lambert(PALETTE.t!),
-      belt: lambert(PALETTE.b!),
-      boots: lambert(PALETTE.B!),
-      eyes: lambert(PALETTE.k!),
+      skin: phong(PALETTE.s!),
+      tunic: phong(PALETTE.t!),
+      belt: phong(PALETTE.b!),
+      boots: phong(PALETTE.B!),
+      eyes: phong(PALETTE.k!),
+      hair: phong(PALETTE.h!, THREE.DoubleSide), // ドット絵の前髪と同じ焦げ茶色
       shadow: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
       hit: new THREE.MeshBasicMaterial({ visible: false }),
     };
     // マントとフードは開いた円柱・球なので、内側の面も塗る
     this.cloakMats = {
-      H: lambert(CLOAKS.none.H, THREE.DoubleSide),
-      C: lambert(CLOAKS.none.C, THREE.DoubleSide),
-      c: lambert(CLOAKS.none.c, THREE.DoubleSide),
+      H: phong(CLOAKS.none.H, THREE.DoubleSide),
+      C: phong(CLOAKS.none.C, THREE.DoubleSide),
+      c: phong(CLOAKS.none.c, THREE.DoubleSide),
     };
     this.disposables.push(...Object.values(mats), ...Object.values(this.cloakMats));
 
@@ -69,25 +92,44 @@ export class Hero3D {
     add(new THREE.BoxGeometry(0.1, 0.08, 0.14), mats.boots, 0.07, 0.04, 0.02);
 
     // 服（マントの内側）とベルト
-    add(new THREE.CylinderGeometry(0.13, 0.17, 0.42, 8), mats.tunic, 0, 0.29, 0);
-    add(new THREE.CylinderGeometry(0.155, 0.16, 0.04, 8), mats.belt, 0, 0.3, 0);
+    add(new THREE.CylinderGeometry(0.13, 0.17, 0.42, 16), mats.tunic, 0, 0.29, 0);
+    add(new THREE.CylinderGeometry(0.155, 0.16, 0.04, 16), mats.belt, 0, 0.3, 0);
 
-    // マント：前（+z）を開けて、中の服が見えるようにする。裾は濃い色
-    const front = Math.PI / 2; // three.js の円柱は角度0が +z の向き
+    // マント：前（+z）を開けて、中の服が見えるようにする。裾は濃い色。
+    // three.js の円柱は、角度0が +z の向き（x = sin、z = cos）なので、角度0を中心に開ける
     const gap = 0.9; // 前の開きの角度（ラジアン）
-    const cloakGeo = new THREE.CylinderGeometry(0.17, 0.27, 0.5, 10, 1, true, front + gap / 2, Math.PI * 2 - gap);
+    const cloakGeo = new THREE.CylinderGeometry(0.17, 0.27, 0.5, 20, 1, true, gap / 2, Math.PI * 2 - gap);
     add(cloakGeo, this.cloakMats.C, 0, 0.3, 0);
-    add(new THREE.CylinderGeometry(0.27, 0.275, 0.05, 10, 1, true, front + gap / 2, Math.PI * 2 - gap), this.cloakMats.c, 0, 0.075, 0);
+    add(new THREE.CylinderGeometry(0.27, 0.275, 0.05, 20, 1, true, gap / 2, Math.PI * 2 - gap), this.cloakMats.c, 0, 0.075, 0);
 
-    // マントから出た手
-    add(new THREE.SphereGeometry(0.05, 6, 4), mats.skin, -0.2, 0.32, 0.08);
-    add(new THREE.SphereGeometry(0.05, 6, 4), mats.skin, 0.2, 0.32, 0.08);
+    // 腕：肩からマントの前の開きを通って、体の前に手を出す（服の袖と、肌色の手）
+    for (const side of [-1, 1]) {
+      const shoulder = new THREE.Vector3(side * 0.12, 0.5, 0.02);
+      const hand = new THREE.Vector3(side * 0.14, 0.31, 0.19);
+      add(limb(shoulder, hand, 0.04, 0.035), mats.tunic, 0, 0, 0);
+      add(new THREE.SphereGeometry(0.048, 10, 8), mats.skin, hand.x, hand.y, hand.z);
+      if (side === 1) this.leftHand.position.copy(hand);
+    }
+    this.leftHand.rotation.set(-WEAPON_GRIP.back, 0, -WEAPON_GRIP.outward);
+    this.body.add(this.leftHand);
 
-    // 頭とフード。フードは顔の前を開ける
-    add(new THREE.SphereGeometry(0.14, 10, 8), mats.skin, 0, 0.7, 0.01);
-    const hood = add(new THREE.SphereGeometry(0.175, 10, 8, Math.PI * 0.8, Math.PI * 1.4), this.cloakMats.H, 0, 0.72, -0.01);
-    hood.rotation.y = Math.PI; // 開いた側を正面（+z）へ
-    add(new THREE.CylinderGeometry(0.1, 0.17, 0.12, 10), this.cloakMats.H, 0, 0.57, 0); // 肩にかかるフードの裾
+    // 頭とフード。フードは顔の前（+z）を開ける
+    // （three.js の球は、横の角度 phi が π/2 のところが +z。phi 0.2π〜0.8π を開けると、顔の前が開く）
+    add(new THREE.SphereGeometry(0.14, 16, 12), mats.skin, 0, 0.7, 0.01);
+    add(new THREE.SphereGeometry(0.175, 16, 12, Math.PI * 0.8, Math.PI * 1.4), this.cloakMats.H, 0, 0.72, -0.01);
+
+    // 髪（長め）：フードの開きから見える前髪と、顔の両横から胸まで垂れる髪、フードの下から背中へ流れる髪
+    // 前髪：頭の球に少し大きい球の上の前側だけをかぶせる（目の上まで）
+    add(new THREE.SphereGeometry(0.148, 16, 8, Math.PI * 0.15, Math.PI * 0.7, 0, Math.PI * 0.42), mats.hair, 0, 0.7, 0.012);
+    for (const side of [-1, 1]) {
+      // 顔の横の髪：こめかみから、あごの下を通って胸まで
+      add(limb(new THREE.Vector3(side * 0.112, 0.74, 0.065), new THREE.Vector3(side * 0.125, 0.47, 0.11), 0.032, 0.022), mats.hair, 0, 0, 0);
+    }
+    // 背中の髪：フードの下から、マントに沿って背中へ流れる3つの房（毛先を細く、真ん中の房をいちばん長く）
+    for (const [x, end] of [[-0.055, 0.38], [0, 0.33], [0.055, 0.38]] as const) {
+      add(limb(new THREE.Vector3(x, 0.63, -0.15), new THREE.Vector3(x * 1.25, end, -0.205), 0.042, 0.016), mats.hair, 0, 0, 0);
+    }
+    add(new THREE.CylinderGeometry(0.1, 0.17, 0.12, 20), this.cloakMats.H, 0, 0.57, 0); // 肩にかかるフードの裾
 
     // 目
     add(new THREE.BoxGeometry(0.03, 0.045, 0.02), mats.eyes, -0.05, 0.7, 0.14);
@@ -99,6 +141,20 @@ export class Hero3D {
     this.disposables.push(hitGeo);
     this.hitBox = new THREE.Mesh(hitGeo, mats.hit);
     this.root.add(this.hitBox);
+  }
+
+  /** 左手に持つ武器（null なら何も持たない）。同じ武器なら作り直さない */
+  setWeapon(type: WeaponType | null) {
+    if ((this.weapon?.type ?? null) === type) return;
+    if (this.weapon) {
+      this.leftHand.remove(this.weapon.root);
+      this.weapon.dispose();
+      this.weapon = null;
+    }
+    if (type) {
+      this.weapon = new Weapon3D(type);
+      this.leftHand.add(this.weapon.root);
+    }
   }
 
   /** マントとフードの色を、装備した防具の色にする */
@@ -131,6 +187,7 @@ export class Hero3D {
   }
 
   dispose() {
+    this.weapon?.dispose();
     for (const d of this.disposables) d.dispose();
   }
 }
