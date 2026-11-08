@@ -4,6 +4,7 @@
 // フォンシェーディング（MeshPhongMaterial）で、陰影をなめらかにし、うっすらツヤを出す（武器の金属は強く光る。weapon3d.ts）。
 //
 // 模型は足元が原点で、高さは約0.95マス。正面は +z（画面の手前）。歩いた向きへ体を回す。
+// 攻撃のときは、左腕を肩から回して武器を振る（武器ごとに振り方が違う。SWINGS）。
 
 import * as THREE from 'three';
 import type { Dir } from '../game/explore';
@@ -26,6 +27,40 @@ const FACING: Record<Dir, number> = {
 // 前へ倒すとカメラの方を向いて短く見えてしまう。後ろへ倒すと、上から見ても武器の長さがわかる
 const WEAPON_GRIP = { back: 0.45, outward: 0.25 };
 
+// 攻撃で武器を振る動き。腕（肩が軸）と武器（手首が軸）の角度、体の前への傾きと踏み込みを、3つの姿勢のあいだで動かす：
+// 構え（rest、ふだんの持ち方）→ 振りかぶる（windup）→ 振り下ろす（strike）→ 構えに戻る。
+// armX：腕を前へ上げる角度（マイナスで上がる。-1.6 で前へ水平、-2.4 で頭の上）。armZ：腕を体の外（マイナス）・内（プラス）へ開く角度。
+// gripX：武器の先を前へ倒す角度（構えの WEAPON_GRIP.back からのずれ。腕を上げた分だけ武器の先も後ろへ倒れるので、その分も足す）。lean：体を前へ傾ける角度。lunge：前へ踏み込む距離（マス）。
+// 振り下ろし切るのは SWING.strikeAt（秒）。攻撃の音（scripts/build-sounds.py の STRIKE_AT）も同じ時間で当たる音が鳴る
+type SwingPose = { armX: number; armZ: number; gripX: number; lean: number; lunge: number };
+const REST_POSE: SwingPose = { armX: 0, armZ: 0, gripX: 0, lean: 0, lunge: 0 };
+type SwingKind = WeaponType | 'fist';
+const SWINGS: Record<SwingKind, { windup: SwingPose; strike: SwingPose }> = {
+  // 剣：肩の上へ振りかぶり、体の外から内へ斜めに斬り下ろす
+  sword: {
+    windup: { armX: -2.3, armZ: -0.5, gripX: -0.5, lean: -0.08, lunge: 0 },
+    strike: { armX: 0.1, armZ: 0.45, gripX: 2.1, lean: 0.18, lunge: 0.1 },
+  },
+  // 槌：頭の上まで大きく振りかぶり、真下へたたきつける
+  hammer: {
+    windup: { armX: -2.7, armZ: -0.15, gripX: -0.9, lean: -0.15, lunge: 0 },
+    strike: { armX: -0.2, armZ: 0.05, gripX: 2.6, lean: 0.28, lunge: 0.12 },
+  },
+  // 杖：少し引いてから、先の宝石を敵へ向けて突き出す
+  staff: {
+    windup: { armX: 0.35, armZ: 0, gripX: -0.3, lean: -0.05, lunge: -0.03 },
+    strike: { armX: -1.25, armZ: 0.1, gripX: 2.7, lean: 0.12, lunge: 0.1 },
+  },
+  // 武器なし：こぶしを引いて、前へ突き出す
+  fist: {
+    windup: { armX: 0.4, armZ: -0.1, gripX: 0, lean: -0.04, lunge: -0.03 },
+    strike: { armX: -1.45, armZ: 0.15, gripX: 0, lean: 0.12, lunge: 0.1 },
+  },
+};
+// 振る動きの時間（秒）：strikeAt で振り下ろし切り、hold までその姿勢を少し保ち、end で構えに戻る
+export const SWING = { strikeAt: 0.1, hold: 0.16, end: 0.36 } as const;
+const SWING_WINDUP_END = 0.055; // 振りかぶり切る時間（秒）。そこから strikeAt までが一気に振り下ろす速い動き
+
 const TURN_SPEED = 14; // 体を回す速さ（大きいほど速く向きが変わる）
 const BOB = { height: 0.05, sway: 0.08 }; // 歩くときの上下の揺れ（マス）と、左右の傾き（ラジアン）
 
@@ -43,6 +78,23 @@ function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number): THREE
 const PHONG = { shininess: 18, specular: 0x2a2622 } as const;
 const phong = (color: string, side: THREE.Side = THREE.FrontSide) => new THREE.MeshPhongMaterial({ color, side, ...PHONG });
 
+/** 振り始めてから t 秒の姿勢。振りかぶりと戻りはなめらかに、振り下ろしは速く */
+function swingPose(swing: { windup: SwingPose; strike: SwingPose }, t: number): SwingPose {
+  const ease = (u: number) => u * u * (3 - 2 * u);
+  if (t < SWING_WINDUP_END) return mixPose(REST_POSE, swing.windup, ease(t / SWING_WINDUP_END));
+  if (t < SWING.strikeAt) {
+    const u = (t - SWING_WINDUP_END) / (SWING.strikeAt - SWING_WINDUP_END);
+    return mixPose(swing.windup, swing.strike, u * u); // だんだん速く振り下ろす
+  }
+  if (t < SWING.hold) return swing.strike;
+  return mixPose(swing.strike, REST_POSE, ease((t - SWING.hold) / (SWING.end - SWING.hold)));
+}
+
+function mixPose(a: SwingPose, b: SwingPose, u: number): SwingPose {
+  const m = (x: number, y: number) => x + (y - x) * u;
+  return { armX: m(a.armX, b.armX), armZ: m(a.armZ, b.armZ), gripX: m(a.gripX, b.gripX), lean: m(a.lean, b.lean), lunge: m(a.lunge, b.lunge) };
+}
+
 export class Hero3D {
   /** シーンに置く入れ物。位置と向きはこれで決まる */
   readonly root = new THREE.Group();
@@ -55,6 +107,8 @@ export class Hero3D {
   private cloak: CloakId | null = null;
   private readonly leftHand = new THREE.Group(); // 左手の位置。持っている武器をここに付ける
   private weapon: Weapon3D | null = null;
+  private readonly leftArm = new THREE.Group(); // 左腕（肩が軸）。攻撃のときに、これを回して武器を振る
+  private swingAt: number | null = null; // 振り始めてからの秒数（振っていなければ null）
   private facing = 0;
 
   constructor() {
@@ -103,15 +157,22 @@ export class Hero3D {
     add(new THREE.CylinderGeometry(0.27, 0.275, 0.05, 20, 1, true, gap / 2, Math.PI * 2 - gap), this.cloakMats.c, 0, 0.075, 0);
 
     // 腕：肩からマントの前の開きを通って、体の前に手を出す（服の袖と、肌色の手）
+    // 左腕（武器を持つ方）は肩を軸にした入れ物に入れ、攻撃のときに肩から回して振る
     for (const side of [-1, 1]) {
       const shoulder = new THREE.Vector3(side * 0.12, 0.5, 0.02);
       const hand = new THREE.Vector3(side * 0.14, 0.31, 0.19);
-      add(limb(shoulder, hand, 0.04, 0.035), mats.tunic, 0, 0, 0);
-      add(new THREE.SphereGeometry(0.048, 10, 8), mats.skin, hand.x, hand.y, hand.z);
-      if (side === 1) this.leftHand.position.copy(hand);
+      const parent = side === 1 ? this.leftArm : this.body;
+      const origin = side === 1 ? shoulder : new THREE.Vector3();
+      add(limb(shoulder.clone().sub(origin), hand.clone().sub(origin), 0.04, 0.035), mats.tunic, 0, 0, 0, parent);
+      add(new THREE.SphereGeometry(0.048, 10, 8), mats.skin, hand.x - origin.x, hand.y - origin.y, hand.z - origin.z, parent);
+      if (side === 1) {
+        this.leftArm.position.copy(shoulder);
+        this.leftHand.position.copy(hand).sub(shoulder);
+      }
     }
     this.leftHand.rotation.set(-WEAPON_GRIP.back, 0, -WEAPON_GRIP.outward);
-    this.body.add(this.leftHand);
+    this.leftArm.add(this.leftHand);
+    this.body.add(this.leftArm);
 
     // 頭とフード。フードは顔の前（+z）を開ける
     // （three.js の球は、横の角度 phi が π/2 のところが +z。phi 0.2π〜0.8π を開けると、顔の前が開く）
@@ -157,6 +218,11 @@ export class Hero3D {
     }
   }
 
+  /** 攻撃で武器を振り始める（振っている途中なら、振り直す） */
+  swing() {
+    this.swingAt = 0;
+  }
+
   /** マントとフードの色を、装備した防具の色にする */
   setCloak(cloak: CloakId) {
     if (cloak === this.cloak) return;
@@ -184,6 +250,18 @@ export class Hero3D {
     const phase = Math.sin(progress * Math.PI);
     this.body.position.y = walking ? phase * BOB.height : 0;
     this.body.rotation.z = walking ? Math.sin(progress * Math.PI * 2) * BOB.sway : 0;
+
+    // 武器を振る動き（動きを減らす設定では振らない）
+    let pose = REST_POSE;
+    if (this.swingAt !== null) {
+      this.swingAt += dt;
+      if (reduceMotion || this.swingAt >= SWING.end) this.swingAt = null;
+      else pose = swingPose(SWINGS[this.weapon?.type ?? 'fist'], this.swingAt);
+    }
+    this.leftArm.rotation.set(pose.armX, 0, -pose.armZ); // 左腕は +x の側なので、z まわりのマイナスが体の内へ
+    this.leftHand.rotation.x = -WEAPON_GRIP.back + pose.gripX;
+    this.body.rotation.x = pose.lean;
+    this.body.position.z = pose.lunge;
   }
 
   dispose() {

@@ -5,7 +5,7 @@
 // キーを押し続けたときの歩く速さが、OS のキーリピートの設定に左右されず一定になる。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { playChestOpen, playFootstep, preloadSounds, setAmbient } from '../audio/sound';
+import { playAttack, playChestOpen, playFootstep, preloadSounds, setAmbient } from '../audio/sound';
 import { BODY_NAMES, ITEMS, TRAIT_IDS, TRAITS } from '../game/data';
 import { enemyDef, key } from '../game/enemies';
 import {
@@ -39,7 +39,7 @@ import {
   type Frame,
   type Motion,
 } from './exploreRender';
-import { DungeonView3D } from './explore3d';
+import { DungeonView3D, weaponOf } from './explore3d';
 import { chooseDirection, knobOffset, STICK, stickDirections } from './stick';
 import { tilesetFor } from './tileset';
 
@@ -182,6 +182,12 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     }
     const next = result.value;
     // 攻撃したとき・攻撃されたときは、画面を少し拡大縮小し、ダメージの数字を出す（3D表示のみ）
+    // 敵を攻撃したときは、主人公が敵の方を向いて武器を振り、武器ごとの音を鳴らす（1回の行動で1回だけ）
+    const struck = next.hits.find((hit) => hit.kind === 'dealt');
+    if (struck) {
+      view3dRef.current?.heroAttack(struck.at);
+      playAttack(weaponOf(next.stats.weapon));
+    }
     for (const hit of next.hits) {
       view3dRef.current?.hitPulse(hit.kind === 'dealt' ? 'attack' : 'hurt');
       view3dRef.current?.popDamage(hit.at, hit.amount, hit.kind);
