@@ -120,6 +120,15 @@ interface Atlas {
 }
 
 /** テクスチャを読み込む前（または読み込めなかったとき）の、ダンジョン特性ごとの床と壁の色 */
+// 床と壁のツヤ（フォンシェーディングの照り返し）。たいまつの光が、主人公のすぐ手前の床に映り込む。
+// 氷は強く（凍った床が濡れたように光る）、光は中くらい（磨いた石）、炎は弱く（照った黒い岩）。ほかの特性はツヤなし
+const TRAIT_GLOSS: Partial<Record<TraitId, { shininess: number; specular: number }>> = {
+  ice: { shininess: 90, specular: 0x5f7180 },
+  light: { shininess: 45, specular: 0x403c34 },
+  fire: { shininess: 22, specular: 0x2e2220 },
+};
+const NO_GLOSS = { shininess: 30, specular: 0x000000 } as const;
+
 const TRAIT_COLORS: Record<TraitId, { floor: number; wall: number }> = {
   fire: { floor: 0x4a2a22, wall: 0x8a3a26 },
   ice: { floor: 0x253a48, wall: 0x6a9cbc },
@@ -144,7 +153,8 @@ export class DungeonView3D {
   private readonly floors: THREE.InstancedMesh[]; // 床の模様ごとに1つ
   private readonly walls: THREE.InstancedMesh;
   private readonly wallShadows: THREE.InstancedMesh; // 壁の根元の影
-  private readonly wallMaterials: { top: THREE.MeshLambertMaterial; side: THREE.MeshLambertMaterial }[];
+  private readonly wallMaterials: { top: THREE.MeshPhongMaterial; side: THREE.MeshPhongMaterial }[];
+  private glossTrait: TraitId | null = null; // 床と壁のツヤを合わせた特性
   private readonly atlases = new Map<TraitId, Atlas | null>(); // null は読み込み中か、読み込めなかった
   private appliedAtlas: Atlas | null = null;
   private readonly props = new THREE.Group(); // 階段・宝箱・目印
@@ -223,14 +233,14 @@ export class DungeonView3D {
     const floorGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
     this.floors = Array.from(
       { length: FLOOR_KINDS },
-      () => new THREE.InstancedMesh(floorGeo, worldMapped(new THREE.MeshLambertMaterial(), 'floor', this.fog), DRAW_CAPACITY),
+      () => new THREE.InstancedMesh(floorGeo, worldMapped(new THREE.MeshPhongMaterial({ ...NO_GLOSS }), 'floor', this.fog), DRAW_CAPACITY),
     );
     // 壁は面ごとに素材を分ける。箱の面の順番は +x, -x, +y（上）, -y（下）, +z, -z。
     // 敵・宝箱・階段の手前に壁があっても、壁は透かさずにそのまま描く
     this.wallMaterials = [
       {
-        top: worldMapped(new THREE.MeshLambertMaterial({ vertexColors: true }), 'top', this.fog),
-        side: worldMapped(new THREE.MeshLambertMaterial({ vertexColors: true }), 'side', this.fog),
+        top: worldMapped(new THREE.MeshPhongMaterial({ vertexColors: true, ...NO_GLOSS }), 'top', this.fog),
+        side: worldMapped(new THREE.MeshPhongMaterial({ vertexColors: true, ...NO_GLOSS }), 'side', this.fog),
       },
     ];
     const wallGeo = shadedBox(WALL_HEIGHT);
@@ -509,6 +519,7 @@ export class DungeonView3D {
     const atlas = this.atlasFor(trait);
     if (atlas !== this.appliedAtlas) this.applyAtlas(atlas);
     this.torch.color.setHex(TORCH.colorByTrait[trait] ?? TORCH.color);
+    if (trait !== this.glossTrait) this.applyGloss(trait);
     // テクスチャがあれば色はテクスチャに任せ、明るさだけを掛ける。なければ特性ごとの色で描く
     const colors = TRAIT_COLORS[trait];
     const floorBase = new THREE.Color(atlas ? 0xffffff : colors.floor);
@@ -627,6 +638,17 @@ export class DungeonView3D {
   }
 
   /** ダンジョン特性のテクスチャ。まだ読み込んでいなければ読み込みを始めて null を返す */
+  /** 床と壁のツヤを、ダンジョンの特性に合わせる */
+  private applyGloss(trait: TraitId) {
+    this.glossTrait = trait;
+    const { shininess, specular } = TRAIT_GLOSS[trait] ?? NO_GLOSS;
+    const mats = [...this.floors.map((f) => f.material as THREE.MeshPhongMaterial), ...this.wallMaterials.flatMap(({ top, side }) => [top, side])];
+    for (const m of mats) {
+      m.shininess = shininess;
+      m.specular.setHex(specular);
+    }
+  }
+
   private atlasFor(trait: TraitId): Atlas | null {
     if (!this.atlases.has(trait)) {
       this.atlases.set(trait, null);
@@ -662,7 +684,7 @@ export class DungeonView3D {
 
   private applyAtlas(atlas: Atlas | null) {
     this.floors.forEach((mesh) => {
-      const mat = mesh.material as THREE.MeshLambertMaterial;
+      const mat = mesh.material as THREE.MeshPhongMaterial;
       mat.map = atlas?.floor ?? null;
       mat.needsUpdate = true;
     });
@@ -890,11 +912,11 @@ function litBillboard(width = 1, height = 1): THREE.PlaneGeometry {
  * 絵のどこを使うかを決める（床と壁の上面は x・z、壁の側面は壁に沿った向きの位置と高さ）。絵は TEXTURE_SPAN マスごとに繰り返す。
  * こうすると隣り合うマスの模様がつながり、マスの境目に縁取りや目地のような線が出ない。霧（applyFog）もかける
  */
-function worldMapped(material: THREE.MeshLambertMaterial, face: 'floor' | 'top' | 'side', fog: Fog): THREE.MeshLambertMaterial {
+function worldMapped<T extends THREE.MeshLambertMaterial | THREE.MeshPhongMaterial>(material: T, face: 'floor' | 'top' | 'side', fog: Fog): T {
   const defines: Record<string, string> = { TEXTURE_SPAN: TEXTURE_SPAN.toFixed(1), WALL_HEIGHT_F: WALL_HEIGHT.toFixed(1) };
   defines[`MAPPED_${face.toUpperCase()}`] = '';
   material.defines = { ...material.defines, ...defines };
-  return applyFog(material, fog, 'darken', `world-mapped-${face}`);
+  return applyFog(material as THREE.Material, fog, 'darken', `world-mapped-${face}`) as T;
 }
 
 // ===== 霧（ピクセル単位） =====
