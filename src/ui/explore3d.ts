@@ -19,6 +19,7 @@ import { cloakOf, lookOf } from '../sprites/looks';
 import { floorVariant } from './autotile';
 import { ENEMY_MARK, lerp, type Frame } from './exploreRender';
 import { Hero3D } from './hero3d';
+import { Stairs3D } from './stairs3d';
 
 // マスの大きさを1とした壁の高さ。高くすると通路が深く見える。
 // 今のカメラの角度（約63度）では、高さ1までなら、すぐ手前の壁は隣のマスに立つキャラクターの足元に届く程度で、体は隠れない
@@ -52,7 +53,6 @@ const REMEMBERED = 0.3; // 一度見たが今は見えていないマスの明�
 // マスの明るさは、見え始め・見えなくなるときに fade の速さ（1秒あたり）で少しずつ変える。
 // 明るさはピクセルごとに決める（霧の地図 → FogState と applyFog）ので、マスの形の段は出ない
 const SIGHT_LIGHT = { edge: 0.5, fade: 9 };
-const FADED_WALL_OPACITY = 0.35; // 敵・宝箱・階段のすぐ手前にあって、それを隠してしまう壁の濃さ
 // 壁の根元の影：壁に接する床の辺に敷く帯。幅（マスの何倍か）と、壁際でのいちばん濃いところ、薄くなり方
 const WALL_SHADOW = { depth: 0.4, darkness: 0.8, falloff: 1.5 }; // falloff：大きいほど壁際で急に薄くなる
 // 影の帯を敷く向き。dx・dz は壁のある方向、angle は帯の暗い側をその方向へ向ける回転
@@ -97,6 +97,8 @@ const SUN = 0.25; // 上からの弱い光。壁の側面に陰をつける
 const MAX_ANISOTROPY = 8; // 斜めから見た床がぼけないようにする強さの上限（スマホで重くなりすぎないように）
 // 宝箱の大きさ（マス）。ふたは奥行きを直径とするかまぼこ形で、本体の上に載る（いちばん上は高さ + 奥行き/2）
 const CHEST = { width: 0.56, height: 0.3, depth: 0.38 };
+// 開けた宝箱：ふたを奥の縁（蝶番）を軸に後ろへ倒す角度（ラジアン）と、箱の口に見える中の暗さ
+const OPENED_CHEST = { lidAngle: 1.75, inside: 0x1c130c, lidInside: 0x3e2a1a };
 /**
  * 写真から作った敵の絵（public/textures/enemies/、scripts/build-enemy-textures.py で作る）。ない敵はドット絵で描く。
  * height は画面での高さ（マス）、aspect は絵の横:縦、footX は足元（マスの中心に置く位置）が絵の左から何割のところか
@@ -141,12 +143,12 @@ export class DungeonView3D {
   private shownState: ExploreState | null = null;
   private readonly floors: THREE.InstancedMesh[]; // 床の模様ごとに1つ
   private readonly walls: THREE.InstancedMesh;
-  private readonly fadedWalls: THREE.InstancedMesh; // 半透明にした壁
   private readonly wallShadows: THREE.InstancedMesh; // 壁の根元の影
-  private readonly wallMaterials: { top: THREE.MeshLambertMaterial; side: THREE.MeshLambertMaterial }[]; // 0：普通、1：半透明
+  private readonly wallMaterials: { top: THREE.MeshLambertMaterial; side: THREE.MeshLambertMaterial }[];
   private readonly atlases = new Map<TraitId, Atlas | null>(); // null は読み込み中か、読み込めなかった
   private appliedAtlas: Atlas | null = null;
   private readonly props = new THREE.Group(); // 階段・宝箱・目印
+  private readonly stairs: Stairs3D; // 特性ごとの階段の模型
   private readonly hero = new Hero3D(); // 主人公は立体の模型（敵や宝箱はドット絵の板のまま）
   private heroDir: Dir = 'down'; // 最後に歩いた向き。模型をこの向きへ回す
   private lastFrameAt = performance.now();
@@ -166,26 +168,25 @@ export class DungeonView3D {
   private readonly litMaterials = new Map<string, THREE.MeshLambertMaterial>(); // たいまつで照らされるドット絵（敵）
   // 敵のドット絵を立てる板。いつもカメラの方を向けるが、光の当たり方は足元の床と同じになるよう、面の向き（法線）を真上にしてある
   private readonly billboard = litBillboard();
-  // 階段・宝箱・目印は形も素材も決まっているので、最初に1回だけ作って使い回す
+  // 宝箱・目印は形も素材も決まっているので、最初に1回だけ作って使い回す（階段は stairs3d.ts）
   private readonly shared = {
-    hole: new THREE.PlaneGeometry(0.8, 0.8).rotateX(-Math.PI / 2),
-    bars: [0, 1, 2].map((step) => new THREE.PlaneGeometry(0.7 - step * 0.15, 0.08).rotateX(-Math.PI / 2)),
     // 宝箱：箱の本体と、かまぼこ形のふた（写真の宝箱の形）。正面は +z（画面の手前）
     chestBody: new THREE.BoxGeometry(CHEST.width, CHEST.height, CHEST.depth).translate(0, CHEST.height / 2, 0),
     chestLid: new THREE.CylinderGeometry(CHEST.depth / 2, CHEST.depth / 2, CHEST.width, 16, 1, false, 0, Math.PI)
       .rotateZ(Math.PI / 2) // 円柱の軸を左右（x）に向け、半分の丸みが上に来るようにする
       .translate(0, CHEST.height, 0),
-    // 上り階段：奥（上の画面側）へ向かって高くなる3段の石段
-    upSteps: [0, 1, 2].map((step) => new THREE.BoxGeometry(0.7, 0.07 * (step + 1), 0.24).translate(0, 0.035 * (step + 1), 0)),
     ring: new THREE.RingGeometry(0.4, 0.48, 24).rotateX(-Math.PI / 2),
     targetRing: new THREE.RingGeometry(0.32, 0.42, 24).rotateX(-Math.PI / 2),
-    holeMat: new THREE.MeshBasicMaterial({ color: 0x05080a }),
-    barMat: new THREE.MeshLambertMaterial({ color: 0xece5d3 }),
     // 宝箱の素材。テクスチャ（public/textures/chest/）を読み込むまでは金色で描く
     chestFront: new THREE.MeshLambertMaterial({ color: 0xe2c178 }),
     chestSide: new THREE.MeshLambertMaterial({ color: 0xe2c178 }),
     chestLidMat: new THREE.MeshLambertMaterial({ color: 0xe2c178 }),
-    stepMat: new THREE.MeshLambertMaterial({ color: 0xc9c3b3 }),
+    // 開けた宝箱の口（中の暗がり）。箱の上の面より少し内側に敷く
+    chestInside: new THREE.PlaneGeometry(CHEST.width - 0.05, CHEST.depth - 0.05).rotateX(-Math.PI / 2),
+    chestInsideMat: new THREE.MeshLambertMaterial({ color: OPENED_CHEST.inside }),
+    // 開けたふたの裏（ふたはかまぼこ形で裏に面がないので、平たい板を張る）
+    chestLidInside: new THREE.PlaneGeometry(CHEST.width, CHEST.depth).rotateX(Math.PI / 2).translate(0, CHEST.height, 0),
+    chestLidInsideMat: new THREE.MeshLambertMaterial({ color: OPENED_CHEST.lidInside, side: THREE.DoubleSide }),
     eliteMat: new THREE.MeshLambertMaterial({ color: 0xd9653b }),
     bossMat: new THREE.MeshLambertMaterial({ color: 0xb48d35 }),
     targetMat: new THREE.MeshBasicMaterial({ color: 0x9cc46a }),
@@ -225,20 +226,19 @@ export class DungeonView3D {
       () => new THREE.InstancedMesh(floorGeo, worldMapped(new THREE.MeshLambertMaterial(), 'floor', this.fog), DRAW_CAPACITY),
     );
     // 壁は面ごとに素材を分ける。箱の面の順番は +x, -x, +y（上）, -y（下）, +z, -z。
-    // 敵などを隠してしまう手前の壁は、半透明の素材で別に描く
-    this.wallMaterials = [{}, { transparent: true, opacity: FADED_WALL_OPACITY, depthWrite: false }].map((extra) => ({
-      top: worldMapped(new THREE.MeshLambertMaterial({ vertexColors: true, ...extra }), 'top', this.fog),
-      side: worldMapped(new THREE.MeshLambertMaterial({ vertexColors: true, ...extra }), 'side', this.fog),
-    }));
+    // 敵・宝箱・階段の手前に壁があっても、壁は透かさずにそのまま描く
+    this.wallMaterials = [
+      {
+        top: worldMapped(new THREE.MeshLambertMaterial({ vertexColors: true }), 'top', this.fog),
+        side: worldMapped(new THREE.MeshLambertMaterial({ vertexColors: true }), 'side', this.fog),
+      },
+    ];
     const wallGeo = shadedBox(WALL_HEIGHT);
-    const [solid, faded] = this.wallMaterials.map(({ top, side }) => [side, side, top, side, side, side]);
-    this.walls = new THREE.InstancedMesh(wallGeo, solid!, DRAW_CAPACITY);
-    this.fadedWalls = new THREE.InstancedMesh(wallGeo, faded!, DRAW_CAPACITY);
-    // 壁は光をさえぎって影を落とし、床と壁は影を受ける（半透明にした手前の壁も、光はさえぎる）
-    for (const wall of [this.walls, this.fadedWalls]) {
-      wall.castShadow = true;
-      wall.receiveShadow = true;
-    }
+    const { top: wallTop, side: wallSide } = this.wallMaterials[0]!;
+    this.walls = new THREE.InstancedMesh(wallGeo, [wallSide, wallSide, wallTop, wallSide, wallSide, wallSide], DRAW_CAPACITY);
+    // 壁は光をさえぎって影を落とし、床と壁は影を受ける
+    this.walls.castShadow = true;
+    this.walls.receiveShadow = true;
     for (const floor of this.floors) floor.receiveShadow = true;
     // 壁の根元の影。帯の上側（北）が暗く、下側へ向かって消えていく。向きはインスタンスごとに回す
     const shadowGeo = new THREE.PlaneGeometry(1, WALL_SHADOW.depth).rotateX(-Math.PI / 2);
@@ -258,11 +258,12 @@ export class DungeonView3D {
     // 影の帯は黒の半透明なので、霧の外では濃さを消す（まだ見ていない場所との境目で、背景より黒くならないように）
     this.wallShadows = new THREE.InstancedMesh(shadowGeo, applyFog(shadowMat, this.fog, 'fade-alpha'), DRAW_CAPACITY * SHADOW_SIDES.length);
     // 階段・宝箱・強敵の足元の輪も、床や壁と同じ霧をかける
-    const { holeMat, barMat, chestFront, chestSide, chestLidMat, stepMat, eliteMat, bossMat } = this.shared;
-    for (const mat of [holeMat, barMat, chestFront, chestSide, chestLidMat, stepMat, eliteMat, bossMat]) applyFog(mat, this.fog);
+    const { chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat } = this.shared;
+    for (const mat of [chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat]) applyFog(mat, this.fog);
+    this.stairs = new Stairs3D((mat) => applyFog(mat, this.fog));
     this.loadChestTextures();
     this.loadEnemyPhotos();
-    for (const mesh of [...this.floors, this.walls, this.fadedWalls, this.wallShadows]) {
+    for (const mesh of [...this.floors, this.walls, this.wallShadows]) {
       // 中身を毎回入れ替えるので、最初の中身で計算された範囲で画面外と判定されないようにする
       mesh.frustumCulled = false;
       this.scene.add(mesh);
@@ -464,17 +465,18 @@ export class DungeonView3D {
 
   dispose() {
     this.floors[0]!.geometry.dispose(); // 床の形はすべての入れ物で共通
-    this.walls.geometry.dispose(); // 半透明の壁と共通
+    this.walls.geometry.dispose();
     this.wallShadows.geometry.dispose();
     this.pathDots.geometry.dispose();
     (this.pathDots.material as THREE.Material).dispose();
     this.pathDots.dispose();
     this.hero.dispose();
+    this.stairs.dispose();
     for (const { sprite } of this.damagePops) {
       sprite.material.map?.dispose();
       sprite.material.dispose();
     }
-    for (const mesh of [...this.floors, this.walls, this.fadedWalls, this.wallShadows]) {
+    for (const mesh of [...this.floors, this.walls, this.wallShadows]) {
       for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) mat.dispose();
       mesh.dispose();
     }
@@ -515,9 +517,7 @@ export class DungeonView3D {
     const c = new THREE.Color();
     const floorCounts = this.floors.map(() => 0);
     let walls = 0;
-    let fadedWalls = 0;
     let shadows = 0;
-    const faded = this.wallsToFade(frame);
     this.fog.setTargets(frame.state, frame.visible);
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
@@ -534,13 +534,10 @@ export class DungeonView3D {
         // 明るさは霧（applyFog）がピクセルごとに付けるので、ここでは元の色だけを入れる
         if (map.tiles[i] === 'wall') {
           m.makeTranslation(x, WALL_HEIGHT / 2, z);
-          if (faded.has(i)) {
-            this.fadedWalls.setMatrixAt(fadedWalls, m);
-            this.fadedWalls.setColorAt(fadedWalls++, wallBase);
-          } else {
-            this.walls.setMatrixAt(walls, m);
-            this.walls.setColorAt(walls++, wallBase);
-          }
+          this.walls.setMatrixAt(walls, m);
+          this.walls.setColorAt(walls++, wallBase);
+        } else if (map.stairs && map.stairs.x === x && map.stairs.y === z) {
+          // 下り階段のマスは床に穴が開いているので、床を敷かない（穴と段は updateProps で描く）
         } else {
           // テクスチャがないときは、マスの位置で明るさを少し変えて描き分ける（2D表示と同じ決め方）
           const k = floorVariant(x, z) % FLOOR_KINDS;
@@ -560,7 +557,6 @@ export class DungeonView3D {
     const counts = [
       ...this.floors.map((mesh, k) => [mesh, floorCounts[k]!] as const),
       [this.walls, walls] as const,
-      [this.fadedWalls, fadedWalls] as const,
       [this.wallShadows, shadows] as const,
     ];
     for (const [mesh, count] of counts) {
@@ -569,26 +565,6 @@ export class DungeonView3D {
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
     if (this.shadows) this.renderer.shadowMap.needsUpdate = true; // 壁の並びが変わったので影も描き直す
-  }
-
-  /**
-   * 半透明にする壁（マスの番号）。今見えている敵・宝箱・階段の、すぐ手前（カメラ側）にある壁。
-   * 主人公は壁より手前に描くので含めない（歩くたびに壁が透けると、立体感が薄れるため）
-   */
-  private wallsToFade(frame: Frame): Set<number> {
-    const { map, enemies, chests } = frame.state;
-    const result = new Set<number>();
-    const behind = (p: Pos) => {
-      if (!frame.visible.has(p.y * map.width + p.x) || p.y + 1 >= map.height) return;
-      const i = (p.y + 1) * map.width + p.x;
-      if (map.tiles[i] === 'wall') result.add(i);
-    };
-    for (const e of enemies) behind(e.pos);
-    for (const c of chests) behind(c.pos);
-    if (map.stairs) behind(map.stairs);
-    const up = upStairs(frame.state);
-    if (up) behind(up);
-    return result;
   }
 
   /** 宝箱のテクスチャ（どのダンジョンでも共通）。読み込めたら金色をやめてテクスチャで描く。読み込めなければ金色のまま */
@@ -707,26 +683,17 @@ export class DungeonView3D {
     // 一度見ただけの場所にあるときの暗さは、霧（applyFog）が床や壁と同じようにピクセルごとに付ける
 
     if (map.stairs && seen[map.stairs.y * map.width + map.stairs.x]) {
-      // 下り階段：床に開いた穴と、段の線
-      const hole = new THREE.Mesh(this.shared.hole, this.shared.holeMat);
-      hole.position.set(map.stairs.x, 0.01, map.stairs.y);
-      this.props.add(hole);
-      this.shared.bars.forEach((geo, step) => {
-        const bar = new THREE.Mesh(geo, this.shared.barMat);
-        bar.position.set(map.stairs!.x, 0.02, map.stairs!.y - 0.25 + step * 0.22);
-        bar.receiveShadow = true;
-        this.props.add(bar);
-      });
+      // 下り階段：床に開いた穴の中へ、奥へ下りていく石段（特性ごとの石と飾り）
+      const down = this.stairs.get('down', frame.state.trait);
+      down.position.set(map.stairs.x, 0, map.stairs.y);
+      this.props.add(down);
     }
     const up = upStairs(frame.state);
     if (up && seen[up.y * map.width + up.x]) {
-      // 上り階段：床から奥へ向かって高くなる石段
-      this.shared.upSteps.forEach((geo, step) => {
-        const block = new THREE.Mesh(geo, this.shared.stepMat);
-        block.position.set(up.x, 0, up.y + 0.25 - step * 0.25);
-        block.receiveShadow = true;
-        this.props.add(block);
-      });
+      // 上り階段：両脇に壁のある、奥へ上っていく石段
+      const steps = this.stairs.get('up', frame.state.trait);
+      steps.position.set(up.x, 0, up.y);
+      this.props.add(steps);
     }
     for (const chest of chests) {
       if (!seen[chest.pos.y * map.width + chest.pos.x]) continue;
@@ -734,12 +701,31 @@ export class DungeonView3D {
       // 本体の面の順番は +x, -x, +y（上）, -y（下）, +z（正面）, -z（背面）。ふたは曲面・両端の順
       const body = new THREE.Mesh(chestBody, [chestSide, chestSide, chestSide, chestSide, chestFront, chestFront]);
       const lid = new THREE.Mesh(chestLid, [this.shared.chestLidMat, chestSide, chestSide]);
+      body.position.set(chest.pos.x, 0, chest.pos.y);
+      const parts: THREE.Object3D[] = [body];
+      if (chest.opened) {
+        // 開けた宝箱：ふたを奥の縁（蝶番）を軸に後ろへ倒し、箱の口に中の暗がりを見せる。空になっても、その場に残す
+        const hinge = new THREE.Group();
+        hinge.position.set(chest.pos.x, CHEST.height, chest.pos.y - CHEST.depth / 2);
+        hinge.rotation.x = -OPENED_CHEST.lidAngle;
+        lid.position.set(0, -CHEST.height, CHEST.depth / 2);
+        const lidInside = new THREE.Mesh(this.shared.chestLidInside, this.shared.chestLidInsideMat);
+        lidInside.position.copy(lid.position);
+        lidInside.receiveShadow = true;
+        hinge.add(lid, lidInside);
+        const inside = new THREE.Mesh(this.shared.chestInside, this.shared.chestInsideMat);
+        inside.position.set(chest.pos.x, CHEST.height + 0.003, chest.pos.y);
+        inside.receiveShadow = true;
+        parts.push(hinge, inside);
+      } else {
+        lid.position.set(chest.pos.x, 0, chest.pos.y);
+        parts.push(lid);
+      }
       for (const part of [body, lid]) {
-        part.position.set(chest.pos.x, 0, chest.pos.y);
         part.castShadow = true;
         part.receiveShadow = true;
-        this.props.add(part);
       }
+      for (const part of parts) this.props.add(part);
     }
   }
 

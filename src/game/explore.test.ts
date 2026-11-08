@@ -271,12 +271,19 @@ describe('宝箱と金貨', () => {
     }
   });
 
-  it('宝箱の上に乗ると中身を手に入れ、宝箱はなくなる', () => {
+  it('宝箱の上に乗ると中身を手に入れ、宝箱は開いて空のまま残る。もう一度乗っても何も起きない', () => {
     const { state, chest, dir } = besideChest(11);
     const s = act(state, { kind: 'move', dir });
     expect(s.gold).toBe(chest.gold);
     if (chest.item) expect(s.stats.items).toContain(chest.item);
-    expect(s.chests).toHaveLength(state.chests.length - 1);
+    expect(s.chests).toHaveLength(state.chests.length);
+    const opened = s.chests.find((c) => c.pos.x === chest.pos.x && c.pos.y === chest.pos.y)!;
+    expect(opened).toEqual({ ...chest, gold: 0, item: null, opened: true });
+    // 降りて、また乗る
+    const back = { up: 'down', down: 'up', left: 'right', right: 'left' } as const;
+    const again = act(act(s, { kind: 'move', dir: back[dir] }), { kind: 'move', dir });
+    expect(again.gold).toBe(s.gold);
+    expect(again.log.filter((l) => l.includes('宝箱'))).toEqual(s.log.filter((l) => l.includes('宝箱')));
   });
 
   it('持ち物がいっぱいなら、道具は宝箱に残る', () => {
@@ -288,7 +295,7 @@ describe('宝箱と金貨', () => {
     const s = act(state, { kind: 'move', dir });
     expect(s.gold).toBe(chest.gold);
     expect(s.stats.items).toHaveLength(PREP_CONFIG.maxItems);
-    expect(s.chests.find((c) => c.pos.x === chest.pos.x && c.pos.y === chest.pos.y)).toEqual({ ...chest, gold: 0 });
+    expect(s.chests.find((c) => c.pos.x === chest.pos.x && c.pos.y === chest.pos.y)).toEqual({ ...chest, gold: 0, opened: true });
   });
 
   it('踏破すれば金貨を全額、力尽きたら半分持ち帰る', () => {

@@ -2,7 +2,7 @@
 // 1歩ごとの状態の変化を、前の位置から新しい位置へ少しずつ動かして描くことで、滑らかにスクロールさせる。
 
 import { enemyDef, type EnemyMode, type MapEnemy } from '../game/enemies';
-import { upStairs, type ExploreState } from '../game/explore';
+import { isEmptyChest, upStairs, type ExploreState } from '../game/explore';
 import type { Pos } from '../game/map';
 import { drawSprite } from '../sprites/canvas';
 import { CLOAKS } from '../sprites/data';
@@ -102,14 +102,20 @@ export function drawView(canvas: HTMLCanvasElement, frame: Frame, colors: Colors
       const { px, py } = toPx(x, y);
       const isStairs = map.stairs !== null && x === map.stairs.x && y === map.stairs.y;
       const isUp = up !== null && x === up.x && y === up.y;
-      // まだ空になっていない宝箱だけを描く
-      const hasChest = state.chests.some((c) => c.pos.x === x && c.pos.y === y);
+      // 宝箱。開けて空になった宝箱も、うすく描いてその場に残す
+      const chest = state.chests.find((c) => c.pos.x === x && c.pos.y === y);
+      const hasChest = chest !== undefined;
+      const emptyChest = chest !== undefined && isEmptyChest(chest);
       if (tiles) {
         drawTile(ctx, tiles, TILESET.floors[floorVariant(x, y)]!, px, py);
         if (map.tiles[i] === 'wall') drawWall(ctx, tiles, state, x, y, px, py);
         if (isStairs) drawTile(ctx, tiles, TILESET.stairs, px, py);
         if (isUp) drawUpStairs(ctx, px, py, colors.stairs);
-        if (hasChest) drawTile(ctx, tiles, TILESET.chest, px, py);
+        if (hasChest) {
+          if (emptyChest) ctx.globalAlpha = 0.45;
+          drawTile(ctx, tiles, TILESET.chest, px, py);
+          ctx.globalAlpha = 1;
+        }
       } else {
         if (map.tiles[i] === 'wall') {
           ctx.fillStyle = colors.wall;
@@ -122,7 +128,11 @@ export function drawView(canvas: HTMLCanvasElement, frame: Frame, colors: Colors
         }
         if (isStairs) drawStairs(ctx, px, py, colors.stairs);
         if (isUp) drawUpStairs(ctx, px, py, colors.stairs);
-        if (hasChest) drawChest(ctx, px, py, colors.treasure, colors.fog);
+        if (hasChest) {
+          if (emptyChest) ctx.globalAlpha = 0.45;
+          drawChest(ctx, px, py, colors.treasure, colors.fog);
+          ctx.globalAlpha = 1;
+        }
       }
       // 一度見たが今は見えていないマスは暗くする
       if (!visible.has(i)) {

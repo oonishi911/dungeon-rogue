@@ -52,6 +52,8 @@ export interface Chest {
   pos: Pos;
   gold: number;
   item: ItemId | null;
+  /** 開けたか。開けた宝箱は、空になってもその場に残す（開いた形で描く） */
+  opened: boolean;
 }
 
 /** この行動で入ったダメージ。画面に数字を出すために使う（ルールには使わない） */
@@ -83,7 +85,7 @@ export interface ExploreState {
   satiety: number;
   maxSatiety: number;
   enemies: MapEnemy[];
-  chests: Chest[]; // この階の、まだ空になっていない宝箱
+  chests: Chest[]; // この階の宝箱（開けて空になったものも残す）
   gold: number; // この挑戦で手に入れた金貨
   hasMap: boolean; // 地図があれば、各階の入口から階段までの道筋が最初から見える
   nextUid: number;
@@ -307,15 +309,16 @@ function fillChests(map: FloorMap, rngState: number, goldRate: number): { chests
       pos: f.pos,
       gold: Math.round(f.depth * TREASURE_CONFIG.goldPerDepth * goldRate),
       item: has.value < TREASURE_CONFIG.itemChance ? TREASURE_CONFIG.items[pick.value]! : null,
+      opened: false,
     });
   }
   return { chests, rngState: s };
 }
 
-/** 宝箱の上に乗ったら開ける。持ち物がいっぱいなら道具は残す */
+/** 宝箱の上に乗ったら開ける。持ち物がいっぱいなら道具は残す。空になった宝箱は、開いたままその場に残す */
 function openChest(state: ExploreState): ExploreState {
   const chest = state.chests.find((c) => samePos(c.pos, state.player));
-  if (!chest) return state;
+  if (!chest || isEmptyChest(chest)) return state;
   const log: string[] = [];
   let { gold, stats } = state;
   let item = chest.item;
@@ -332,10 +335,13 @@ function openChest(state: ExploreState): ExploreState {
       log.push(`宝箱に${ITEMS[item].name}が入っているが、持ち物がいっぱいだ`);
     }
   }
-  const chests = item
-    ? state.chests.map((c) => (c === chest ? { ...c, gold: 0, item } : c))
-    : state.chests.filter((c) => c !== chest);
+  const chests = state.chests.map((c) => (c === chest ? { ...c, gold: 0, item, opened: true } : c));
   return { ...state, gold, stats, chests, log: [...state.log, ...log] };
+}
+
+/** 開けて、中身がもう何もない宝箱 */
+export function isEmptyChest(chest: Chest): boolean {
+  return chest.opened && chest.gold === 0 && chest.item === null;
 }
 
 // ===== 道具 =====

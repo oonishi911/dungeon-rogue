@@ -49,6 +49,7 @@ const MINI_SHARP_MAX = 96;
 
 // 1マス動くのにかける時間。なぞり続けたとき・タップで歩くときの速さもこれで決まる（1秒に約3.7マス）
 const STEP_MS = 270;
+const DOUBLE_TAP_MS = 350; // この時間（ミリ秒）以内に主人公を2回タップすると、ダブルタップとしてその場で待つ
 const QUEUE_MAX = 2; // 動いている途中に押した操作を、いくつまで覚えておくか（多すぎると指を止めても歩き続ける）
 
 const KEY_DIRS: Record<string, Dir> = {
@@ -401,6 +402,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
    * マップをタップ・クリックすると、そのマスまで歩く。敵をタップするとその敵へ向かって攻撃する。
    * 歩いている途中にもう一度タップすると、その場で止まる
    */
+  const heroTapRef = useRef(-Infinity); // 最後に主人公をタップした時刻（ダブルタップを見分ける）
   const onMapTap = (e: { clientX: number; clientY: number }) => {
     const s = stateRef.current;
     if (s.outcome !== 'ongoing') return;
@@ -409,12 +411,20 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       return;
     }
     const target = mode === '3d' ? view3dRef.current?.pickTile(e.clientX, e.clientY) : pickTile2d(e);
-    // 主人公をタップすると、その場で1ターン待つ
+    // 主人公をダブルタップ（DOUBLE_TAP_MS 以内に2回タップ）すると、その場で1ターン待つ。
+    // 1回だけのタップでは待たない（うっかり触れて、ターンが進まないように）
     const onHero = mode === '3d' ? view3dRef.current?.hitsPlayer(e.clientX, e.clientY) : target && samePos(target, s.player);
     if (onHero) {
-      request({ kind: 'wait' });
+      const now = performance.now();
+      if (now - heroTapRef.current <= DOUBLE_TAP_MS) {
+        heroTapRef.current = -Infinity;
+        request({ kind: 'wait' });
+      } else {
+        heroTapRef.current = now;
+      }
       return;
     }
+    heroTapRef.current = -Infinity;
     if (!target) return;
     const i = target.y * s.map.width + target.x;
     const known = target.x >= 0 && target.y >= 0 && target.x < s.map.width && target.y < s.map.height && s.seen[i];
@@ -556,7 +566,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
             width={VIEW_W * CELL}
             height={VIEW_H * CELL}
             role="img"
-            aria-label={`${floorName}の周囲。マスをタップするとそこまで歩き、指でなぞるとその向きに歩き続ける。主人公をタップするとその場で待つ。階段は踏むと降りる。${onStairs ? '足元に階段がある' : ''}`}
+            aria-label={`${floorName}の周囲。マスをタップするとそこまで歩き、指でなぞるとその向きに歩き続ける。主人公をダブルタップするとその場で1ターン待つ。階段は踏むと降りる。${onStairs ? '足元に階段がある' : ''}`}
           />
           {stick && (
             <div className="stick" style={{ left: stick.x, top: stick.y }} aria-hidden="true">
@@ -676,7 +686,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
             </section>
 
             <p className="muted explore__help">
-              マスをタップするとそこまで歩く（敵をタップすると攻撃しに行く。歩いている途中にタップすると止まる）。画面を指でなぞると、なぞった向きに歩き続ける。主人公をタップするとその場で待つ。階段は踏むとそのまま降りる。キーボードでは矢印キー／WASDで移動、スペースで待つ、数字キーで道具を使う
+              マスをタップするとそこまで歩く（敵をタップすると攻撃しに行く。歩いている途中にタップすると止まる）。画面を指でなぞると、なぞった向きに歩き続ける。主人公をダブルタップするとその場で1ターン待つ。階段は踏むとそのまま降りる。キーボードでは矢印キー／WASDで移動、スペースで待つ、数字キーで道具を使う
             </p>
             <section className="explore__more-log" aria-label="記録">
               <h3 className="meter__head">記録</h3>
