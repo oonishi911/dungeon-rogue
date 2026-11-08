@@ -2,7 +2,7 @@
 // スマホのブラウザは、画面に触れるまで音を出させてくれないので、最初に触れたとき（unlockSound）に音の準備をする。
 // 音の素材は scripts/build-sounds.py で作る（public/sounds/）。読み込めない音は鳴らさないだけで、遊ぶのには困らない
 
-import type { TraitId } from '../game/types';
+import type { TraitId, WeaponType } from '../game/types';
 import { loadSoundSettings, writeSoundSettings } from '../storage';
 import { gainOf, type SoundSettings } from './settings';
 
@@ -22,6 +22,16 @@ const STEP_SOUNDS: Partial<Record<TraitId, string[]>> = Object.fromEntries(
 const STEP_PITCH = { min: 0.96, max: 1.04 };
 // 宝箱から中身を取ったときの音（木の宝箱が「ぎー」ときしみながら開き、「ガコッ」と当たって止まる。約0.9秒）
 const CHEST_SOUND = 'chest-open.mp3';
+// 敵を攻撃したときの音。武器ごとに変える（武器なしは素手で打つ音）。振る「ヒュッ」のあと、約0.1秒で当たる音が鳴る
+// 剣は斬る「ザシュッ」と刃の「キン」、槌は重い「ブォン」と「ドゴッ」、杖は木の「コツッ」と魔法の「シャラン」
+const ATTACK_SOUNDS: Record<WeaponType | 'fist', string> = {
+  sword: 'attack-sword.mp3',
+  hammer: 'attack-hammer.mp3',
+  staff: 'attack-staff.mp3',
+  fist: 'attack-fist.mp3',
+};
+// 攻撃の音の高さを1回ごとに少し変える範囲（再生の速さの倍率）
+const ATTACK_PITCH = { min: 0.95, max: 1.05 };
 // 特性ごとの環境音（ダンジョンにいるあいだ、くり返し流す）。ない特性は流さない
 // 無属性は洞窟を吹き抜ける風のうなり、炎は溶岩の流れる火山の洞窟（地鳴り・溶岩の泡・火のはぜる音・蒸気）、
 // 氷は氷の洞窟（細い風・氷のきしみ・水滴・きらめき）、光は神殿の広間（合唱のような和音・鐘・そよ風）、
@@ -145,6 +155,7 @@ function syncAmbient() {
 export function preloadSounds(trait: TraitId) {
   for (const name of STEP_SOUNDS[trait] ?? []) fetchFile(name);
   fetchFile(CHEST_SOUND);
+  for (const name of Object.values(ATTACK_SOUNDS)) fetchFile(name);
   const ambient = AMBIENT_SOUNDS[trait];
   if (ambient) fetchFile(ambient);
 }
@@ -152,6 +163,11 @@ export function preloadSounds(trait: TraitId) {
 /** 宝箱から中身（金貨か道具）を取ったときの音 */
 export function playChestOpen() {
   play(CHEST_SOUND, 1);
+}
+
+/** 敵を攻撃したときの音（持っている武器の音。武器なしなら素手の音） */
+export function playAttack(weapon: WeaponType | null) {
+  play(ATTACK_SOUNDS[weapon ?? 'fist'], ATTACK_PITCH.min + Math.random() * (ATTACK_PITCH.max - ATTACK_PITCH.min));
 }
 
 /** 主人公が1歩進んだときの足音。左右の足で交互に鳴らす（奇数番が片方の足、偶数番がもう片方の足の音） */

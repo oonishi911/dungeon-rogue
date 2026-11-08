@@ -10,6 +10,7 @@
   ゲームでは左右の足で交互に、その足の音から選び、音の高さも少し変えて、同じ音のくり返しに聞こえないようにする
 - 乱数の種を決めているので、作り直しても同じ音になる
 - 宝箱の音（chest-open.mp3）：宝箱から中身を取ったときに鳴らす
+- 攻撃の音（attack-{武器}.mp3）：敵を攻撃したときに鳴らす。剣・槌・杖・武器なし（fist）で音を変える
 - 環境音（ambient-{特性}.mp3）：ダンジョンにいるあいだ、くり返し鳴らす。最後と最初が継ぎ目なくつながる
 - 足音は特性ごとに地面を変える：無属性は土、炎は焼けて尖った細かい石、氷は雪、光は磨かれた石の神殿、闇は硬い石の洞窟
 """
@@ -650,6 +651,125 @@ AMBIENT_MAX = 0.45
 # 宝箱の音のいちばん大きいところ。たまにしか鳴らない大事な音なので、足音よりはっきり聞こえる大きさにする
 CHEST_PEAK = 0.6
 
+
+# ===== 攻撃の音 =====
+# 武器を振る「ヒュッ」（風を切る音）のあと、STRIKE_AT 秒で敵に当たる音。
+# 主人公の模型（src/ui/hero3d.ts の SWING）も、振り始めてから同じ時間で振り下ろし切るので、音と動きがそろう
+STRIKE_AT = 0.1
+ATTACK_PEAK = 0.55  # 攻撃の音のいちばん大きいところ（何度も鳴るので、宝箱の音より少し小さく）
+
+
+def swish(n, lo, hi, length, rng, level=1.0):
+    """武器が風を切る音：ノイズの帯を、低い音から高い音へ動かしながら、大きくして当たる直前で切る"""
+    y = np.zeros(n)
+    k = int(length * SR)
+    noise = rng.standard_normal(k)
+    steps = 12
+    for i in range(steps):
+        a, b = i * k // steps, (i + 1) * k // steps
+        u = (i + 0.5) / steps
+        c = lo * (hi / lo) ** u
+        seg = band(noise, c * 0.7, min(c * 1.4, SR / 2 - 100))[a:b]
+        y[int((STRIKE_AT - length) * SR) + a:int((STRIKE_AT - length) * SR) + b] += seg
+    # 帯の切り替えで音が途切れないよう、全体になめらかな大きさの変化を付ける（だんだん大きく、当たる瞬間に急に切る）
+    start = int((STRIKE_AT - length) * SR)
+    shape = np.zeros(n)
+    shape[start:start + k] = np.linspace(0, 1, k) ** 1.6
+    cut = int(0.004 * SR)
+    shape[start + k - cut:start + k] *= np.linspace(1, 0, cut)
+    return y * shape * level
+
+
+def resonate(x, freqs, decays, gains):
+    """衝撃の列を、減衰する固有振動（共鳴器）に通す"""
+    y = np.zeros_like(x)
+    for f, d, g in zip(freqs, decays, gains):
+        r = np.exp(-1 / (d * SR))
+        w = 2 * np.pi * f / SR
+        y += lfilter([1], [1, -2 * r * np.cos(w), r * r], x) * g * (1 - r)
+    return y
+
+
+def impulse(n, at, amp=1.0):
+    x = np.zeros(n)
+    x[int(at * SR)] = amp
+    return x
+
+
+def finish_attack(y, room=0.18):
+    """小さな部屋の反射を少し付け、大きさをそろえ、終わりをなめらかに消す（左右2チャンネル）"""
+    y = high(y, 40)
+    fade = int(0.03 * SR)
+    y[-fade:] *= np.linspace(1, 0, fade)  # 響かせる前の音の終わりで、ぷつっと切れないように
+    y = cave(y, 0.35, 5000, room)
+    y = y / np.max(np.abs(y)) * ATTACK_PEAK
+    fade = int(0.06 * SR)
+    y[-fade:] *= np.linspace(1, 0, fade)[:, None]
+    return y
+
+
+def attack_sword():
+    """剣：鋭い「ヒュッ」のあと、刃で斬る「ザシュッ」（高いノイズの短い裂け目）と、刃が鳴る「キン」（金属の響き）"""
+    rng = np.random.default_rng(31)
+    n = int(SR * 0.42)
+    y = swish(n, 900, 5200, 0.09, rng, 0.7)
+    at = int(STRIKE_AT * SR)
+    k = int(0.09 * SR)
+    slash = high(band(rng.standard_normal(k), 1800, 9000), 1500) * env(k, 0.001, 0.025)
+    y[at:at + k] += slash * 1.4
+    k = int(0.06 * SR)
+    y[at:at + k] += low(band(rng.standard_normal(k), 150, 900), 900) * env(k, 0.0005, 0.018) * 0.8  # 斬ったときの手ごたえ
+    y += resonate(impulse(n, STRIKE_AT + 0.004), [2650, 4120, 5730, 7400], [0.09, 0.06, 0.04, 0.025], [1.0, 0.7, 0.45, 0.25]) * 0.9
+    return finish_attack(y, 0.16)
+
+
+def attack_hammer():
+    """槌：重く低い「ブォン」のあと、鉄の塊がたたきつける「ドゴッ」（低い衝撃と、鈍い金属の響き、砕けるざらつき）"""
+    rng = np.random.default_rng(37)
+    n = int(SR * 0.5)
+    y = swish(n, 180, 1100, 0.1, rng, 0.9)
+    at = int(STRIKE_AT * SR)
+    t = np.arange(n - at) / SR
+    thump = np.sin(2 * np.pi * (95 * t - 60 * t ** 2 * 3)) * np.exp(-t / 0.06)  # 低い「ド」：少し高さが下がる
+    y[at:] += thump * 2.2
+    y += resonate(impulse(n, STRIKE_AT), [180, 310, 520, 880], [0.07, 0.05, 0.035, 0.02], [1.6, 1.2, 0.8, 0.4]) * 1.8
+    k = int(0.08 * SR)
+    y[at:at + k] += low(band(rng.standard_normal(k), 300, 4000), 3000) * env(k, 0.0005, 0.02) * 0.9  # 「ゴッ」と砕けるざらつき
+    return finish_attack(y, 0.22)
+
+
+def attack_staff():
+    """杖：軽い「ヒュン」のあと、木の杖が当たる「コツッ」と、先の宝石から魔法がはじける「シャラン」（高く澄んだ響きの粒）"""
+    rng = np.random.default_rng(41)
+    n = int(SR * 0.75)
+    y = swish(n, 500, 2600, 0.08, rng, 0.6)
+    y += resonate(impulse(n, STRIKE_AT), [620, 1150, 1780], [0.03, 0.018, 0.01], [1.2, 0.7, 0.35]) * 1.4
+    t = np.arange(n) / SR
+    for i, f in enumerate([2093, 2637, 3136, 3951, 4699]):
+        at = STRIKE_AT + 0.012 + i * 0.022 + rng.random() * 0.01
+        u = np.clip(t - at, 0, None)
+        y += np.sin(2 * np.pi * f * u) * np.exp(-u / 0.12) * (t >= at) * 0.13
+    k = int(0.3 * SR)
+    a = int((STRIKE_AT + 0.01) * SR)
+    y[a:a + k] += high(rng.standard_normal(k), 6000) * env(k, 0.01, 0.07) * 0.08  # きらめくような細かい音
+    return finish_attack(y, 0.3)
+
+
+def attack_fist():
+    """武器なし：腕を振る短い「シュッ」と、素手で打つ鈍い「ドスッ」"""
+    rng = np.random.default_rng(43)
+    n = int(SR * 0.35)
+    y = swish(n, 400, 1800, 0.07, rng, 0.5)
+    at = int(STRIKE_AT * SR)
+    t = np.arange(n - at) / SR
+    y[at:] += np.sin(2 * np.pi * 130 * t) * np.exp(-t / 0.035) * 1.4
+    k = int(0.04 * SR)
+    y[at:at + k] += low(rng.standard_normal(k), 1500) * env(k, 0.0005, 0.01) * 0.8
+    return finish_attack(y, 0.12)
+
+
+ATTACKS = {'sword': attack_sword, 'hammer': attack_hammer, 'staff': attack_staff, 'fist': attack_fist}
+
 STEPS = {'neutral': step_neutral, 'fire': step_fire, 'ice': step_ice, 'light': step_light, 'dark': step_dark}
 
 
@@ -722,6 +842,9 @@ def main():
         print(f'wrote public/sounds/step-{trait}-1〜{VARIATIONS}.mp3')
     write_mp3(chest_open(), OUT / 'chest-open.mp3')
     print('wrote public/sounds/chest-open.mp3')
+    for weapon, make in ATTACKS.items():
+        write_mp3(make(), OUT / f'attack-{weapon}.mp3')
+        print(f'wrote public/sounds/attack-{weapon}.mp3')
     write_mp3(ambient_wind(), OUT / 'ambient-neutral.mp3')
     print('wrote public/sounds/ambient-neutral.mp3')
     write_mp3(ambient_ice(), OUT / 'ambient-ice.mp3')

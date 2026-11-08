@@ -358,6 +358,13 @@ export class DungeonView3D {
     this.renderer.render(this.scene, this.camera);
   }
 
+  /** 主人公が at のマスの敵を攻撃したとき：敵の方を向いて、武器を振る */
+  heroAttack(at: Pos) {
+    const me = this.shownState?.player;
+    if (me && Math.abs(me.x - at.x) + Math.abs(me.y - at.y) === 1) this.heroDir = dirBetween(me, at);
+    this.hero.swing();
+  }
+
   /** 攻撃したとき・攻撃されたときに、画面を少し拡大縮小する。動きを減らす設定では何もしない */
   hitPulse(kind: HitPulse) {
     this.lastCombatAt = performance.now();
@@ -1086,7 +1093,7 @@ function applyFog<T extends THREE.Material>(material: T, fog: Fog, mode: 'darken
 }
 
 /** 装備している武器の種類（武器でなければ null） */
-function weaponOf(item: ItemId | null): WeaponType | null {
+export function weaponOf(item: ItemId | null): WeaponType | null {
   if (!item) return null;
   const effect = ITEMS[item].effect;
   return effect.kind === 'weapon' ? effect.weapon : null;
