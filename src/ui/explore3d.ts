@@ -916,7 +916,7 @@ function worldMapped<T extends THREE.MeshLambertMaterial | THREE.MeshPhongMateri
   const defines: Record<string, string> = { TEXTURE_SPAN: TEXTURE_SPAN.toFixed(1), WALL_HEIGHT_F: WALL_HEIGHT.toFixed(1) };
   defines[`MAPPED_${face.toUpperCase()}`] = '';
   material.defines = { ...material.defines, ...defines };
-  return applyFog(material, fog, 'darken', `world-mapped-${face}`);
+  return applyFog<T>(material, fog, 'darken', `world-mapped-${face}`);
 }
 
 // ===== 霧（ピクセル単位） =====
