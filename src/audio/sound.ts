@@ -2,7 +2,7 @@
 // スマホのブラウザは、画面に触れるまで音を出させてくれないので、最初に触れたとき（unlockSound）に音の準備をする。
 // 音の素材は scripts/build-sounds.py で作る（public/sounds/）。読み込めない音は鳴らさないだけで、遊ぶのには困らない
 
-import type { TraitId, WeaponType } from '../game/types';
+import type { Body, TraitId, WeaponType } from '../game/types';
 import { loadSoundSettings, writeSoundSettings } from '../storage';
 import { gainOf, type SoundSettings } from './settings';
 
@@ -32,6 +32,15 @@ const ATTACK_SOUNDS: Record<WeaponType | 'fist', string> = {
 };
 // 攻撃の音の高さを1回ごとに少し変える範囲（再生の速さの倍率）
 const ATTACK_PITCH = { min: 0.95, max: 1.05 };
+// 敵に攻撃されたときの音。敵の体質で変え、ボスは体質によらずボスの音（敵を足しても、体質で音が決まる）
+// ふつうの体は爪で引っかく「シャッ」、やわらかい体はかみつく「ガブッ」、かたい体はぶつかる「ゴッ」、霊の体は冷たく通り抜ける「ヒュオォ」、ボスは「ズドン」
+const ENEMY_ATTACK_SOUNDS: Record<Body | 'boss', string> = {
+  normal: 'enemy-attack-normal.mp3',
+  soft: 'enemy-attack-soft.mp3',
+  hard: 'enemy-attack-hard.mp3',
+  spirit: 'enemy-attack-spirit.mp3',
+  boss: 'enemy-attack-boss.mp3',
+};
 // 特性ごとの環境音（ダンジョンにいるあいだ、くり返し流す）。ない特性は流さない
 // 無属性は洞窟を吹き抜ける風のうなり、炎は溶岩の流れる火山の洞窟（地鳴り・溶岩の泡・火のはぜる音・蒸気）、
 // 氷は氷の洞窟（細い風・氷のきしみ・水滴・きらめき）、光は神殿の広間（合唱のような和音・鐘・そよ風）、
@@ -155,7 +164,7 @@ function syncAmbient() {
 export function preloadSounds(trait: TraitId) {
   for (const name of STEP_SOUNDS[trait] ?? []) fetchFile(name);
   fetchFile(CHEST_SOUND);
-  for (const name of Object.values(ATTACK_SOUNDS)) fetchFile(name);
+  for (const name of [...Object.values(ATTACK_SOUNDS), ...Object.values(ENEMY_ATTACK_SOUNDS)]) fetchFile(name);
   const ambient = AMBIENT_SOUNDS[trait];
   if (ambient) fetchFile(ambient);
 }
@@ -168,6 +177,11 @@ export function playChestOpen() {
 /** 敵を攻撃したときの音（持っている武器の音。武器なしなら素手の音） */
 export function playAttack(weapon: WeaponType | null) {
   play(ATTACK_SOUNDS[weapon ?? 'fist'], ATTACK_PITCH.min + Math.random() * (ATTACK_PITCH.max - ATTACK_PITCH.min));
+}
+
+/** 敵に攻撃されたときの音。delay 秒あとに鳴らす（主人公の攻撃の音や、ほかの敵の攻撃の音と重ならないように） */
+export function playEnemyAttack(enemy: { body: Body; boss?: boolean }, delay = 0) {
+  play(ENEMY_ATTACK_SOUNDS[enemy.boss ? 'boss' : enemy.body], ATTACK_PITCH.min + Math.random() * (ATTACK_PITCH.max - ATTACK_PITCH.min), delay);
 }
 
 /** 主人公が1歩進んだときの足音。左右の足で交互に鳴らす（奇数番が片方の足、偶数番がもう片方の足の音） */
@@ -210,7 +224,7 @@ function bufferOf(ctx: AudioContext, name: string): Promise<AudioBuffer | null> 
   return buffer;
 }
 
-function play(name: string, rate: number) {
+function play(name: string, rate: number, delay = 0) {
   if (!context || !effects || gainOf(settings) === 0) return;
   const ctx = context;
   const out = effects;
@@ -220,6 +234,6 @@ function play(name: string, rate: number) {
     source.buffer = buffer;
     source.playbackRate.value = rate;
     source.connect(out);
-    source.start();
+    source.start(ctx.currentTime + delay);
   });
 }

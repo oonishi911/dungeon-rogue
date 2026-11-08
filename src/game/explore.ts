@@ -18,7 +18,7 @@ import {
 import { generateBossFloor, generateFloor, tileAt, type FloorMap, type Pos } from './map';
 import { rankParams, regenIntervalFor } from './rank';
 import { nextInt, nextRandom } from './rng';
-import type { ItemId, PlayerStats, Result, TraitId } from './types';
+import type { EnemyId, ItemId, PlayerStats, Result, TraitId } from './types';
 
 // 数値はすべて仮。バランス調整で見直す
 export const EXPLORE_CONFIG = {
@@ -61,6 +61,7 @@ export interface HitEvent {
   kind: 'dealt' | 'taken'; // dealt：プレイヤーが敵に与えた / taken：プレイヤーが受けた
   at: Pos; // ダメージを受けた側がいたマス
   amount: number;
+  by?: EnemyId; // taken のとき、攻撃してきた敵（毒など、敵の攻撃でないときはない）
 }
 
 /** 一度離れた階の様子。戻ってきたら、倒した敵・開けた宝箱・晴れた霧はそのまま */
@@ -447,7 +448,7 @@ function backAttacks(state: ExploreState, to: Pos): ExploreState {
     }
     if (!hits) continue;
     const def = enemyDef(e);
-    s = damagePlayer(s, enemyHitDamage(s.stats, def), `離れようとして、${def.name}に背後から攻撃された`, def.name);
+    s = damagePlayer(s, enemyHitDamage(s.stats, def), `離れようとして、${def.name}に背後から攻撃された`, def.name, def.id);
     if (s.outcome !== 'ongoing') return s;
   }
   return s;
@@ -492,7 +493,7 @@ function enemiesTurn(state: ExploreState): ExploreState {
     // 攻撃
     if (e.mode !== 'wander' && isAdjacent(e.pos, s.player)) {
       s = withEnemy(s, e);
-      s = damagePlayer(s, enemyHitDamage(s.stats, def), `${def.name}の攻撃`, def.name);
+      s = damagePlayer(s, enemyHitDamage(s.stats, def), `${def.name}の攻撃`, def.name, def.id);
       if (s.outcome !== 'ongoing') return s;
       continue;
     }
@@ -519,10 +520,11 @@ function withEnemy(state: ExploreState, enemy: MapEnemy): ExploreState {
   return { ...state, enemies: state.enemies.map((e) => (e.uid === enemy.uid ? enemy : e)) };
 }
 
-function damagePlayer(state: ExploreState, dmg: number, message: string, by: string): ExploreState {
+function damagePlayer(state: ExploreState, dmg: number, message: string, by: string, enemy?: EnemyId): ExploreState {
   const hp = Math.max(0, state.stats.hp - dmg);
   const log = [...state.log, `${message}で${dmg}のダメージ`];
-  state = { ...state, hits: [...state.hits, { kind: 'taken', at: state.player, amount: dmg }] };
+  const hit: HitEvent = enemy ? { kind: 'taken', at: state.player, amount: dmg, by: enemy } : { kind: 'taken', at: state.player, amount: dmg };
+  state = { ...state, hits: [...state.hits, hit] };
   if (hp === 0) {
     return { ...state, stats: { ...state.stats, hp }, outcome: 'defeated', log: [...log, `${by}に倒された…`] };
   }

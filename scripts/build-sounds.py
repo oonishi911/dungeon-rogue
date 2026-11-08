@@ -11,6 +11,7 @@
 - 乱数の種を決めているので、作り直しても同じ音になる
 - 宝箱の音（chest-open.mp3）：宝箱から中身を取ったときに鳴らす
 - 攻撃の音（attack-{武器}.mp3）：敵を攻撃したときに鳴らす。剣・槌・杖・武器なし（fist）で音を変える
+- 敵の攻撃の音（enemy-attack-{体質}.mp3）：敵に攻撃されたときに鳴らす。敵の体質（normal・soft・hard・spirit）で音を変え、ボスは boss の音
 - 環境音（ambient-{特性}.mp3）：ダンジョンにいるあいだ、くり返し鳴らす。最後と最初が継ぎ目なくつながる
 - 足音は特性ごとに地面を変える：無属性は土、炎は焼けて尖った細かい石、氷は雪、光は磨かれた石の神殿、闇は硬い石の洞窟
 """
@@ -770,6 +771,126 @@ def attack_fist():
 
 ATTACKS = {'sword': attack_sword, 'hammer': attack_hammer, 'staff': attack_staff, 'fist': attack_fist}
 
+
+# ===== 敵の攻撃の音 =====
+# 敵の体質（normal・soft・hard・spirit）ごとに1つ、ボスは体質によらず1つ。敵を足しても、体質で音が決まる。
+# どれも ENEMY_HIT_AT 秒で主人公に当たる音が鳴る
+ENEMY_HIT_AT = 0.07
+ENEMY_PEAK = 0.6
+
+
+def claw_normal():
+    """ふつうの体（小鬼・ゴブリンなど）：爪や刃物で引っかく「シャッ」と、主人公の体に当たる「ドッ」"""
+    rng = np.random.default_rng(51)
+    n = int(SR * 0.36)
+    y = np.zeros(n)
+    at = int(ENEMY_HIT_AT * SR)
+    for i, (d, lo) in enumerate([(0.0, 2500), (0.018, 3200), (0.034, 2800)]):  # 3本の爪が少しずつずれて引っかく
+        k = int(0.05 * SR)
+        a = at - int(0.03 * SR) + int(d * SR)
+        y[a:a + k] += band(rng.standard_normal(k), lo, 9000) * env(k, 0.004, 0.014) * (0.9 - i * 0.15)
+    t = np.arange(n - at) / SR
+    y[at:] += np.sin(2 * np.pi * 110 * t) * np.exp(-t / 0.04) * 1.3
+    k = int(0.05 * SR)
+    y[at:at + k] += low(rng.standard_normal(k), 1200) * env(k, 0.0005, 0.012) * 0.7
+    return finish_enemy(y, 0.14)
+
+
+def bite_soft():
+    """やわらかい体（獣・スライム・鳥・コウモリなど）：うなる息と、かみつく「ガブッ」（歯が当たる2つの「カッ」と、湿った音）"""
+    rng = np.random.default_rng(53)
+    n = int(SR * 0.4)
+    y = np.zeros(n)
+    at = int(ENEMY_HIT_AT * SR)
+    k = int(0.07 * SR)
+    a = at - k
+    growl = band(rng.standard_normal(k), 250, 1400) * env(k, 0.02, 0.03)
+    growl *= 1 + 0.6 * np.sin(2 * np.pi * 38 * np.arange(k) / SR)  # のどを鳴らすような揺れ
+    y[a:a + k] += growl * 0.7
+    for d in [0.0, 0.012]:  # 上と下の歯
+        y += resonate(impulse(n, ENEMY_HIT_AT + d), [1700, 2900], [0.012, 0.008], [1.0, 0.6]) * 1.6
+    k = int(0.16 * SR)
+    wet = low(band(rng.standard_normal(k), 300, 2500), 2000) * env(k, 0.003, 0.03)
+    y[at:at + k] += wet * 0.9
+    t = np.arange(n - at) / SR
+    y[at:] += np.sin(2 * np.pi * 140 * t) * np.exp(-t / 0.035) * 0.9
+    return finish_enemy(y, 0.14)
+
+
+def crush_hard():
+    """かたい体（ゴーレム・甲虫・甲冑など）：重いものを振る低い風の音と、石や殻がぶつかる「ゴッ」（低い衝撃と、ざらついた砕ける音）"""
+    rng = np.random.default_rng(57)
+    n = int(SR * 0.45)
+    y = np.zeros(n)
+    at = int(ENEMY_HIT_AT * SR)
+    k = int(0.06 * SR)
+    y[at - k:at] += band(rng.standard_normal(k), 150, 700) * np.linspace(0, 1, k) ** 2 * 0.6
+    t = np.arange(n - at) / SR
+    y[at:] += np.sin(2 * np.pi * (80 * t - 90 * t ** 2)) * np.exp(-t / 0.07) * 2.0
+    y += resonate(impulse(n, ENEMY_HIT_AT), [230, 410, 690], [0.05, 0.035, 0.02], [1.3, 0.9, 0.5]) * 1.6
+    k = int(0.1 * SR)
+    grit = band(rng.standard_normal(k), 600, 5000) * env(k, 0.001, 0.03)
+    grit *= rng.random(k) < 0.25  # 粒の細かい、砕けるざらつき
+    y[at:at + k] += grit * 1.6
+    return finish_enemy(y, 0.2)
+
+
+def chill_spirit():
+    """霊の体（光の精・影・亡霊など）：低く吹き下ろす「ヒュオォ」と、ぶつからずに体を通り抜ける冷たい響き（少し濁った高い音）"""
+    rng = np.random.default_rng(59)
+    n = int(SR * 0.7)
+    y = np.zeros(n)
+    t = np.arange(n) / SR
+    k = int(0.45 * SR)
+    a = int((ENEMY_HIT_AT - 0.05) * SR)
+    seg = np.zeros(k)
+    noise = rng.standard_normal(k)
+    steps = 10
+    for i in range(steps):
+        lo = 1800 * (0.45 ** (i / steps))  # 高いところから下がっていく息
+        b0, b1 = i * k // steps, (i + 1) * k // steps
+        seg[b0:b1] = band(noise, lo, lo * 2.2)[b0:b1]
+    y[a:a + k] += seg * env(k, 0.04, 0.09) * 0.9
+    u = np.clip(t - ENEMY_HIT_AT, 0, None)
+    on = t >= ENEMY_HIT_AT
+    for f, g in [(740, 0.35), (784, 0.3), (1109, 0.2), (1568, 0.12)]:  # 少しぶつかり合う高さで、不気味に
+        y += np.sin(2 * np.pi * f * u) * np.exp(-u / 0.16) * on * g
+    y += np.sin(2 * np.pi * 70 * u) * np.exp(-u / 0.08) * on * 0.9  # 胸に響く低い揺れ
+    return finish_enemy(y, 0.32)
+
+
+def smash_boss():
+    """ボス：大きく振りかぶる重い風の音と、地面ごと揺れる「ズドン」（とても低い衝撃と、長く残る地鳴り）"""
+    rng = np.random.default_rng(61)
+    n = int(SR * 0.75)
+    y = np.zeros(n)
+    at = int(ENEMY_HIT_AT * SR)
+    k = int(0.07 * SR)
+    y[at - k:at] += band(rng.standard_normal(k), 120, 900) * np.linspace(0, 1, k) ** 2 * 0.9
+    t = np.arange(n - at) / SR
+    y[at:] += np.sin(2 * np.pi * (60 * t - 40 * t ** 2)) * np.exp(-t / 0.12) * 2.6
+    y += resonate(impulse(n, ENEMY_HIT_AT), [150, 260, 430], [0.08, 0.05, 0.03], [1.5, 1.0, 0.6]) * 1.8
+    k = int(0.09 * SR)
+    y[at:at + k] += low(band(rng.standard_normal(k), 300, 5000), 3500) * env(k, 0.0005, 0.025) * 1.1
+    k = n - at
+    rumble = low(rng.standard_normal(k), 120) * env(k, 0.02, 0.22)
+    y[at:] += rumble * 3.0
+    return finish_enemy(y, 0.3)
+
+
+def finish_enemy(y, room):
+    y = high(y, 35)
+    fade = int(0.03 * SR)
+    y[-fade:] *= np.linspace(1, 0, fade)
+    y = cave(y, 0.35, 5000, room)
+    y = y / np.max(np.abs(y)) * ENEMY_PEAK
+    fade = int(0.06 * SR)
+    y[-fade:] *= np.linspace(1, 0, fade)[:, None]
+    return y
+
+
+ENEMY_ATTACKS = {'normal': claw_normal, 'soft': bite_soft, 'hard': crush_hard, 'spirit': chill_spirit, 'boss': smash_boss}
+
 STEPS = {'neutral': step_neutral, 'fire': step_fire, 'ice': step_ice, 'light': step_light, 'dark': step_dark}
 
 
@@ -845,6 +966,9 @@ def main():
     for weapon, make in ATTACKS.items():
         write_mp3(make(), OUT / f'attack-{weapon}.mp3')
         print(f'wrote public/sounds/attack-{weapon}.mp3')
+    for kind, make in ENEMY_ATTACKS.items():
+        write_mp3(make(), OUT / f'enemy-attack-{kind}.mp3')
+        print(f'wrote public/sounds/enemy-attack-{kind}.mp3')
     write_mp3(ambient_wind(), OUT / 'ambient-neutral.mp3')
     print('wrote public/sounds/ambient-neutral.mp3')
     write_mp3(ambient_ice(), OUT / 'ambient-ice.mp3')
