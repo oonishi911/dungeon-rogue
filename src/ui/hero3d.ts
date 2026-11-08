@@ -7,7 +7,9 @@
 
 import * as THREE from 'three';
 import type { Dir } from '../game/explore';
+import type { WeaponType } from '../game/types';
 import { CLOAKS, PALETTE } from '../sprites/data';
+import { Weapon3D } from './weapon3d';
 
 export type CloakId = keyof typeof CLOAKS;
 
@@ -18,6 +20,11 @@ const FACING: Record<Dir, number> = {
   up: Math.PI,
   left: -Math.PI / 2,
 };
+
+// 左手（主人公から見て左、+x の側）に持った武器の傾き（ラジアン）。
+// 刃先を少し後ろへ倒し（back）、少し外へ開く（outward）。ゲームのカメラは斜め上の手前から見下ろすので、
+// 前へ倒すとカメラの方を向いて短く見えてしまう。後ろへ倒すと、上から見ても武器の長さがわかる
+const WEAPON_GRIP = { back: 0.45, outward: 0.25 };
 
 const TURN_SPEED = 14; // 体を回す速さ（大きいほど速く向きが変わる）
 const BOB = { height: 0.05, sway: 0.08 }; // 歩くときの上下の揺れ（マス）と、左右の傾き（ラジアン）
@@ -44,6 +51,8 @@ export class Hero3D {
   private readonly cloakMats: Record<'H' | 'C' | 'c', THREE.MeshLambertMaterial>;
   private readonly disposables: { dispose(): void }[] = [];
   private cloak: CloakId | null = null;
+  private readonly leftHand = new THREE.Group(); // 左手の位置。持っている武器をここに付ける
+  private weapon: Weapon3D | null = null;
   private facing = 0;
 
   constructor() {
@@ -96,7 +105,10 @@ export class Hero3D {
       const hand = new THREE.Vector3(side * 0.14, 0.31, 0.19);
       add(limb(shoulder, hand, 0.04, 0.035), mats.tunic, 0, 0, 0);
       add(new THREE.SphereGeometry(0.048, 6, 4), mats.skin, hand.x, hand.y, hand.z);
+      if (side === 1) this.leftHand.position.copy(hand);
     }
+    this.leftHand.rotation.set(-WEAPON_GRIP.back, 0, -WEAPON_GRIP.outward);
+    this.body.add(this.leftHand);
 
     // 頭とフード。フードは顔の前（+z）を開ける
     // （three.js の球は、横の角度 phi が π/2 のところが +z。phi 0.2π〜0.8π を開けると、顔の前が開く）
@@ -114,6 +126,20 @@ export class Hero3D {
     this.disposables.push(hitGeo);
     this.hitBox = new THREE.Mesh(hitGeo, mats.hit);
     this.root.add(this.hitBox);
+  }
+
+  /** 左手に持つ武器（null なら何も持たない）。同じ武器なら作り直さない */
+  setWeapon(type: WeaponType | null) {
+    if ((this.weapon?.type ?? null) === type) return;
+    if (this.weapon) {
+      this.leftHand.remove(this.weapon.root);
+      this.weapon.dispose();
+      this.weapon = null;
+    }
+    if (type) {
+      this.weapon = new Weapon3D(type);
+      this.leftHand.add(this.weapon.root);
+    }
   }
 
   /** マントとフードの色を、装備した防具の色にする */
@@ -146,6 +172,7 @@ export class Hero3D {
   }
 
   dispose() {
+    this.weapon?.dispose();
     for (const d of this.disposables) d.dispose();
   }
 }
