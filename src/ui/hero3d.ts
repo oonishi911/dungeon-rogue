@@ -1,6 +1,6 @@
 // 主人公の立体の模型。ドット絵（sprites/data.ts の hero）と同じ色・同じ形の要素で組み立てる：
-// フード付きのマント（装備した防具の色）、フードの前の開きから見える肌色の顔、マントの前の開きから見える服とベルト、
-// 開きから前へ出した腕（服の袖と手）、茶色の靴。
+// フード付きのマント（装備した防具の色）、フードの前の開きから見える肌色の顔と焦げ茶色の長めの髪、
+// マントの前の開きから見える服とベルト、開きから前へ出した腕（服の袖と手）、茶色の靴。
 // 面を平らに塗る（flatShading）少ない面数の形にして、ドット絵の素朴さに合わせる。
 //
 // 模型は足元が原点で、高さは約0.95マス。正面は +z（画面の手前）。歩いた向きへ体を回す。
@@ -62,6 +62,7 @@ export class Hero3D {
       belt: lambert(PALETTE.b!),
       boots: lambert(PALETTE.B!),
       eyes: lambert(PALETTE.k!),
+      hair: lambert(PALETTE.h!, THREE.DoubleSide), // ドット絵の前髪と同じ焦げ茶色
       shadow: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
       hit: new THREE.MeshBasicMaterial({ visible: false }),
     };
@@ -114,6 +115,18 @@ export class Hero3D {
     // （three.js の球は、横の角度 phi が π/2 のところが +z。phi 0.2π〜0.8π を開けると、顔の前が開く）
     add(new THREE.SphereGeometry(0.14, 10, 8), mats.skin, 0, 0.7, 0.01);
     add(new THREE.SphereGeometry(0.175, 10, 8, Math.PI * 0.8, Math.PI * 1.4), this.cloakMats.H, 0, 0.72, -0.01);
+
+    // 髪（長め）：フードの開きから見える前髪と、顔の両横から胸まで垂れる髪、フードの下から背中へ流れる髪
+    // 前髪：頭の球に少し大きい球の上の前側だけをかぶせる（目の上まで）
+    add(new THREE.SphereGeometry(0.148, 10, 6, Math.PI * 0.15, Math.PI * 0.7, 0, Math.PI * 0.42), mats.hair, 0, 0.7, 0.012);
+    for (const side of [-1, 1]) {
+      // 顔の横の髪：こめかみから、あごの下を通って胸まで
+      add(limb(new THREE.Vector3(side * 0.112, 0.74, 0.065), new THREE.Vector3(side * 0.125, 0.47, 0.11), 0.032, 0.022), mats.hair, 0, 0, 0);
+    }
+    // 背中の髪：フードの下から、マントに沿って背中へ流れる3つの房（毛先を細く、真ん中の房をいちばん長く）
+    for (const [x, end] of [[-0.055, 0.38], [0, 0.33], [0.055, 0.38]] as const) {
+      add(limb(new THREE.Vector3(x, 0.63, -0.15), new THREE.Vector3(x * 1.25, end, -0.205), 0.042, 0.016), mats.hair, 0, 0, 0);
+    }
     add(new THREE.CylinderGeometry(0.1, 0.17, 0.12, 10), this.cloakMats.H, 0, 0.57, 0); // 肩にかかるフードの裾
 
     // 目
