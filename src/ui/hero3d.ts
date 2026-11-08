@@ -1,5 +1,6 @@
 // 主人公の立体の模型。ドット絵（sprites/data.ts の hero）と同じ色・同じ形の要素で組み立てる：
-// フード付きのマント（装備した防具の色）、肌色の顔、マントの前の開きから見える服とベルト、茶色の靴。
+// フード付きのマント（装備した防具の色）、フードの前の開きから見える肌色の顔、マントの前の開きから見える服とベルト、
+// 開きから前へ出した腕（服の袖と手）、茶色の靴。
 // 面を平らに塗る（flatShading）少ない面数の形にして、ドット絵の素朴さに合わせる。
 //
 // 模型は足元が原点で、高さは約0.95マス。正面は +z（画面の手前）。歩いた向きへ体を回す。
@@ -20,6 +21,16 @@ const FACING: Record<Dir, number> = {
 
 const TURN_SPEED = 14; // 体を回す速さ（大きいほど速く向きが変わる）
 const BOB = { height: 0.05, sway: 0.08 }; // 歩くときの上下の揺れ（マス）と、左右の傾き（ラジアン）
+
+/** 2点のあいだをつなぐ円柱（腕など）。a の太さが ra、b の太さが rb */
+function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number): THREE.BufferGeometry {
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const geo = new THREE.CylinderGeometry(rb, ra, dir.length(), 6);
+  // 円柱は y 軸向きなので、a から b の向きへ回して、真ん中に置く
+  geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()));
+  const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
+  return geo.translate(mid.x, mid.y, mid.z);
+}
 
 const lambert = (color: string, side: THREE.Side = THREE.FrontSide) => new THREE.MeshLambertMaterial({ color, flatShading: true, side });
 
@@ -72,21 +83,25 @@ export class Hero3D {
     add(new THREE.CylinderGeometry(0.13, 0.17, 0.42, 8), mats.tunic, 0, 0.29, 0);
     add(new THREE.CylinderGeometry(0.155, 0.16, 0.04, 8), mats.belt, 0, 0.3, 0);
 
-    // マント：前（+z）を開けて、中の服が見えるようにする。裾は濃い色
-    const front = Math.PI / 2; // three.js の円柱は角度0が +z の向き
+    // マント：前（+z）を開けて、中の服が見えるようにする。裾は濃い色。
+    // three.js の円柱は、角度0が +z の向き（x = sin、z = cos）なので、角度0を中心に開ける
     const gap = 0.9; // 前の開きの角度（ラジアン）
-    const cloakGeo = new THREE.CylinderGeometry(0.17, 0.27, 0.5, 10, 1, true, front + gap / 2, Math.PI * 2 - gap);
+    const cloakGeo = new THREE.CylinderGeometry(0.17, 0.27, 0.5, 10, 1, true, gap / 2, Math.PI * 2 - gap);
     add(cloakGeo, this.cloakMats.C, 0, 0.3, 0);
-    add(new THREE.CylinderGeometry(0.27, 0.275, 0.05, 10, 1, true, front + gap / 2, Math.PI * 2 - gap), this.cloakMats.c, 0, 0.075, 0);
+    add(new THREE.CylinderGeometry(0.27, 0.275, 0.05, 10, 1, true, gap / 2, Math.PI * 2 - gap), this.cloakMats.c, 0, 0.075, 0);
 
-    // マントから出た手
-    add(new THREE.SphereGeometry(0.05, 6, 4), mats.skin, -0.2, 0.32, 0.08);
-    add(new THREE.SphereGeometry(0.05, 6, 4), mats.skin, 0.2, 0.32, 0.08);
+    // 腕：肩からマントの前の開きを通って、体の前に手を出す（服の袖と、肌色の手）
+    for (const side of [-1, 1]) {
+      const shoulder = new THREE.Vector3(side * 0.12, 0.5, 0.02);
+      const hand = new THREE.Vector3(side * 0.14, 0.31, 0.19);
+      add(limb(shoulder, hand, 0.04, 0.035), mats.tunic, 0, 0, 0);
+      add(new THREE.SphereGeometry(0.048, 6, 4), mats.skin, hand.x, hand.y, hand.z);
+    }
 
-    // 頭とフード。フードは顔の前を開ける
+    // 頭とフード。フードは顔の前（+z）を開ける
+    // （three.js の球は、横の角度 phi が π/2 のところが +z。phi 0.2π〜0.8π を開けると、顔の前が開く）
     add(new THREE.SphereGeometry(0.14, 10, 8), mats.skin, 0, 0.7, 0.01);
-    const hood = add(new THREE.SphereGeometry(0.175, 10, 8, Math.PI * 0.8, Math.PI * 1.4), this.cloakMats.H, 0, 0.72, -0.01);
-    hood.rotation.y = Math.PI; // 開いた側を正面（+z）へ
+    add(new THREE.SphereGeometry(0.175, 10, 8, Math.PI * 0.8, Math.PI * 1.4), this.cloakMats.H, 0, 0.72, -0.01);
     add(new THREE.CylinderGeometry(0.1, 0.17, 0.12, 10), this.cloakMats.H, 0, 0.57, 0); // 肩にかかるフードの裾
 
     // 目
