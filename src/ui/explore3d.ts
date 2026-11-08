@@ -19,11 +19,19 @@ import { cloakOf, lookOf } from '../sprites/looks';
 import { floorVariant } from './autotile';
 import { ENEMY_MARK, lerp, type Frame } from './exploreRender';
 import { Hero3D } from './hero3d';
+import { exposureOf, softWallGeometry } from './softWall';
 import { Stairs3D } from './stairs3d';
 
 // マスの大きさを1とした壁の高さ。高くすると通路が深く見える。
 // 今のカメラの角度（約63度）では、高さ1までなら、すぐ手前の壁は隣のマスに立つキャラクターの足元に届く程度で、体は隠れない
 const WALL_HEIGHT = 1;
+// 壁の角の丸み：床に面した縁と、出っ張った縦の角を丸める半径（マス）
+const WALL_ROUND = 0.16;
+// 壁の表面のでこぼこ：岩肌のように、面をその向きへ少し押し出したり引っ込めたりする。
+// amount はいちばん大きくずらす距離（マス）、scale は1マスあたりの波の細かさ。上面は top を掛けて控えめにする。
+// ずらし方はダンジョンの中の位置で決めるので、となり合う壁の面はつながったまま波打つ
+const WALL_ROUGH = { amount: 0.045, scale: 2.6, top: 0.5 } as const;
+const WALL_SHAPES = 16; // 4つの側面のどれが床に面しているかの組み合わせ（softWall.ts の exposureIndex）
 const CAMERA = { height: 15, back: 7.5 }; // 主人公の真上15・手前7.5から見下ろす（約63度）
 // 画面の大きさによらず、主人公のいるあたりの1マスが画面上でこの大きさ（CSSピクセル）に映るよう、視野の広さを決める。
 // スマホの縦画面（幅約390px）で横に約8マス、PCの探索画面（幅約670px）で横に約14マス映る
@@ -151,7 +159,8 @@ export class DungeonView3D {
 
   private shownState: ExploreState | null = null;
   private readonly floors: THREE.InstancedMesh[]; // 床の模様ごとに1つ
-  private readonly walls: THREE.InstancedMesh;
+  // 壁は、床に面している側面の組み合わせごとに形が違う（面した縁だけ丸める）ので、組み合わせごとに入れ物を分ける
+  private readonly walls: THREE.InstancedMesh[];
   private readonly wallShadows: THREE.InstancedMesh; // 壁の根元の影
   private readonly wallMaterials: { top: THREE.MeshPhongMaterial; side: THREE.MeshPhongMaterial }[];
   private glossTrait: TraitId | null = null; // 床と壁のツヤを合わせた特性
@@ -235,20 +244,22 @@ export class DungeonView3D {
       { length: FLOOR_KINDS },
       () => new THREE.InstancedMesh(floorGeo, worldMapped(new THREE.MeshPhongMaterial({ ...NO_GLOSS }), 'floor', this.fog), DRAW_CAPACITY),
     );
-    // 壁は面ごとに素材を分ける。箱の面の順番は +x, -x, +y（上）, -y（下）, +z, -z。
+    // 壁は上面と側面で素材を分ける（softWall.ts：0 が側面、1 が上面）。
     // 敵・宝箱・階段の手前に壁があっても、壁は透かさずにそのまま描く
     this.wallMaterials = [
       {
-        top: worldMapped(new THREE.MeshPhongMaterial({ vertexColors: true, ...NO_GLOSS }), 'top', this.fog),
-        side: worldMapped(new THREE.MeshPhongMaterial({ vertexColors: true, ...NO_GLOSS }), 'side', this.fog),
+        top: worldMapped(new THREE.MeshPhongMaterial({ vertexColors: true, ...NO_GLOSS }), 'top', this.fog, true),
+        side: worldMapped(new THREE.MeshPhongMaterial({ vertexColors: true, ...NO_GLOSS }), 'side', this.fog, true),
       },
     ];
-    const wallGeo = shadedBox(WALL_HEIGHT);
     const { top: wallTop, side: wallSide } = this.wallMaterials[0]!;
-    this.walls = new THREE.InstancedMesh(wallGeo, [wallSide, wallSide, wallTop, wallSide, wallSide, wallSide], DRAW_CAPACITY);
-    // 壁は光をさえぎって影を落とし、床と壁は影を受ける
-    this.walls.castShadow = true;
-    this.walls.receiveShadow = true;
+    this.walls = Array.from({ length: WALL_SHAPES }, (_, k) => {
+      const mesh = new THREE.InstancedMesh(softWallGeometry(exposureOf(k), WALL_HEIGHT, WALL_ROUND), [wallSide, wallTop], DRAW_CAPACITY);
+      // 壁は光をさえぎって影を落とし、床と壁は影を受ける
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    });
     for (const floor of this.floors) floor.receiveShadow = true;
     // 壁の根元の影。帯の上側（北）が暗く、下側へ向かって消えていく。向きはインスタンスごとに回す
     const shadowGeo = new THREE.PlaneGeometry(1, WALL_SHADOW.depth).rotateX(-Math.PI / 2);
@@ -273,7 +284,7 @@ export class DungeonView3D {
     this.stairs = new Stairs3D((mat) => applyFog(mat, this.fog));
     this.loadChestTextures();
     this.loadEnemyPhotos();
-    for (const mesh of [...this.floors, this.walls, this.wallShadows]) {
+    for (const mesh of [...this.floors, ...this.walls, this.wallShadows]) {
       // 中身を毎回入れ替えるので、最初の中身で計算された範囲で画面外と判定されないようにする
       mesh.frustumCulled = false;
       this.scene.add(mesh);
@@ -482,7 +493,7 @@ export class DungeonView3D {
 
   dispose() {
     this.floors[0]!.geometry.dispose(); // 床の形はすべての入れ物で共通
-    this.walls.geometry.dispose();
+    for (const mesh of this.walls) mesh.geometry.dispose();
     this.wallShadows.geometry.dispose();
     this.pathDots.geometry.dispose();
     (this.pathDots.material as THREE.Material).dispose();
@@ -493,7 +504,7 @@ export class DungeonView3D {
       sprite.material.map?.dispose();
       sprite.material.dispose();
     }
-    for (const mesh of [...this.floors, this.walls, this.wallShadows]) {
+    for (const mesh of [...this.floors, ...this.walls, this.wallShadows]) {
       for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) mat.dispose();
       mesh.dispose();
     }
@@ -534,7 +545,7 @@ export class DungeonView3D {
     const m = new THREE.Matrix4();
     const c = new THREE.Color();
     const floorCounts = this.floors.map(() => 0);
-    let walls = 0;
+    const wallCounts = this.walls.map(() => 0);
     let shadows = 0;
     this.fog.setTargets(frame.state, frame.visible);
     const q = new THREE.Quaternion();
@@ -551,9 +562,11 @@ export class DungeonView3D {
         if (!seen[i]) continue;
         // 明るさは霧（applyFog）がピクセルごとに付けるので、ここでは元の色だけを入れる
         if (map.tiles[i] === 'wall') {
-          m.makeTranslation(x, WALL_HEIGHT / 2, z);
-          this.walls.setMatrixAt(walls, m);
-          this.walls.setColorAt(walls++, wallBase);
+          // となりが一度見た壁なら、その面は描かずにつなげる。床・まだ見ていない壁・ダンジョンの外に面した側は丸める
+          const k = (seenWall(x + 1, z) ? 0 : 1) | (seenWall(x - 1, z) ? 0 : 2) | (seenWall(x, z + 1) ? 0 : 4) | (seenWall(x, z - 1) ? 0 : 8);
+          const mesh = this.walls[k]!;
+          mesh.setMatrixAt(wallCounts[k]!, m.makeTranslation(x, 0, z));
+          mesh.setColorAt(wallCounts[k]!++, wallBase);
         } else if (map.stairs && map.stairs.x === x && map.stairs.y === z) {
           // 下り階段のマスは床に穴が開いているので、床を敷かない（穴と段は updateProps で描く）
         } else {
@@ -574,7 +587,7 @@ export class DungeonView3D {
     }
     const counts = [
       ...this.floors.map((mesh, k) => [mesh, floorCounts[k]!] as const),
-      [this.walls, walls] as const,
+      ...this.walls.map((mesh, k) => [mesh, wallCounts[k]!] as const),
       [this.wallShadows, shadows] as const,
     ];
     for (const [mesh, count] of counts) {
@@ -886,17 +899,6 @@ export class DungeonView3D {
   }
 }
 
-/** 上面を明るく、側面を暗くした箱（壁）。色はインスタンスごとの色と掛け合わされる */
-function shadedBox(height: number): THREE.BoxGeometry {
-  const geo = new THREE.BoxGeometry(1, height, 1);
-  // BoxGeometry の面の順番は +x, -x, +y（上）, -y（下）, +z, -z で、1面につき頂点4つ
-  const shade = [0.7, 0.7, 1.15, 0.3, 0.85, 0.6];
-  const colors: number[] = [];
-  for (const k of shade) for (let v = 0; v < 4; v++) colors.push(k, k, k);
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  return geo;
-}
-
 /**
  * 敵の絵を立てる板（ふつうは1×1、中心が原点）。板はカメラの方へ向けて使うが、そのままだと面の向きがカメラを向くので、
  * 主人公とカメラのあいだにいる敵は、たいまつの光を背中から受けて真っ暗になる。
@@ -919,12 +921,48 @@ function litBillboard(width = 1, height = 1): THREE.PlaneGeometry {
  * 絵のどこを使うかを決める（床と壁の上面は x・z、壁の側面は壁に沿った向きの位置と高さ）。絵は TEXTURE_SPAN マスごとに繰り返す。
  * こうすると隣り合うマスの模様がつながり、マスの境目に縁取りや目地のような線が出ない。霧（applyFog）もかける
  */
-function worldMapped<T extends THREE.MeshLambertMaterial | THREE.MeshPhongMaterial>(material: T, face: 'floor' | 'top' | 'side', fog: Fog): T {
+function worldMapped<T extends THREE.MeshLambertMaterial | THREE.MeshPhongMaterial>(material: T, face: 'floor' | 'top' | 'side', fog: Fog, rough = false): T {
   const defines: Record<string, string> = { TEXTURE_SPAN: TEXTURE_SPAN.toFixed(1), WALL_HEIGHT_F: WALL_HEIGHT.toFixed(1) };
   defines[`MAPPED_${face.toUpperCase()}`] = '';
+  // 壁は表面を岩肌のように波打たせる（WALL_ROUGH）
+  if (rough) defines.WALL_ROUGH = '';
   material.defines = { ...material.defines, ...defines };
   return applyFog(material as THREE.Material, fog, 'darken', `world-mapped-${face}`) as T;
 }
+
+// 壁の表面のでこぼこ（WALL_ROUGH を定めた素材だけ）。ダンジョンの中の位置で決まるなめらかな値のノイズを2段重ね、
+// 面の向き（法線）の方へ頂点をずらす。底（下向きの面）はずらさない
+const WALL_ROUGH_GLSL = `
+#ifdef WALL_ROUGH
+float wallHash( vec3 p ) {
+  p = fract( p * 0.3183099 + 0.1 );
+  p *= 17.0;
+  return fract( p.x * p.y * p.z * ( p.x + p.y + p.z ) );
+}
+float wallNoise( vec3 x ) {
+  vec3 i = floor( x );
+  vec3 f = fract( x );
+  f = f * f * ( 3.0 - 2.0 * f );
+  return mix(
+    mix( mix( wallHash( i ), wallHash( i + vec3( 1, 0, 0 ) ), f.x ), mix( wallHash( i + vec3( 0, 1, 0 ) ), wallHash( i + vec3( 1, 1, 0 ) ), f.x ), f.y ),
+    mix( mix( wallHash( i + vec3( 0, 0, 1 ) ), wallHash( i + vec3( 1, 0, 1 ) ), f.x ), mix( wallHash( i + vec3( 0, 1, 1 ) ), wallHash( i + vec3( 1, 1, 1 ) ), f.x ), f.y ),
+    f.z );
+}
+#endif
+`;
+const WALL_ROUGH_VERTEX = `#include <begin_vertex>
+#ifdef WALL_ROUGH
+{
+  vec4 roughAt = vec4( position, 1.0 );
+  #ifdef USE_INSTANCING
+    roughAt = instanceMatrix * roughAt;
+  #endif
+  vec3 rp = ( modelMatrix * roughAt ).xyz * ${WALL_ROUGH.scale.toFixed(2)};
+  float bump = ( wallNoise( rp ) - 0.5 ) * 1.4 + ( wallNoise( rp * 2.3 + 7.1 ) - 0.5 ) * 0.6;
+  float along = objectNormal.y < -0.5 ? 0.0 : mix( 1.0, ${WALL_ROUGH.top.toFixed(2)}, max( objectNormal.y, 0.0 ) );
+  transformed += objectNormal * bump * ${WALL_ROUGH.amount.toFixed(3)} * along;
+}
+#endif`;
 
 // ===== 霧（ピクセル単位） =====
 
@@ -1036,7 +1074,8 @@ function applyFog<T extends THREE.Material>(material: T, fog: Fog, mode: 'darken
     Object.assign(shader.uniforms, fog.uniforms);
     shader.vertexShader =
       'varying vec3 vFogWorld;\n' +
-      shader.vertexShader.replace(
+      WALL_ROUGH_GLSL +
+      shader.vertexShader.replace('#include <begin_vertex>', WALL_ROUGH_VERTEX).replace(
         '#include <uv_vertex>',
         `#include <uv_vertex>
         {
