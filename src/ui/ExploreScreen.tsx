@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } 
 import { playAttack, playChestOpen, playEnemyAttack, playSpell, playFootstep, preloadSounds, setAmbient } from '../audio/sound';
 import { BODY_NAMES, enemyBase, expToNext, ITEMS, REWARD_CONFIG, SPELLS, TRAIT_IDS, TRAITS } from '../game/data';
 import { GEN_SETTINGS } from '../game/genMaster';
+import { bestLoadout } from '../game/bestLoadout';
 import { enemyDef, key } from '../game/enemies';
 import {
   DIR_DELTA,
@@ -25,7 +26,7 @@ import {
 import { tileAt, type Pos } from '../game/map';
 import { SoundButton } from './SoundButton';
 import { walkPath, walkToward } from '../game/path';
-import type { ItemId, SpellId } from '../game/types';
+import type { ItemId, SpellId, TraitId } from '../game/types';
 import {
   CELL,
   drawMinimap,
@@ -80,6 +81,8 @@ const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 const urlSeed = Number(new URLSearchParams(location.search).get('seed'));
 // ?rank=3 でランクを指定できる（広いマップの確認用）
 const urlRank = Number(new URLSearchParams(location.search).get('rank')) || 1;
+// ?best=1 で、ダンジョンの特性に合わせた、いちばん強い装備・道具・呪文書で始める
+const urlBest = new URLSearchParams(location.search).get('best') === '1';
 // ?trait=fire でダンジョン特性を指定できる（タイル素材の確認用）
 const traitParam = new URLSearchParams(location.search).get('trait');
 const urlTrait = TRAIT_IDS.find((t) => t === traitParam);
@@ -110,14 +113,33 @@ function visibleEnemyIds(state: ExploreState): Set<number> {
 // 開発用画面で持たせる装備と道具
 const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fire_whetstone', 'ice_whetstone', 'book_shockwave', 'book_fire_bolt', 'book_heal'];
 
-/** 開発用：準備フェーズを通さずに探索だけを試す。?seed=・?rank=・?trait=・?render= で条件を指定できる */
+/**
+ * 開発用：準備フェーズを通さずに探索だけを試す。?seed=・?rank=・?trait=・?render= で条件を指定できる。
+ * ?best=1 なら、そのダンジョンの特性に合わせて、いちばん強い装備・道具・呪文書で始める（bestLoadout.ts）
+ */
 export function ExploreDevScreen() {
   return (
     <ExploreScreen
       renderMode={urlRender}
-      start={() => startExplore(Number.isInteger(urlSeed) && urlSeed > 0 ? urlSeed : newSeed(), { loadout: DEV_LOADOUT, rank: urlRank, trait: urlTrait })}
+      devBest={urlBest}
+      start={() => {
+        const seed = Number.isInteger(urlSeed) && urlSeed > 0 ? urlSeed : newSeed();
+        if (!urlBest) return startExplore(seed, { loadout: DEV_LOADOUT, rank: urlRank, trait: urlTrait });
+        // 特性を決めてから、その特性に合う装備で始め直す（同じシードなら同じダンジョン）
+        const trait = urlTrait ?? startExplore(seed, { rank: urlRank }).trait;
+        return startExplore(seed, { loadout: bestLoadout(trait), rank: urlRank, trait });
+      }}
     />
   );
+}
+
+/** 開発用画面の「いちばん強い装備で試す」の切り替え先（今のダンジョンの特性のまま、装備だけを切り替える） */
+function devBestHref(best: boolean, trait: TraitId): string {
+  const params = new URLSearchParams(location.search);
+  if (best) params.set('best', '1');
+  else params.delete('best');
+  params.set('trait', trait);
+  return `?${params.toString()}`;
 }
 
 interface ExploreScreenProps {
@@ -125,6 +147,7 @@ interface ExploreScreenProps {
   run?: number; // 何回目の挑戦か。省略すると開発用の表示になる
   onFinish?: (state: ExploreState) => void; // 省略すると、終わったあと同じ条件でやり直せる
   renderMode?: RenderMode; // 省略すると3D表示（WebGL2 が使えない環境では2D表示）
+  devBest?: boolean; // 開発用画面で、いちばん強い装備で試しているか（切り替えのリンクを出す）
 }
 
 /** WebGL2 が使えるか。Three.js の3D表示に必要 */
@@ -136,7 +159,7 @@ function webglAvailable(): boolean {
   }
 }
 
-export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3d' }: ExploreScreenProps) {
+export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3d', devBest }: ExploreScreenProps) {
   // 3D表示ができない環境（WebGL2 が使えない、準備に失敗した）では2D表示に切り替える
   const [mode, setMode] = useState<RenderMode>(() => (renderMode === '3d' && webglAvailable() ? '3d' : '2d'));
   const [state, setState] = useState<ExploreState>(start);
@@ -586,7 +609,15 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       <header className="top explore-top">
         <div>
           <p className="top__run">
-            {runNumber ? `${runNumber}回目の挑戦` : '開発用'} ・ ランク{state.rank} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体 ・ 金貨{' '}
+            {runNumber ? (
+              `${runNumber}回目の挑戦`
+            ) : (
+              <>
+                開発用（
+                <a href={devBestHref(!devBest, state.trait)}>{devBest ? 'ふつうの装備に戻す' : 'いちばん強い装備で試す'}</a>）
+              </>
+            )}{' '}
+            ・ ランク{state.rank} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体 ・ 金貨{' '}
             {state.gold}G
           </p>
           <h1 className="top__title">{floorName}</h1>

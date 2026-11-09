@@ -65,4 +65,4 @@ npm test        # テスト
 npm run build   # 型チェック＋ビルド
 ```
 
-開発用の確認画面：`?view=map`（マップ生成）、`?view=explore`（探索だけを試す。`&seed=1` で階層、`&rank=3` で広さ、`&trait=fire` で特性、`&render=2d` で2D表示を指定）
+開発用の確認画面：`?view=map`（マップ生成）、`?view=explore`（探索だけを試す。`&seed=1` で階層、`&rank=3` で広さ、`&trait=fire` で特性、`&render=2d` で2D表示、`&best=1` でダンジョンに合わせたいちばん強い装備・道具・呪文書を指定。画面上の「いちばん強い装備で試す」でも切り替えられる）
