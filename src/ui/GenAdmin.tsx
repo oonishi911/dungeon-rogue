@@ -1,6 +1,6 @@
 // 開発用：ダンジョンの設定（src/game/dungeonGen.json）を管理する画面。?view=gen で開く。
 // 小部屋の多さと大きさ、敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋・部屋から出さない）、
-// 敵を倒したときのレベルの上がり方と強敵の報酬の倍率を変えられる。
+// 敵を倒したときのレベルの上がり方と強敵の報酬の倍率、魔力と呪文の強さを変えられる。
 // 変えた値で作ったマップの見本を、その場で見て確かめられる。
 // 変えた内容は「変更を公開」でリポジトリに保存され、自動チェックが通れば数分で公開版に反映される
 
@@ -11,6 +11,9 @@ import {
   GEN_LABELS,
   GEN_LIMITS,
   GEN_SETTINGS,
+  MAGIC_FIELDS,
+  SPELL_FIELDS,
+  SPELL_NAMES,
   genProblems,
   PLACEMENT_LABELS,
   PLACEMENTS,
@@ -18,11 +21,13 @@ import {
   type EnemySettings,
   type GenSettings,
   type GrowthSettings,
+  type MagicSettings,
   type Placement,
   type RoomSettings,
 } from '../game/genMaster';
 import { generateFloor, type FloorMap } from '../game/map';
 import { RANK_CONFIG, rankParams } from '../game/rank';
+import type { SpellId } from '../game/types';
 import { AdminNav, cls, NumberField, PublishPanel, usePublish } from './adminParts';
 
 const FILE = 'src/game/dungeonGen.json';
@@ -46,6 +51,9 @@ export function GenAdmin() {
   const setGrowth = (patch: Partial<GrowthSettings>) => setDraft((d) => ({ ...d, growth: { ...d.growth, ...patch } }));
   const g = draft.growth;
   const bg = base.growth;
+  const setMagic = (patch: Partial<MagicSettings>) => setDraft((d) => ({ ...d, magic: { ...d.magic, ...patch } }));
+  const setSpell = (spell: SpellId, key: string, v: number) =>
+    setDraft((d) => ({ ...d, spells: { ...d.spells, [spell]: { ...d.spells[spell], [key]: v } } }));
   const r = draft.rooms;
   const e = draft.enemies;
   const br = base.rooms;
@@ -163,6 +171,50 @@ export function GenAdmin() {
           ))}
         </div>
         <LevelTable growth={g} />
+      </section>
+
+      <section className="admin__section" aria-labelledby="gen-magic">
+        <h2 id="gen-magic" className="admin__heading">魔法</h2>
+        <p className="admin__note">
+          呪文書（準備の魔法屋で買う）を持っていくと、魔力を使ってその呪文を何度でも唱えられます。呪文書を持っていなければ、魔力の棒も出ません。
+        </p>
+        <div className="gen__fields">
+          {MAGIC_FIELDS.map((f) => (
+            <Field key={f.key} label={f.label} hint={f.hint || undefined}>
+              <NumberField
+                min={f.min}
+                max={f.max}
+                step={f.step}
+                value={draft.magic[f.key]}
+                changed={draft.magic[f.key] !== base.magic[f.key]}
+                label={f.label}
+                onChange={(v) => setMagic({ [f.key]: v })}
+              />
+            </Field>
+          ))}
+        </div>
+        <h3 className="gen__subheading">呪文ごとの設定</h3>
+        <div className="gen__spells">
+          {(Object.keys(SPELL_FIELDS) as SpellId[]).map((spell) => (
+            <div key={spell} className="gen__spell">
+              <span className="gen__label">{SPELL_NAMES[spell]}</span>
+              {SPELL_FIELDS[spell].map((f) => (
+                <label key={f.key} className="gen__spell-field">
+                  <span>{f.label}</span>
+                  <NumberField
+                    min={f.min}
+                    max={f.max}
+                    step={f.step}
+                    value={draft.spells[spell][f.key]!}
+                    changed={draft.spells[spell][f.key] !== base.spells[spell][f.key]}
+                    label={`${SPELL_NAMES[spell]}の${f.label}`}
+                    onChange={(v) => setSpell(spell, f.key, v)}
+                  />
+                </label>
+              ))}
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="admin__section" aria-labelledby="gen-preview">

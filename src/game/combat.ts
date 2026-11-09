@@ -15,6 +15,8 @@ export function itemSlot(item: ItemDef): ItemSlot {
     case 'food':
     case 'enchant':
       return 'consumable';
+    case 'spellbook':
+      return 'spellbook';
     default: {
       const unreachable: never = item.effect;
       return unreachable;

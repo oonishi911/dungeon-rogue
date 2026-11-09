@@ -5,8 +5,9 @@
 // キーを押し続けたときの歩く速さが、OS のキーリピートの設定に左右されず一定になる。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { playAttack, playChestOpen, playEnemyAttack, playFootstep, preloadSounds, setAmbient } from '../audio/sound';
-import { BODY_NAMES, enemyBase, expToNext, ITEMS, REWARD_CONFIG, TRAIT_IDS, TRAITS } from '../game/data';
+import { playAttack, playChestOpen, playEnemyAttack, playSpell, playFootstep, preloadSounds, setAmbient } from '../audio/sound';
+import { BODY_NAMES, enemyBase, expToNext, ITEMS, REWARD_CONFIG, SPELLS, TRAIT_IDS, TRAITS } from '../game/data';
+import { GEN_SETTINGS } from '../game/genMaster';
 import { enemyDef, key } from '../game/enemies';
 import {
   DIR_DELTA,
@@ -24,7 +25,7 @@ import {
 import { tileAt, type Pos } from '../game/map';
 import { SoundButton } from './SoundButton';
 import { walkPath, walkToward } from '../game/path';
-import type { ItemId } from '../game/types';
+import type { ItemId, SpellId } from '../game/types';
 import {
   CELL,
   drawMinimap,
@@ -65,6 +66,10 @@ const KEY_DIRS: Record<string, Dir> = {
   d: 'right',
 };
 
+// 呪文は z・x・c キーで唱える（持ってきた順）
+const SPELL_KEYS = ['z', 'x', 'c'] as const;
+const DIR_ARROWS: Record<Dir, string> = { up: '↑', down: '↓', left: '←', right: '→' };
+
 const KEY_ACTIONS: Record<string, ExploreAction> = {
   ' ': { kind: 'wait' },
   '.': { kind: 'wait' },
@@ -103,7 +108,7 @@ function visibleEnemyIds(state: ExploreState): Set<number> {
 }
 
 // 開発用画面で持たせる装備と道具
-const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fire_whetstone', 'ice_whetstone'];
+const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fire_whetstone', 'ice_whetstone', 'book_shockwave', 'book_fire_bolt', 'book_heal'];
 
 /** 開発用：準備フェーズを通さずに探索だけを試す。?seed=・?rank=・?trait=・?render= で条件を指定できる */
 export function ExploreDevScreen() {
@@ -169,6 +174,10 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
   }, [state.stats.items]);
   const itemGroupsRef = useRef(itemGroups);
   itemGroupsRef.current = itemGroups;
+  // 向きを選んで唱える呪文（なぎ払い・矢）を選んだあと、向きを選んでいるところ
+  const [aiming, setAiming] = useState<SpellId | null>(null);
+  const aimingRef = useRef<SpellId | null>(null);
+  aimingRef.current = aiming;
 
   /** 行動を1つ行い、前の位置から新しい位置への動きを始める。行動にならなければ false */
   const perform = useCallback((action: ExploreAction): boolean => {
@@ -183,9 +192,15 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       return false;
     }
     const next = result.value;
+    if (action.kind !== 'cast') setAiming(null);
     // 攻撃したとき・攻撃されたときは、画面を少し拡大縮小し、ダメージの数字を出す（3D表示のみ）
     // 敵を攻撃したときは、主人公が敵の方を向いて武器を振り、武器ごとの音を鳴らす（1回の行動で1回だけ）
-    const struck = next.hits.find((hit) => hit.kind === 'dealt');
+    // 呪文を唱えたときは、武器を振らずに呪文の演出と音にする
+    if (next.cast) {
+      view3dRef.current?.castSpell(next.cast, prev.player);
+      playSpell(next.cast.spell);
+    }
+    const struck = next.cast ? undefined : next.hits.find((hit) => hit.kind === 'dealt');
     if (struck) {
       view3dRef.current?.heroAttack(struck.at);
       playAttack(weaponOf(next.stats.weapon));
@@ -228,6 +243,21 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     walkRef.current = null;
     if (queueRef.current.length < QUEUE_MAX) queueRef.current = [...queueRef.current, action];
   }, []);
+
+  /** 呪文を選ぶ。向きを選ぶ呪文なら向きを選ぶ状態にし（もう一度選ぶとやめる）、ほかはすぐ唱える */
+  const chooseSpell = useCallback(
+    (spell: SpellId) => {
+      if (!SPELLS[spell].aim) {
+        setAiming(null);
+        request({ kind: 'cast', spell });
+        return;
+      }
+      setAiming((now) => (now === spell ? null : spell));
+    },
+    [request],
+  );
+  const chooseSpellRef = useRef(chooseSpell);
+  chooseSpellRef.current = chooseSpell;
 
   const hold = useCallback((dir: Dir) => {
     walkRef.current = null;
@@ -379,9 +409,23 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
       if (e.target instanceof HTMLInputElement) return;
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       const dir = KEY_DIRS[key];
+      // 呪文の向きを選んでいるときは、方向キーで唱える（Esc でやめる）
+      if (aimingRef.current && (dir || key === 'Escape')) {
+        e.preventDefault();
+        if (dir && !e.repeat) request({ kind: 'cast', spell: aimingRef.current, dir });
+        setAiming(null);
+        return;
+      }
       if (dir) {
         e.preventDefault(); // 矢印キーでページがスクロールしないように
         if (!e.repeat) hold(dir);
+        return;
+      }
+      const spellIndex = SPELL_KEYS.indexOf(key as (typeof SPELL_KEYS)[number]);
+      const spell = spellIndex >= 0 ? stateRef.current.spells[spellIndex] : undefined;
+      if (spell) {
+        e.preventDefault();
+        if (!e.repeat) chooseSpellRef.current(spell);
         return;
       }
       const n = Number(e.key);
@@ -626,6 +670,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
           <div className="explore__status">
             <Meter label="HP" value={stats.hp} max={stats.maxHp} tone="hp" />
             <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" />
+            {state.maxMp > 0 && <Meter label="魔力" value={state.mp} max={state.maxMp} tone="mp" />}
             {/* レベルは、この挑戦のあいだだけ。いちばん上のレベルでは経験値の棒を出さない */}
             {state.level < REWARD_CONFIG.maxLevel ? (
               <Meter label={`レベル${state.level}`} value={state.exp} max={expToNext(state.level)} tone="exp" unit="経験値" />
@@ -638,7 +683,52 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
           </div>
 
           <div className="explore__controls">
-            {itemGroups.length === 0 ? (
+            {state.spells.length > 0 && (
+              <ul className="explore__items explore__spells" aria-label="呪文">
+                {state.spells.map((spell, i) => {
+                  const cost = GEN_SETTINGS.spells[spell].cost ?? 0;
+                  return (
+                    <li key={spell}>
+                      <button
+                        type="button"
+                        className={`explore__use explore__spell${aiming === spell ? ' is-aiming' : ''}`}
+                        onClick={() => chooseSpell(spell)}
+                        disabled={ended || state.mp < cost}
+                        aria-pressed={SPELLS[spell].aim ? aiming === spell : undefined}
+                        title={ITEMS[`book_${spell}` as ItemId].description}
+                      >
+                        <span className="explore__key">{SPELL_KEYS[i]?.toUpperCase()}</span>
+                        {SPELLS[spell].name}
+                        <span className="explore__cost">魔力{cost}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {/* 向きを選んでいるあいだは、道具の列のかわりに向きのボタンを出す（画面の高さを変えないため） */}
+            {aiming ? (
+              <div className="explore__aim" role="group" aria-label={`${SPELLS[aiming].name}の向きを選ぶ`}>
+                <span className="explore__aim-label">{SPELLS[aiming].name}の向き</span>
+                {(['up', 'left', 'down', 'right'] as const).map((dir) => (
+                  <button
+                    key={dir}
+                    type="button"
+                    className="explore__wait explore__aim-dir"
+                    aria-label={`${DIR_ARROWS[dir]}の向きに唱える`}
+                    onClick={() => {
+                      request({ kind: 'cast', spell: aiming, dir });
+                      setAiming(null);
+                    }}
+                  >
+                    {DIR_ARROWS[dir]}
+                  </button>
+                ))}
+                <button type="button" className="explore__wait" onClick={() => setAiming(null)}>
+                  やめる
+                </button>
+              </div>
+            ) : itemGroups.length === 0 ? (
               <p className="muted explore__items">道具はない</p>
             ) : (
               <ul className="explore__items" aria-label="道具">
@@ -739,7 +829,7 @@ function LogList({ lines, total }: { lines: string[]; total: number }) {
   );
 }
 
-function Meter({ label, value, max, tone, unit }: { label: string; value: number; max: number; tone: 'hp' | 'satiety' | 'exp'; unit?: string }) {
+function Meter({ label, value, max, tone, unit }: { label: string; value: number; max: number; tone: 'hp' | 'satiety' | 'exp' | 'mp'; unit?: string }) {
   return (
     <div className="meter">
       <div className="meter__head">

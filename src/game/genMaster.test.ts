@@ -9,6 +9,17 @@ const SAMPLE: GenSettings = {
   rooms: { attemptRate: 0.04, minSize: 3, maxSize: 9 },
   enemies: { amount: 1, placement: 'mixed', roomWeight: 1, nestChance: 0, nestMin: 3, nestMax: 5, stayInRoom: false },
   growth: { expBase: 30, expStep: 20, hpPerLevel: 2, atkPerLevel: 1, maxLevel: 10, eliteRate: 3 },
+  magic: { maxMp: 20, regenEvery: 6, power: 8, staffPower: 1.5, staffMp: 10, noiseRadius: 3 },
+  spells: {
+    shockwave: { cost: 6, power: 0.3, push: 3, crash: 3 },
+    sweep: { cost: 5, power: 0.8, range: 3 },
+    fire_bolt: { cost: 4, power: 1, range: 6 },
+    ice_bolt: { cost: 4, power: 1, range: 6 },
+    light_lance: { cost: 4, power: 1, range: 6 },
+    dark_bolt: { cost: 4, power: 1, range: 6 },
+    heal: { cost: 6, amount: 20 },
+    regen: { cost: 5, amount: 3, turns: 8 },
+  },
 };
 const clone = (): GenSettings => JSON.parse(JSON.stringify(SAMPLE)) as GenSettings;
 const enemiesFor = (patch: Partial<EnemySettings>) => ({ ...SAMPLE.enemies, ...patch });
@@ -30,12 +41,14 @@ describe('ダンジョン生成の設定（dungeonGen.json）', () => {
     bad.enemies.nestMin = 6;
     bad.enemies.nestMax = 2;
     bad.growth.maxLevel = 0;
+    bad.spells.heal.amount = -1;
     const problems = genProblems(bad);
     expect(problems.some((p) => p.includes('奇数'))).toBe(true);
     expect(problems.some((p) => p.includes('部屋の大きさ：最小'))).toBe(true);
     expect(problems.some((p) => p.includes('群れ部屋になる確率'))).toBe(true);
     expect(problems.some((p) => p.includes('群れの敵の数：最小'))).toBe(true);
     expect(problems.some((p) => p.includes('レベルの上限'))).toBe(true);
+    expect(problems.some((p) => p.includes('癒しの回復するHP'))).toBe(true);
     expect(() => parseGenSettings(bad)).toThrow();
   });
 
@@ -44,10 +57,14 @@ describe('ダンジョン生成の設定（dungeonGen.json）', () => {
     after.rooms.attemptRate = 0.1;
     after.enemies.stayInRoom = true;
     after.growth.hpPerLevel = 4;
+    after.magic.maxMp = 30;
+    after.spells.shockwave.push = 2;
     expect(describeGenChanges(SAMPLE, after)).toEqual([
       '部屋の多さ：0.04 → 0.1',
       '部屋の敵は部屋から出ない：しない → する',
       '1レベルで増える最大HP：2 → 4',
+      '魔力の最大：20 → 30',
+      '衝撃波の吹き飛ばすマス数：3 → 2',
     ]);
   });
 

@@ -2,7 +2,7 @@
 // スマホのブラウザは、画面に触れるまで音を出させてくれないので、最初に触れたとき（unlockSound）に音の準備をする。
 // 音の素材は scripts/build-sounds.py で作る（public/sounds/）。読み込めない音は鳴らさないだけで、遊ぶのには困らない
 
-import type { Body, TraitId, WeaponType } from '../game/types';
+import type { Body, SpellId, TraitId, WeaponType } from '../game/types';
 import { loadSoundSettings, writeSoundSettings } from '../storage';
 import { gainOf, type SoundSettings } from './settings';
 
@@ -40,6 +40,19 @@ const ENEMY_ATTACK_SOUNDS: Record<Body | 'boss', string> = {
   hard: 'enemy-attack-hard.mp3',
   spirit: 'enemy-attack-spirit.mp3',
   boss: 'enemy-attack-boss.mp3',
+};
+// 呪文を唱えたときの音（呪文ごと）。衝撃波は低い「ドゥン」と広がる風、なぎ払いは光の刃の「シュバッ」、
+// 炎の矢は噴き出す炎とパチパチ、氷の矢は結晶の「キィン」と砕ける音、光の槍は上がっていく鐘のような和音、
+// 闇の矢は低くうなる濁った響き、癒しは上がっていく分散和音、再生はあたたかくふくらむ和音
+const SPELL_SOUNDS: Record<SpellId, string> = {
+  shockwave: 'spell-shockwave.mp3',
+  sweep: 'spell-sweep.mp3',
+  fire_bolt: 'spell-fire_bolt.mp3',
+  ice_bolt: 'spell-ice_bolt.mp3',
+  light_lance: 'spell-light_lance.mp3',
+  dark_bolt: 'spell-dark_bolt.mp3',
+  heal: 'spell-heal.mp3',
+  regen: 'spell-regen.mp3',
 };
 // 特性ごとの環境音（ダンジョンにいるあいだ、くり返し流す）。ない特性は流さない
 // 無属性は洞窟を吹き抜ける風のうなり、炎は溶岩の流れる火山の洞窟（地鳴り・溶岩の泡・火のはぜる音・蒸気）、
@@ -164,7 +177,7 @@ function syncAmbient() {
 export function preloadSounds(trait: TraitId) {
   for (const name of STEP_SOUNDS[trait] ?? []) fetchFile(name);
   fetchFile(CHEST_SOUND);
-  for (const name of [...Object.values(ATTACK_SOUNDS), ...Object.values(ENEMY_ATTACK_SOUNDS)]) fetchFile(name);
+  for (const name of [...Object.values(ATTACK_SOUNDS), ...Object.values(ENEMY_ATTACK_SOUNDS), ...Object.values(SPELL_SOUNDS)]) fetchFile(name);
   const ambient = AMBIENT_SOUNDS[trait];
   if (ambient) fetchFile(ambient);
 }
@@ -182,6 +195,11 @@ export function playAttack(weapon: WeaponType | null) {
 /** 敵に攻撃されたときの音。delay 秒あとに鳴らす（主人公の攻撃の音や、ほかの敵の攻撃の音と重ならないように） */
 export function playEnemyAttack(enemy: { body: Body; boss?: boolean }, delay = 0) {
   play(ENEMY_ATTACK_SOUNDS[enemy.boss ? 'boss' : enemy.body], ATTACK_PITCH.min + Math.random() * (ATTACK_PITCH.max - ATTACK_PITCH.min), delay);
+}
+
+/** 呪文を唱えたときの音 */
+export function playSpell(spell: SpellId) {
+  play(SPELL_SOUNDS[spell], 1);
 }
 
 /** 主人公が1歩進んだときの足音。左右の足で交互に鳴らす（奇数番が片方の足、偶数番がもう片方の足の音） */

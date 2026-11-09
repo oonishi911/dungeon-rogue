@@ -8,6 +8,8 @@ import type {
   EnemyId,
   ItemDef,
   ItemId,
+  SpellDef,
+  SpellId,
   TraitDef,
   TraitId,
   WeaponType,
@@ -24,6 +26,7 @@ export const PREP_CONFIG = {
   maxCarry: 3,
   startGold: 100, // 前の挑戦で持ち帰った金貨は、これに足される
   maxItems: 8, // 道具（消耗品）を持てる数。武器と防具は1つずつ
+  maxSpellbooks: 3, // 持っていける呪文書の数（同じ呪文書は1冊まで）
 } as const;
 
 export const TRAITS: Record<TraitId, TraitDef> = {
@@ -88,6 +91,14 @@ export const CARDS: Record<CardId, CardDef> = {
     description: 'その日だけ道具を買える',
     effect: { kind: 'open_shop', shop: 'item' },
   },
+  // 呪文書の入手方法が決まるまでの、仮のカード
+  magic_shop: {
+    id: 'magic_shop',
+    name: '魔法屋に行く',
+    category: 'procure',
+    description: 'その日だけ呪文書を買える（3冊まで持っていける）',
+    effect: { kind: 'open_shop', shop: 'magic' },
+  },
   work: {
     id: 'work',
     name: '日雇い仕事',
@@ -112,9 +123,23 @@ export const DECK: readonly CardId[] = [
   'item_shop',
   'item_shop',
   'item_shop',
+  'magic_shop',
+  'magic_shop',
   'work',
   'work',
 ];
+
+/** 呪文。強さと使う魔力は dungeonGen.json の spells（管理画面で変えられる） */
+export const SPELLS: Record<SpellId, SpellDef> = {
+  shockwave: { id: 'shockwave', name: '衝撃波', aim: false, effect: { kind: 'shockwave' } },
+  sweep: { id: 'sweep', name: 'なぎ払い', aim: true, effect: { kind: 'sweep' } },
+  fire_bolt: { id: 'fire_bolt', name: '炎の矢', aim: true, effect: { kind: 'bolt', element: 'fire' } },
+  ice_bolt: { id: 'ice_bolt', name: '氷の矢', aim: true, effect: { kind: 'bolt', element: 'ice' } },
+  light_lance: { id: 'light_lance', name: '光の槍', aim: true, effect: { kind: 'bolt', element: 'light' } },
+  dark_bolt: { id: 'dark_bolt', name: '闇の矢', aim: true, effect: { kind: 'bolt', element: 'dark' } },
+  heal: { id: 'heal', name: '癒し', aim: false, effect: { kind: 'heal' } },
+  regen: { id: 'regen', name: '再生', aim: false, effect: { kind: 'regen' } },
+};
 
 // 数値はすべて仮。遊んでみてバランス調整する
 export const ITEMS: Record<ItemId, ItemDef> = {
@@ -230,7 +255,31 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     description: '武器に闇の力を宿す（攻撃5回）。光の敵によく効く',
     effect: { kind: 'enchant', element: 'dark', hits: 5 },
   },
+  ...spellbooks(),
 };
+
+/** 呪文書（魔法屋で買う）。持っていくと、探索で魔力を使ってその呪文を何度でも唱えられる */
+function spellbooks(): Record<Extract<ItemId, `book_${string}`>, ItemDef> {
+  const book = (spell: SpellId, price: number, description: string): ItemDef => ({
+    id: `book_${spell}` as ItemId,
+    name: `${SPELLS[spell].name}の呪文書`,
+    shop: 'magic',
+    price,
+    description,
+    effect: { kind: 'spellbook', spell },
+  });
+  return {
+    book_shockwave: book('shockwave', 50, 'まわりの敵を吹き飛ばす。ダメージは控えめだが、壁や敵にぶつけると追加ダメージ'),
+    book_sweep: book('sweep', 40, '向いた方向の数マスを貫き、並んだ敵すべてに当たる'),
+    book_fire_bolt: book('fire_bolt', 35, '炎の矢を放つ。氷と闇の敵によく効く'),
+    book_ice_bolt: book('ice_bolt', 35, '氷の矢を放つ。炎と光の敵によく効く'),
+    book_light_lance: book('light_lance', 35, '光の槍を放つ。闇の敵によく効く'),
+    book_dark_bolt: book('dark_bolt', 35, '闇の矢を放つ。光の敵によく効く'),
+    book_heal: book('heal', 40, 'すぐにHPを回復する'),
+    book_regen: book('regen', 35, '数ターンかけて、少しずつHPを回復する'),
+  };
+}
+
 
 // ===== 戦闘の設定値（仮） =====
 export const COMBAT_CONFIG = {
