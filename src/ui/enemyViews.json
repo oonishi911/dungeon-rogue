@@ -1,0 +1,163 @@
+{
+  "lava_slime": {
+    "height": 0.8,
+    "views": {
+      "front": {
+        "file": "lava_slime-front.png",
+        "aspect": 1.081,
+        "footX": 0.5,
+        "px": 444
+      },
+      "side": {
+        "file": "lava_slime-side.png",
+        "aspect": 1.055,
+        "footX": 0.36,
+        "px": 450
+      },
+      "back": {
+        "file": "lava_slime-back.png",
+        "aspect": 0.854,
+        "footX": 0.49,
+        "px": 458
+      }
+    }
+  },
+  "iwao": {
+    "height": 1.25,
+    "views": {
+      "front": {
+        "file": "iwao-front.png",
+        "aspect": 0.828,
+        "footX": 0.49,
+        "px": 599
+      },
+      "side": {
+        "file": "iwao-side.png",
+        "aspect": 0.419,
+        "footX": 0.46,
+        "px": 615
+      },
+      "back": {
+        "file": "iwao-back.png",
+        "aspect": 0.732,
+        "footX": 0.5,
+        "px": 613
+      }
+    }
+  },
+  "wraith": {
+    "height": 1.1,
+    "views": {
+      "front": {
+        "file": "wraith-front.png",
+        "aspect": 0.951,
+        "footX": 0.5,
+        "px": 518
+      },
+      "side": {
+        "file": "wraith-side.png",
+        "aspect": 0.333,
+        "footX": 0.35,
+        "px": 565
+      },
+      "back": {
+        "file": "wraith-back.png",
+        "aspect": 0.875,
+        "footX": 0.51,
+        "px": 533
+      }
+    }
+  },
+  "troll": {
+    "height": 1.2,
+    "views": {
+      "front": {
+        "file": "troll-front.png",
+        "aspect": 0.979,
+        "footX": 0.5,
+        "px": 668
+      },
+      "side": {
+        "file": "troll-side.png",
+        "aspect": 0.352,
+        "footX": 0.47,
+        "px": 665
+      },
+      "back": {
+        "file": "troll-back.png",
+        "aspect": 0.734,
+        "footX": 0.49,
+        "px": 666
+      }
+    }
+  },
+  "yeti": {
+    "height": 1.15,
+    "views": {
+      "front": {
+        "file": "yeti-front.png",
+        "aspect": 0.854,
+        "footX": 0.48,
+        "px": 639
+      },
+      "side": {
+        "file": "yeti-side.png",
+        "aspect": 0.292,
+        "footX": 0.42,
+        "px": 623
+      },
+      "back": {
+        "file": "yeti-back.png",
+        "aspect": 0.534,
+        "footX": 0.44,
+        "px": 608
+      }
+    }
+  },
+  "dark_knight": {
+    "height": 1.15,
+    "views": {
+      "front": {
+        "file": "dark_knight-front.png",
+        "aspect": 0.849,
+        "footX": 0.51,
+        "px": 605
+      },
+      "side": {
+        "file": "dark_knight-side.png",
+        "aspect": 0.417,
+        "footX": 0.62,
+        "px": 604
+      },
+      "back": {
+        "file": "dark_knight-back.png",
+        "aspect": 0.846,
+        "footX": 0.49,
+        "px": 605
+      }
+    }
+  },
+  "holy_knight": {
+    "height": 1.15,
+    "views": {
+      "front": {
+        "file": "holy_knight-front.png",
+        "aspect": 0.641,
+        "footX": 0.53,
+        "px": 683
+      },
+      "side": {
+        "file": "holy_knight-side.png",
+        "aspect": 0.24,
+        "footX": 0.45,
+        "px": 675
+      },
+      "back": {
+        "file": "holy_knight-back.png",
+        "aspect": 0.568,
+        "footX": 0.49,
+        "px": 668
+      }
+    }
+  }
+}

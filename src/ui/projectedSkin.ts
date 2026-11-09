@@ -12,6 +12,7 @@ export interface ProjectedView {
   file: string;
   footX: number; // 足元（模型の原点）が、絵の左から何割のところか
   aspect: number; // 絵の横:縦
+  scale?: number; // この絵の体の高さが、正面の絵の何倍か（元の設定画で向きごとに大きさが少し違うとき）。省くと1
 }
 
 export interface ProjectedViews {
@@ -28,16 +29,18 @@ const FALLBACK = 0x1c1f16; // どの絵も透明なところの色（暗がり�
 /** 3枚の絵を投影して貼る素材（フォンシェーディング。ツヤは弱く） */
 export function projectedSkin(views: ProjectedViews, textures: Record<'front' | 'side' | 'back', THREE.Texture>): THREE.MeshPhongMaterial {
   const material = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 14, specular: 0x1a1a16 });
-  const perUnitV = (views.vTop - views.vFeet) / views.height; // 1マスが絵の縦の何割か
+  // 向きごとに (足元の横の位置, 1マスが絵の横の何割か, 足元の縦の位置, 1マスが絵の縦の何割か)
+  const place = (view: ProjectedView) => {
+    const perUnitV = (views.vTop - views.vFeet) / (views.height * (view.scale ?? 1));
+    return new THREE.Vector4(view.footX, perUnitV / view.aspect, views.vFeet, perUnitV);
+  };
   const uniforms = {
     tFront: { value: textures.front },
     tSide: { value: textures.side },
     tBack: { value: textures.back },
-    // x：足元の位置、y：1マスが絵の横の何割か
-    uFront: { value: new THREE.Vector2(views.front.footX, perUnitV / views.front.aspect) },
-    uSide: { value: new THREE.Vector2(views.side.footX, perUnitV / views.side.aspect) },
-    uBack: { value: new THREE.Vector2(views.back.footX, perUnitV / views.back.aspect) },
-    uV: { value: new THREE.Vector2(views.vFeet, perUnitV) },
+    uFront: { value: place(views.front) },
+    uSide: { value: place(views.side) },
+    uBack: { value: place(views.back) },
     uFallback: { value: new THREE.Color(FALLBACK) },
   };
   material.onBeforeCompile = (shader) => {
@@ -49,10 +52,9 @@ export function projectedSkin(views: ProjectedViews, textures: Record<'front' | 
       `uniform sampler2D tFront;
 uniform sampler2D tSide;
 uniform sampler2D tBack;
-uniform vec2 uFront;
-uniform vec2 uSide;
-uniform vec2 uBack;
-uniform vec2 uV;
+uniform vec4 uFront;
+uniform vec4 uSide;
+uniform vec4 uBack;
 uniform vec3 uFallback;
 varying vec3 vRestPos;
 varying vec3 vRestNormal;
@@ -61,10 +63,9 @@ varying vec3 vRestNormal;
         '#include <map_fragment>',
         `{
   vec3 n = normalize(vRestNormal);
-  float v = uV.x + vRestPos.y * uV.y;
-  vec4 cf = texture2D(tFront, vec2(uFront.x + vRestPos.x * uFront.y, v));
-  vec4 cb = texture2D(tBack, vec2(uBack.x - vRestPos.x * uBack.y, v));
-  vec4 cs = texture2D(tSide, vec2(uSide.x - vRestPos.z * uSide.y, v));
+  vec4 cf = texture2D(tFront, vec2(uFront.x + vRestPos.x * uFront.y, uFront.z + vRestPos.y * uFront.w));
+  vec4 cb = texture2D(tBack, vec2(uBack.x - vRestPos.x * uBack.y, uBack.z + vRestPos.y * uBack.w));
+  vec4 cs = texture2D(tSide, vec2(uSide.x - vRestPos.z * uSide.y, uSide.z + vRestPos.y * uSide.w));
   // 面の向きで混ぜる（真上を向いた面は、3枚を少しずつ）
   float wf = pow(max(n.z, 0.0), 2.0) + 0.04;
   float wb = pow(max(-n.z, 0.0), 2.0) + 0.04;
