@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { ITEMS } from '../game/data';
 import { enemyDef, isAdjacent } from '../game/enemies';
-import { dirBetween, EXPLORE_CONFIG, upStairs, type Dir, type ExploreState } from '../game/explore';
+import { dirBetween, EXPLORE_CONFIG, upStairs, type CastEvent, type Dir, type ExploreState } from '../game/explore';
 import type { Pos } from '../game/map';
 import type { EnemyId, ItemId, TraitId, WeaponType } from '../game/types';
 import { drawSprite } from '../sprites/canvas';
@@ -20,6 +20,7 @@ import { floorVariant } from './autotile';
 import { ENEMY_MARK, lerp, type Frame } from './exploreRender';
 import { Hero3D } from './hero3d';
 import { exposureOf, softWallGeometry } from './softWall';
+import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
 
 // マスの大きさを1とした壁の高さ。高くすると通路が深く見える。
@@ -172,6 +173,7 @@ export class DungeonView3D {
   private heroDir: Dir = 'down'; // 最後に歩いた向き。模型をこの向きへ回す
   private lastFrameAt = performance.now();
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  private readonly spellFx = new SpellEffects(this.scene, this.reduceMotion); // 呪文の演出
   private pulse: { kind: HitPulse; start: number } | null = null;
   private combatZoom = 1; // 戦闘中に寄せている倍率（なめらかに変わる）
   private lastCombatAt = -Infinity; // 最後に戦闘中だった時刻
@@ -341,6 +343,7 @@ export class DungeonView3D {
     this.hero.update(p.x, p.y, this.heroDir, moved ? frame.progress : 1, dt, this.reduceMotion);
     this.fog.update(p, dt, this.reduceMotion);
     this.updateDamagePops(now);
+    this.spellFx.update(now);
     const zoom = this.updateCombatZoom(s, now, dt) * this.pulseZoom(now);
     if (Math.abs(zoom - this.camera.zoom) > 1e-4) {
       this.camera.zoom = zoom;
@@ -367,6 +370,12 @@ export class DungeonView3D {
     this.updateWalkTarget(frame.walkTarget);
     this.updateWalkPath(frame.walkPath);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /** 呪文を唱えたとき：向きを選ぶ呪文ならその向きを向き、呪文の演出を出す。from は唱えたマス */
+  castSpell(cast: CastEvent, from: Pos) {
+    if (cast.dir) this.heroDir = cast.dir;
+    this.spellFx.start(cast, from);
   }
 
   /** 主人公が at のマスの敵を攻撃したとき：敵の方を向いて、武器を振る */
@@ -492,6 +501,7 @@ export class DungeonView3D {
   }
 
   dispose() {
+    this.spellFx.dispose();
     this.floors[0]!.geometry.dispose(); // 床の形はすべての入れ物で共通
     for (const mesh of this.walls) mesh.geometry.dispose();
     this.wallShadows.geometry.dispose();

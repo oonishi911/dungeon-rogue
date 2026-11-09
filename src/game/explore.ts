@@ -3,7 +3,8 @@
 // ほかのロジックと同じく、状態を受け取り新しい状態を返す純粋関数でできている。
 
 import { buildPlayer, enemyHitDamage, playerHitDamage } from './combat';
-import { COMBAT_CONFIG, enemyReward, expToNext, ITEMS, PREP_CONFIG, REWARD_CONFIG, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
+import { COMBAT_CONFIG, ENCHANT_VS_ELEMENT, enemyReward, expToNext, ITEMS, PREP_CONFIG, REWARD_CONFIG, SPELLS, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
+import { GEN_SETTINGS } from './genMaster';
 import {
   ENEMY_CONFIG,
   enemyDef,
@@ -18,7 +19,7 @@ import {
 import { generateBossFloor, generateFloor, tileAt, type FloorMap, type Pos } from './map';
 import { rankParams, regenIntervalFor } from './rank';
 import { nextInt, nextRandom } from './rng';
-import type { EnemyId, ItemId, PlayerStats, Result, TraitId } from './types';
+import type { EnemyDef, EnemyId, ItemId, PlayerStats, Result, SpellId, TraitId } from './types';
 
 // 数値はすべて仮。バランス調整で見直す
 export const EXPLORE_CONFIG = {
@@ -43,7 +44,8 @@ export type ExploreAction =
   | { kind: 'wait' }
   | { kind: 'descend' }
   | { kind: 'ascend' } // 上り階段（2階目からの入口）から、1つ上の階へ戻る
-  | { kind: 'use_item'; item: ItemId };
+  | { kind: 'use_item'; item: ItemId }
+  | { kind: 'cast'; spell: SpellId; dir?: Dir }; // 呪文を唱える。向きを選ぶ呪文（なぎ払い・矢）は dir が要る
 
 export type ExploreOutcome = 'ongoing' | 'cleared' | 'defeated';
 
@@ -62,6 +64,14 @@ export interface HitEvent {
   at: Pos; // ダメージを受けた側がいたマス
   amount: number;
   by?: EnemyId; // taken のとき、攻撃してきた敵（毒など、敵の攻撃でないときはない）
+}
+
+/** この行動で唱えた呪文。画面の演出と効果音のために使う（ルールには使わない） */
+export interface CastEvent {
+  spell: SpellId;
+  dir: Dir | null;
+  path: Pos[]; // 矢・なぎ払いが通ったマス（演出で使う）
+  moves: { from: Pos; to: Pos }[]; // 衝撃波で吹き飛んだ敵の、動く前と後
 }
 
 /** 一度離れた階の様子。戻ってきたら、倒した敵・開けた宝箱・晴れた霧はそのまま */
@@ -85,6 +95,11 @@ export interface ExploreState {
   stats: PlayerStats; // HP・攻撃力・装備
   satiety: number;
   maxSatiety: number;
+  spells: SpellId[]; // 持ってきた呪文書の呪文
+  mp: number; // 魔力（呪文を唱えると減り、歩くと少しずつ戻る）
+  maxMp: number;
+  regen: { amount: number; turns: number } | null; // 再生の呪文：あと何ターン、1ターンにどれだけ回復するか
+  cast: CastEvent | null; // この行動で唱えた呪文（画面用）
   enemies: MapEnemy[];
   chests: Chest[]; // この階の宝箱（開けて空になったものも残す）
   gold: number; // この挑戦で手に入れた金貨
@@ -144,6 +159,9 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     stats: buildPlayer(options.loadout ?? []),
     satiety: maxSatiety,
     maxSatiety,
+    ...startMagic(options.loadout ?? []),
+    regen: null,
+    cast: null,
     enemies: [],
     chests: [],
     gold: 0,
@@ -166,7 +184,7 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
 /** 1行動進める。壁への移動など行動にならない操作はエラーを返し、ターンも満腹度も消費しない */
 export function step(state: ExploreState, action: ExploreAction): Result<ExploreState> {
   if (state.outcome !== 'ongoing') return err('探索は終わっています');
-  state = { ...state, hits: [] };
+  state = { ...state, hits: [], cast: null };
 
   let next: ExploreState;
   switch (action.kind) {
@@ -192,6 +210,13 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
       const r = useItem(state, action.item);
       if (!r.ok) return r;
       next = r.value;
+      break;
+    }
+    case 'cast': {
+      const r = castSpell(state, action.spell, action.dir ?? null);
+      if (!r.ok) return r;
+      next = r.value;
+      if (next.outcome !== 'ongoing') return ok({ ...next, turn: next.turn + 1 });
       break;
     }
     case 'descend': {
@@ -387,11 +412,173 @@ function useItem(state: ExploreState, itemId: ItemId): Result<ExploreState> {
     case 'weapon':
     case 'armor':
       return err('装備品は道具として使えません');
+    case 'spellbook':
+      return err('呪文書は道具として使えません（呪文として唱える）');
     default: {
       const unreachable: never = effect;
       return unreachable;
     }
   }
+}
+
+// ===== 魔法 =====
+
+/** 持ってきた呪文書から、唱えられる呪文と魔力を決める。呪文書がなければ魔力も0（魔力の棒も出さない） */
+function startMagic(loadout: readonly ItemId[]): { spells: SpellId[]; mp: number; maxMp: number } {
+  const spells = loadout.flatMap((id) => {
+    const effect = ITEMS[id].effect;
+    return effect.kind === 'spellbook' ? [effect.spell] : [];
+  });
+  if (spells.length === 0) return { spells: [], mp: 0, maxMp: 0 };
+  const M = GEN_SETTINGS.magic;
+  const staff = loadout.some(isStaff);
+  const maxMp = M.maxMp + (staff ? M.staffMp : 0);
+  return { spells: [...new Set(spells)], mp: maxMp, maxMp };
+}
+
+/** 魔法の強さ。杖を持っていると強くなる */
+export function magicPower(stats: PlayerStats): number {
+  const M = GEN_SETTINGS.magic;
+  return M.power * (stats.weapon && isStaff(stats.weapon) ? M.staffPower : 1);
+}
+
+function isStaff(id: ItemId): boolean {
+  const effect = ITEMS[id].effect;
+  return effect.kind === 'weapon' && effect.weapon === 'staff';
+}
+
+/** 呪文のダメージ（敵の防御は無視する。属性の矢は、属性の相性で増減する） */
+export function spellDamage(stats: PlayerStats, spell: SpellId, enemy: EnemyDef): number {
+  const def = SPELLS[spell];
+  const rate = GEN_SETTINGS.spells[spell].power ?? 1;
+  const element = def.effect.kind === 'bolt' ? (ENCHANT_VS_ELEMENT[def.effect.element][enemy.element] ?? 1) : 1;
+  return Math.max(1, Math.round(magicPower(stats) * rate * element));
+}
+
+/** 1行動ごとの、魔力の回復と再生の呪文の回復 */
+function recoverMagic(state: ExploreState, turn: number): ExploreState {
+  let { mp, regen, stats } = state;
+  if (state.maxMp > 0 && mp < state.maxMp && turn % GEN_SETTINGS.magic.regenEvery === 0) mp++;
+  if (regen) {
+    stats = { ...stats, hp: Math.min(stats.maxHp, stats.hp + regen.amount) };
+    regen = regen.turns > 1 ? { ...regen, turns: regen.turns - 1 } : null;
+  }
+  return { ...state, mp, regen, stats };
+}
+
+function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result<ExploreState> {
+  if (!state.spells.includes(spell)) return err('その呪文書は持っていません');
+  const def = SPELLS[spell];
+  const cfg = GEN_SETTINGS.spells[spell];
+  const cost = cfg.cost ?? 0;
+  if (state.mp < cost) return err('魔力が足りない');
+  if (def.aim && !dir) return err('向きを選んでください');
+  const event: CastEvent = { spell, dir: def.aim ? dir : null, path: [], moves: [] };
+  let s: ExploreState = { ...state, mp: state.mp - cost, cast: event, log: [...state.log, `${def.name}を唱えた`] };
+  const { stats } = s;
+
+  switch (def.effect.kind) {
+    case 'heal': {
+      if (stats.hp >= stats.maxHp) return err('HPは減っていない');
+      const hp = Math.min(stats.maxHp, stats.hp + (cfg.amount ?? 0));
+      s = { ...s, stats: { ...stats, hp }, log: [...s.log, `HPが${hp - stats.hp}回復`] };
+      break;
+    }
+    case 'regen': {
+      s = { ...s, regen: { amount: cfg.amount ?? 0, turns: cfg.turns ?? 1 }, log: [...s.log, `体が温かい光に包まれた（${cfg.turns}ターン）`] };
+      break;
+    }
+    case 'bolt':
+    case 'sweep': {
+      // 向いた方向へ、壁に当たるか届くマス数まで進む。矢は最初の敵で止まり、なぎ払いは貫く
+      const d = DIR_DELTA[dir!];
+      const range = cfg.range ?? 1;
+      const targets: MapEnemy[] = [];
+      for (let i = 1; i <= range; i++) {
+        const p = { x: s.player.x + d.x * i, y: s.player.y + d.y * i };
+        if (tileAt(s.map, p) === 'wall') break;
+        event.path.push(p);
+        const enemy = s.enemies.find((e) => samePos(e.pos, p));
+        if (enemy) {
+          targets.push(enemy);
+          if (def.effect.kind === 'bolt') break;
+        }
+      }
+      if (targets.length === 0) s = { ...s, log: [...s.log, '何にも当たらなかった'] };
+      for (const t of targets) s = hurtEnemy(s, t.uid, spellDamage(s.stats, spell, enemyDef(t)));
+      break;
+    }
+    case 'shockwave': {
+      // まわり8マスの敵を、主人公から離れる向きへ吹き飛ばす。壁や敵にぶつかったら止まり、追加ダメージ。ボスは動かない
+      const around = s.enemies.filter((e) => Math.max(Math.abs(e.pos.x - s.player.x), Math.abs(e.pos.y - s.player.y)) === 1);
+      if (around.length === 0) s = { ...s, log: [...s.log, 'まわりに敵はいなかった'] };
+      for (const t of around) {
+        s = hurtEnemy(s, t.uid, spellDamage(s.stats, spell, enemyDef(t)));
+        const target = s.enemies.find((e) => e.uid === t.uid);
+        if (!target || s.outcome !== 'ongoing' || enemyDef(target).boss) continue;
+        const d = { x: Math.sign(target.pos.x - s.player.x), y: Math.sign(target.pos.y - s.player.y) };
+        let pos = target.pos;
+        let crashed = false;
+        for (let i = 0; i < (cfg.push ?? 0); i++) {
+          const p = { x: pos.x + d.x, y: pos.y + d.y };
+          if (tileAt(s.map, p) === 'wall' || s.enemies.some((e) => e.uid !== target.uid && samePos(e.pos, p)) || samePos(p, s.player)) {
+            crashed = true;
+            break;
+          }
+          pos = p;
+        }
+        if (!samePos(pos, target.pos)) {
+          event.moves.push({ from: target.pos, to: pos });
+          s = { ...s, enemies: s.enemies.map((e) => (e.uid === target.uid ? { ...e, pos } : e)) };
+        }
+        if (crashed && (cfg.crash ?? 0) > 0) {
+          s = { ...s, log: [...s.log, `${enemyDef(target).name}は壁にぶつかった`] };
+          s = hurtEnemy(s, target.uid, cfg.crash ?? 0);
+        }
+      }
+      break;
+    }
+    default: {
+      const unreachable: never = def.effect;
+      return unreachable;
+    }
+  }
+
+  // 唱える声で、近くのうろついている敵が気付く
+  const radius = GEN_SETTINGS.magic.noiseRadius;
+  if (radius > 0 && s.outcome === 'ongoing') {
+    s = {
+      ...s,
+      enemies: s.enemies.map((e) =>
+        e.mode === 'wander' && Math.abs(e.pos.x - s.player.x) + Math.abs(e.pos.y - s.player.y) <= radius
+          ? { ...e, mode: 'chase', justNoticed: true, lastSeen: s.player }
+          : e,
+      ),
+    };
+  }
+  return ok(s);
+}
+
+/** 敵に魔法などでダメージを与える。倒したら報酬（ボスなら踏破）、倒れなければこちらに気付く */
+function hurtEnemy(state: ExploreState, uid: number, dmg: number): ExploreState {
+  const target = state.enemies.find((e) => e.uid === uid);
+  if (!target || state.outcome !== 'ongoing') return state;
+  const def = enemyDef(target);
+  const hp = target.hp - dmg;
+  const log = [...state.log, `${def.name}に${dmg}のダメージ`];
+  state = { ...state, hits: [...state.hits, { kind: 'dealt', at: target.pos, amount: dmg }] };
+  if (hp <= 0) {
+    log.push(`${def.name}を倒した`);
+    const defeated = { ...state, enemies: state.enemies.filter((e) => e.uid !== uid), defeated: state.defeated + 1 };
+    if (def.boss) {
+      const reward = rankParams(state.rank).bossGold;
+      log.push(`報酬として金貨${reward}Gを手に入れた`, 'ダンジョンを踏破した');
+      return { ...defeated, gold: state.gold + reward, outcome: 'cleared', log };
+    }
+    return defeatReward({ ...defeated, log }, target);
+  }
+  const hit: MapEnemy = { ...target, hp, mode: 'chase', justNoticed: target.mode === 'wander', lastSeen: state.player };
+  return { ...state, enemies: state.enemies.map((e) => (e.uid === uid ? hit : e)), log };
 }
 
 // ===== 敵を倒したときの報酬 =====
@@ -592,7 +779,7 @@ function damagePlayer(state: ExploreState, dmg: number, message: string, by: str
 function spendAction(state: ExploreState): ExploreState {
   const poisoned = applyPoison(state);
   if (poisoned.outcome !== 'ongoing') return { ...poisoned, turn: poisoned.turn + 1 };
-  state = poisoned;
+  state = recoverMagic(poisoned, state.turn + 1);
   const turn = state.turn + 1;
   const { stats } = state;
   if (state.satiety > 0) {

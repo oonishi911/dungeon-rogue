@@ -1,10 +1,11 @@
 // ダンジョンの設定（src/game/dungeonGen.json）を読み、正しい形かを確かめる。
 // dungeonGen.json は、開発用の管理画面（?view=gen、src/ui/GenAdmin.tsx）から書き換えて公開できる。
 // rooms は小部屋の多さと大きさ、enemies は敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋など）、
-// growth は敵を倒したときのレベルの上がり方と強敵の報酬の倍率。
+// growth は敵を倒したときのレベルの上がり方と強敵の報酬の倍率、magic は魔力と魔法の強さ、spells は呪文ごとの魔力と効き目。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
 
 import raw from './dungeonGen.json';
+import type { SpellId } from './types';
 
 /** 小部屋の置き方（map.ts） */
 export interface RoomSettings {
@@ -39,11 +40,75 @@ export interface GrowthSettings {
   eliteRate: number; // 強敵を倒したときの金貨と経験値の倍率
 }
 
+/** 魔力と魔法の強さ（magic.ts） */
+export interface MagicSettings {
+  maxMp: number; // 魔力の最大
+  regenEvery: number; // 何行動ごとに魔力が1回復するか
+  power: number; // 魔法の強さのもと（呪文のダメージ＝これ×呪文の倍率。防御は無視する）
+  staffPower: number; // 杖を持っているときの、魔法の強さの倍率
+  staffMp: number; // 杖を持っているときに増える魔力の最大
+  noiseRadius: number; // 唱えると、このマス数以内のうろついている敵が気付く（0：気付かない）
+}
+
+/** 呪文ごとの設定。どの呪文にも cost（使う魔力）があり、ほかの項目は呪文の働きごとに違う（SPELL_FIELDS） */
+export type SpellSettings = Record<SpellId, Record<string, number>>;
+
 export interface GenSettings {
   rooms: RoomSettings;
   enemies: EnemySettings;
   growth: GrowthSettings;
+  magic: MagicSettings;
+  spells: SpellSettings;
 }
+
+/** 魔力と魔法の強さの項目（名前・範囲・整数か） */
+export const MAGIC_FIELDS: { key: keyof MagicSettings; label: string; min: number; max: number; step: number; hint: string }[] = [
+  { key: 'maxMp', label: '魔力の最大', min: 0, max: 200, step: 1, hint: '探索を始めるときは、魔力がいっぱい' },
+  { key: 'regenEvery', label: '魔力が1回復する行動数', min: 1, max: 100, step: 1, hint: 'この行動数ごとに、魔力が1回復する' },
+  { key: 'power', label: '魔法の強さ', min: 0, max: 100, step: 1, hint: '呪文のダメージ＝魔法の強さ×呪文の倍率（敵の防御は無視する）' },
+  { key: 'staffPower', label: '杖での魔法の強さの倍率', min: 1, max: 5, step: 0.1, hint: '杖を持っていると、魔法がこの倍だけ強くなる' },
+  { key: 'staffMp', label: '杖で増える魔力の最大', min: 0, max: 100, step: 1, hint: '' },
+  { key: 'noiseRadius', label: '唱えると気付かれる距離', min: 0, max: 20, step: 1, hint: 'このマス数以内の、うろついている敵が気付く（0：気付かない）' },
+];
+
+/** 呪文ごとの項目（名前・範囲・整数か）。どの呪文も最初は cost */
+export const SPELL_FIELDS: Record<SpellId, { key: string; label: string; min: number; max: number; step: number; integer: boolean }[]> = (() => {
+  const cost = { key: 'cost', label: '使う魔力', min: 0, max: 99, step: 1, integer: true };
+  const power = { key: 'power', label: 'ダメージの倍率', min: 0, max: 10, step: 0.1, integer: false };
+  const range = { key: 'range', label: '届くマス数', min: 1, max: 20, step: 1, integer: true };
+  const bolt = [cost, power, range];
+  return {
+    shockwave: [
+      cost,
+      power,
+      { key: 'push', label: '吹き飛ばすマス数', min: 0, max: 10, step: 1, integer: true },
+      { key: 'crash', label: 'ぶつかったときの追加ダメージ', min: 0, max: 99, step: 1, integer: true },
+    ],
+    sweep: [cost, power, range],
+    fire_bolt: bolt,
+    ice_bolt: bolt,
+    light_lance: bolt,
+    dark_bolt: bolt,
+    heal: [cost, { key: 'amount', label: '回復するHP', min: 0, max: 999, step: 1, integer: true }],
+    regen: [
+      cost,
+      { key: 'amount', label: '1ターンに回復するHP', min: 0, max: 99, step: 1, integer: true },
+      { key: 'turns', label: '続くターン数', min: 1, max: 99, step: 1, integer: true },
+    ],
+  };
+})();
+
+/** 呪文の名前（変更の説明と管理画面で使う。ゲームの中の名前は data.ts の SPELLS と同じ） */
+export const SPELL_NAMES: Record<SpellId, string> = {
+  shockwave: '衝撃波',
+  sweep: 'なぎ払い',
+  fire_bolt: '炎の矢',
+  ice_bolt: '氷の矢',
+  light_lance: '光の槍',
+  dark_bolt: '闇の矢',
+  heal: '癒し',
+  regen: '再生',
+};
 
 /** 値の範囲（管理画面の入力欄も、この範囲にする）。step は管理画面で1回に動かす量 */
 export const GEN_LIMITS = {
@@ -84,7 +149,9 @@ export const GEN_LABELS = {
 /** 形のおかしいところを、すべて日本語の文で返す（なければ空） */
 export function genProblems(data: unknown): string[] {
   const problems: string[] = [];
-  if (!isObject(data) || !isObject(data.rooms) || !isObject(data.enemies) || !isObject(data.growth)) return ['rooms と enemies と growth がない'];
+  if (!isObject(data) || !isObject(data.rooms) || !isObject(data.enemies) || !isObject(data.growth) || !isObject(data.magic) || !isObject(data.spells)) {
+    return ['rooms・enemies・growth・magic・spells のどれかがない'];
+  }
   const { rooms, enemies } = data;
   const num = (v: unknown, label: string, lim: { min: number; max: number }) => {
     if (typeof v !== 'number' || !Number.isFinite(v) || v < lim.min || v > lim.max) problems.push(`${label}：${lim.min}〜${lim.max}の数にする`);
@@ -116,6 +183,23 @@ export function genProblems(data: unknown): string[] {
     if (typeof growth[k] === 'number' && !Number.isInteger(growth[k])) problems.push(`${GEN_LABELS[k]}：整数にする`);
   }
   num(growth.eliteRate, GEN_LABELS.eliteRate, GEN_LIMITS.eliteRate);
+  const { magic, spells } = data;
+  for (const f of MAGIC_FIELDS) {
+    num(magic[f.key], f.label, f);
+    if (Number.isInteger(f.step) && typeof magic[f.key] === 'number' && !Number.isInteger(magic[f.key])) problems.push(`${f.label}：整数にする`);
+  }
+  for (const [id, fields] of Object.entries(SPELL_FIELDS) as [SpellId, (typeof SPELL_FIELDS)[SpellId]][]) {
+    const spell = spells[id];
+    if (!isObject(spell)) {
+      problems.push(`${SPELL_NAMES[id]}の設定がない`);
+      continue;
+    }
+    for (const f of fields) {
+      const label = `${SPELL_NAMES[id]}の${f.label}`;
+      num(spell[f.key], label, f);
+      if (f.integer && typeof spell[f.key] === 'number' && !Number.isInteger(spell[f.key])) problems.push(`${label}：整数にする`);
+    }
+  }
   if (typeof enemies.stayInRoom !== 'boolean') problems.push(`${GEN_LABELS.stayInRoom}：true か false にする`);
   return problems;
 }
@@ -141,6 +225,16 @@ export function describeGenChanges(before: GenSettings, after: GenSettings): str
     const b = after[group] as unknown as Record<string, number | boolean | string>;
     for (const k of Object.keys(b)) {
       if (a[k] !== b[k]) out.push(`${GEN_LABELS[k as keyof typeof GEN_LABELS]}：${show(a[k]!)} → ${show(b[k]!)}`);
+    }
+  }
+  for (const f of MAGIC_FIELDS) {
+    if (before.magic[f.key] !== after.magic[f.key]) out.push(`${f.label}：${before.magic[f.key]} → ${after.magic[f.key]}`);
+  }
+  for (const [id, fields] of Object.entries(SPELL_FIELDS) as [SpellId, (typeof SPELL_FIELDS)[SpellId]][]) {
+    for (const f of fields) {
+      const a = before.spells[id][f.key];
+      const b = after.spells[id][f.key];
+      if (a !== b) out.push(`${SPELL_NAMES[id]}の${f.label}：${a} → ${b}`);
     }
   }
   return out;

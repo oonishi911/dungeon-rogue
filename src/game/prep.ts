@@ -126,6 +126,10 @@ export function buyItem(state: PrepState, itemId: ItemId): Result<PrepState> {
   const owned = state.inventory.filter((id) => itemSlot(ITEMS[id]) === slot).length;
   if (slot === 'weapon' && owned >= 1) return err('武器はもう持っています（1つまで）');
   if (slot === 'armor' && owned >= 1) return err('防具はもう持っています（1つまで）');
+  if (slot === 'spellbook' && state.inventory.includes(itemId)) return err('その呪文書はもう持っています');
+  if (slot === 'spellbook' && owned >= PREP_CONFIG.maxSpellbooks) {
+    return err(`呪文書はこれ以上持てません（${PREP_CONFIG.maxSpellbooks}冊まで）`);
+  }
   if (slot === 'consumable' && owned >= PREP_CONFIG.maxItems) {
     return err(`道具はこれ以上持てません（${PREP_CONFIG.maxItems}個まで）`);
   }

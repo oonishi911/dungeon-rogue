@@ -15,10 +15,10 @@ export interface TraitDef {
 }
 
 // ===== カード =====
-export type CardId = 'rumor' | 'informant' | 'map' | 'smithy' | 'item_shop' | 'work';
+export type CardId = 'rumor' | 'informant' | 'map' | 'smithy' | 'item_shop' | 'magic_shop' | 'work';
 
 export type CardCategory = 'info' | 'procure' | 'funds';
-export type ShopId = 'smithy' | 'item'; // 鍛冶屋は武器と防具、道具屋は道具
+export type ShopId = 'smithy' | 'item' | 'magic'; // 鍛冶屋は武器と防具、道具屋は道具、魔法屋は呪文書
 
 // カードの効果は判別可能なユニオン型で表す。
 // 新しい効果を追加すると、switch の書き漏れを型チェックで検出できる。
@@ -58,9 +58,17 @@ export type ItemId =
   | 'fire_whetstone'
   | 'ice_whetstone'
   | 'holy_water'
-  | 'dark_oil';
+  | 'dark_oil'
+  | 'book_shockwave'
+  | 'book_sweep'
+  | 'book_fire_bolt'
+  | 'book_ice_bolt'
+  | 'book_light_lance'
+  | 'book_dark_bolt'
+  | 'book_heal'
+  | 'book_regen';
 
-export type ItemSlot = 'weapon' | 'armor' | 'consumable';
+export type ItemSlot = 'weapon' | 'armor' | 'consumable' | 'spellbook';
 export type WeaponType = 'sword' | 'hammer' | 'staff';
 
 // 防具の守り方。成分ごとに効くもの（マント・鎧）と、複合属性を丸ごと防ぐもの（専用防具）がある
@@ -73,7 +81,27 @@ export type ItemEffect =
   | { kind: 'armor'; guard: ArmorGuard }
   | { kind: 'heal'; hp: number }
   | { kind: 'food'; satiety: number }
-  | { kind: 'enchant'; element: Element; hits: number }; // 武器に一時的に属性を付ける
+  | { kind: 'enchant'; element: Element; hits: number } // 武器に一時的に属性を付ける
+  | { kind: 'spellbook'; spell: SpellId }; // 呪文書。持っていくと、探索で魔力を使ってその呪文を何度でも唱えられる
+
+// ===== 魔法 =====
+// 呪文は呪文書を持っていくと使える。強さと魔力の量は src/game/dungeonGen.json の magic と spells（管理画面で変えられる）
+export type SpellId = 'shockwave' | 'sweep' | 'fire_bolt' | 'ice_bolt' | 'light_lance' | 'dark_bolt' | 'heal' | 'regen';
+
+// 呪文の働き。aim は唱えるときに向きを選ぶかどうか
+export type SpellEffect =
+  | { kind: 'shockwave' } // まわり8マスの敵を、外へ吹き飛ばす（ダメージは控えめ。壁や敵にぶつかると追加ダメージ）
+  | { kind: 'sweep' } // 向いた方向の数マスを貫き、そこにいる敵すべてに当たる
+  | { kind: 'bolt'; element: Element } // 向いた方向へ飛び、最初に当たった敵に属性のダメージ
+  | { kind: 'heal' } // すぐにHPを回復する
+  | { kind: 'regen' }; // 数ターンかけて、少しずつHPを回復する
+
+export interface SpellDef {
+  id: SpellId;
+  name: string;
+  aim: boolean;
+  effect: SpellEffect;
+}
 
 export interface ItemDef {
   id: ItemId;

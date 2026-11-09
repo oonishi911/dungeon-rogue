@@ -5,7 +5,7 @@ import { RANK_CONFIG, rankParams, upgradeCost } from '../game/rank';
 import type { ItemId, Knowledge, PrepState, ShopId } from '../game/types';
 import { Card } from './Card';
 
-const SHOP_NAME: Record<ShopId, string> = { smithy: '鍛冶屋', item: '道具屋' };
+const SHOP_NAME: Record<ShopId, string> = { smithy: '鍛冶屋', item: '道具屋', magic: '魔法屋' };
 
 export function knowledgeText(knowledge: Knowledge): string {
   if (knowledge.status === 'unknown') return 'まだ何もわからない';

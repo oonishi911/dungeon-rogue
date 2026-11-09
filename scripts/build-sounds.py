@@ -11,6 +11,7 @@
 - 乱数の種を決めているので、作り直しても同じ音になる
 - 宝箱の音（chest-open.mp3）：宝箱から中身を取ったときに鳴らす
 - 攻撃の音（attack-{武器}.mp3）：敵を攻撃したときに鳴らす。剣・槌・杖・武器なし（fist）で音を変える
+- 呪文の音（spell-{呪文}.mp3）：呪文を唱えたときに鳴らす。呪文ごとに違う音
 - 敵の攻撃の音（enemy-attack-{体質}.mp3）：敵に攻撃されたときに鳴らす。敵の体質（normal・soft・hard・spirit）で音を変え、ボスは boss の音
 - 環境音（ambient-{特性}.mp3）：ダンジョンにいるあいだ、くり返し鳴らす。最後と最初が継ぎ目なくつながる
 - 足音は特性ごとに地面を変える：無属性は土、炎は焼けて尖った細かい石、氷は雪、光は磨かれた石の神殿、闇は硬い石の洞窟
@@ -891,6 +892,165 @@ def finish_enemy(y, room):
 
 ENEMY_ATTACKS = {'normal': claw_normal, 'soft': bite_soft, 'hard': crush_hard, 'spirit': chill_spirit, 'boss': smash_boss}
 
+
+# ===== 呪文の音 =====
+# 唱えたときに1回鳴らす。どれも、唱えてすぐに効き目の音が来る（演出の光と合わせる）
+SPELL_PEAK = 0.6
+
+
+def finish_spell(y, room):
+    y = high(y, 35)
+    fade = int(0.04 * SR)
+    y[-fade:] *= np.linspace(1, 0, fade)
+    y = cave(y, 0.4, 6000, room)
+    y = y / np.max(np.abs(y)) * SPELL_PEAK
+    fade = int(0.08 * SR)
+    y[-fade:] *= np.linspace(1, 0, fade)[:, None]
+    return y
+
+
+def tone(n, f, start, decay, gain=1.0, glide=0.0):
+    """start 秒から鳴り、decay 秒で減っていく正弦波（glide で高さを少し動かす）。鳴り始めは 5ms かけて立ち上げ、ぷつっと鳴らないようにする"""
+    t = np.arange(n) / SR
+    u = np.clip(t - start, 0, None)
+    attack = np.clip(u / 0.005, 0, 1)
+    return np.sin(2 * np.pi * (f * u + 0.5 * glide * u * u)) * np.exp(-u / decay) * attack * (t >= start) * gain
+
+
+def sweep_noise(n, start, length, lo, hi, rng, steps=14):
+    """start 秒から length 秒、帯の高さを lo から hi へ動かすノイズ（なめらかに大きくなって消える）。
+    帯ごとに通したノイズを、となりの帯と重ねながら少しずつ入れ替えるので、切り替わりでぷつぷつ鳴らない"""
+    y = np.zeros(n)
+    k = int(length * SR)
+    a = int(start * SR)
+    noise = rng.standard_normal(k)
+    pos = np.linspace(0, steps - 1, k)  # 今どの帯にいるか（小数）
+    for i in range(steps):
+        c = lo * (hi / lo) ** (i / max(1, steps - 1))
+        w = np.clip(1 - np.abs(pos - i), 0, 1)  # となりの帯との重なり（三角の窓）
+        y[a:a + k] += band(noise, c * 0.7, min(c * 1.4, SR / 2 - 100)) * w
+    shape = np.zeros(n)
+    shape[a:a + k] = np.sin(np.linspace(0, np.pi, k)) ** 1.5
+    return y * shape
+
+
+def spell_shockwave():
+    """衝撃波：胸に響く低い「ドゥン」と、外へ広がる風の「ゴォッ」"""
+    rng = np.random.default_rng(71)
+    n = int(SR * 0.9)
+    t = np.arange(n) / SR
+    y = np.sin(2 * np.pi * (70 * t - 40 * t * t)) * np.exp(-t / 0.18) * 2.4
+    y += resonate(impulse(n, 0.002), [120, 210], [0.09, 0.05], [1.2, 0.6]) * 1.5
+    y += sweep_noise(n, 0.0, 0.55, 1800, 220, rng) * 1.3
+    return finish_spell(y, 0.45)
+
+
+def spell_sweep():
+    """なぎ払い：光の刃が走る鋭い「シュバッ」と、澄んだ響き"""
+    rng = np.random.default_rng(73)
+    n = int(SR * 0.6)
+    y = sweep_noise(n, 0.0, 0.2, 900, 7000, rng) * 1.5
+    y += sweep_noise(n, 0.15, 0.12, 6000, 2500, rng) * 0.6
+    for f, g in [(1760, 0.3), (2637, 0.2), (3520, 0.12)]:
+        y += tone(n, f, 0.14, 0.12, g)
+    return finish_spell(y, 0.3)
+
+
+def spell_fire_bolt():
+    """炎の矢：火が噴き出す「ボッ」と、燃えながら飛ぶ「ゴォー」、当たってはじけるパチパチ"""
+    rng = np.random.default_rng(79)
+    n = int(SR * 0.75)
+    y = sweep_noise(n, 0.0, 0.3, 500, 2600, rng) * 1.4
+    k = int(0.07 * SR)
+    y[:k] += low(rng.standard_normal(k), 600) * env(k, 0.002, 0.03) * 2.0
+    t = np.arange(n) / SR
+    pops = (rng.random(n) < 0.0016) * (t > 0.18) * (t < 0.55)
+    y += np.clip(lfilter([1, -0.9], [1], pops * rng.standard_normal(n)), -1, 1) * 0.35
+    return finish_spell(y, 0.3)
+
+
+def spell_ice_bolt():
+    """氷の矢：冷たい息のような「ヒュッ」と、氷の結晶が鳴る「キィン」、当たって砕ける「パリン」"""
+    rng = np.random.default_rng(83)
+    n = int(SR * 0.8)
+    y = sweep_noise(n, 0.0, 0.18, 2500, 8000, rng) * 0.8
+    for f, d, g in [(2349, 0.25, 0.45), (3136, 0.2, 0.35), (4699, 0.15, 0.25), (5588, 0.1, 0.15)]:
+        y += tone(n, f, 0.02, d, g)
+    t = np.arange(n) / SR
+    for i in range(10):
+        at = 0.2 + rng.random() * 0.08
+        y += tone(n, 3000 + rng.random() * 5000, at, 0.03, 0.18)
+    k = int(0.06 * SR)
+    a = int(0.2 * SR)
+    y[a:a + k] += high(rng.standard_normal(k), 4000) * env(k, 0.001, 0.015) * 0.6
+    return finish_spell(y, 0.35)
+
+
+def spell_light_lance():
+    """光の槍：明るく上がっていく「シャラーン」と、澄んだ鐘のような響き"""
+    rng = np.random.default_rng(89)
+    n = int(SR * 1.0)
+    y = np.zeros(n)
+    for i, f in enumerate([1047, 1319, 1568, 2093, 2637]):  # 上がっていく和音
+        y += tone(n, f, i * 0.025, 0.35, 0.28)
+    for f, g in [(880, 0.4), (1760, 0.2), (2794, 0.12)]:
+        y += tone(n, f, 0.0, 0.6, g)
+    y += sweep_noise(n, 0.0, 0.25, 3000, 9000, rng) * 0.35
+    return finish_spell(y, 0.45)
+
+
+def spell_dark_bolt():
+    """闇の矢：低くうなる「ヴォン」と、濁って揺れる響き"""
+    rng = np.random.default_rng(97)
+    n = int(SR * 0.9)
+    t = np.arange(n) / SR
+    wobble = 1 + 0.5 * np.sin(2 * np.pi * 11 * t)
+    y = (np.sin(2 * np.pi * 98 * t) + 0.6 * np.sin(2 * np.pi * 104 * t) + 0.4 * np.sin(2 * np.pi * 147 * t)) * np.exp(-t / 0.3) * wobble
+    y += sweep_noise(n, 0.0, 0.35, 1200, 250, rng) * 0.9
+    for f, g in [(622, 0.2), (659, 0.18)]:  # ぶつかり合う高さで不気味に
+        y += tone(n, f, 0.05, 0.3, g)
+    return finish_spell(y, 0.4)
+
+
+def spell_heal():
+    """癒し：やわらかく上がっていく分散和音と、きらめき"""
+    rng = np.random.default_rng(101)
+    n = int(SR * 1.2)
+    y = np.zeros(n)
+    for i, f in enumerate([523, 659, 784, 1047, 1319]):
+        y += tone(n, f, i * 0.07, 0.45, 0.32)
+        y += tone(n, f * 2, i * 0.07, 0.2, 0.08)
+    t = np.arange(n) / SR
+    for i in range(12):
+        y += tone(n, 3000 + rng.random() * 3000, 0.1 + rng.random() * 0.5, 0.06, 0.07)
+    return finish_spell(y, 0.45)
+
+
+def spell_regen():
+    """再生：あたたかく包むような和音が、ゆっくりふくらんで消える"""
+    rng = np.random.default_rng(103)
+    n = int(SR * 1.4)
+    t = np.arange(n) / SR
+    swell = np.sin(np.clip(t / 1.2, 0, 1) * np.pi) ** 1.2
+    y = np.zeros(n)
+    for f, g in [(392, 0.35), (494, 0.3), (587, 0.25), (784, 0.15)]:
+        y += np.sin(2 * np.pi * f * t + rng.random() * 6) * g * (1 + 0.15 * np.sin(2 * np.pi * 4.5 * t)) * swell
+    for i, f in enumerate([1175, 1568, 1976]):
+        y += tone(n, f, 0.25 + i * 0.12, 0.3, 0.1)
+    return finish_spell(y, 0.5)
+
+
+SPELL_SOUNDS = {
+    'shockwave': spell_shockwave,
+    'sweep': spell_sweep,
+    'fire_bolt': spell_fire_bolt,
+    'ice_bolt': spell_ice_bolt,
+    'light_lance': spell_light_lance,
+    'dark_bolt': spell_dark_bolt,
+    'heal': spell_heal,
+    'regen': spell_regen,
+}
+
 STEPS = {'neutral': step_neutral, 'fire': step_fire, 'ice': step_ice, 'light': step_light, 'dark': step_dark}
 
 
@@ -969,6 +1129,9 @@ def main():
     for kind, make in ENEMY_ATTACKS.items():
         write_mp3(make(), OUT / f'enemy-attack-{kind}.mp3')
         print(f'wrote public/sounds/enemy-attack-{kind}.mp3')
+    for spell, make in SPELL_SOUNDS.items():
+        write_mp3(make(), OUT / f'spell-{spell}.mp3')
+        print(f'wrote public/sounds/spell-{spell}.mp3')
     write_mp3(ambient_wind(), OUT / 'ambient-neutral.mp3')
     print('wrote public/sounds/ambient-neutral.mp3')
     write_mp3(ambient_ice(), OUT / 'ambient-ice.mp3')
