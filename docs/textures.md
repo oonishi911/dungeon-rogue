@@ -125,6 +125,14 @@ python3 scripts/build-enemy-models.py yeti   # 1体だけ作る
 ```
 
 - 絵を作り直したり `enemyViews.json` を変えたりしたら、模型も作り直す
+
+### 設定画のない敵の模型（`src/ui/creatures.ts`）
+
+設定画のない敵は、形も色もプログラムで組んだ立体の模型で描く（画像は使わない）。
+
+- 組み立て方：闇のダンジョンの敵は `src/ui/creaturesDark.ts`、ほかは `src/ui/creaturesWorld.ts`。似た体つきの敵は同じ組み立て方を使い、色や大きさを変える（小鬼・猟犬・鬼・ゴーレム・甲冑）
+- 道具（形の部品、表面の凹凸、光る目、羽、素材）は `src/ui/creatureKit.ts`
+- 敵を足すときは、組み立て方を書いて `DARK_BUILDERS` か `WORLD_BUILDERS` に加える。そこにない敵は、今までどおり絵の板で描く
 - 模型が読み込めなければ、絵の板で描く
 
 ## 画像から作る（`scripts/build-photo-textures.py`）
