@@ -29,7 +29,7 @@
 
 ## 写真から作った敵の絵
 
-- 写真から作った敵の絵（`public/textures/enemies/`、`docs/textures.md`）は、管理画面では足せない。写真の切り抜きはプログラム（`scripts/build-enemy-textures.py`）で行い、`src/ui/explore3d.ts` の `ENEMY_PHOTOS` に書く。正面・側面・背面の設定画から作った敵は `ENEMY_VIEWS` に書き、敵の向きで絵を切り替える（`docs/textures.md`）
+- 写真から作った敵の絵（`public/textures/enemies/`、`docs/textures.md`）は、管理画面では足せない。写真の切り抜きはプログラム（`scripts/build-enemy-textures.py`）で行い、`src/ui/explore3d.ts` の `ENEMY_PHOTOS` に書く。正面・側面・背面の設定画から作った敵は `src/ui/enemyViews.json` に書き、立体の模型で描く（`docs/textures.md`）
 - 写真の絵がない敵は、データの見た目（ドット絵）で描く。写真の絵がある敵を消しても、絵のファイルは残る（使われないだけ）
 
 ## テスト

@@ -108,8 +108,24 @@ python3 scripts/build-enemy-textures.py ogre_chief # 1体だけ作る
 
 - スクリプトの `SUBJECTS` には、向きごとに `敵のID-front` のような名前で書き、`source` に元の設定画の名前を書く
 - 設定画のラベル文字や寸法の線が体に重なっているところは `inpaint`（まわりの模様で埋めて消す）、背景と体の色が近い敵は `tight`（形を囲んで外は確実に背景とする）、明るい紙のような背景は `light_bg` で除く
-- `src/ui/explore3d.ts` の `ENEMY_VIEWS` に、向きごとの `aspect`・`footX` と、スクリプトが表示する `source px`（元の設定画での絵の高さ）を書く。向きを変えても大きさが変わらないよう、正面の高さに `source px` の比を掛けて、ほかの向きの高さを決める
+- `src/ui/enemyViews.json` に、向きごとの `aspect`・`footX` と、スクリプトが表示する `source px`（元の設定画での絵の高さ）を書く。向きを変えても大きさが変わらないよう、正面の高さに `source px` の比を掛けて、ほかの向きの高さを決める
 - 3つの向きの絵がすべて読み込めたときだけ使う。読み込めなければドット絵のまま
+
+### 立体の模型にする（`scripts/build-enemy-models.py`）
+
+向きのある敵は、3枚の絵を板として切り替える代わりに、立体の模型で描く。模型の表面には、同じ3枚の絵を投影して貼る（`src/ui/projectedSkin.ts`）。
+
+- トロルは、体の各部を手で組んだ模型（`src/ui/troll3d.ts`）。腕を振り、息をする
+- ほかの6体は、正面と側面（と背面）の絵の輪郭から形を削り出した模型（`public/models/enemies/{敵のID}.bin`、`src/ui/enemyModel.ts`）。体全体で、歩く・浮かぶ・弾むように動く（`src/ui/explore3d.ts` の `SHAPED_ENEMIES`）
+
+```bash
+pip install pillow numpy scipy scikit-image
+python3 scripts/build-enemy-models.py        # すべて作る
+python3 scripts/build-enemy-models.py yeti   # 1体だけ作る
+```
+
+- 絵を作り直したり `enemyViews.json` を変えたりしたら、模型も作り直す
+- 模型が読み込めなければ、絵の板で描く
 
 ## 画像から作る（`scripts/build-photo-textures.py`）
 
