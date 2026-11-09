@@ -92,6 +92,25 @@ python3 scripts/build-enemy-textures.py ogre_chief # 1体だけ作る
 - 画面ではドット絵と同じく、カメラの方を向けた板に貼り、たいまつの光と霧をかける。絵の大きさと、足元（マスの中心に置く位置）は `src/ui/explore3d.ts` の `ENEMY_PHOTOS` で決める
 - 新しい敵を足すときは、`SUBJECTS` と `ENEMY_PHOTOS` の両方に書き足す。スクリプトが表示する `aspect`（絵の横:縦）と `footX`（足元の位置）を `ENEMY_PHOTOS` に書く
 
+### 向きのある敵（正面・側面・背面の設定画から作る）
+
+正面・側面・背面が1枚に並んだ設定画からは、向きごとに3枚の絵を切り抜く（`{敵のID}-front.png`・`-side.png`・`-back.png`）。画面では、敵が歩いた向き（止まっているときは、追っている主人公の方）に合わせて絵を切り替える。下へ向くと正面、上へ向くと背面、左右は側面（側面の絵は左を向いているので、右を向くときは左右を反転する）。
+
+| 敵 | 元の設定画 | 正面の画面での高さ |
+|---|---|---|
+| 溶岩スライム（`lava_slime`） | `assets/texture-sources/enemies/lava_slime.jpg` | 0.8マス |
+| 岩鬼イワオ（`iwao`） | `assets/texture-sources/enemies/iwao.jpg` | 1.25マス |
+| レイス（`wraith`） | `assets/texture-sources/enemies/wraith.jpg` | 1.1マス |
+| トロル（`troll`） | `assets/texture-sources/enemies/troll.jpg` | 1.2マス |
+| イエティ（`yeti`） | `assets/texture-sources/enemies/yeti.jpg` | 1.15マス |
+| 暗黒騎士（`dark_knight`） | `assets/texture-sources/enemies/dark_knight.jpg` | 1.15マス |
+| 聖騎士（`holy_knight`） | `assets/texture-sources/enemies/holy_knight.jpg` | 1.15マス |
+
+- スクリプトの `SUBJECTS` には、向きごとに `敵のID-front` のような名前で書き、`source` に元の設定画の名前を書く
+- 設定画のラベル文字や寸法の線が体に重なっているところは `inpaint`（まわりの模様で埋めて消す）、背景と体の色が近い敵は `tight`（形を囲んで外は確実に背景とする）、明るい紙のような背景は `light_bg` で除く
+- `src/ui/explore3d.ts` の `ENEMY_VIEWS` に、向きごとの `aspect`・`footX` と、スクリプトが表示する `source px`（元の設定画での絵の高さ）を書く。向きを変えても大きさが変わらないよう、正面の高さに `source px` の比を掛けて、ほかの向きの高さを決める
+- 3つの向きの絵がすべて読み込めたときだけ使う。読み込めなければドット絵のまま
+
 ## 画像から作る（`scripts/build-photo-textures.py`）
 
 端どうしがつながる（並べても継ぎ目が出ない）正方形の画像1枚から、3枚をまとめて作る。
