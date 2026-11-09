@@ -423,6 +423,159 @@
         "exp": 0,
         "drop": 0
       }
+    },
+    "lava_slime": {
+      "name": "溶岩スライム",
+      "hp": 18,
+      "atk": 13,
+      "def": 0,
+      "element": "fire",
+      "body": "soft",
+      "look": {
+        "sprite": "poison_slime",
+        "recolor": {
+          "L": "#ffb36a",
+          "U": "#e0562e",
+          "u": "#7a1e12"
+        }
+      },
+      "reward": {
+        "gold": 7,
+        "exp": 6,
+        "drop": 10
+      }
+    },
+    "iwao": {
+      "name": "岩鬼イワオ",
+      "hp": 26,
+      "atk": 11,
+      "def": 3,
+      "element": "neutral",
+      "body": "hard",
+      "look": {
+        "sprite": "fire_drake",
+        "recolor": {
+          "F": "#8a8780",
+          "O": "#5f5c56",
+          "R": "#3f3d3a",
+          "r": "#e0662e"
+        }
+      },
+      "reward": {
+        "gold": 8,
+        "exp": 7,
+        "drop": 10
+      }
+    },
+    "wraith": {
+      "name": "レイス",
+      "hp": 18,
+      "atk": 15,
+      "def": 1,
+      "element": "dark",
+      "body": "spirit",
+      "look": {
+        "sprite": "fire_imp",
+        "recolor": {
+          "F": "#9fb4d8",
+          "O": "#5a5f86",
+          "R": "#3a3c5e",
+          "r": "#24263e"
+        }
+      },
+      "reward": {
+        "gold": 8,
+        "exp": 7,
+        "drop": 10
+      }
+    },
+    "troll": {
+      "name": "トロル",
+      "hp": 20,
+      "atk": 9,
+      "def": 1,
+      "element": "neutral",
+      "body": "normal",
+      "look": {
+        "sprite": "goblin",
+        "recolor": {
+          "g": "#6f8a4a",
+          "G": "#465a2e"
+        }
+      },
+      "reward": {
+        "gold": 5,
+        "exp": 6,
+        "drop": 10
+      }
+    },
+    "yeti": {
+      "name": "イエティ",
+      "hp": 20,
+      "atk": 14,
+      "def": 1,
+      "element": "ice",
+      "body": "normal",
+      "look": {
+        "sprite": "goblin",
+        "recolor": {
+          "g": "#d8e2ea",
+          "G": "#8fa3b4"
+        }
+      },
+      "reward": {
+        "gold": 8,
+        "exp": 7,
+        "drop": 10
+      }
+    },
+    "dark_knight": {
+      "name": "暗黒騎士",
+      "hp": 22,
+      "atk": 15,
+      "def": 3,
+      "element": "dark",
+      "body": "hard",
+      "look": {
+        "sprite": "venom_queen",
+        "recolor": {
+          "U": "#4a4a52",
+          "u": "#2e2e34",
+          "V": "#1e1e24",
+          "v": "#121216",
+          "E": "#e03a3a",
+          "Z": "#6a6a74"
+        }
+      },
+      "reward": {
+        "gold": 9,
+        "exp": 7,
+        "drop": 10
+      }
+    },
+    "holy_knight": {
+      "name": "聖騎士",
+      "hp": 24,
+      "atk": 14,
+      "def": 3,
+      "element": "light",
+      "body": "hard",
+      "look": {
+        "sprite": "venom_queen",
+        "recolor": {
+          "U": "#d8dde4",
+          "u": "#a9b2bf",
+          "V": "#7c8696",
+          "v": "#4c5462",
+          "E": "#f7e27a",
+          "Z": "#fff6c8"
+        }
+      },
+      "reward": {
+        "gold": 9,
+        "exp": 8,
+        "drop": 10
+      }
     }
   },
   "dungeons": {
@@ -434,7 +587,8 @@
         "flame_hound",
         "flame_hound",
         "lava_lizard",
-        "goblin"
+        "goblin",
+        "lava_slime"
       ],
       "boss": "flame_beast"
     },
@@ -445,7 +599,8 @@
         "ice_beetle",
         "ice_beetle",
         "ice_beetle",
-        "goblin"
+        "goblin",
+        "yeti"
       ],
       "boss": "ice_colossus"
     },
@@ -456,7 +611,9 @@
         "giant_rat",
         "giant_rat",
         "stone_golem",
-        "stone_golem"
+        "stone_golem",
+        "troll",
+        "iwao"
       ],
       "boss": "ogre_chief"
     },
@@ -468,7 +625,8 @@
         "holy_armor",
         "light_wisp",
         "fire_imp",
-        "stone_golem"
+        "stone_golem",
+        "holy_knight"
       ],
       "boss": "light_guardian"
     },
@@ -480,7 +638,9 @@
         "phantom",
         "phantom",
         "ice_imp",
-        "giant_rat"
+        "giant_rat",
+        "wraith",
+        "dark_knight"
       ],
       "boss": "dark_lord"
     }
