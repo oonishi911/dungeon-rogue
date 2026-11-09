@@ -6,7 +6,8 @@
 // - 床と壁には、ダンジョン特性ごとのテクスチャ（public/textures/{特性}.png）を貼る。読み込むまでは色で描く
 // - 霧：まだ見ていないマスは描かない。一度見たマスは暗く、今見えているマスは明るく描く
 // - 主人公は立体の模型（hero3d.ts）。設定画から作った敵も立体の模型（トロルは troll3d.ts、ほかは enemyModel.ts）。
-//   ほかの敵と宝箱は、絵を常にカメラを向く板（スプライト）として立てる
+//   設定画のない闇のダンジョンの敵は、形から組み立てた模型（creature3d.ts）。
+//   闇のダンジョンの、設定画のない敵は、形も色もプログラムで組んだ模型（creatures.ts）。ほかの敵と宝箱は、絵を常にカメラを向く板（スプライト）として立てる
 
 import * as THREE from 'three';
 import { ITEMS } from '../game/data';
@@ -21,7 +22,9 @@ import { floorVariant } from './autotile';
 import { ENEMY_MARK, lerp, type Frame } from './exploreRender';
 import { Hero3D } from './hero3d';
 import enemyViewsJson from './enemyViews.json';
+import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { enemySkin, parseEnemyShape, ShapedEnemy, type EnemyMotion } from './enemyModel';
+import { CREATURES } from './creature3d';
 import { Troll3D } from './troll3d';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
@@ -146,7 +149,14 @@ interface Atlas {
 
 /** from から to を見たときの向き（離れていてもよい。縦と横で、差の大きい方の向き） */
 /** 立体の模型で描く敵。模型は、その敵の正面・側面・背面の絵（ENEMY_VIEWS）を表面に投影して貼るので、絵が読み込めてから作る */
-type EnemyModel = { root: THREE.Object3D; update(x: number, z: number, dir: Dir, walking: boolean, dt: number): void; dispose(): void };
+type EnemyModel = {
+  root: THREE.Object3D;
+  height?: number; // 頭のてっぺんの高さ（マス）
+  update(x: number, z: number, dir: Dir, walking: boolean, dt: number): void;
+  dispose(): void;
+};
+/** 設定画がなく、形も色もプログラムで組んだ模型（creatures.ts）の敵か */
+const isCreature = (id: EnemyId): id is EnemyId & CreatureId => (CREATURE_IDS as readonly string[]).includes(id);
 /** 手で組んだ模型（腕や頭が動く） */
 const ENEMY_MODELS: Partial<Record<EnemyId, { make: (textures: Record<ViewSide, THREE.Texture>, wrap: <T extends THREE.Material>(m: T, name: string) => T) => EnemyModel }>> = {
   troll: { make: (textures, wrap) => new Troll3D(textures, wrap) },
@@ -942,7 +952,7 @@ export class DungeonView3D {
           body = mesh;
         }
         if (ring) ring.receiveShadow = true;
-        const top = model ? (ENEMY_VIEWS[e.id]?.height ?? 1) + (SHAPED_ENEMIES[e.id] === 'float' ? FLOAT_HEIGHT : 0) : (photo?.top ?? 1);
+        const top = model ? (CREATURES[e.id]?.height ?? ENEMY_VIEWS[e.id]?.height ?? 1) + (SHAPED_ENEMIES[e.id] === 'float' ? FLOAT_HEIGHT : 0) : (photo?.top ?? 1);
         view = { id: e.id, body, model, mark: new THREE.Sprite(), hp: new THREE.Sprite(), ring, top, facing: 'down' };
         this.scene.add(view.body, view.mark, view.hp);
         if (ring) this.scene.add(ring);
@@ -985,6 +995,9 @@ export class DungeonView3D {
 
   /** 立体の模型で描く敵なら、模型を作る（向きごとの絵がまだ読み込めていなければ null） */
   private makeEnemyModel(id: EnemyId): EnemyModel | null {
+    if (isCreature(id)) return new Creature(id, (m, name) => applyFog(m, this.fog, 'darken', name));
+    const creature = CREATURES[id];
+    if (creature) return creature.make((m, name) => applyFog(m, this.fog, 'darken', name));
     const shape = this.shapes.get(id);
     const motion = SHAPED_ENEMIES[id];
     if (shape && motion) return new ShapedEnemy(shape.geometry, shape.material, this.modelShadow, motion);
