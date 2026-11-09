@@ -12,5 +12,13 @@
     "nestMin": 3,
     "nestMax": 5,
     "stayInRoom": false
+  },
+  "growth": {
+    "expBase": 30,
+    "expStep": 20,
+    "hpPerLevel": 2,
+    "atkPerLevel": 1,
+    "maxLevel": 10,
+    "eliteRate": 3
   }
 }

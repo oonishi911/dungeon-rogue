@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { enemyHitDamage, playerHitDamage } from './combat';
-import { enemyBase, TRAIT_ENEMIES, TREASURE_CONFIG } from './data';
+import { enemyBase, enemyReward, expToNext, PREP_CONFIG, REWARD_CONFIG, TRAIT_ENEMIES, TREASURE_CONFIG } from './data';
+import { rankParams } from './rank';
 import { BOSS_ENEMY, FIELD_ENEMY } from './enemies.fixtures';
 import { ENEMY_CONFIG, enemyDef, key, spawnBoss, type MapEnemy } from './enemies';
 import { startExplore, step, type ExploreAction, type ExploreState } from './explore';
@@ -217,12 +218,59 @@ describe('属性付与と攻撃', () => {
 });
 
 describe('報酬とボス', () => {
-  it('強敵を倒すと金貨を落とす', () => {
+  it('通常の敵を倒すと、敵ごとの金貨と経験値が入る', () => {
+    const s = act(arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { hp: 1 })]), { kind: 'move', dir: 'right' });
+    const reward = enemyReward(FIELD_ENEMY);
+    expect(s.gold).toBe(Math.round(reward.gold * rankParams(1).chestGoldRate));
+    expect(s.exp).toBe(reward.exp);
+    expect(s.level).toBe(1);
+  });
+
+  it('経験値がたまるとレベルが上がり、最大HPと攻撃力が上がる（上がった分だけHPも回復する）', () => {
+    const s0 = arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { hp: 1 })]);
+    const before = { ...s0, exp: expToNext(1) - 1, stats: { ...s0.stats, hp: 10 } };
+    const s = act(before, { kind: 'move', dir: 'right' });
+    expect(s.level).toBe(2);
+    expect(s.stats.maxHp).toBe(s0.stats.maxHp + REWARD_CONFIG.hpPerLevel);
+    expect(s.stats.atk).toBe(s0.stats.atk + REWARD_CONFIG.atkPerLevel);
+    expect(s.stats.hp).toBe(10 + REWARD_CONFIG.hpPerLevel);
+    expect(s.log.some((l) => l.includes('レベル2に上がった'))).toBe(true);
+  });
+
+  it('通常の敵は、ときどき回復薬か食料を落とし、持ち物に入る。持ち物がいっぱいなら宝箱で残す', () => {
+    // 落とすかどうかは乱数なので、落とすまでシードを変えて試す
+    let dropped: ExploreState | null = null;
+    let full: ExploreState | null = null;
+    for (let seed = 0; seed < 400 && !(dropped && full); seed++) {
+      const s0 = { ...arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { hp: 1 })]), rngState: seed };
+      const s = act(s0, { kind: 'move', dir: 'right' });
+      if (!dropped && s.stats.items.length > s0.stats.items.length) dropped = s;
+      const packed = { ...s0, stats: { ...s0.stats, items: new Array(PREP_CONFIG.maxItems).fill('potion') } };
+      const f = act(packed, { kind: 'move', dir: 'right' });
+      if (!full && f.chests.some((c) => c.pos.x === 2 && c.pos.y === 2)) full = f;
+    }
+    expect(dropped).not.toBeNull();
+    expect(REWARD_CONFIG.dropItems).toContain(dropped!.stats.items.at(-1));
+    expect(full).not.toBeNull();
+    const left = full!.chests.find((c) => c.pos.x === 2 && c.pos.y === 2)!;
+    expect(left.opened).toBe(false);
+    expect(REWARD_CONFIG.dropItems).toContain(left.item);
+  });
+
+  it('強敵を倒すと、金貨と経験値が多く入り、必ず宝箱（金貨と良い道具）を落とす', () => {
     const s = act(arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { elite: true, hp: 1 })]), {
       kind: 'move',
       dir: 'right',
     });
-    expect(s.gold).toBe(TREASURE_CONFIG.eliteGold);
+    const reward = enemyReward(FIELD_ENEMY);
+    expect(s.gold).toBe(Math.round(reward.gold * REWARD_CONFIG.elite * rankParams(1).chestGoldRate));
+    const chest = s.chests.find((c) => c.pos.x === 2 && c.pos.y === 2);
+    expect(chest).toMatchObject({ gold: TREASURE_CONFIG.eliteGold, opened: false });
+    expect(REWARD_CONFIG.eliteItems).toContain(chest!.item);
+    // 宝箱に乗ると中身を取る
+    const opened = act(s, { kind: 'move', dir: 'right' });
+    expect(opened.gold).toBe(s.gold + TREASURE_CONFIG.eliteGold);
+    expect(opened.stats.items).toContain(chest!.item);
   });
 
   it('ボスを倒すと報酬が出て、ダンジョンを踏破する', () => {

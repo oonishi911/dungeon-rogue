@@ -1,6 +1,7 @@
-// ダンジョン生成の設定（src/game/dungeonGen.json）を読み、正しい形かを確かめる。
+// ダンジョンの設定（src/game/dungeonGen.json）を読み、正しい形かを確かめる。
 // dungeonGen.json は、開発用の管理画面（?view=gen、src/ui/GenAdmin.tsx）から書き換えて公開できる。
-// rooms は小部屋の多さと大きさ、enemies は敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋など）。
+// rooms は小部屋の多さと大きさ、enemies は敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋など）、
+// growth は敵を倒したときのレベルの上がり方と強敵の報酬の倍率。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
 
 import raw from './dungeonGen.json';
@@ -28,9 +29,20 @@ export interface EnemySettings {
   stayInRoom: boolean; // 部屋に置いた敵は、主人公に気付くまで部屋の中だけを歩く
 }
 
+/** 敵を倒したときのレベルの上がり方と、強敵の報酬の倍率（data.ts の REWARD_CONFIG） */
+export interface GrowthSettings {
+  expBase: number; // レベル1→2に必要な経験値
+  expStep: number; // レベルが1上がるごとに、次に必要な経験値が増える量
+  hpPerLevel: number; // 1レベルで増える最大HP（上がった分だけHPも回復する）
+  atkPerLevel: number; // 1レベルで増える攻撃力
+  maxLevel: number; // レベルの上限
+  eliteRate: number; // 強敵を倒したときの金貨と経験値の倍率
+}
+
 export interface GenSettings {
   rooms: RoomSettings;
   enemies: EnemySettings;
+  growth: GrowthSettings;
 }
 
 /** 値の範囲（管理画面の入力欄も、この範囲にする）。step は管理画面で1回に動かす量 */
@@ -41,6 +53,12 @@ export const GEN_LIMITS = {
   weight: { min: 0, max: 10, step: 0.5 },
   nestChance: { min: 0, max: 1, step: 0.05 },
   nestCount: { min: 1, max: 12, step: 1 },
+  expBase: { min: 1, max: 999, step: 1 },
+  expStep: { min: 0, max: 999, step: 1 },
+  hpPerLevel: { min: 0, max: 50, step: 1 },
+  atkPerLevel: { min: 0, max: 10, step: 1 },
+  maxLevel: { min: 1, max: 99, step: 1 },
+  eliteRate: { min: 0, max: 10, step: 0.5 },
 } as const;
 
 /** 項目の名前（管理画面と、変更の説明で使う） */
@@ -55,12 +73,18 @@ export const GEN_LABELS = {
   nestMin: '群れの敵の数（最小）',
   nestMax: '群れの敵の数（最大）',
   stayInRoom: '部屋の敵は部屋から出ない',
+  expBase: '最初のレベルアップに要る経験値',
+  expStep: '1レベルごとに増える必要経験値',
+  hpPerLevel: '1レベルで増える最大HP',
+  atkPerLevel: '1レベルで増える攻撃',
+  maxLevel: 'レベルの上限',
+  eliteRate: '強敵の金貨と経験値の倍率',
 } as const;
 
 /** 形のおかしいところを、すべて日本語の文で返す（なければ空） */
 export function genProblems(data: unknown): string[] {
   const problems: string[] = [];
-  if (!isObject(data) || !isObject(data.rooms) || !isObject(data.enemies)) return ['rooms と enemies がない'];
+  if (!isObject(data) || !isObject(data.rooms) || !isObject(data.enemies) || !isObject(data.growth)) return ['rooms と enemies と growth がない'];
   const { rooms, enemies } = data;
   const num = (v: unknown, label: string, lim: { min: number; max: number }) => {
     if (typeof v !== 'number' || !Number.isFinite(v) || v < lim.min || v > lim.max) problems.push(`${label}：${lim.min}〜${lim.max}の数にする`);
@@ -86,6 +110,12 @@ export function genProblems(data: unknown): string[] {
   if (typeof enemies.nestMin === 'number' && typeof enemies.nestMax === 'number' && enemies.nestMin > enemies.nestMax) {
     problems.push('群れの敵の数：最小を最大以下にする');
   }
+  const { growth } = data;
+  for (const k of ['expBase', 'expStep', 'hpPerLevel', 'atkPerLevel', 'maxLevel'] as const) {
+    num(growth[k], GEN_LABELS[k], GEN_LIMITS[k]);
+    if (typeof growth[k] === 'number' && !Number.isInteger(growth[k])) problems.push(`${GEN_LABELS[k]}：整数にする`);
+  }
+  num(growth.eliteRate, GEN_LABELS.eliteRate, GEN_LIMITS.eliteRate);
   if (typeof enemies.stayInRoom !== 'boolean') problems.push(`${GEN_LABELS.stayInRoom}：true か false にする`);
   return problems;
 }
@@ -106,7 +136,7 @@ export function describeGenChanges(before: GenSettings, after: GenSettings): str
   const out: string[] = [];
   const show = (v: number | boolean | string) =>
     typeof v === 'boolean' ? (v ? 'する' : 'しない') : typeof v === 'string' ? (PLACEMENT_LABELS[v as Placement] ?? v) : String(v);
-  for (const group of ['rooms', 'enemies'] as const) {
+  for (const group of ['rooms', 'enemies', 'growth'] as const) {
     const a = before[group] as unknown as Record<string, number | boolean | string>;
     const b = after[group] as unknown as Record<string, number | boolean | string>;
     for (const k of Object.keys(b)) {

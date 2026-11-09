@@ -3,7 +3,7 @@
 // ほかのロジックと同じく、状態を受け取り新しい状態を返す純粋関数でできている。
 
 import { buildPlayer, enemyHitDamage, playerHitDamage } from './combat';
-import { COMBAT_CONFIG, ITEMS, PREP_CONFIG, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
+import { COMBAT_CONFIG, enemyReward, expToNext, ITEMS, PREP_CONFIG, REWARD_CONFIG, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
 import {
   ENEMY_CONFIG,
   enemyDef,
@@ -91,6 +91,8 @@ export interface ExploreState {
   hasMap: boolean; // 地図があれば、各階の入口から階段までの道筋が最初から見える
   nextUid: number;
   defeated: number; // 倒した敵の数
+  level: number; // この挑戦のあいだのレベル（1から。敵を倒して経験値がたまると上がる）
+  exp: number; // 今のレベルになってからためた経験値（expToNext(level) で次のレベル）
   seen: boolean[]; // この階で一度でも見えたマス（霧が晴れた場所）
   turn: number; // 行動した回数
   rngState: number;
@@ -148,6 +150,8 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     hasMap: options.hasMap ?? false,
     nextUid: 0,
     defeated: 0,
+    level: 1,
+    exp: 0,
     seen: [],
     turn: 0,
     rngState: traitRoll.state,
@@ -390,6 +394,68 @@ function useItem(state: ExploreState, itemId: ItemId): Result<ExploreState> {
   }
 }
 
+// ===== 敵を倒したときの報酬 =====
+
+/**
+ * 通常の敵・強敵を倒したときの報酬：金貨、経験値（レベルアップ）、道具。
+ * 道具は持ち物に入れ、いっぱいなら倒した場所に宝箱で残す。強敵は必ず宝箱を落とす（金貨と良い道具が入っている）
+ */
+function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
+  const reward = enemyReward(enemy.id);
+  const rate = enemy.elite ? REWARD_CONFIG.elite : 1;
+  const log = [...state.log];
+  let s = state.rngState;
+  let { stats } = state;
+  let chests = state.chests;
+
+  const gold = Math.round(reward.gold * rate * rankParams(state.rank).chestGoldRate);
+  if (gold > 0) log.push(`金貨${gold}Gを手に入れた`);
+
+  // 道具：強敵は必ず宝箱で、通常の敵は確率で落とす
+  let item: ItemId | null = null;
+  const items = enemy.elite ? REWARD_CONFIG.eliteItems : REWARD_CONFIG.dropItems;
+  if (enemy.elite || reward.drop > 0) {
+    const roll = nextRandom(s);
+    const pick = nextInt(roll.state, items.length);
+    s = pick.state;
+    if (enemy.elite || roll.value * 100 < reward.drop) item = items[pick.value]!;
+  }
+  if (item && !enemy.elite && stats.items.length < PREP_CONFIG.maxItems) {
+    stats = { ...stats, items: [...stats.items, item] };
+    log.push(`${ITEMS[item].name}を手に入れた`);
+    item = null;
+  }
+  const chestGold = enemy.elite ? TREASURE_CONFIG.eliteGold : 0;
+  if (item || chestGold > 0) {
+    // 宝箱で残す（すでに宝箱があるマスなら、その宝箱に入れる）
+    const here = chests.find((c) => samePos(c.pos, enemy.pos));
+    if (here) {
+      chests = chests.map((c) => (c === here ? { ...c, gold: c.gold + chestGold, item: c.item ?? item, opened: false } : c));
+    } else {
+      chests = [...chests, { pos: enemy.pos, gold: chestGold, item, opened: false }];
+    }
+    log.push(enemy.elite ? '宝箱を落とした' : `${ITEMS[item!].name}を落としたが、持ち物がいっぱいなので宝箱に残した`);
+  }
+
+  // 経験値とレベルアップ
+  let { level, exp } = state;
+  exp += Math.round(reward.exp * rate);
+  while (level < REWARD_CONFIG.maxLevel && exp >= expToNext(level)) {
+    exp -= expToNext(level);
+    level++;
+    stats = {
+      ...stats,
+      maxHp: stats.maxHp + REWARD_CONFIG.hpPerLevel,
+      hp: stats.hp + REWARD_CONFIG.hpPerLevel,
+      atk: stats.atk + REWARD_CONFIG.atkPerLevel,
+    };
+    log.push(`レベル${level}に上がった（最大HP+${REWARD_CONFIG.hpPerLevel}、攻撃+${REWARD_CONFIG.atkPerLevel}）`);
+  }
+  if (level >= REWARD_CONFIG.maxLevel) exp = 0;
+
+  return { ...state, gold: state.gold + gold, stats, chests, level, exp, rngState: s, log };
+}
+
 // ===== プレイヤーの攻撃 =====
 
 /** 体当たりで攻撃する。気付いていない敵なら不意打ちになる */
@@ -411,24 +477,13 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
 
   if (hp <= 0) {
     log.push(`${def.name}を倒した`);
-    let gold = state.gold;
+    const defeated = { ...state, stats, enemies: state.enemies.filter((e) => e.uid !== target.uid), defeated: state.defeated + 1 };
     if (def.boss) {
       const reward = rankParams(state.rank).bossGold;
-      gold += reward;
       log.push(`報酬として金貨${reward}Gを手に入れた`, 'ダンジョンを踏破した');
-    } else if (target.elite) {
-      gold += TREASURE_CONFIG.eliteGold;
-      log.push(`金貨${TREASURE_CONFIG.eliteGold}Gを手に入れた`);
+      return { ...defeated, gold: state.gold + reward, outcome: 'cleared', log };
     }
-    return {
-      ...state,
-      stats,
-      gold,
-      enemies: state.enemies.filter((e) => e.uid !== target.uid),
-      defeated: state.defeated + 1,
-      outcome: def.boss ? 'cleared' : state.outcome,
-      log,
-    };
+    return defeatReward({ ...defeated, log }, target);
   }
   // 攻撃された敵はこちらに気付く
   const hit: MapEnemy = { ...target, hp, mode: 'chase', justNoticed: surprise, lastSeen: state.player };

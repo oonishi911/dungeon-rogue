@@ -13,7 +13,8 @@ import type {
   WeaponType,
 } from './types';
 import enemyMasterJson from './enemies.json';
-import { enemyDefs, parseEnemyMaster } from './enemyMaster';
+import { enemyDefs, enemyRewards, parseEnemyMaster, type EnemyReward } from './enemyMaster';
+import { GEN_SETTINGS } from './genMaster';
 
 // ===== MVPの設定値 =====
 // 数値は仮。遊んでみてバランス調整する。
@@ -263,6 +264,12 @@ export const ENCHANT_VS_ELEMENT: Record<Element, Partial<Record<Element, number>
 // ボスを少し弱くしている
 export const ENEMY_MASTER = parseEnemyMaster(enemyMasterJson);
 export const ENEMIES: Record<EnemyId, EnemyDef> = enemyDefs(ENEMY_MASTER);
+const ENEMY_REWARDS: Record<EnemyId, EnemyReward> = enemyRewards(ENEMY_MASTER);
+
+/** 倒したときの報酬（enemies.json の reward）。データにない敵なら何も落とさない */
+export function enemyReward(id: EnemyId): EnemyReward {
+  return ENEMY_REWARDS[id] ?? { gold: 0, exp: 0, drop: 0 };
+}
 
 /** 敵の能力（data の値。ボス以外はゲームの中で弱める前の値）。データにない敵の ID ならエラーにする */
 export function enemyBase(id: EnemyId): EnemyDef {
@@ -299,7 +306,33 @@ export const TREASURE_CONFIG = {
   goldPerDepth: 5, // 宝箱の金貨＝本道からの距離×これ
   itemChance: 0.5, // 宝箱に道具が入っている確率
   items: ['potion', 'food', 'fire_whetstone', 'ice_whetstone', 'holy_water', 'dark_oil'] as readonly ItemId[],
-  eliteGold: 30, // 強敵を倒すと落とす金貨
+  eliteGold: 30, // 強敵を倒すと落とす宝箱に入っている金貨（敵ごとの金貨とは別）
   bossGold: 50, // ボスを倒したときの報酬
   keepOnDefeat: 0.5, // 力尽きたときに持ち帰れる金貨の割合
 } as const;
+
+/**
+ * 敵を倒したときの報酬と、挑戦のあいだだけのレベル（数値はすべて仮。バランステストを満たすように調整する）。
+ * - 金貨：敵ごとの金貨（enemies.json の reward.gold）に、ランクの宝箱の倍率（chestGoldRate）を掛ける
+ * - 道具：敵ごとの確率（reward.drop %）で、dropItems のどれかを落とす。持ち物がいっぱいなら、その場に宝箱で残す
+ * - 強敵：金貨と経験値は elite 倍。さらに必ず宝箱を落とし、eliteGold の金貨と eliteItems のどれかが入っている
+ * - 経験値：たまるとレベルが上がり、最大HPと攻撃力が上がる（上がった分だけHPも回復する）。挑戦が終わると1に戻る
+ */
+// レベルの上がり方と強敵の倍率は、管理画面（?view=gen）で変えられる設定（dungeonGen.json の growth）にある。
+// 自動プレイのバランステスト（外れた準備でクリアできすぎない）を満たす範囲にする。満たさないと公開されない。
+// 無属性のダンジョンの外れた準備は、報酬なしで77.5%、今の値で87.5%（上限90%）
+export const REWARD_CONFIG = {
+  dropItems: ['potion', 'food'] as readonly ItemId[],
+  elite: GEN_SETTINGS.growth.eliteRate,
+  eliteItems: ['potion', 'food', 'fire_whetstone', 'ice_whetstone', 'holy_water', 'dark_oil'] as readonly ItemId[],
+  expBase: GEN_SETTINGS.growth.expBase, // レベル1→2に必要な経験値
+  expStep: GEN_SETTINGS.growth.expStep, // レベルが1上がるごとに、次に必要な経験値が増える量
+  hpPerLevel: GEN_SETTINGS.growth.hpPerLevel,
+  atkPerLevel: GEN_SETTINGS.growth.atkPerLevel,
+  maxLevel: GEN_SETTINGS.growth.maxLevel,
+};
+
+/** レベル level から次のレベルに上がるのに必要な経験値 */
+export function expToNext(level: number): number {
+  return REWARD_CONFIG.expBase + REWARD_CONFIG.expStep * (level - 1);
+}

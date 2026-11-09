@@ -9,6 +9,11 @@
       "body": "normal",
       "look": {
         "sprite": "goblin"
+      },
+      "reward": {
+        "gold": 4,
+        "exp": 4,
+        "drop": 10
       }
     },
     "giant_rat": {
@@ -26,6 +31,11 @@
           "R": "#6a5038",
           "r": "#3a2e24"
         }
+      },
+      "reward": {
+        "gold": 3,
+        "exp": 3,
+        "drop": 10
       }
     },
     "stone_golem": {
@@ -43,6 +53,11 @@
           "R": "#7d786b",
           "r": "#55514a"
         }
+      },
+      "reward": {
+        "gold": 7,
+        "exp": 6,
+        "drop": 10
       }
     },
     "fire_imp": {
@@ -54,6 +69,11 @@
       "body": "normal",
       "look": {
         "sprite": "fire_imp"
+      },
+      "reward": {
+        "gold": 5,
+        "exp": 5,
+        "drop": 10
       }
     },
     "flame_hound": {
@@ -65,6 +85,11 @@
       "body": "soft",
       "look": {
         "sprite": "flame_hound"
+      },
+      "reward": {
+        "gold": 7,
+        "exp": 6,
+        "drop": 10
       }
     },
     "lava_lizard": {
@@ -76,6 +101,11 @@
       "body": "hard",
       "look": {
         "sprite": "fire_drake"
+      },
+      "reward": {
+        "gold": 9,
+        "exp": 7,
+        "drop": 10
       }
     },
     "ice_imp": {
@@ -93,6 +123,11 @@
           "R": "#5aa7d6",
           "r": "#2f6f9e"
         }
+      },
+      "reward": {
+        "gold": 5,
+        "exp": 5,
+        "drop": 10
       }
     },
     "ice_slime": {
@@ -109,6 +144,11 @@
           "U": "#8fd0ee",
           "u": "#4f97c4"
         }
+      },
+      "reward": {
+        "gold": 5,
+        "exp": 5,
+        "drop": 10
       }
     },
     "ice_beetle": {
@@ -128,6 +168,11 @@
           "E": "#ffffff",
           "Z": "#d6f1fb"
         }
+      },
+      "reward": {
+        "gold": 7,
+        "exp": 7,
+        "drop": 10
       }
     },
     "light_bird": {
@@ -145,6 +190,11 @@
           "R": "#e9c04a",
           "r": "#b48d35"
         }
+      },
+      "reward": {
+        "gold": 5,
+        "exp": 5,
+        "drop": 10
       }
     },
     "holy_armor": {
@@ -164,6 +214,11 @@
           "E": "#f7e27a",
           "Z": "#fff6c8"
         }
+      },
+      "reward": {
+        "gold": 9,
+        "exp": 8,
+        "drop": 10
       }
     },
     "light_wisp": {
@@ -180,6 +235,11 @@
           "U": "#f7e27a",
           "u": "#d9b94a"
         }
+      },
+      "reward": {
+        "gold": 6,
+        "exp": 5,
+        "drop": 10
       }
     },
     "dark_bat": {
@@ -198,6 +258,11 @@
           "v": "#1a1428",
           "Z": "#9a7cc4"
         }
+      },
+      "reward": {
+        "gold": 4,
+        "exp": 5,
+        "drop": 10
       }
     },
     "shadow": {
@@ -214,6 +279,11 @@
           "U": "#3e3358",
           "u": "#241d36"
         }
+      },
+      "reward": {
+        "gold": 7,
+        "exp": 6,
+        "drop": 10
       }
     },
     "phantom": {
@@ -231,6 +301,11 @@
           "R": "#8a80a6",
           "r": "#5a5276"
         }
+      },
+      "reward": {
+        "gold": 7,
+        "exp": 6,
+        "drop": 10
       }
     },
     "flame_beast": {
@@ -249,6 +324,11 @@
           "R": "#b8321c",
           "r": "#7a1e12"
         }
+      },
+      "reward": {
+        "gold": 0,
+        "exp": 0,
+        "drop": 0
       }
     },
     "ice_colossus": {
@@ -267,6 +347,11 @@
           "R": "#4f97c4",
           "r": "#2f5d80"
         }
+      },
+      "reward": {
+        "gold": 0,
+        "exp": 0,
+        "drop": 0
       }
     },
     "ogre_chief": {
@@ -283,6 +368,11 @@
           "g": "#c0563a",
           "G": "#8a3424"
         }
+      },
+      "reward": {
+        "gold": 0,
+        "exp": 0,
+        "drop": 0
       }
     },
     "light_guardian": {
@@ -303,6 +393,11 @@
           "E": "#ffffff",
           "Z": "#fff9dc"
         }
+      },
+      "reward": {
+        "gold": 0,
+        "exp": 0,
+        "drop": 0
       }
     },
     "dark_lord": {
@@ -322,6 +417,11 @@
           "r": "#2a2140",
           "t": "#36294a"
         }
+      },
+      "reward": {
+        "gold": 0,
+        "exp": 0,
+        "drop": 0
       }
     }
   },

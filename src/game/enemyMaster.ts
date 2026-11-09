@@ -15,8 +15,14 @@ export const ENEMY_SPRITES = (Object.keys(SPRITES) as SpriteId[]).filter((s) => 
 /** 敵の見た目：もとのドット絵と、色の差し替え（ドット絵の文字ごとの色） */
 export type EnemyLook = { sprite: SpriteId; recolor?: Record<string, string> };
 
+/**
+ * 倒したときの報酬。gold：落とす金貨（ランクが上がると増える）、exp：経験値（たまるとその挑戦のあいだレベルが上がる）、
+ * drop：回復薬か食料を落とす確率（%）。強敵は data.ts の REWARD_CONFIG の倍率で増え、道具は必ず宝箱で落とす。ボスは使わない
+ */
+export type EnemyReward = { gold: number; exp: number; drop: number };
+
 /** 敵1体分（id は enemies.json のキー） */
-export type EnemyRecord = Omit<EnemyDef, 'id'> & { look: EnemyLook };
+export type EnemyRecord = Omit<EnemyDef, 'id'> & { look: EnemyLook; reward: EnemyReward };
 
 /** ダンジョンごとに出る敵。pool は同じ敵を何度も並べると出やすくなる（並び順も乱数の結果に関わる） */
 export type DungeonEnemies = { pool: EnemyId[]; boss: EnemyId };
@@ -34,6 +40,9 @@ export const LIMITS = {
   name: { max: 12 },
   /** 敵の ID：英小文字で始まり、英小文字・数字・_ だけ */
   id: { pattern: /^[a-z][a-z0-9_]{1,23}$/, max: 24 },
+  gold: { min: 0, max: 999 },
+  exp: { min: 0, max: 999 },
+  drop: { min: 0, max: 100 },
   /** 1つのダンジョンで、同じ敵を並べられる数（出やすさ） */
   weight: { max: 9 },
 } as const;
@@ -75,6 +84,14 @@ export function masterProblems(data: unknown): string[] {
     if (!(BODIES as readonly unknown[]).includes(e.body)) problems.push(`${label}：体質が正しくない`);
     if (e.boss !== undefined && typeof e.boss !== 'boolean') problems.push(`${label}：ボスかどうかが正しくない`);
     problems.push(...lookProblems(label, e.look));
+    if (!isObject(e.reward)) problems.push(`${label}：倒したときの報酬がない`);
+    else {
+      for (const key of ['gold', 'exp', 'drop'] as const) {
+        const v = e.reward[key];
+        const { min, max } = LIMITS[key];
+        if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) problems.push(`${label}：${REWARD_LABELS[key]}は${min}〜${max}の整数にする`);
+      }
+    }
   }
   const isBoss = (id: unknown) => typeof id === 'string' && isObject(enemies[id]) && (enemies[id] as Record<string, unknown>).boss === true;
   for (const trait of MASTER_TRAITS) {
@@ -128,7 +145,7 @@ export function parseEnemyMaster(data: unknown): EnemyMaster {
 export function enemyDefs(master: EnemyMaster): Record<EnemyId, EnemyDef> {
   return Object.fromEntries(
     enemyIds(master).map((id) => {
-      const { look: _look, ...rest } = master.enemies[id]!;
+      const { look: _look, reward: _reward, ...rest } = master.enemies[id]!;
       return [id, { id, ...rest }];
     }),
   );
@@ -138,9 +155,10 @@ export function enemyDefs(master: EnemyMaster): Record<EnemyId, EnemyDef> {
 export function serializeEnemyMaster(master: EnemyMaster): string {
   const enemies = Object.fromEntries(
     enemyIds(master).map((id) => {
-      const { name, hp, atk, def, element, body, boss, look } = master.enemies[id]!;
+      const { name, hp, atk, def, element, body, boss, look, reward } = master.enemies[id]!;
       const cleanLook = look.recolor && Object.keys(look.recolor).length ? { sprite: look.sprite, recolor: look.recolor } : { sprite: look.sprite };
-      return [id, { name, hp, atk, def, element, body, ...(boss ? { boss: true } : {}), look: cleanLook }];
+      const cleanReward = { gold: reward.gold, exp: reward.exp, drop: reward.drop };
+      return [id, { name, hp, atk, def, element, body, ...(boss ? { boss: true } : {}), look: cleanLook, reward: cleanReward }];
     }),
   );
   const dungeons = Object.fromEntries(
@@ -210,6 +228,9 @@ export function describeChanges(before: EnemyMaster, after: EnemyMaster): string
     if (a.body !== b.body) out.push(`${b.name}：体質を変更`);
     if (Boolean(a.boss) !== Boolean(b.boss)) out.push(`${b.name}：${b.boss ? 'ボスにする' : 'ボスではなくする'}`);
     if (JSON.stringify(a.look) !== JSON.stringify(b.look)) out.push(`${b.name}：見た目を変更`);
+    for (const key of ['gold', 'exp', 'drop'] as const) {
+      if (a.reward[key] !== b.reward[key]) out.push(`${b.name}：${REWARD_LABELS[key]} ${a.reward[key]} → ${b.reward[key]}`);
+    }
   }
   for (const trait of MASTER_TRAITS) {
     const a = before.dungeons[trait];
@@ -231,6 +252,12 @@ export function describeChanges(before: EnemyMaster, after: EnemyMaster): string
 }
 
 export const STAT_LABELS = { hp: 'HP', atk: '攻撃', def: '防御' } as const;
+export const REWARD_LABELS = { gold: '金貨', exp: '経験値', drop: '道具を落とす確率（%）' } as const;
+
+/** 倒したときの報酬（敵の ID ごと） */
+export function enemyRewards(master: EnemyMaster): Record<EnemyId, EnemyReward> {
+  return Object.fromEntries(enemyIds(master).map((id) => [id, master.enemies[id]!.reward]));
+}
 export const TRAIT_LABELS: Record<TraitId, string> = { neutral: '無属性', fire: '炎', ice: '氷', light: '光', dark: '闇' };
 
 function isObject(v: unknown): v is Record<string, unknown> {

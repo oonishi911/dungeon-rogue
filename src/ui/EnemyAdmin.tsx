@@ -3,7 +3,7 @@
 // 変えた内容は「変更を公開」でリポジトリに保存され、自動チェックが通れば数分で公開版に反映される
 
 import { useMemo, useState } from 'react';
-import { BODY_NAMES, ENEMY_MASTER } from '../game/data';
+import { BODY_NAMES, ENEMY_MASTER, REWARD_CONFIG } from '../game/data';
 import { ENEMY_CONFIG } from '../game/enemies';
 import {
   addEnemy,
@@ -16,6 +16,7 @@ import {
   MASTER_TRAITS,
   masterProblems,
   removeEnemy,
+  REWARD_LABELS,
   serializeEnemyMaster,
   setWeight,
   TRAIT_LABELS,
@@ -70,6 +71,7 @@ export function EnemyAdmin() {
       <p className="admin__lead">
         値を変えて「変更を公開」を押すと、リポジトリの <code>{FILE}</code> に保存され、自動チェックが通れば数分で公開版に反映されます。
         ボス以外の敵は、ゲームの中ではHPと攻撃が{ENEMY_CONFIG.strengthRate === 0.5 ? '半分' : `${ENEMY_CONFIG.strengthRate}倍`}になります（「ゲーム内」の数字）。
+        金貨・経験値・落とす%は倒したときの報酬です（落とす%：回復薬か食料を落とす確率）。強敵は金貨と経験値が{REWARD_CONFIG.elite}倍になり、必ず宝箱を落とします。
       </p>
 
       <section className="admin__section" aria-labelledby="admin-enemies">
@@ -85,6 +87,9 @@ export function EnemyAdmin() {
                 <th scope="col">属性</th>
                 <th scope="col">体質</th>
                 <th scope="col">ボス</th>
+                <th scope="col">金貨</th>
+                <th scope="col">経験値</th>
+                <th scope="col">落とす%</th>
                 <th scope="col">見た目</th>
                 <th scope="col">
                   <span className="visually-hidden">消す</span>
@@ -95,7 +100,15 @@ export function EnemyAdmin() {
               {ids.map((id) => {
                 const e = draft.enemies[id]!;
                 // 足したばかりの敵は、公開版にない（どの値も「変えた」として印を付ける）
-                const b = base.enemies[id] ?? { ...e, name: '', hp: -1, atk: -1, def: -1, look: { sprite: e.look.sprite, recolor: { _: '' } } };
+                const b = base.enemies[id] ?? {
+                  ...e,
+                  name: '',
+                  hp: -1,
+                  atk: -1,
+                  def: -1,
+                  look: { sprite: e.look.sprite, recolor: { _: '' } },
+                  reward: { gold: -1, exp: -1, drop: -1 },
+                };
                 const added = !(id in base.enemies);
                 const weak = !e.boss;
                 const bossOf = dungeonsWithBoss(draft, id);
@@ -168,6 +181,22 @@ export function EnemyAdmin() {
                         onChange={(ev) => setEnemy(id, { boss: ev.target.checked || undefined })}
                       />
                     </td>
+                    {(['gold', 'exp', 'drop'] as const).map((key) => (
+                      <td key={key}>
+                        {e.boss ? (
+                          <span className="admin__ingame" title="ボスを倒したときは、ランクごとの報酬が出る">—</span>
+                        ) : (
+                          <NumberField
+                            value={e.reward[key]}
+                            min={LIMITS[key].min}
+                            max={LIMITS[key].max}
+                            changed={e.reward[key] !== b.reward[key]}
+                            label={`${e.name}の${REWARD_LABELS[key]}`}
+                            onChange={(v) => setEnemy(id, { reward: { ...e.reward, [key]: v } })}
+                          />
+                        )}
+                      </td>
+                    ))}
                     <td>
                       <select
                         className={cls('admin__select admin__look', lookKey !== JSON.stringify(b.look))}
