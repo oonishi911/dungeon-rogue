@@ -1,204 +1,174 @@
-// トロルの立体の模型（試作）。設定画（assets/texture-sources/enemies/troll.jpg）を見て、主人公の模型（hero3d.ts）と同じく、
-// 球・円柱・円すいを組み合わせて作る。緑の肌の、前かがみで大きな上半身。長い腕に鉄の籠手、毛皮付きの革の肩当て、
-// 牙のあるあご、とがった耳、後ろへ垂れる黒いドレッドヘアとあごひげ。鎖かたびらの腰布と、ぼろぼろの前垂れ、革のブーツ。
-// 右手に石の棍棒を持つ。フォンシェーディングで、肌は少しだけ、鉄はやや強く光る。
+// トロルの立体の模型（試作）。設定画（assets/texture-sources/enemies/troll.jpg）の正面・側面・背面に合わせて体の形を組み、
+// 表面には、その設定画から切り抜いた絵（public/textures/enemies/troll-{front,side,back}.png）をそのまま投影して貼る（projectedSkin.ts）。
+// 肌のこぶや鎧の傷・さびは絵から、立体の陰影はたいまつの光から付くので、写実的なダークファンタジーの見た目になる。
+// 棍棒だけは設定画の体にないので、暗い木と石の色で塗る。
 //
-// 模型は足元が原点で、高さは約1.2マス。正面は +z。歩いた向きへ体を回し、歩くときは体を揺らし、止まっているときは息をする。
+// 体の各部の位置は、設定画をマスの大きさに直して決めた（正面の絵で、頭のてっぺんから足元までの640pxを1.2マスとする）。
+// まず体全体を作ったときの姿勢（設定画の立ち方）で組み、絵を貼る位置を決めてから、腕・胸・頭を動かせる入れ物に移す。
+// 動いても絵は体にくっついたまま。模型は足元が原点で、高さは1.2マス。正面は +z。
 
 import * as THREE from 'three';
 import type { Dir } from '../game/explore';
+import { bakeRestPose, projectedSkin, type ProjectedViews } from './projectedSkin';
 
 const FACING: Record<Dir, number> = { down: 0, right: Math.PI / 2, up: Math.PI, left: -Math.PI / 2 };
-const TURN_SPEED = 10;
-const BOB = { height: 0.04, sway: 0.06 }; // 歩くときの上下の揺れ（マス）と、左右の傾き（ラジアン）。重いので主人公より小さく
-const BREATH = { speed: 1.6, amount: 0.025 }; // 止まっているときの息（1秒あたりの回数、胸のふくらみ）
+const TURN_SPEED = 8; // 重い体なので、主人公よりゆっくり向きを変える
+const BOB = { height: 0.03, sway: 0.05, speed: 6 }; // 歩くときの上下の揺れ（マス）、左右の傾き（ラジアン）、速さ
+const BREATH = { speed: 0.35, amount: 0.02 }; // 止まっているときの息（1秒あたりの回数、胸のふくらみ）
 
-// 設定画から拾った色
-const COLORS = {
-  skin: '#4b6334', // くすんだ緑の肌
-  skinDark: '#3e522a', // 鼻・耳の影
-  leather: '#4a3424', // 肩当て・ブーツ・ベルトの革
-  rust: '#5e4a3e', // さびた鉄の板
-  iron: '#3e3a36', // 籠手
-  fur: '#7a6e5e', // 肩の毛皮
-  chain: '#4e4c47', // 鎖かたびら
-  cloth: '#4a3426', // ぼろぼろの前垂れ
-  rope: '#8a7656', // 腰の縄
-  hair: '#24211c', // ドレッドヘアとひげ
-  tusk: '#e4d8bc', // 牙
-  eye: '#e0a640', // 黄色い目
-  wood: '#6b4a2e', // 棍棒の柄
-  stone: '#8a8a84', // 棍棒の石
+/** 設定画から切り抜いた絵と、その中での体の位置（scripts/build-enemy-textures.py が書き出した絵を測った値） */
+export const TROLL_VIEWS: ProjectedViews = {
+  height: 1.2,
+  vFeet: 0.013,
+  vTop: 0.987,
+  front: { file: 'troll-front.png', footX: 0.5, aspect: 376 / 384 },
+  side: { file: 'troll-side.png', footX: 0.47, aspect: 135 / 384 },
+  back: { file: 'troll-back.png', footX: 0.49, aspect: 282 / 384 },
 };
 
 /** 2点のあいだをつなぐ円柱（腕や脚）。a の太さが ra、b の太さが rb */
-function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number, segments = 12): THREE.BufferGeometry {
+function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number, segments = 16): THREE.BufferGeometry {
   const dir = new THREE.Vector3().subVectors(b, a);
-  const geo = new THREE.CylinderGeometry(rb, ra, dir.length(), segments);
+  const geo = new THREE.CylinderGeometry(rb, ra, dir.length(), segments, 4);
   geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()));
   const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
   return geo.translate(mid.x, mid.y, mid.z);
 }
-
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+const ellipsoid = (rx: number, ry: number, rz: number, x: number, y: number, z: number) =>
+  new THREE.SphereGeometry(1, 24, 16).scale(rx, ry, rz).translate(x, y, z);
 
 export class Troll3D {
   readonly root = new THREE.Group();
   private readonly body = new THREE.Group(); // 揺れる部分
-  private readonly chest = new THREE.Group(); // 息でふくらむ部分
+  private readonly chest = new THREE.Group(); // 息でふくらむ部分（腰から上）
+  private readonly head = new THREE.Group();
+  private readonly arms: THREE.Group[] = [];
   private readonly disposables: { dispose(): void }[] = [];
   private facing = 0;
   private time = 0;
 
-  constructor() {
-    const mat = (color: string, shininess = 14, specular = 0x1e1c18, side: THREE.Side = THREE.FrontSide) =>
-      new THREE.MeshPhongMaterial({ color, shininess, specular, side });
-    const m = {
-      skin: mat(COLORS.skin, 12, 0x161a10),
-      skinDark: mat(COLORS.skinDark),
-      leather: mat(COLORS.leather, 24, 0x2a2018),
-      rust: mat(COLORS.rust, 40, 0x3a3028),
-      iron: mat(COLORS.iron, 60, 0x55504a),
-      fur: mat(COLORS.fur, 4, 0x000000),
-      chain: mat(COLORS.chain, 50, 0x34322e),
-      cloth: mat(COLORS.cloth, 6, 0x000000, THREE.DoubleSide),
-      rope: mat(COLORS.rope, 6, 0x000000),
-      hair: mat(COLORS.hair, 10, 0x141210),
-      tusk: mat(COLORS.tusk, 40, 0x3a3830),
-      eye: new THREE.MeshBasicMaterial({ color: COLORS.eye }), // 暗がりでも光って見える目
-      wood: mat(COLORS.wood, 10, 0x1a1410),
-      stone: mat(COLORS.stone, 8, 0x1a1a18),
-      shadow: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.38, depthWrite: false }),
-    };
-    this.disposables.push(...Object.values(m));
-    const add = (geo: THREE.BufferGeometry, material: THREE.Material, parent: THREE.Object3D = this.body) => {
+  constructor(textures: Record<'front' | 'side' | 'back', THREE.Texture>) {
+    const skin = projectedSkin(TROLL_VIEWS, textures);
+    const wood = new THREE.MeshPhongMaterial({ color: 0x3e2a1a, shininess: 6, specular: 0x0a0806 });
+    const stone = new THREE.MeshPhongMaterial({ color: 0x5c5a55, shininess: 4, specular: 0x0a0a0a, flatShading: true });
+    const rope = new THREE.MeshPhongMaterial({ color: 0x5a4a34, shininess: 4, specular: 0x000000 });
+    const shadow = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false });
+    this.disposables.push(skin, wood, stone, rope, shadow);
+
+    // まずはすべて体の入れ物に、体の高さのままで置く
+    const add = (geo: THREE.BufferGeometry, material: THREE.Material = skin) => {
       this.disposables.push(geo);
       const mesh = new THREE.Mesh(geo, material);
       mesh.castShadow = true;
-      parent.add(mesh);
+      this.body.add(mesh);
       return mesh;
     };
-    const ellipsoid = (rx: number, ry: number, rz: number, x: number, y: number, z: number, material: THREE.Material, parent?: THREE.Object3D) =>
-      add(new THREE.SphereGeometry(1, 20, 14).scale(rx, ry, rz).translate(x, y, z), material, parent);
+    const parts = { chest: [] as THREE.Mesh[], head: [] as THREE.Mesh[], arms: [[], []] as THREE.Mesh[][] };
 
-    // 足元の影
-    add(new THREE.CircleGeometry(0.34, 20).rotateX(-Math.PI / 2).translate(0, 0.01, 0), m.shadow, this.root).castShadow = false;
-
+    // 脚：太いふとももと、革ひもを巻いたブーツ（設定画では足元が肩幅より広い、どっしりした立ち方）
     for (const side of [-1, 1]) {
-      const x = side * 0.14;
-      // ブーツ（つま先から緑の指がのぞく）と、すねに巻いた革ひも
-      add(new THREE.BoxGeometry(0.16, 0.1, 0.24).translate(x, 0.05, 0.03), m.leather);
-      add(new THREE.CylinderGeometry(0.095, 0.1, 0.18, 12).translate(x, 0.16, 0), m.leather);
-      add(new THREE.TorusGeometry(0.098, 0.012, 6, 16).rotateX(Math.PI / 2).translate(x, 0.2, 0), m.rope);
-      for (const t of [-0.045, 0, 0.045]) ellipsoid(0.028, 0.022, 0.035, x + t, 0.03, 0.155, m.skin);
-      // すね・ふともも（太く短い脚）
-      add(limb(V(x, 0.22, 0), V(x * 0.95, 0.36, 0), 0.075, 0.085), m.skin);
-      add(limb(V(x * 0.95, 0.34, 0), V(x * 0.8, 0.52, -0.01), 0.09, 0.11), m.skin);
-      ellipsoid(0.07, 0.06, 0.06, x * 0.95, 0.35, 0.03, m.skin); // ひざ
+      add(limb(V(side * 0.1, 0.52, 0), V(side * 0.13, 0.25, 0.015), 0.1, 0.085)); // ふともも
+      add(ellipsoid(0.075, 0.07, 0.07, side * 0.135, 0.25, 0.035)); // ひざ
+      add(limb(V(side * 0.135, 0.25, 0.01), V(side * 0.16, 0.13, -0.005), 0.08, 0.085)); // すね
+      add(new THREE.CylinderGeometry(0.1, 0.11, 0.17, 18, 3).translate(side * 0.163, 0.105, -0.01)); // ブーツ
+      add(ellipsoid(0.1, 0.06, 0.14, side * 0.163, 0.04, 0.03)); // 足（前へ張り出したつま先）
     }
+    // 腰：鎖かたびらと革の腰布（すそが広がる）と、ベルト
+    add(new THREE.CylinderGeometry(0.19, 0.235, 0.27, 24, 4, true).translate(0, 0.45, 0));
+    add(new THREE.CylinderGeometry(0.192, 0.192, 0.06, 24, 1).translate(0, 0.585, 0));
 
-    // 腰：鎖かたびらの腰布、ぼろぼろの前垂れ、ベルトと縄
-    add(new THREE.CylinderGeometry(0.2, 0.25, 0.2, 18, 1, true).translate(0, 0.46, 0), m.chain);
-    const flap = (w: number, h: number, z: number, tilt: number) => {
-      const g = new THREE.PlaneGeometry(w, h, 6, 1);
-      const pos = g.getAttribute('position');
-      // 下の端をぎざぎざにする（破れた布）
-      for (let i = 0; i < pos.count; i++) if (pos.getY(i) < 0) pos.setY(i, pos.getY(i) - (i % 2 === 0 ? 0.04 : 0));
-      g.rotateX(tilt).translate(0, 0.44, z);
-      add(g, m.cloth);
-    };
-    flap(0.22, 0.26, 0.23, -0.12);
-    flap(0.26, 0.22, -0.24, 0.12);
-    add(new THREE.TorusGeometry(0.215, 0.032, 8, 24).rotateX(Math.PI / 2).translate(0, 0.57, 0.01), m.leather);
-    add(new THREE.TorusGeometry(0.225, 0.012, 6, 24).rotateX(Math.PI / 2).translate(0, 0.54, 0.01), m.rope);
-
-    // 胴：前かがみで、ふくらんだ腹と分厚い胸
-    this.chest.position.set(0, 0.62, 0);
-    this.body.add(this.chest);
-    ellipsoid(0.25, 0.2, 0.22, 0, 0.12, 0.03, m.skin, this.chest); // 腹
-    ellipsoid(0.31, 0.2, 0.24, 0, 0.27, 0.0, m.skin, this.chest); // 胸
-    // 胸を斜めに横切る革帯
-    add(new THREE.BoxGeometry(0.055, 0.48, 0.02).rotateZ(0.85).translate(0, 0.22, 0.235), m.leather, this.chest);
-    add(new THREE.BoxGeometry(0.055, 0.48, 0.02).rotateZ(-0.85).translate(0, 0.22, -0.235), m.leather, this.chest);
-
+    // 上半身
+    const ch = (geo: THREE.BufferGeometry) => parts.chest.push(add(geo));
+    ch(ellipsoid(0.19, 0.11, 0.155, 0, 0.6, 0.015)); // 腰まわり
+    ch(ellipsoid(0.2, 0.14, 0.175, 0, 0.68, 0.03)); // ふくらんだ腹
+    ch(ellipsoid(0.245, 0.15, 0.17, 0, 0.82, 0.0)); // 分厚い胸
+    ch(ellipsoid(0.17, 0.07, 0.13, 0, 0.94, -0.02)); // 首のつけねの盛り上がった筋肉
     for (const side of [-1, 1]) {
-      const sx = side * 0.31;
-      // 肩：毛皮の襟と、革の肩当て（さびた鉄の板を重ねる）
-      ellipsoid(0.15, 0.08, 0.16, sx * 0.9, 0.31, 0, m.fur, this.chest);
-      add(new THREE.SphereGeometry(0.15, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.05, 0.8, 1.1).translate(sx, 0.27, 0), m.leather, this.chest);
-      add(new THREE.SphereGeometry(0.12, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2.6).scale(1.1, 0.75, 1.15).translate(sx * 1.05, 0.32, 0), m.rust, this.chest);
-      // 長い腕：肩から下へ垂らし、手はひざの高さ
-      const shoulder = V(sx * 1.05, 0.86, 0.0);
-      const elbow = V(side * 0.42, 0.66, 0.03);
-      const wrist = V(side * 0.45, 0.42, 0.1);
-      add(limb(shoulder, elbow, 0.085, 0.075), m.skin);
-      add(limb(elbow, wrist, 0.075, 0.07), m.skin);
-      // 鉄の籠手（前腕）
-      add(limb(V(side * 0.43, 0.6, 0.05), V(side * 0.45, 0.45, 0.095), 0.092, 0.088), m.iron);
-      add(new THREE.TorusGeometry(0.09, 0.012, 6, 16).rotateX(Math.PI / 2).translate(side * 0.44, 0.52, 0.075), m.rope);
-      // 大きな手と、とがった爪
-      ellipsoid(0.075, 0.07, 0.065, side * 0.455, 0.37, 0.11, m.skin);
-      for (const f of [-0.035, 0, 0.035]) {
-        add(limb(V(side * 0.455 + f, 0.33, 0.13), V(side * 0.46 + f * 1.2, 0.27, 0.15), 0.018, 0.01), m.skin);
-        add(new THREE.ConeGeometry(0.01, 0.03, 6).rotateX(Math.PI).translate(side * 0.46 + f * 1.2, 0.25, 0.15), m.tusk);
-      }
+      // 革を重ねた大きな肩当て
+      ch(new THREE.SphereGeometry(0.13, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.62).scale(1.05, 0.85, 1.1).translate(side * 0.25, 0.88, -0.02));
     }
 
-    // 首と頭：肩のあいだから前へ突き出した、大きな頭。上から見下ろすカメラでも顔が見えるよう、少し上を向ける
-    add(limb(V(0, 0.86, 0.02), V(0, 1.0, 0.11), 0.11, 0.1), m.skin);
-    const head = new THREE.Group();
-    head.position.set(0, 1.09, 0.14);
-    head.rotation.x = -0.18;
-    this.body.add(head);
-    ellipsoid(0.135, 0.135, 0.13, 0, 0.02, 0, m.skin, head); // 頭
-    add(new THREE.BoxGeometry(0.22, 0.045, 0.07).translate(0, 0.05, 0.1), m.skin, head); // 張り出した眉
-    ellipsoid(0.115, 0.075, 0.1, 0, -0.075, 0.06, m.skin, head); // 突き出たあご
-    ellipsoid(0.035, 0.04, 0.04, 0, 0.0, 0.135, m.skinDark, head); // 大きな鼻
-    for (const side of [-1, 1]) {
-      ellipsoid(0.022, 0.016, 0.012, side * 0.05, 0.025, 0.122, m.eye, head); // 黄色い目
-      add(new THREE.ConeGeometry(0.017, 0.07, 6).translate(side * 0.052, -0.045, 0.14), m.tusk, head); // 下あごから上へ伸びる牙
-      add(new THREE.ConeGeometry(0.032, 0.13, 6).rotateZ(-side * 1.2).translate(side * 0.17, 0.04, -0.01), m.skinDark, head); // とがった耳
-    }
-    // あごひげ（下へ垂れる）
-    add(new THREE.ConeGeometry(0.065, 0.17, 8).rotateX(Math.PI).translate(0, -0.17, 0.08), m.hair, head);
-    // ドレッドヘア：頭のてっぺんから後ろをおおい（顔は出す）、後ろと肩へ太い房が垂れる
-    ellipsoid(0.142, 0.138, 0.13, 0, 0.035, -0.035, m.hair, head);
-    for (let i = 0; i < 11; i++) {
-      const a = Math.PI * (0.05 + (i / 10) * 0.9); // 頭の後ろ半分に並べる
-      const x = Math.cos(a) * 0.12;
-      const z = -Math.sin(a) * 0.11;
-      const len = 0.3 + (i % 3) * 0.06;
-      // 背中にめり込まないよう、後ろへ大きく張り出して垂らす
-      add(limb(V(x, 0.06, z), V(x * 1.5, 0.06 - len * 0.8, z * 1.5 - 0.4), 0.024, 0.018, 6), m.hair, head);
-    }
+    // 腕：肩から外へ開いて垂らし、手はふとももの横（設定画の立ち方）。[0] が右腕（-x）
+    const shoulders = [V(-0.22, 0.84, -0.03), V(0.22, 0.84, -0.03)];
+    [-1, 1].forEach((side, i) => {
+      const ar = (geo: THREE.BufferGeometry) => parts.arms[i]!.push(add(geo));
+      const shoulder = shoulders[i]!;
+      const elbow = V(side * 0.41, 0.69, -0.04);
+      const wrist = V(side * 0.515, 0.57, -0.02);
+      ar(limb(shoulder, elbow, 0.085, 0.075)); // 上腕
+      ar(ellipsoid(0.07, 0.065, 0.065, elbow.x, elbow.y, elbow.z)); // ひじ
+      ar(limb(elbow, wrist, 0.082, 0.08)); // 籠手をはめた前腕
+      ar(ellipsoid(0.055, 0.075, 0.065, side * 0.53, 0.5, -0.005)); // 大きな手
+      for (const f of [-0.03, 0, 0.03]) ar(limb(V(side * 0.535, 0.46, f), V(side * 0.55, 0.39, f + 0.01), 0.018, 0.012, 8)); // 指
+    });
 
-    // 右手（-x）の石の棍棒：太い木の柄に、ごつごつした石の頭
-    const club = new THREE.Group();
-    club.position.set(-0.455, 0.37, 0.11);
-    club.rotation.set(-0.9, 0, -0.35); // 先を前へ、少し外へ向けて持つ（上から見ても棍棒の長さがわかる）
-    this.body.add(club);
-    add(limb(V(0, -0.08, 0), V(0, 0.42, 0), 0.03, 0.04, 8), m.wood, club);
-    add(new THREE.TorusGeometry(0.034, 0.009, 6, 12).rotateX(Math.PI / 2).translate(0, 0.0, 0), m.rope, club);
-    add(new THREE.TorusGeometry(0.036, 0.009, 6, 12).rotateX(Math.PI / 2).translate(0, 0.05, 0), m.rope, club);
-    add(new THREE.DodecahedronGeometry(0.12, 0).scale(1, 1.35, 0.9).translate(0, 0.52, 0), m.stone, club);
+    // 頭：肩のあいだから前へ突き出した頭。あごひげと、後ろへ垂れるドレッドヘア、とがった耳
+    const hd = (geo: THREE.BufferGeometry) => parts.head.push(add(geo));
+    hd(ellipsoid(0.095, 0.115, 0.1, 0, 1.08, 0.07)); // 頭
+    hd(ellipsoid(0.085, 0.055, 0.075, 0, 0.99, 0.11)); // 突き出たあご
+    hd(new THREE.ConeGeometry(0.07, 0.14, 12).rotateX(Math.PI).translate(0, 0.92, 0.1)); // あごひげ
+    hd(ellipsoid(0.105, 0.14, 0.1, 0, 1.06, 0.0)); // 後ろへ垂れる髪
+    for (const side of [-1, 1]) hd(new THREE.ConeGeometry(0.02, 0.09, 8).rotateZ(-side * 1.3).translate(side * 0.11, 1.09, 0.04)); // とがった耳
 
+    // 作ったときの姿勢で、絵を貼る位置を決めておく
     this.root.add(this.body);
+    const shadowMesh = new THREE.Mesh(new THREE.CircleGeometry(0.42, 24).rotateX(-Math.PI / 2).translate(0, 0.01, 0), shadow);
+    this.disposables.push(shadowMesh.geometry);
+    this.root.add(shadowMesh);
+    bakeRestPose(this.body, skin);
+
+    // 動かす部分を、軸の位置に置いた入れ物へ移す（attach は見た目の位置を変えずに入れ物を移す）
+    const pivot = (group: THREE.Group, parent: THREE.Object3D, at: THREE.Vector3, meshes: THREE.Mesh[]) => {
+      parent.add(group);
+      group.position.copy(parent === this.body ? at : at.clone().sub(new THREE.Vector3().setFromMatrixPosition(parent.matrixWorld)));
+      group.updateMatrixWorld(true);
+      for (const m of meshes) group.attach(m);
+    };
+    this.root.updateMatrixWorld(true);
+    pivot(this.chest, this.body, V(0, 0.56, 0), parts.chest);
+    this.chest.updateMatrixWorld(true);
+    pivot(this.head, this.chest, V(0, 0.95, 0.0), parts.head);
+    for (let i = 0; i < 2; i++) {
+      const arm = new THREE.Group();
+      pivot(arm, this.chest, shoulders[i]!, parts.arms[i]!);
+      this.arms.push(arm);
+    }
+
+    // 右手（-x）の石の棍棒：先を前へ、少し外へ向けて持つ（上から見ても棍棒の長さがわかる）
+    const club = new THREE.Group();
+    club.position.set(-0.53 - shoulders[0]!.x, 0.5 - shoulders[0]!.y, -0.005 - shoulders[0]!.z);
+    club.rotation.set(-0.75, 0, -0.3);
+    this.arms[0]!.add(club);
+    const clubPart = (geo: THREE.BufferGeometry, material: THREE.Material) => {
+      this.disposables.push(geo);
+      const mesh = new THREE.Mesh(geo, material);
+      mesh.castShadow = true;
+      club.add(mesh);
+    };
+    clubPart(limb(V(0, -0.06, 0), V(0, 0.4, 0), 0.026, 0.036, 10), wood);
+    clubPart(new THREE.TorusGeometry(0.032, 0.008, 6, 14).rotateX(Math.PI / 2), rope);
+    clubPart(new THREE.DodecahedronGeometry(0.1, 1).scale(1, 1.4, 0.85).translate(0, 0.5, 0), stone);
   }
 
   /** 毎フレーム呼ぶ。x, z はマスの位置、walking は歩いているか、dt は前のフレームからの秒数 */
   update(x: number, z: number, dir: Dir, walking: boolean, dt: number) {
     this.time += dt;
     this.root.position.set(x, 0, z);
-    // 向き：一番近い回り方で回す
     let diff = FACING[dir] - this.facing;
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
     this.facing += diff * Math.min(1, dt * TURN_SPEED);
     this.root.rotation.y = this.facing;
-    // 歩く揺れと、止まっているときの息
-    const phase = this.time * 7;
+    const phase = this.time * BOB.speed;
     this.body.position.y = walking ? Math.abs(Math.sin(phase)) * BOB.height : 0;
     this.body.rotation.z = walking ? Math.sin(phase) * BOB.sway : 0;
-    this.chest.scale.setScalar(1 + (walking ? 0 : Math.sin(this.time * BREATH.speed * Math.PI * 2) * BREATH.amount));
+    // 歩くときは腕を前後に振り、止まっているときは息で胸がふくらみ、頭が少し上下する
+    const swing = walking ? Math.sin(phase) * 0.35 : 0;
+    this.arms[0]!.rotation.x = swing;
+    this.arms[1]!.rotation.x = -swing;
+    const breath = walking ? 0 : Math.sin(this.time * BREATH.speed * Math.PI * 2);
+    this.chest.scale.set(1 + breath * BREATH.amount, 1 + breath * BREATH.amount * 0.5, 1 + breath * BREATH.amount);
+    this.head.rotation.x = breath * 0.04;
   }
 
   dispose() {
