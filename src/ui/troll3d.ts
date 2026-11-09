@@ -38,6 +38,9 @@ const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const ellipsoid = (rx: number, ry: number, rz: number, x: number, y: number, z: number) =>
   new THREE.SphereGeometry(1, 24, 16).scale(rx, ry, rz).translate(x, y, z);
 
+// 腕を肩から体の側へ下げる角度（ラジアン）。設定画は腕を大きく開いた立ち方なので、そのままだと広がりすぎる
+const ARM_DROP = 0.3;
+
 export class Troll3D {
   readonly root = new THREE.Group();
   private readonly body = new THREE.Group(); // 揺れる部分
@@ -164,8 +167,8 @@ export class Troll3D {
     this.body.rotation.z = walking ? Math.sin(phase) * BOB.sway : 0;
     // 歩くときは腕を前後に振り、止まっているときは息で胸がふくらみ、頭が少し上下する
     const swing = walking ? Math.sin(phase) * 0.35 : 0;
-    this.arms[0]!.rotation.x = swing;
-    this.arms[1]!.rotation.x = -swing;
+    this.arms[0]!.rotation.set(swing, 0, ARM_DROP);
+    this.arms[1]!.rotation.set(-swing, 0, -ARM_DROP);
     const breath = walking ? 0 : Math.sin(this.time * BREATH.speed * Math.PI * 2);
     this.chest.scale.set(1 + breath * BREATH.amount, 1 + breath * BREATH.amount * 0.5, 1 + breath * BREATH.amount);
     this.head.rotation.x = breath * 0.04;
