@@ -1,4 +1,4 @@
-// トロルの立体の模型（試作）。設定画（assets/texture-sources/enemies/troll.jpg）の正面・側面・背面に合わせて体の形を組み、
+// トロルの立体の模型。設定画（assets/texture-sources/enemies/troll.jpg）の正面・側面・背面に合わせて体の形を組み、
 // 表面には、その設定画から切り抜いた絵（public/textures/enemies/troll-{front,side,back}.png）をそのまま投影して貼る（projectedSkin.ts）。
 // 肌のこぶや鎧の傷・さびは絵から、立体の陰影はたいまつの光から付くので、写実的なダークファンタジーの見た目になる。
 // 棍棒だけは設定画の体にないので、暗い木と石の色で塗る。
@@ -51,11 +51,15 @@ export class Troll3D {
   private facing = 0;
   private time = 0;
 
-  constructor(textures: Record<'front' | 'side' | 'back', THREE.Texture>) {
-    const skin = projectedSkin(TROLL_VIEWS, textures);
-    const wood = new THREE.MeshPhongMaterial({ color: 0x3e2a1a, shininess: 6, specular: 0x0a0806 });
-    const stone = new THREE.MeshPhongMaterial({ color: 0x5c5a55, shininess: 4, specular: 0x0a0a0a, flatShading: true });
-    const rope = new THREE.MeshPhongMaterial({ color: 0x5a4a34, shininess: 4, specular: 0x000000 });
+  /** wrap は素材に手を加える関数（ダンジョンの暗がりを効かせるなど）。name は素材の種類ごとの名前 */
+  constructor(
+    textures: Record<'front' | 'side' | 'back', THREE.Texture>,
+    wrap: <T extends THREE.Material>(material: T, name: string) => T = (m) => m,
+  ) {
+    const skin = wrap(projectedSkin(TROLL_VIEWS, textures), 'troll-skin');
+    const wood = wrap(new THREE.MeshPhongMaterial({ color: 0x3e2a1a, shininess: 6, specular: 0x0a0806 }), 'troll-wood');
+    const stone = wrap(new THREE.MeshPhongMaterial({ color: 0x5c5a55, shininess: 4, specular: 0x0a0a0a, flatShading: true }), 'troll-stone');
+    const rope = wrap(new THREE.MeshPhongMaterial({ color: 0x5a4a34, shininess: 4, specular: 0x000000 }), 'troll-rope');
     const shadow = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false });
     this.disposables.push(skin, wood, stone, rope, shadow);
 
