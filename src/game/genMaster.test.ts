@@ -8,6 +8,7 @@ import { generateFloor, type FloorMap, type Room } from './map';
 const SAMPLE: GenSettings = {
   rooms: { attemptRate: 0.04, minSize: 3, maxSize: 9 },
   enemies: { amount: 1, placement: 'mixed', roomWeight: 1, nestChance: 0, nestMin: 3, nestMax: 5, stayInRoom: false },
+  growth: { expBase: 30, expStep: 20, hpPerLevel: 2, atkPerLevel: 1, maxLevel: 10, eliteRate: 3 },
 };
 const clone = (): GenSettings => JSON.parse(JSON.stringify(SAMPLE)) as GenSettings;
 const enemiesFor = (patch: Partial<EnemySettings>) => ({ ...SAMPLE.enemies, ...patch });
@@ -28,11 +29,13 @@ describe('ダンジョン生成の設定（dungeonGen.json）', () => {
     bad.enemies.nestChance = 2;
     bad.enemies.nestMin = 6;
     bad.enemies.nestMax = 2;
+    bad.growth.maxLevel = 0;
     const problems = genProblems(bad);
     expect(problems.some((p) => p.includes('奇数'))).toBe(true);
     expect(problems.some((p) => p.includes('部屋の大きさ：最小'))).toBe(true);
     expect(problems.some((p) => p.includes('群れ部屋になる確率'))).toBe(true);
     expect(problems.some((p) => p.includes('群れの敵の数：最小'))).toBe(true);
+    expect(problems.some((p) => p.includes('レベルの上限'))).toBe(true);
     expect(() => parseGenSettings(bad)).toThrow();
   });
 
@@ -40,7 +43,12 @@ describe('ダンジョン生成の設定（dungeonGen.json）', () => {
     const after = clone();
     after.rooms.attemptRate = 0.1;
     after.enemies.stayInRoom = true;
-    expect(describeGenChanges(SAMPLE, after)).toEqual(['部屋の多さ：0.04 → 0.1', '部屋の敵は部屋から出ない：しない → する']);
+    after.growth.hpPerLevel = 4;
+    expect(describeGenChanges(SAMPLE, after)).toEqual([
+      '部屋の多さ：0.04 → 0.1',
+      '部屋の敵は部屋から出ない：しない → する',
+      '1レベルで増える最大HP：2 → 4',
+    ]);
   });
 
   it('部屋の多さを上げると、部屋が増える', () => {

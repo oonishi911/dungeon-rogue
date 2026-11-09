@@ -14,6 +14,7 @@ import type {
 } from './types';
 import enemyMasterJson from './enemies.json';
 import { enemyDefs, enemyRewards, parseEnemyMaster, type EnemyReward } from './enemyMaster';
+import { GEN_SETTINGS } from './genMaster';
 
 // ===== MVPの設定値 =====
 // 数値は仮。遊んでみてバランス調整する。
@@ -317,18 +318,19 @@ export const TREASURE_CONFIG = {
  * - 強敵：金貨と経験値は elite 倍。さらに必ず宝箱を落とし、eliteGold の金貨と eliteItems のどれかが入っている
  * - 経験値：たまるとレベルが上がり、最大HPと攻撃力が上がる（上がった分だけHPも回復する）。挑戦が終わると1に戻る
  */
+// レベルの上がり方と強敵の倍率は、管理画面（?view=gen）で変えられる設定（dungeonGen.json の growth）にある。
+// 自動プレイのバランステスト（外れた準備でクリアできすぎない）を満たす範囲にする。満たさないと公開されない。
+// 無属性のダンジョンの外れた準備は、報酬なしで77.5%、今の値で87.5%（上限90%）
 export const REWARD_CONFIG = {
   dropItems: ['potion', 'food'] as readonly ItemId[],
-  elite: 3,
+  elite: GEN_SETTINGS.growth.eliteRate,
   eliteItems: ['potion', 'food', 'fire_whetstone', 'ice_whetstone', 'holy_water', 'dark_oil'] as readonly ItemId[],
-  // レベルの上がり方は、自動プレイのバランステスト（外れた準備でクリアできすぎない）を満たす範囲にしている。
-  // 無属性のダンジョンの外れた準備は、報酬なしで77.5%、今の値で87.5%（上限90%）
-  expBase: 30, // レベル1→2に必要な経験値
-  expStep: 20, // レベルが1上がるごとに、次に必要な経験値が増える量
-  hpPerLevel: 2,
-  atkPerLevel: 1,
-  maxLevel: 10,
-} as const;
+  expBase: GEN_SETTINGS.growth.expBase, // レベル1→2に必要な経験値
+  expStep: GEN_SETTINGS.growth.expStep, // レベルが1上がるごとに、次に必要な経験値が増える量
+  hpPerLevel: GEN_SETTINGS.growth.hpPerLevel,
+  atkPerLevel: GEN_SETTINGS.growth.atkPerLevel,
+  maxLevel: GEN_SETTINGS.growth.maxLevel,
+};
 
 /** レベル level から次のレベルに上がるのに必要な経験値 */
 export function expToNext(level: number): number {

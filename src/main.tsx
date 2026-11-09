@@ -16,7 +16,7 @@ for (const type of ['pointerdown', 'pointerup', 'touchend', 'keydown'] as const)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {/* 開発用：?view=map でマップ生成、?view=explore で探索の確認画面、?view=enemies で敵のマスターデータ、?view=gen でダンジョン生成の設定の管理画面を開く */}
+    {/* 開発用：?view=map でマップ生成、?view=explore で探索の確認画面、?view=enemies で敵のマスターデータ、?view=gen でダンジョンの設定（生成・レベル）の管理画面を開く */}
     {{ map: <MapViewer />, explore: <ExploreDevScreen />, enemies: <EnemyAdmin />, gen: <GenAdmin /> }[view ?? ''] ?? <App />}
   </StrictMode>,
 );

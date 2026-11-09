@@ -1,5 +1,6 @@
-// 開発用：ダンジョン生成の設定（src/game/dungeonGen.json）を管理する画面。?view=gen で開く。
-// 小部屋の多さと大きさ、敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋・部屋から出さない）を変えられる。
+// 開発用：ダンジョンの設定（src/game/dungeonGen.json）を管理する画面。?view=gen で開く。
+// 小部屋の多さと大きさ、敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋・部屋から出さない）、
+// 敵を倒したときのレベルの上がり方と強敵の報酬の倍率を変えられる。
 // 変えた値で作ったマップの見本を、その場で見て確かめられる。
 // 変えた内容は「変更を公開」でリポジトリに保存され、自動チェックが通れば数分で公開版に反映される
 
@@ -16,6 +17,7 @@ import {
   serializeGenSettings,
   type EnemySettings,
   type GenSettings,
+  type GrowthSettings,
   type Placement,
   type RoomSettings,
 } from '../game/genMaster';
@@ -41,6 +43,9 @@ export function GenAdmin() {
 
   const setRooms = (patch: Partial<RoomSettings>) => setDraft((d) => ({ ...d, rooms: { ...d.rooms, ...patch } }));
   const setEnemies = (patch: Partial<EnemySettings>) => setDraft((d) => ({ ...d, enemies: { ...d.enemies, ...patch } }));
+  const setGrowth = (patch: Partial<GrowthSettings>) => setDraft((d) => ({ ...d, growth: { ...d.growth, ...patch } }));
+  const g = draft.growth;
+  const bg = base.growth;
   const r = draft.rooms;
   const e = draft.enemies;
   const br = base.rooms;
@@ -48,7 +53,7 @@ export function GenAdmin() {
 
   const onPublish = () => {
     if (problems.length || !changes.length) return;
-    const message = `ダンジョン生成の設定を更新する（管理画面から）\n\n${changes.map((c) => `- ${c}`).join('\n')}`;
+    const message = `ダンジョンの設定を更新する（管理画面から）\n\n${changes.map((c) => `- ${c}`).join('\n')}`;
     void publisher.send(serializeGenSettings(draft), serializeGenSettings(base), message, () => setBase(copy(draft)));
   };
 
@@ -57,7 +62,7 @@ export function GenAdmin() {
       <header className="top">
         <div>
           <p className="top__run">開発用</p>
-          <h1 className="top__title">ダンジョン生成の設定</h1>
+          <h1 className="top__title">ダンジョンの設定</h1>
         </div>
       </header>
       <AdminNav current="gen" />
@@ -135,6 +140,31 @@ export function GenAdmin() {
         </div>
       </section>
 
+      <section className="admin__section" aria-labelledby="gen-growth">
+        <h2 id="gen-growth" className="admin__heading">レベルと強敵の報酬</h2>
+        <p className="admin__note">
+          敵を倒して経験値がたまると、その挑戦のあいだだけレベルが上がります。敵ごとの金貨・経験値・道具を落とす確率は、敵のマスターデータの画面で変えます。
+          強くしすぎると、自動チェックのバランステスト（外れた準備でクリアできすぎないか）に通らず、公開されません。
+        </p>
+        <div className="gen__fields">
+          {(
+            [
+              ['expBase', '経験値がこれだけたまると、レベル1→2に上がる'],
+              ['expStep', 'レベルが上がるたびに、次に要る経験値がこれだけ増える'],
+              ['hpPerLevel', '上がった分だけ、HPも回復する'],
+              ['atkPerLevel', ''],
+              ['maxLevel', ''],
+              ['eliteRate', '強敵は、通常の敵の金貨と経験値のこの倍。強敵は必ず宝箱（金貨と良い道具）も落とす'],
+            ] as const
+          ).map(([key, hint]) => (
+            <Field key={key} label={GEN_LABELS[key]} hint={hint || undefined}>
+              <NumberField {...GEN_LIMITS[key]} value={g[key]} changed={g[key] !== bg[key]} label={GEN_LABELS[key]} onChange={(v) => setGrowth({ [key]: v })} />
+            </Field>
+          ))}
+        </div>
+        <LevelTable growth={g} />
+      </section>
+
       <section className="admin__section" aria-labelledby="gen-preview">
         <h2 id="gen-preview" className="admin__heading">見本</h2>
         <div className="gen__preview-controls">
@@ -157,6 +187,41 @@ export function GenAdmin() {
 
       <PublishPanel changes={changes} problems={problems} publisher={publisher} onReset={() => setDraft(copy(base))} onPublish={onPublish} />
     </main>
+  );
+}
+
+/** レベルごとの、上がるまでに要る経験値（合計）と、最大HP・攻撃の増え方。最初の数レベル分 */
+function LevelTable({ growth }: { growth: GrowthSettings }) {
+  const rows: { level: number; total: number; hp: number; atk: number }[] = [];
+  let total = 0;
+  for (let level = 2; level <= Math.min(growth.maxLevel, 6); level++) {
+    total += growth.expBase + growth.expStep * (level - 2);
+    rows.push({ level, total, hp: growth.hpPerLevel * (level - 1), atk: growth.atkPerLevel * (level - 1) });
+  }
+  if (!rows.length) return null;
+  return (
+    <div className="admin__scroll gen__levels">
+      <table className="admin__table">
+        <thead>
+          <tr>
+            <th scope="col">レベル</th>
+            <th scope="col">経験値の合計</th>
+            <th scope="col">最大HP</th>
+            <th scope="col">攻撃</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.level}>
+              <th scope="row">{r.level}</th>
+              <td>{r.total}</td>
+              <td>+{r.hp}</td>
+              <td>+{r.atk}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

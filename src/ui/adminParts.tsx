@@ -1,5 +1,5 @@
 // 開発用の管理画面で共通に使う部品：変更の一覧・トークン・「変更を公開」と、公開の進み具合。
-// 敵のマスターデータ（EnemyAdmin.tsx）と、ダンジョン生成の設定（GenAdmin.tsx）で使う
+// 敵のマスターデータ（EnemyAdmin.tsx）と、ダンジョンの設定（GenAdmin.tsx）で使う
 
 import { useEffect, useState } from 'react';
 import { deployStage, loadToken, publishFile, PublishError, REPO, saveToken, type DeployStage } from './githubPublish';
@@ -15,7 +15,7 @@ export type Publish =
 /** 管理画面どうしを行き来するリンク */
 export const ADMIN_VIEWS = [
   { view: 'enemies', label: '敵のマスターデータ' },
-  { view: 'gen', label: 'ダンジョン生成の設定' },
+  { view: 'gen', label: 'ダンジョンの設定' },
 ] as const;
 
 export function AdminNav({ current }: { current: (typeof ADMIN_VIEWS)[number]['view'] }) {
