@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { playAttack, playChestOpen, playEnemyAttack, playFootstep, preloadSounds, setAmbient } from '../audio/sound';
-import { BODY_NAMES, enemyBase, ITEMS, TRAIT_IDS, TRAITS } from '../game/data';
+import { BODY_NAMES, enemyBase, expToNext, ITEMS, REWARD_CONFIG, TRAIT_IDS, TRAITS } from '../game/data';
 import { enemyDef, key } from '../game/enemies';
 import {
   DIR_DELTA,
@@ -200,7 +200,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     // 同じ階で1歩進んだら足音を鳴らす（階を移ったとき・その場で戦ったときは鳴らさない）
     if (next.map === prev.map && !samePos(prev.player, next.player)) playFootstep(next.trait);
     // 宝箱から金貨か道具を取ったら、宝箱の音を鳴らす（持ち物がいっぱいで何も取れなかったときは鳴らさない）
-    if (next.map === prev.map && next.chests !== prev.chests && (next.gold > prev.gold || next.stats.items.length > prev.stats.items.length)) {
+    // （敵を倒して宝箱が落ちたときや、倒して金貨を得たときは鳴らさない。主人公のいるマスの宝箱を開けたときだけ）
+    const openedHere = next.chests.some((c) => c.opened && samePos(c.pos, next.player) && !prev.chests.some((p) => p.opened && samePos(p.pos, c.pos)));
+    if (next.map === prev.map && openedHere && (next.gold > prev.gold || next.stats.items.length > prev.stats.items.length)) {
       playChestOpen();
     }
     // 階を移ったときは動かさずに切り替える
@@ -624,6 +626,15 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
           <div className="explore__status">
             <Meter label="HP" value={stats.hp} max={stats.maxHp} tone="hp" />
             <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" />
+            {/* レベルは、この挑戦のあいだだけ。いちばん上のレベルでは経験値の棒を出さない */}
+            {state.level < REWARD_CONFIG.maxLevel ? (
+              <Meter label={`レベル${state.level}`} value={state.exp} max={expToNext(state.level)} tone="exp" unit="経験値" />
+            ) : (
+              <p className="meter__head">
+                <span>レベル{state.level}</span>
+                <span>最大</span>
+              </p>
+            )}
           </div>
 
           <div className="explore__controls">
@@ -728,16 +739,17 @@ function LogList({ lines, total }: { lines: string[]; total: number }) {
   );
 }
 
-function Meter({ label, value, max, tone }: { label: string; value: number; max: number; tone: 'hp' | 'satiety' }) {
+function Meter({ label, value, max, tone, unit }: { label: string; value: number; max: number; tone: 'hp' | 'satiety' | 'exp'; unit?: string }) {
   return (
     <div className="meter">
       <div className="meter__head">
         <span>{label}</span>
         <span>
+          {unit ? `${unit} ` : ''}
           {value} / {max}
         </span>
       </div>
-      <div className={`meter__track meter__track--${tone}`} role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value}>
+      <div className={`meter__track meter__track--${tone}`} role="meter" aria-label={unit ? `${label}の${unit}` : label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value}>
         <div className="meter__fill" style={{ width: `${(value / max) * 100}%` }} />
       </div>
     </div>

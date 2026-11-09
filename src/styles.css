@@ -696,6 +696,11 @@ button.card:disabled {
   background: var(--procure);
 }
 
+/* 経験値：情報の青。たまると次のレベルに上がる */
+.meter__track--exp .meter__fill {
+  background: var(--info);
+}
+
 .explore__log {
   list-style: none;
   margin: 0;
