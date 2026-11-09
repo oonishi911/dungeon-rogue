@@ -506,7 +506,7 @@ function enemiesTurn(state: ExploreState): ExploreState {
         const nextPos = nextStepToward(s.map, e.pos, e.lastSeen, blocked);
         if (nextPos && !samePos(nextPos, s.player)) e = { ...e, pos: nextPos };
       } else {
-        const moved = wanderStep(s.map, e.pos, blocked, s.rngState);
+        const moved = wanderStep(s.map, e.pos, blocked, s.rngState, e.room);
         s = { ...s, rngState: moved.rngState };
         e = { ...e, pos: moved.pos };
       }

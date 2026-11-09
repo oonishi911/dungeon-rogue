@@ -4,6 +4,7 @@ import { App } from './App';
 import { unlockSound } from './audio/sound';
 import { EnemyAdmin } from './ui/EnemyAdmin';
 import { ExploreDevScreen } from './ui/ExploreScreen';
+import { GenAdmin } from './ui/GenAdmin';
 import { MapViewer } from './ui/MapViewer';
 import './styles.css';
 
@@ -15,7 +16,7 @@ for (const type of ['pointerdown', 'pointerup', 'touchend', 'keydown'] as const)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {/* 開発用：?view=map でマップ生成、?view=explore で探索の確認画面、?view=enemies で敵のマスターデータの管理画面を開く */}
-    {{ map: <MapViewer />, explore: <ExploreDevScreen />, enemies: <EnemyAdmin /> }[view ?? ''] ?? <App />}
+    {/* 開発用：?view=map でマップ生成、?view=explore で探索の確認画面、?view=enemies で敵のマスターデータ、?view=gen でダンジョン生成の設定の管理画面を開く */}
+    {{ map: <MapViewer />, explore: <ExploreDevScreen />, enemies: <EnemyAdmin />, gen: <GenAdmin /> }[view ?? ''] ?? <App />}
   </StrictMode>,
 );

@@ -6,14 +6,13 @@
 // 5. 本道から外れた行き止まりに、宝箱か強敵を置く。
 // 乱数はシード付きなので、同じシード・同じ設定なら必ず同じマップになる。
 
+import { GEN_SETTINGS, type RoomSettings } from './genMaster';
 import { nextInt, nextRandom, shuffle } from './rng';
 
 export const MAP_CONFIG = {
   minSize: 20,
   maxSize: 100,
-  roomAttemptRate: 0.04, // 迷路のセル数に対する、部屋を置こうとする回数の割合
-  roomMinSize: 3, // 部屋の一辺（奇数）
-  roomMaxSize: 9,
+  // 小部屋の多さと大きさは、管理画面で変えられる設定（dungeonGen.json の rooms）にある
   loopChance: 0.04, // すでにつながっている場所どうしの壁を壊してループにする確率
   stairsMinRatio: 0.55, // 階段は、入口から最も遠い通路までの距離のこの範囲に置く
   stairsMaxRatio: 0.8,
@@ -60,6 +59,7 @@ export interface FloorOptions {
   height: number;
   loopChance?: number;
   featureRate?: number;
+  rooms?: RoomSettings; // 小部屋の置き方（ふつうは dungeonGen.json の設定。管理画面の見本では、変えている途中の値を使う）
 }
 
 const DIRS: readonly Pos[] = [
@@ -79,6 +79,7 @@ export function generateFloor(seed: number, options: FloorOptions): FloorMap {
   }
   const loopChance = options.loopChance ?? MAP_CONFIG.loopChance;
   const featureRate = options.featureRate ?? MAP_CONFIG.featureRate;
+  const roomSettings = options.rooms ?? GEN_SETTINGS.rooms;
 
   const tiles: Tile[] = new Array<Tile>(width * height).fill('wall');
   // 掘ったマスがどの区画（部屋1つ、または迷路1つ）に属するか。壁は -1
@@ -106,11 +107,11 @@ export function generateFloor(seed: number, options: FloorOptions): FloorMap {
   // --- 1. 小部屋を置く ---
   // 位置も大きさも奇数にそろえるので、部屋どうしの間には必ず壁が1マス以上残る
   const rooms: Room[] = [];
-  const sizeSteps = (MAP_CONFIG.roomMaxSize - MAP_CONFIG.roomMinSize) / 2 + 1;
-  const attempts = Math.round(cols * rows * MAP_CONFIG.roomAttemptRate);
+  const sizeSteps = (roomSettings.maxSize - roomSettings.minSize) / 2 + 1;
+  const attempts = Math.round(cols * rows * roomSettings.attemptRate);
   for (let a = 0; a < attempts; a++) {
-    const w = Math.min(MAP_CONFIG.roomMinSize + roll(sizeSteps) * 2, maxCellX);
-    const h = Math.min(MAP_CONFIG.roomMinSize + roll(sizeSteps) * 2, maxCellY);
+    const w = Math.min(roomSettings.minSize + roll(sizeSteps) * 2, maxCellX);
+    const h = Math.min(roomSettings.minSize + roll(sizeSteps) * 2, maxCellY);
     // 右端・下端が maxCell を超えない奇数座標から選ぶ
     const x = roll((maxCellX - w) / 2 + 1) * 2 + 1;
     const y = roll((maxCellY - h) / 2 + 1) * 2 + 1;
