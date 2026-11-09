@@ -6,7 +6,6 @@
 // - 床と壁には、ダンジョン特性ごとのテクスチャ（public/textures/{特性}.png）を貼る。読み込むまでは色で描く
 // - 霧：まだ見ていないマスは描かない。一度見たマスは暗く、今見えているマスは明るく描く
 // - 主人公は立体の模型（hero3d.ts）。設定画から作った敵も立体の模型（トロルは troll3d.ts、ほかは enemyModel.ts）。
-//   設定画のない闇のダンジョンの敵は、形から組み立てた模型（creature3d.ts）。
 //   闇のダンジョンの、設定画のない敵は、形も色もプログラムで組んだ模型（creatures.ts）。ほかの敵と宝箱は、絵を常にカメラを向く板（スプライト）として立てる
 
 import * as THREE from 'three';
@@ -24,7 +23,6 @@ import { Hero3D } from './hero3d';
 import enemyViewsJson from './enemyViews.json';
 import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { enemySkin, parseEnemyShape, ShapedEnemy, type EnemyMotion } from './enemyModel';
-import { CREATURES } from './creature3d';
 import { Troll3D } from './troll3d';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
@@ -952,7 +950,7 @@ export class DungeonView3D {
           body = mesh;
         }
         if (ring) ring.receiveShadow = true;
-        const top = model ? (CREATURES[e.id]?.height ?? ENEMY_VIEWS[e.id]?.height ?? 1) + (SHAPED_ENEMIES[e.id] === 'float' ? FLOAT_HEIGHT : 0) : (photo?.top ?? 1);
+        const top = model ? (model.height ?? ENEMY_VIEWS[e.id]?.height ?? 1) + (SHAPED_ENEMIES[e.id] === 'float' ? FLOAT_HEIGHT : 0) : (photo?.top ?? 1);
         view = { id: e.id, body, model, mark: new THREE.Sprite(), hp: new THREE.Sprite(), ring, top, facing: 'down' };
         this.scene.add(view.body, view.mark, view.hp);
         if (ring) this.scene.add(ring);
@@ -996,8 +994,6 @@ export class DungeonView3D {
   /** 立体の模型で描く敵なら、模型を作る（向きごとの絵がまだ読み込めていなければ null） */
   private makeEnemyModel(id: EnemyId): EnemyModel | null {
     if (isCreature(id)) return new Creature(id, (m, name) => applyFog(m, this.fog, 'darken', name));
-    const creature = CREATURES[id];
-    if (creature) return creature.make((m, name) => applyFog(m, this.fog, 'darken', name));
     const shape = this.shapes.get(id);
     const motion = SHAPED_ENEMIES[id];
     if (shape && motion) return new ShapedEnemy(shape.geometry, shape.material, this.modelShadow, motion);

@@ -17,6 +17,7 @@ const TURN_SPEED = 9;
 // ===== 形を作る道具 =====
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+const P = (r: number, y: number) => new THREE.Vector2(r, y); // 回転体の輪郭の点（半径, 高さ）
 
 /** 楕円体（中心が原点） */
 function ellipsoid(rx: number, ry: number, rz: number, w = 28, h = 20): THREE.BufferGeometry {
@@ -318,7 +319,7 @@ const BUILDERS: Record<CreatureId, (k: Kit, body: THREE.Group) => Rig> = {
     const eye = k.glow(0x9fe8ff);
     const float = k.pivot(body, V(0, 0.12, 0));
     const hem = tatter(
-      new THREE.LatheGeometry([V(0.27, 0, 0), V(0.25, 0.2, 0), V(0.2, 0.45, 0), V(0.15, 0.65, 0), V(0.13, 0.75, 0), V(0.06, 0.8, 0)], 28),
+      new THREE.LatheGeometry([P(0.27, 0), P(0.25, 0.2), P(0.2, 0.45), P(0.15, 0.65), P(0.13, 0.75), P(0.06, 0.8)], 28),
       0.12,
       9,
     );
@@ -483,7 +484,7 @@ const BUILDERS: Record<CreatureId, (k: Kit, body: THREE.Group) => Rig> = {
     const orbGlow = k.glow(0xb07cff);
     const float = k.pivot(body, V(0, 0.1, 0));
     // 下半身：裂けたすその長い衣
-    k.mesh(float, roughen(tatter(new THREE.LatheGeometry([V(0.32, 0, 0), V(0.28, 0.25, 0), V(0.21, 0.5, 0), V(0.17, 0.66, 0), V(0.1, 0.7, 0)], 28), 0.12, 11), 0.015, 12), cloth);
+    k.mesh(float, roughen(tatter(new THREE.LatheGeometry([P(0.32, 0), P(0.28, 0.25), P(0.21, 0.5), P(0.17, 0.66), P(0.1, 0.7)], 28), 0.12, 11), 0.015, 12), cloth);
     k.mesh(float, new THREE.TorusGeometry(0.17, 0.022, 8, 28).rotateX(Math.PI / 2), trim, V(0, 0.66, 0)); // 帯
     const chest = k.pivot(float, V(0, 0.66, 0));
     k.mesh(chest, roughen(ellipsoid(0.2, 0.19, 0.14), 0.006, 16), armor, V(0, 0.2, 0));
