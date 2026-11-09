@@ -1360,6 +1360,79 @@ button.card:disabled {
   color: var(--alert);
 }
 
+/* 管理画面どうしを行き来するリンク */
+.admin__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0 0 1rem;
+  font-size: var(--step--1);
+}
+
+.admin__nav a {
+  color: var(--bone-dim);
+}
+
+.admin__nav [aria-current='page'] {
+  color: var(--bone);
+  font-weight: 700;
+}
+
+/* ダンジョン生成の設定：項目名・入力欄・説明を1行ずつ並べる（狭い画面では説明を下に回す） */
+.gen__fields {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.gen__field {
+  display: grid;
+  grid-template-columns: minmax(9rem, 13rem) auto 1fr;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+}
+
+.gen__label {
+  font-weight: 700;
+}
+
+.gen__hint {
+  color: var(--bone-dim);
+  font-size: var(--step--1);
+  line-height: 1.5;
+}
+
+.gen__field .admin__number {
+  width: 6rem;
+}
+
+.gen__preview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.gen__preview-controls label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: var(--step--1);
+}
+
+.gen__room-swatch {
+  background: color-mix(in srgb, var(--bone) 16%, var(--pine-line));
+}
+
+@media (max-width: 640px) {
+  .gen__field {
+    grid-template-columns: 1fr auto;
+  }
+
+  .gen__hint {
+    grid-column: 1 / -1;
+  }
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

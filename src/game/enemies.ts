@@ -2,7 +2,8 @@
 // 敵の手番の進め方（気付く・追う・攻撃する）は explore.ts にある。
 
 import { enemyBase, TRAIT_ENEMIES } from './data';
-import { tileAt, type FloorMap, type Pos } from './map';
+import { GEN_SETTINGS, type EnemySettings } from './genMaster';
+import { tileAt, type FloorMap, type Pos, type Room } from './map';
 import { nextInt, nextRandom } from './rng';
 import type { EnemyDef, EnemyId, TraitId } from './types';
 
@@ -37,6 +38,7 @@ export interface MapEnemy {
   justNoticed: boolean; // このターンに気付いた（「！」を強調して表示する）
   lastSeen: Pos | null; // 最後にプレイヤーを見た場所
   searchTurns: number; // search のとき、あと何ターン探すか
+  room?: Room; // 気付くまでは、この部屋の中だけを歩く（部屋に置いた敵で、設定の stayInRoom がオンのとき）
 }
 
 /**
@@ -65,7 +67,11 @@ function strongestOf(trait: TraitId): EnemyId {
 
 /**
  * 階に敵を配置する。
- * 強敵はマップの「強敵」の行き止まりに置き、通常の敵は入口から離れた通路にランダムに置く。
+ * 強敵はマップの「強敵」の行き止まりに置き、通常の敵は入口から離れた床にランダムに置く。
+ * 数と置き方は設定（dungeonGen.json の enemies）で決める：数は amount 倍。置く場所は placement で、
+ * 部屋にも通路にも（部屋の床は roomWeight 倍選ばれやすい）・部屋だけ・通路だけ。部屋が足りなければ置ける分だけ置く。
+ * さらに、部屋ごとに nestChance の確率で「群れ部屋」にして、通常の敵とは別に nestMin〜nestMax 体をまとめて置く（通路だけのときは作らない）。
+ * 入口から safeDistance マス以内には、どちらも置かない
  */
 export function spawnEnemies(
   map: FloorMap,
@@ -73,20 +79,26 @@ export function spawnEnemies(
   rngState: number,
   firstUid: number,
   density: number = ENEMY_CONFIG.density,
+  settings: EnemySettings = GEN_SETTINGS.enemies,
 ): { enemies: MapEnemy[]; rngState: number } {
   let s = rngState;
   const enemies: MapEnemy[] = [];
-  const make = (id: EnemyId, pos: Pos, elite: boolean): MapEnemy => ({
-    uid: firstUid + enemies.length,
-    id,
-    elite,
-    pos,
-    hp: enemyDef({ id, elite }).hp,
-    mode: 'wander',
-    justNoticed: false,
-    lastSeen: null,
-    searchTurns: 0,
-  });
+  const roomAt = (p: Pos) => map.rooms.find((r) => p.x >= r.x && p.x < r.x + r.width && p.y >= r.y && p.y < r.y + r.height);
+  const make = (id: EnemyId, pos: Pos, elite: boolean): MapEnemy => {
+    const room = !elite && settings.stayInRoom ? roomAt(pos) : undefined;
+    return {
+      uid: firstUid + enemies.length,
+      id,
+      elite,
+      pos,
+      hp: enemyDef({ id, elite }).hp,
+      mode: 'wander',
+      justNoticed: false,
+      lastSeen: null,
+      searchTurns: 0,
+      ...(room ? { room: { ...room } } : {}),
+    };
+  };
 
   const occupied = new Set<string>([key(map.start), ...(map.stairs ? [key(map.stairs)] : [])]);
   for (const f of map.features) {
@@ -102,14 +114,53 @@ export function spawnEnemies(
     candidates.push(pos);
   });
   const floorCount = map.tiles.filter((t) => t === 'floor').length;
-  const count = Math.min(candidates.length, Math.round(floorCount * density));
+  const count = Math.min(candidates.length, Math.round(floorCount * density * settings.amount));
   const pool = TRAIT_ENEMIES[trait].pool;
+  // 場所の選ばれやすさ（0 の場所には置かない）。部屋にも通路にも置くとき、部屋の床は roomWeight、通路の床は1
+  const roomWeight = { mixed: settings.roomWeight, rooms: 1, corridors: 0 }[settings.placement];
+  const corridorWeight = settings.placement === 'rooms' ? 0 : 1;
+  const weights = candidates.map((p) => (roomAt(p) ? roomWeight : corridorWeight));
+  const even = roomWeight === 1 && corridorWeight === 1; // どこも同じなら、前と同じ選び方（同じシードなら同じ配置）
   for (let n = 0; n < count; n++) {
-    const pick = nextInt(s, candidates.length);
-    const kind = nextInt(pick.state, pool.length);
+    let index: number;
+    if (even) {
+      const pick = nextInt(s, candidates.length);
+      s = pick.state;
+      index = pick.value;
+    } else {
+      const total = weights.reduce((a, w) => a + w, 0);
+      if (total <= 0) break;
+      const r = nextRandom(s);
+      s = r.state;
+      let left = r.value * total;
+      index = weights.findIndex((w) => (left -= w) < 0);
+      if (index < 0) index = weights.length - 1;
+    }
+    const kind = nextInt(s, pool.length);
     s = kind.state;
-    const [pos] = candidates.splice(pick.value, 1);
+    const [pos] = candidates.splice(index, 1);
+    weights.splice(index, 1);
     enemies.push(make(pool[kind.value]!, pos!, false));
+  }
+
+  // 群れ部屋：部屋ごとに確率で決め、部屋の中の空いている床に、まとめて置く
+  if (settings.nestChance > 0 && settings.placement !== 'corridors') {
+    for (const room of map.rooms) {
+      const roll = nextRandom(s);
+      s = roll.state;
+      if (roll.value >= settings.nestChance) continue;
+      const size = nextInt(s, settings.nestMax - settings.nestMin + 1);
+      s = size.state;
+      for (let n = 0; n < settings.nestMin + size.value; n++) {
+        const free = candidates.flatMap((p, i) => (roomAt(p) === room ? [i] : []));
+        if (free.length === 0) break;
+        const pick = nextInt(s, free.length);
+        const kind = nextInt(pick.state, pool.length);
+        s = kind.state;
+        const [pos] = candidates.splice(free[pick.value]!, 1);
+        enemies.push(make(pool[kind.value]!, pos!, false));
+      }
+    }
   }
   return { enemies, rngState: s };
 }
@@ -169,10 +220,12 @@ export function wanderStep(
   from: Pos,
   blocked: ReadonlySet<string>,
   rngState: number,
+  area?: Room, // あれば、この部屋の外へは出ない
 ): { pos: Pos; rngState: number } {
   const move = nextRandom(rngState);
   if (move.value >= ENEMY_CONFIG.wanderMoveChance) return { pos: from, rngState: move.state };
-  const open = neighbors(from).filter((n) => tileAt(map, n) === 'floor' && !blocked.has(key(n)));
+  const inArea = (p: Pos) => !area || (p.x >= area.x && p.x < area.x + area.width && p.y >= area.y && p.y < area.y + area.height);
+  const open = neighbors(from).filter((n) => tileAt(map, n) === 'floor' && !blocked.has(key(n)) && (!inArea(from) || inArea(n)));
   if (open.length === 0) return { pos: from, rngState: move.state };
   const pick = nextInt(move.state, open.length);
   return { pos: open[pick.value]!, rngState: pick.state };
