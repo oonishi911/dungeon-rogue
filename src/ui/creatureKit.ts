@@ -231,3 +231,22 @@ export type Rig = { height: number; shadow: number; animate(t: number, walk: num
 
 /** 模型を組み立てる関数 */
 export type Builder = (k: Kit, body: THREE.Group) => Rig;
+
+// ===== 組み立ての決まった手順 =====
+
+/** 関節の付いた手足：点をつないだ円柱と、関節の球。radii は点ごとの太さ */
+export function chain(k: Kit, parent: THREE.Object3D, pts: THREE.Vector3[], radii: number[], mat: THREE.Material, joints = true) {
+  for (let i = 0; i + 1 < pts.length; i++) {
+    k.mesh(parent, limb(pts[i]!, pts[i + 1]!, radii[i]!, radii[i + 1]!), mat);
+    if (joints && i > 0) k.mesh(parent, ellipsoid(radii[i]! * 1.08, radii[i]! * 1.08, radii[i]! * 1.08, 12, 8), mat, pts[i]!);
+  }
+}
+
+/** 炎のゆらめき：大きさを不規則に変える */
+export const flicker = (t: number, i: number) => 0.8 + 0.2 * Math.sin(t * 13 + i * 1.7) * Math.sin(t * 7.3 + i * 2.9);
+
+/** 大きさを変えた模型（ボスなど）：体全体を拡大し、高さと影も合わせる */
+export function scaled(body: THREE.Group, rig: Rig, s: number): Rig {
+  body.scale.setScalar(s);
+  return { ...rig, height: rig.height * s, shadow: rig.shadow * s };
+}

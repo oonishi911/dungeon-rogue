@@ -1,14 +1,16 @@
-// 設定画のない敵を、形も色もプログラムで組んだ立体の模型。
-// 組み立て方は敵ごとに creaturesDark.ts（闇のダンジョン）と creaturesWorld.ts（ほかのダンジョン）にあり、
+// すべての敵の、形も色もプログラムで組んだ立体の模型。
+// 組み立て方は敵ごとに creaturesDark.ts（闇のダンジョン）、creaturesWorld.ts（ほかのダンジョン）、
+// creaturesSheet.ts（以前は設定画から作っていた7体）にあり、
 // 道具（形の部品、凹凸、光る目、素材）は creatureKit.ts。ここでは、組んだ模型を向かせ、動かす。
 
 import * as THREE from 'three';
 import type { Dir } from '../game/explore';
 import { type Builder, Kit, type Rig, type Wrap } from './creatureKit';
 import { DARK_BUILDERS } from './creaturesDark';
+import { SHEET_BUILDERS } from './creaturesSheet';
 import { WORLD_BUILDERS } from './creaturesWorld';
 
-const BUILDERS = { ...DARK_BUILDERS, ...WORLD_BUILDERS } satisfies Record<string, Builder>;
+const BUILDERS = { ...DARK_BUILDERS, ...WORLD_BUILDERS, ...SHEET_BUILDERS } satisfies Record<string, Builder>;
 export type CreatureId = keyof typeof BUILDERS;
 export const CREATURE_IDS = Object.keys(BUILDERS) as CreatureId[];
 

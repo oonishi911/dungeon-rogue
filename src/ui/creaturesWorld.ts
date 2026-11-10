@@ -8,26 +8,7 @@
 // - ほか：溶岩トカゲ・氷のスライム・氷の甲虫・光の鳥・光の精
 
 import * as THREE from 'three';
-import { type Builder, ellipsoid, type Kit, limb, P, type Rig, roughen, spike, tatter, V } from './creatureKit';
-
-type Mat = THREE.Material;
-
-/** 関節の付いた手足：点をつないだ円柱と、関節の球。radii は点ごとの太さ */
-function chain(k: Kit, parent: THREE.Object3D, pts: THREE.Vector3[], radii: number[], mat: Mat, joints = true) {
-  for (let i = 0; i + 1 < pts.length; i++) {
-    k.mesh(parent, limb(pts[i]!, pts[i + 1]!, radii[i]!, radii[i + 1]!), mat);
-    if (joints && i > 0) k.mesh(parent, ellipsoid(radii[i]! * 1.08, radii[i]! * 1.08, radii[i]! * 1.08, 12, 8), mat, pts[i]!);
-  }
-}
-
-/** 炎のゆらめき：大きさを不規則に変える */
-const flicker = (t: number, i: number) => 0.8 + 0.2 * Math.sin(t * 13 + i * 1.7) * Math.sin(t * 7.3 + i * 2.9);
-
-/** 大きさを変えた模型（ボスなど）：体全体を拡大し、高さと影も合わせる */
-function scaled(body: THREE.Group, rig: Rig, s: number): Rig {
-  body.scale.setScalar(s);
-  return { ...rig, height: rig.height * s, shadow: rig.shadow * s };
-}
+import { type Builder, chain, ellipsoid, flicker, type Kit, limb, P, type Rig, roughen, scaled, spike, tatter, V } from './creatureKit';
 
 // ===== 小鬼 =====
 
