@@ -2,9 +2,11 @@
 // プライベートブラウズなどで localStorage が使えないこともあるので、失敗しても遊べるようにする。
 
 import { parseSoundSettings, type SoundSettings } from './audio/settings';
+import { parseRun, type ResumedRun, type RunSave } from './game/runSave';
 import { parseSave, type SaveData } from './game/save';
 
 const KEY = 'dungeon-prep/save';
+const RUN_KEY = 'dungeon-prep/run';
 const SOUND_KEY = 'dungeon-prep/sound';
 
 export function loadSave(): SaveData | null {
@@ -28,6 +30,31 @@ export function clearSave(): void {
     localStorage.removeItem(KEY);
   } catch {
     // 消せなくても次の読み込みで形を確かめるので問題ない
+  }
+}
+
+/** 探索の途中の状態（中断データ）。なければ、または続きから遊べなければ null */
+export function loadRun(): ResumedRun | null {
+  try {
+    return parseRun(localStorage.getItem(RUN_KEY));
+  } catch {
+    return null;
+  }
+}
+
+export function writeRun(data: RunSave): void {
+  try {
+    localStorage.setItem(RUN_KEY, JSON.stringify(data));
+  } catch {
+    // 保存できなくても遊び続けられる（続きから遊べなくなるだけ）
+  }
+}
+
+export function clearRun(): void {
+  try {
+    localStorage.removeItem(RUN_KEY);
+  } catch {
+    // 消せなくても、探索が終わっていれば読み込みで弾かれる
   }
 }
 
