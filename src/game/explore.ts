@@ -705,19 +705,33 @@ function backAttacks(state: ExploreState, to: Pos): ExploreState {
  */
 function enemiesTurn(state: ExploreState): ExploreState {
   let s = state;
-  for (const original of state.enemies) {
-    const current = s.enemies.find((e) => e.uid === original.uid);
-    if (!current) continue;
+  // 敵の並びと「敵のいるマス」は、1体動かすたびに作り直さず、その場で書き換える。
+  // （1体ごとに全員ぶんを作り直すと、敵が100体を超える広い階で、手間が敵の数の2乗になるため）
+  const enemies = [...state.enemies];
+  const playerKey = key(s.player);
+  const crowd = new Map<string, number>(); // マスごとの敵の数
+  for (const e of enemies) crowd.set(key(e.pos), (crowd.get(key(e.pos)) ?? 0) + 1);
+  const blocked = new Set<string>([...crowd.keys(), playerKey]); // 通れないマス：敵と主人公
+  const leave = (k: string) => {
+    const left = (crowd.get(k) ?? 1) - 1;
+    crowd.set(k, left);
+    if (left <= 0 && k !== playerKey) blocked.delete(k);
+  };
+  const enter = (k: string) => {
+    crowd.set(k, (crowd.get(k) ?? 0) + 1);
+    blocked.add(k);
+  };
+  for (let i = 0; i < enemies.length; i++) {
+    const current = enemies[i]!;
     const def = enemyDef(current);
     const sees = canSee(s.map, current.pos, s.player, ENEMY_CONFIG.sight);
     let e: MapEnemy = { ...current, justNoticed: false };
-    const log: string[] = [];
 
     if (sees) {
       if (e.mode !== 'chase') {
         // 気付いたターンは身構えるだけで動かない。プレイヤーに対応する猶予を与える
-        e = { ...e, mode: 'chase', justNoticed: true, lastSeen: s.player };
-        s = withEnemy({ ...s, log: [...s.log, `${def.name}がこちらに気付いた`] }, e);
+        enemies[i] = { ...e, mode: 'chase', justNoticed: true, lastSeen: s.player };
+        s = { ...s, log: [...s.log, `${def.name}がこちらに気付いた`] };
         continue;
       }
       e = { ...e, lastSeen: s.player };
@@ -727,23 +741,21 @@ function enemiesTurn(state: ExploreState): ExploreState {
       e = { ...e, searchTurns: e.searchTurns - 1 };
       if (e.searchTurns <= 0) {
         e = { ...e, mode: 'wander', lastSeen: null, searchTurns: 0 };
-        log.push(`${def.name}はこちらを見失ったようだ`);
+        s = { ...s, log: [...s.log, `${def.name}はこちらを見失ったようだ`] };
       }
     }
-    s = { ...s, log: [...s.log, ...log] };
 
     // 攻撃
     if (e.mode !== 'wander' && isAdjacent(e.pos, s.player)) {
-      s = withEnemy(s, e);
+      enemies[i] = e;
       s = damagePlayer(s, enemyHitDamage(s.stats, def), `${def.name}の攻撃`, def.name, def.id);
-      if (s.outcome !== 'ongoing') return s;
+      if (s.outcome !== 'ongoing') return { ...s, enemies };
       continue;
     }
 
-    // 移動
+    // 移動（自分のいるマスは、自分にとっては通れないマスに数えない）
     if (!e.elite) {
-      const blocked = new Set(s.enemies.filter((o) => o.uid !== e.uid).map((o) => key(o.pos)));
-      blocked.add(key(s.player));
+      leave(key(e.pos));
       if (e.mode !== 'wander' && e.lastSeen && !samePos(e.pos, e.lastSeen)) {
         const nextPos = nextStepToward(s.map, e.pos, e.lastSeen, blocked);
         if (nextPos && !samePos(nextPos, s.player)) e = { ...e, pos: nextPos };
@@ -752,14 +764,11 @@ function enemiesTurn(state: ExploreState): ExploreState {
         s = { ...s, rngState: moved.rngState };
         e = { ...e, pos: moved.pos };
       }
+      enter(key(e.pos));
     }
-    s = withEnemy(s, e);
+    enemies[i] = e;
   }
-  return s;
-}
-
-function withEnemy(state: ExploreState, enemy: MapEnemy): ExploreState {
-  return { ...state, enemies: state.enemies.map((e) => (e.uid === enemy.uid ? enemy : e)) };
+  return { ...s, enemies };
 }
 
 function damagePlayer(state: ExploreState, dmg: number, message: string, by: string, enemy?: EnemyId): ExploreState {

@@ -187,28 +187,38 @@ export function spawnBoss(pos: Pos, trait: TraitId, uid: number): MapEnemy {
  */
 export function nextStepToward(map: FloorMap, from: Pos, to: Pos, blocked: ReadonlySet<string>): Pos | null {
   if (from.x === to.x && from.y === to.y) return null;
-  const parent = new Map<string, string>();
-  const dist = new Map<string, number>([[key(from), 0]]);
-  const queue: Pos[] = [from];
-  for (let head = 0; head < queue.length; head++) {
-    const p = queue[head]!;
-    const d = dist.get(key(p))!;
+  // マスは番号（y × 幅 + x）で扱う（文字列の鍵で調べるより速い）
+  const { width, height, tiles } = map;
+  const start = from.y * width + from.x;
+  const goal = to.y * width + to.x;
+  const parent = new Int32Array(width * height).fill(-1); // そのマスへ来る前のマス。-1 はまだ来ていない
+  const dist = new Int32Array(width * height);
+  parent[start] = start;
+  const queue = new Int32Array(width * height);
+  queue[0] = start;
+  let tail = 1;
+  for (let head = 0; head < tail; head++) {
+    const at = queue[head]!;
+    const d = dist[at]!;
     if (d >= ENEMY_CONFIG.chaseSearchLimit) continue;
-    for (const n of neighbors(p)) {
-      const k = key(n);
-      if (dist.has(k) || tileAt(map, n) === 'wall') continue;
-      const isGoal = n.x === to.x && n.y === to.y;
-      if (!isGoal && blocked.has(k)) continue;
-      dist.set(k, d + 1);
-      parent.set(k, key(p));
-      if (isGoal) {
+    const x = at % width;
+    const y = (at - x) / width;
+    for (const step of STEPS) {
+      const nx = x + step.x;
+      const ny = y + step.y;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      const n = ny * width + nx;
+      if (parent[n] !== -1 || tiles[n] === 'wall') continue;
+      if (n !== goal && blocked.has(`${nx},${ny}`)) continue;
+      dist[n] = d + 1;
+      parent[n] = at;
+      if (n === goal) {
         // ゴールからたどって、from の次のマスを返す
-        let cur = k;
-        while (parent.get(cur) !== key(from)) cur = parent.get(cur)!;
-        const [x, y] = cur.split(',').map(Number);
-        return { x: x!, y: y! };
+        let cur = n;
+        while (parent[cur] !== start) cur = parent[cur]!;
+        return { x: cur % width, y: Math.floor(cur / width) };
       }
-      queue.push(n);
+      queue[tail++] = n;
     }
   }
   return null;
@@ -238,6 +248,14 @@ export function isAdjacent(a: Pos, b: Pos): boolean {
 export function key(p: Pos): string {
   return `${p.x},${p.y}`;
 }
+
+// 隣のマスへの向き（上・右・下・左）。neighbors と同じ順（道探しの結果が変わらないように）
+const STEPS: readonly Pos[] = [
+  { x: 0, y: -1 },
+  { x: 1, y: 0 },
+  { x: 0, y: 1 },
+  { x: -1, y: 0 },
+];
 
 function neighbors(p: Pos): Pos[] {
   return [

@@ -3,7 +3,7 @@
 
 import { key } from './enemies';
 import { dirBetween, samePos, type ExploreAction, type ExploreState } from './explore';
-import { tileAt, type Pos } from './map';
+import type { Pos } from './map';
 
 export const DIRS: readonly Pos[] = [
   { x: 0, y: -1 },
@@ -23,25 +23,32 @@ export function findPath(
   avoid: ReadonlySet<string> = new Set(),
 ): Pos[] | null {
   const { map, player, seen } = state;
-  const start = key(player);
-  const parent = new Map<string, string>([[start, '']]);
-  const queue: Pos[] = [player];
-  for (let head = 0; head < queue.length; head++) {
-    const p = queue[head]!;
-    if (head > 0 && isGoal(p)) {
+  // マスは番号（y × 幅 + x）で扱う。文字列の鍵で調べるより、広い階でずっと速い
+  const { width, height, tiles } = map;
+  const start = player.y * width + player.x;
+  const parent = new Int32Array(width * height).fill(-1); // そのマスへ来る前のマス。-1 はまだ来ていない
+  parent[start] = start;
+  const queue = new Int32Array(width * height);
+  queue[0] = start;
+  let tail = 1;
+  const hasAvoid = avoid.size > 0;
+  for (let head = 0; head < tail; head++) {
+    const at = queue[head]!;
+    const x = at % width;
+    const y = (at - x) / width;
+    if (head > 0 && isGoal({ x, y })) {
       const path: Pos[] = [];
-      for (let cur = key(p); cur !== start; cur = parent.get(cur)!) {
-        const [x, y] = cur.split(',').map(Number);
-        path.push({ x: x!, y: y! });
-      }
+      for (let cur = at; cur !== start; cur = parent[cur]!) path.push({ x: cur % width, y: Math.floor(cur / width) });
       return path.reverse();
     }
     for (const d of DIRS) {
-      const n = { x: p.x + d.x, y: p.y + d.y };
-      const k = key(n);
-      if (parent.has(k) || avoid.has(k) || tileAt(map, n) === 'wall' || !seen[n.y * map.width + n.x]) continue;
-      parent.set(k, key(p));
-      queue.push(n);
+      const nx = x + d.x;
+      const ny = y + d.y;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      const n = ny * width + nx;
+      if (parent[n] !== -1 || tiles[n] === 'wall' || !seen[n] || (hasAvoid && avoid.has(`${nx},${ny}`))) continue;
+      parent[n] = at;
+      queue[tail++] = n;
     }
   }
   return null;
