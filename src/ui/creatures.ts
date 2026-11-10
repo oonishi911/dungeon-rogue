@@ -5,7 +5,7 @@
 
 import * as THREE from 'three';
 import type { Dir } from '../game/explore';
-import { type Builder, Kit, type Rig, type Wrap } from './creatureKit';
+import { type Builder, Kit, mergeStatic, type Rig, type Wrap } from './creatureKit';
 import { DARK_BUILDERS } from './creaturesDark';
 import { SHEET_BUILDERS } from './creaturesSheet';
 import { WORLD_BUILDERS } from './creaturesWorld';
@@ -33,6 +33,10 @@ export class Creature {
     this.rig = BUILDERS[id](this.kit, this.body);
     this.height = this.rig.height;
     this.root.add(this.body);
+    // 動かさない部品をまとめて、描く回数を減らす。時間と歩き方を変えて動かしてみて、動いた部品だけを残す
+    this.rig.animate(this.time, 0, false, 0);
+    const probes: [number, number, boolean][] = [[0.83, 0.37, true], [1.71, 0.9, true], [2.6, 0, false]];
+    mergeStatic(this.body, (i) => this.rig.animate(this.time + probes[i]![0], probes[i]![1], probes[i]![2], 0.016), probes.length, this.kit.disposables);
     const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false });
     const shadow = new THREE.Mesh(new THREE.CircleGeometry(this.rig.shadow, 24).rotateX(-Math.PI / 2).translate(0, 0.01, 0), shadowMat);
     this.kit.disposables.push(shadowMat, shadow.geometry);

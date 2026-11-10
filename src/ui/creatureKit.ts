@@ -12,15 +12,15 @@ import * as THREE from 'three';
 export const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 export const P = (r: number, y: number) => new THREE.Vector2(r, y); // 回転体の輪郭の点（半径, 高さ）
 
-/** 楕円体（中心が原点） */
-export function ellipsoid(rx: number, ry: number, rz: number, w = 28, h = 20): THREE.BufferGeometry {
+/** 楕円体（中心が原点）。画面では敵は小さく映るので、面の数は控えめにする（細かくしても見分けられず、描くのが重くなるだけ） */
+export function ellipsoid(rx: number, ry: number, rz: number, w = 18, h = 12): THREE.BufferGeometry {
   return new THREE.SphereGeometry(1, w, h).scale(rx, ry, rz);
 }
 
 /** 2点のあいだをつなぐ円柱（腕や脚、骨）。a の太さが ra、b の太さが rb */
-export function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number, segments = 12): THREE.BufferGeometry {
+export function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number, segments = 10): THREE.BufferGeometry {
   const dir = new THREE.Vector3().subVectors(b, a);
-  const geo = new THREE.CylinderGeometry(rb, ra, dir.length(), segments, 3);
+  const geo = new THREE.CylinderGeometry(rb, ra, dir.length(), segments, 2);
   geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), dir.clone().normalize()));
   const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
   return geo.translate(mid.x, mid.y, mid.z);
@@ -249,4 +249,92 @@ export const flicker = (t: number, i: number) => 0.8 + 0.2 * Math.sin(t * 13 + i
 export function scaled(body: THREE.Group, rig: Rig, s: number): Rig {
   body.scale.setScalar(s);
   return { ...rig, height: rig.height * s, shadow: rig.shadow * s };
+}
+
+// ===== 描く回数を減らす =====
+
+/**
+ * 動かさない部品を、入れ物（pivot）ごと・素材ごとに1つの形にまとめる。
+ * 模型は小さな部品を何十個も組んで作るが、部品1つごとに描く命令が1回かかるので、まとめると描くのがずっと軽くなる。
+ * 動かす部品（animate の中で位置・向き・大きさを変える部品）は、まとめずに残す。どれが動くかは、probe（時間や歩き方を
+ * 変えて animate を呼ぶ関数）を何度か呼び、そのたびに部品が動いたかを見て決める。
+ * まとめた形は disposables に加える（元の形はここで片付ける）
+ */
+export function mergeStatic(root: THREE.Object3D, probe: (pass: number) => void, passes: number, disposables: { dispose(): void }[]) {
+  const nodes: THREE.Object3D[] = [];
+  root.traverse((o) => void nodes.push(o));
+  const pose = (o: THREE.Object3D) => [...o.position.toArray(), ...o.quaternion.toArray(), ...o.scale.toArray()];
+  const before = nodes.map(pose);
+  const moving = new Set<THREE.Object3D>();
+  for (let pass = 0; pass < passes; pass++) {
+    probe(pass);
+    nodes.forEach((o, i) => {
+      if (pose(o).some((v, k) => Math.abs(v - before[i]![k]!) > 1e-9)) moving.add(o);
+    });
+  }
+  // 部品ごとに、いちばん近い「動く入れ物」（なければ全体）を探し、そこから見た置き方を求める。
+  // 動かない入れ物（向きを付けるためだけの入れ物など）は、中の部品ごと、その外の入れ物にまとめる
+  type Part = { mesh: THREE.Mesh; matrix: THREE.Matrix4 };
+  const byAnchor = new Map<THREE.Object3D, Map<THREE.Material, Part[]>>();
+  for (const o of nodes) {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || moving.has(mesh) || mesh.children.length > 0 || Array.isArray(mesh.material) || mesh === root) continue;
+    mesh.updateMatrix();
+    const matrix = mesh.matrix.clone();
+    let anchor = mesh.parent!;
+    while (anchor !== root && !moving.has(anchor)) {
+      anchor.updateMatrix();
+      matrix.premultiply(anchor.matrix);
+      anchor = anchor.parent!;
+    }
+    const byMaterial = byAnchor.get(anchor) ?? new Map<THREE.Material, Part[]>();
+    byAnchor.set(anchor, byMaterial);
+    byMaterial.set(mesh.material, [...(byMaterial.get(mesh.material) ?? []), { mesh, matrix }]);
+  }
+  const groups = [...byAnchor].flatMap(([anchor, byMaterial]) => [...byMaterial.values()].map((parts) => ({ anchor, parts })));
+  const v = new THREE.Vector3();
+  const normalMatrix = new THREE.Matrix3();
+  for (const { anchor, parts } of groups) {
+    if (parts.length < 2 && parts[0]!.mesh.parent === anchor) continue; // まとめる相手がなく、置き場所もそのまま
+    const total = parts.reduce((n, p) => n + p.mesh.geometry.getAttribute('position').count, 0);
+    const position = new Float32Array(total * 3);
+    const normal = new Float32Array(total * 3);
+    const uv = new Float32Array(total * 2);
+    const index: number[] = [];
+    let at = 0;
+    for (const { mesh: m, matrix } of parts) {
+      normalMatrix.getNormalMatrix(matrix);
+      const flipped = matrix.determinant() < 0; // 裏返っていれば、面の表裏を戻す
+      const g = m.geometry;
+      const pos = g.getAttribute('position');
+      const nor = g.getAttribute('normal');
+      const tex = g.getAttribute('uv');
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(matrix).toArray(position, (at + i) * 3);
+        if (nor) v.fromBufferAttribute(nor, i).applyMatrix3(normalMatrix).normalize().toArray(normal, (at + i) * 3);
+        if (tex) uv.set([tex.getX(i), tex.getY(i)], (at + i) * 2);
+      }
+      const count = g.index ? g.index.count : pos.count;
+      for (let i = 0; i < count; i += 3) {
+        const a = at + (g.index ? g.index.getX(i) : i);
+        const b = at + (g.index ? g.index.getX(i + 1) : i + 1);
+        const c = at + (g.index ? g.index.getX(i + 2) : i + 2);
+        if (flipped) index.push(a, c, b);
+        else index.push(a, b, c);
+      }
+      at += pos.count;
+      m.removeFromParent();
+      g.dispose();
+    }
+    const merged = new THREE.BufferGeometry();
+    merged.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    merged.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
+    merged.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    merged.setIndex(index);
+    const first = parts[0]!.mesh;
+    const mesh = new THREE.Mesh(merged, first.material);
+    mesh.castShadow = first.castShadow;
+    anchor.add(mesh);
+    disposables.push(merged);
+  }
 }

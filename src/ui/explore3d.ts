@@ -105,6 +105,10 @@ const TORCH = {
 };
 const AMBIENT = 0.3; // 全体を均等に照らす弱い光。光の届かない場所や、一度見ただけのマスがかろうじて見える明るさ
 const SUN = 0.25; // 上からの弱い光。壁の側面に陰をつける
+// 描く解像度（画面の1ピクセルを何ピクセルで描くか）。細かい画面でも max まで。
+// 描くのが間に合わない端末では、滑らかに動く方を優先して low まで下げる：1コマに slowMs より長くかかることが frames 回たまったら下げる
+// （速いコマが続けば数え直す。一度下げたら戻さない。low は、ぼやけが目立たない程度にとどめる）
+const RESOLUTION = { max: 2, low: 1.5, slowMs: 26, frames: 60 } as const;
 const MAX_ANISOTROPY = 8; // 斜めから見た床がぼけないようにする強さの上限（スマホで重くなりすぎないように）
 // 宝箱の大きさ（マス）。ふたは奥行きを直径とするかまぼこ形で、本体の上に載る（いちばん上は高さ + 奥行き/2）
 const CHEST = { width: 0.56, height: 0.3, depth: 0.38 };
@@ -180,6 +184,8 @@ export class DungeonView3D {
   private readonly hero = new Hero3D(); // 主人公は立体の模型（敵や宝箱はドット絵の板のまま）
   private heroDir: Dir = 'down'; // 最後に歩いた向き。模型をこの向きへ回す
   private lastFrameAt = performance.now();
+  private pixelRatio = Math.min(window.devicePixelRatio, RESOLUTION.max);
+  private slowFrames = 0; // 描くのが間に合わなかったコマの数（解像度を下げるかを決める）
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private readonly spellFx = new SpellEffects(this.scene, this.reduceMotion); // 呪文の演出
   private pulse: { kind: HitPulse; start: number } | null = null;
@@ -236,7 +242,7 @@ export class DungeonView3D {
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.setSize(canvas.width, canvas.height, false);
     if (this.shadows) {
       this.renderer.shadowMap.enabled = true;
@@ -350,8 +356,10 @@ export class DungeonView3D {
     // 動きの途中の位置
     const p = lerp(frame.from.player, s.player, frame.progress);
     const now = performance.now();
-    const dt = Math.min(0.1, (now - this.lastFrameAt) / 1000);
+    const elapsed = now - this.lastFrameAt;
+    const dt = Math.min(0.1, elapsed / 1000);
     this.lastFrameAt = now;
+    this.adaptResolution(elapsed);
     const moved = frame.from.player.x !== s.player.x || frame.from.player.y !== s.player.y;
     // 1マスずつ動くので、前の位置から今の位置への向きが歩いた向き（階を移ったときは向きを変えない）
     if (moved && Math.abs(frame.from.player.x - s.player.x) + Math.abs(frame.from.player.y - s.player.y) === 1) {
@@ -376,7 +384,7 @@ export class DungeonView3D {
     this.camera.lookAt(p.x, 0, p.y);
     for (const e of s.enemies) {
       const view = this.enemies.get(e.uid);
-      if (!view) continue;
+      if (!view || !view.body.visible) continue; // 見えていない敵は動かさない
       const from = frame.from.enemies.get(e.uid) ?? e.pos;
       const at = lerp(from, e.pos, frame.progress);
       if (view.model) {
@@ -394,6 +402,15 @@ export class DungeonView3D {
     this.updateWalkTarget(frame.walkTarget);
     this.updateWalkPath(frame.walkPath);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /** 描くのが間に合わないコマが続いたら、描く解像度を下げる（RESOLUTION）。elapsed は前のコマからの時間（ms） */
+  private adaptResolution(elapsed: number) {
+    if (this.pixelRatio <= RESOLUTION.low || elapsed > 250) return; // 長く止まっていたとき（別の画面を見ていたなど）は数えない
+    this.slowFrames = elapsed > RESOLUTION.slowMs ? this.slowFrames + 1 : Math.max(0, this.slowFrames - 1);
+    if (this.slowFrames < RESOLUTION.frames) return;
+    this.pixelRatio = RESOLUTION.low;
+    this.renderer.setPixelRatio(this.pixelRatio);
   }
 
   /** 呪文を唱えたとき：向きを選ぶ呪文ならその向きを向き、呪文の演出を出す。from は唱えたマス */
@@ -785,7 +802,11 @@ export class DungeonView3D {
 
   // ===== 敵 =====
 
-  /** 今見えているマスにいる敵だけを表示する */
+  /**
+   * 今見えているマスにいる敵だけを表示する。
+   * 見えなくなった敵の模型は、隠すだけで片付けない（また見えたときに組み立て直すと、その瞬間に動きが引っかかるため）。
+   * 倒されたり、階を移ったりして、いなくなった敵の模型だけを片付ける
+   */
   private updateEnemies(frame: Frame) {
     const { state, visible } = frame;
     const shown = new Set<number>();
@@ -813,6 +834,8 @@ export class DungeonView3D {
         if (ring) this.scene.add(ring);
         this.enemies.set(e.uid, view);
       }
+      view.body.visible = view.mark.visible = true;
+      if (view.ring) view.ring.visible = true;
       // 向き：歩いたらその向き、止まっていても主人公を追っていれば主人公の方を向く
       const from = frame.from.enemies.get(e.uid);
       if (from && (from.x !== e.pos.x || from.y !== e.pos.y)) view.facing = facingToward(from, e.pos);
@@ -825,9 +848,14 @@ export class DungeonView3D {
       view.hp.material = this.hpMaterial(Math.ceil((e.hp / def.hp) * 10));
       view.hp.scale.set(0.8, 0.1, 1);
     }
-    for (const uid of [...this.enemies.keys()]) {
+    const alive = new Set(state.enemies.map((e) => e.uid));
+    for (const [uid, view] of [...this.enemies]) {
       if (shown.has(uid)) continue;
-      this.removeEnemyView(uid);
+      if (!alive.has(uid)) this.removeEnemyView(uid);
+      else {
+        view.body.visible = view.mark.visible = view.hp.visible = false;
+        if (view.ring) view.ring.visible = false;
+      }
     }
   }
 

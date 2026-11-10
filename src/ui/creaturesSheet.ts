@@ -12,7 +12,7 @@ function boulderMaker() {
 }
 
 /** 毛むくじゃらの塊：表面を細かく大きめに波打たせる */
-const shaggy = (rx: number, ry: number, rz: number, seed = 0) => roughen(roughen(ellipsoid(rx, ry, rz, 32, 24), Math.min(rx, ry, rz) * 0.12, 9 / Math.min(rx, ry, rz) * 0.1, seed), 0.006, 60, seed + 3);
+const shaggy = (rx: number, ry: number, rz: number, seed = 0) => roughen(roughen(ellipsoid(rx, ry, rz, 24, 16), Math.min(rx, ry, rz) * 0.12, 9 / Math.min(rx, ry, rz) * 0.1, seed), 0.006, 60, seed + 3);
 
 /** 2本脚の歩き：脚と腕を交互に振る */
 function swing(legs: THREE.Object3D[], arms: THREE.Object3D[], step: number, legAmp: number, armAmp: number, armBase: [number, number] = [0, 0]) {
