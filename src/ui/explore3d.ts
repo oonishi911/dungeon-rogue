@@ -5,8 +5,8 @@
 //   マップがどれだけ広くても描く量は変わらない
 // - 床と壁には、ダンジョン特性ごとのテクスチャ（public/textures/{特性}.png）を貼る。読み込むまでは色で描く
 // - 霧：まだ見ていないマスは描かない。一度見たマスは暗く、今見えているマスは明るく描く
-// - 主人公は立体の模型（hero3d.ts）。設定画から作った敵も立体の模型（トロルは troll3d.ts、ほかは enemyModel.ts）。
-//   ほかの敵と宝箱は、絵を常にカメラを向く板（スプライト）として立てる
+// - 主人公は立体の模型（hero3d.ts）。敵も、形も色もプログラムで組んだ立体の模型（creatures.ts）。
+//   模型のない敵（新しく足した敵など）と宝箱は、絵を常にカメラを向く板（スプライト）として立てる
 
 import * as THREE from 'three';
 import { ITEMS } from '../game/data';
@@ -20,9 +20,7 @@ import { cloakOf, lookOf } from '../sprites/looks';
 import { floorVariant } from './autotile';
 import { ENEMY_MARK, lerp, type Frame } from './exploreRender';
 import { Hero3D } from './hero3d';
-import enemyViewsJson from './enemyViews.json';
-import { enemySkin, parseEnemyShape, ShapedEnemy, type EnemyMotion } from './enemyModel';
-import { Troll3D } from './troll3d';
+import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
@@ -112,29 +110,6 @@ const MAX_ANISOTROPY = 8; // 斜めから見た床がぼけないようにする
 const CHEST = { width: 0.56, height: 0.3, depth: 0.38 };
 // 開けた宝箱：ふたを奥の縁（蝶番）を軸に後ろへ倒す角度（ラジアン）と、箱の口に見える中の暗さ
 const OPENED_CHEST = { lidAngle: 1.75, inside: 0x1c130c, lidInside: 0x3e2a1a };
-/**
- * 写真から作った敵の絵（public/textures/enemies/、scripts/build-enemy-textures.py で作る）。ない敵はドット絵で描く。
- * height は画面での高さ（マス）、aspect は絵の横:縦、footX は足元（マスの中心に置く位置）が絵の左から何割のところか。
- * 正面・側面・背面の設定画から作った敵（ENEMY_VIEWS）は、敵の向きに合わせて絵を切り替える
- */
-const ENEMY_PHOTOS: Partial<Record<EnemyId, { file: string; height: number; aspect: number; footX: number }>> = {
-  // 無属性のダンジョン。ボスは少し大きく、ネズミは低く描く
-  goblin: { file: 'goblin.png', height: 1.0, aspect: 1.445, footX: 0.61 }, // 棍棒を左に構えている
-  giant_rat: { file: 'giant_rat.png', height: 0.8, aspect: 1.081, footX: 0.45 },
-  stone_golem: { file: 'stone_golem.png', height: 1.15, aspect: 0.977, footX: 0.47 },
-  ogre_chief: { file: 'ogre_chief.png', height: 1.3, aspect: 1.396, footX: 0.65 }, // 金棒を左に構えている
-};
-/** 敵の絵の向き。側面の絵はどれも左を向いているので、右を向くときは左右を反転して描く */
-type ViewSide = 'front' | 'side' | 'back';
-type PhotoView = { file: string; aspect: number; footX: number; px: number }; // px は元の設定画での絵の高さ（向きどうしの大きさをそろえる）
-/**
- * 正面・側面・背面の設定画から作った敵の絵（public/textures/enemies/{敵のID}-{向き}.png）。置き方は enemyViews.json。
- * 歩いた向き（止まっているときは、追っている主人公の方）を向き、カメラから見えるはずの面の絵を出す。
- * height は正面の絵の画面での高さ（マス）。ほかの向きは、元の設定画での高さの比で大きさをそろえる
- */
-const ENEMY_VIEWS = enemyViewsJson as Partial<Record<EnemyId, { height: number; views: Record<ViewSide, PhotoView> }>>;
-const VIEW_OF_DIR: Record<Dir, ViewSide> = { down: 'front', up: 'back', left: 'side', right: 'side' };
-
 const TEXTURE_SPAN = 4; // 床と壁の絵1枚が何マス分にまたがるか（scripts/build-textures.ts・build-photo-textures.py と合わせる）
 const FLOOR_KINDS = 4; // テクスチャがないとき、床を何通りの明るさで描き分けるか
 
@@ -145,34 +120,20 @@ interface Atlas {
 }
 
 /** from から to を見たときの向き（離れていてもよい。縦と横で、差の大きい方の向き） */
-/** 立体の模型で描く敵。模型は、その敵の正面・側面・背面の絵（ENEMY_VIEWS）を表面に投影して貼るので、絵が読み込めてから作る */
-type EnemyModel = { root: THREE.Object3D; update(x: number, z: number, dir: Dir, walking: boolean, dt: number): void; dispose(): void };
-/** 手で組んだ模型（腕や頭が動く） */
-const ENEMY_MODELS: Partial<Record<EnemyId, { make: (textures: Record<ViewSide, THREE.Texture>, wrap: <T extends THREE.Material>(m: T, name: string) => T) => EnemyModel }>> = {
-  troll: { make: (textures, wrap) => new Troll3D(textures, wrap) },
+/** 立体の模型で描く敵 */
+type EnemyModel = {
+  root: THREE.Object3D;
+  height: number; // 頭のてっぺんの高さ（マス）
+  update(x: number, z: number, dir: Dir, walking: boolean, dt: number): void;
+  dispose(): void;
 };
-/** 絵の輪郭から削り出した模型（public/models/enemies/{敵のID}.bin、scripts/build-enemy-models.py で作る）と、その動き方 */
-const SHAPED_ENEMIES: Partial<Record<EnemyId, EnemyMotion>> = {
-  lava_slime: 'blob',
-  iwao: 'walk',
-  wraith: 'float',
-  yeti: 'walk',
-  dark_knight: 'walk',
-  holy_knight: 'walk',
-};
-const FLOAT_HEIGHT = 0.1; // 浮かぶ敵の、頭上のマークを上げる分
-
+/** 形も色もプログラムで組んだ模型（creatures.ts）がある敵か */
+const isCreature = (id: EnemyId): id is EnemyId & CreatureId => (CREATURE_IDS as readonly string[]).includes(id);
 function facingToward(from: Pos, to: Pos): Dir {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 'right' : 'left';
   return dy >= 0 ? 'down' : 'up';
-}
-
-/** 写真の敵の板。足元（絵の下の端の footX のところ）が、ドット絵の板と同じくマスの中心の床の高さに来るようにずらす */
-function photoGeometry(height: number, aspect: number, footX: number): THREE.PlaneGeometry {
-  const width = height * aspect;
-  return litBillboard(width, height).translate((0.5 - footX) * width, height / 2 - 0.5, 0);
 }
 
 /** テクスチャを読み込む前（または読み込めなかったとき）の、ダンジョン特性ごとの床と壁の色 */
@@ -233,7 +194,7 @@ export class DungeonView3D {
     {
       id: EnemyId;
       body: THREE.Object3D; // 絵の板（Mesh）か、立体の模型の入れ物
-      model: EnemyModel | null; // 立体の模型で描く敵（ENEMY_MODELS）
+      model: EnemyModel | null; // 立体の模型で描く敵
       mark: THREE.Sprite;
       hp: THREE.Sprite;
       ring: THREE.Mesh | null;
@@ -241,14 +202,6 @@ export class DungeonView3D {
       facing: Dir;
     }
   >();
-  // 写真から作った敵の絵（読み込めたものだけ）。板の形と素材をまとめて持つ
-  private readonly photos = new Map<EnemyId, { geometry: THREE.PlaneGeometry; material: THREE.MeshLambertMaterial; top: number }>();
-  // 向きごとの絵（ENEMY_VIEWS）。3つの向きがすべて読み込めた敵だけ入る
-  private readonly viewPhotos = new Map<EnemyId, Record<ViewSide, { geometry: THREE.PlaneGeometry; material: THREE.MeshLambertMaterial; top: number }>>();
-  // 絵の輪郭から削り出した模型の形と素材（SHAPED_ENEMIES）。同じ種類の敵で使い回す
-  private readonly shapes = new Map<EnemyId, { geometry: THREE.BufferGeometry; material: THREE.MeshPhongMaterial }>();
-  private disposed = false;
-  private readonly modelShadow = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false });
   private readonly textures = new Map<string, THREE.Texture>();
   private readonly materials = new Map<string, THREE.SpriteMaterial>();
   private readonly litMaterials = new Map<string, THREE.MeshLambertMaterial>(); // たいまつで照らされるドット絵（敵）
@@ -350,7 +303,6 @@ export class DungeonView3D {
     for (const mat of [chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat]) applyFog(mat, this.fog);
     this.stairs = new Stairs3D((mat) => applyFog(mat, this.fog));
     this.loadChestTextures();
-    this.loadEnemyPhotos();
     for (const mesh of [...this.floors, ...this.walls, this.wallShadows]) {
       // 中身を毎回入れ替えるので、最初の中身で計算された範囲で画面外と判定されないようにする
       mesh.frustumCulled = false;
@@ -573,7 +525,6 @@ export class DungeonView3D {
   }
 
   dispose() {
-    this.disposed = true;
     this.spellFx.dispose();
     this.floors[0]!.geometry.dispose(); // 床の形はすべての入れ物で共通
     for (const mesh of this.walls) mesh.geometry.dispose();
@@ -583,11 +534,6 @@ export class DungeonView3D {
     this.pathDots.dispose();
     this.hero.dispose();
     for (const view of this.enemies.values()) view.model?.dispose();
-    for (const { geometry, material } of this.shapes.values()) {
-      geometry.dispose();
-      material.dispose();
-    }
-    this.modelShadow.dispose();
     this.stairs.dispose();
     for (const { sprite } of this.damagePops) {
       sprite.material.map?.dispose();
@@ -605,11 +551,6 @@ export class DungeonView3D {
     for (const m of this.materials.values()) m.dispose();
     for (const m of this.litMaterials.values()) m.dispose();
     this.billboard.dispose();
-    for (const { geometry, material } of [...this.photos.values(), ...[...this.viewPhotos.values()].flatMap((v) => Object.values(v))]) {
-      geometry.dispose();
-      material.map?.dispose();
-      material.dispose();
-    }
     this.fog.dispose();
     for (const t of this.textures.values()) t.dispose();
     this.renderer.dispose();
@@ -710,79 +651,6 @@ export class DungeonView3D {
         this.shownState = null; // 次のフレームで描き直す
       })
       .catch(() => undefined);
-  }
-
-  /**
-   * 写真から作った敵の絵を読み込む。読み込めた敵は、次に描くときからドット絵の代わりに使う
-   * （読み込む前に出ていた敵も作り直す）。読み込めなかった敵はドット絵のまま
-   */
-  private loadEnemyPhotos() {
-    const loader = new THREE.TextureLoader();
-    const dir = `${import.meta.env.BASE_URL}textures/enemies/`;
-    for (const [id, photo] of Object.entries(ENEMY_PHOTOS) as [EnemyId, NonNullable<(typeof ENEMY_PHOTOS)[EnemyId]>][]) {
-      loader
-        .loadAsync(dir + photo.file)
-        .then((map) => {
-          map.colorSpace = THREE.SRGBColorSpace;
-          map.anisotropy = Math.min(MAX_ANISOTROPY, this.renderer.capabilities.getMaxAnisotropy());
-          // 写真の縁と、足元へ向けて透明になっていくところを、なめらかに重ねて描く
-          const material = applyFog(
-            new THREE.MeshLambertMaterial({ map, transparent: true, alphaTest: 0.04, side: THREE.DoubleSide }),
-            this.fog,
-          );
-          this.photos.set(id, { geometry: photoGeometry(photo.height, photo.aspect, photo.footX), material, top: photo.height });
-          this.refreshEnemyKind(id);
-        })
-        .catch(() => undefined);
-    }
-    // 正面・側面・背面の絵：3つとも読み込めたら使う（1つでも読めなければドット絵のまま）
-    for (const [id, set] of Object.entries(ENEMY_VIEWS) as [EnemyId, NonNullable<(typeof ENEMY_VIEWS)[EnemyId]>][]) {
-      const sides = Object.keys(set.views) as ViewSide[];
-      Promise.all(
-        sides.map(async (side) => {
-          const v = set.views[side];
-          const map = await loader.loadAsync(dir + v.file);
-          map.colorSpace = THREE.SRGBColorSpace;
-          map.anisotropy = Math.min(MAX_ANISOTROPY, this.renderer.capabilities.getMaxAnisotropy());
-          const material = applyFog(
-            new THREE.MeshLambertMaterial({ map, transparent: true, alphaTest: 0.04, side: THREE.DoubleSide }),
-            this.fog,
-          );
-          const height = (set.height * v.px) / set.views.front.px; // 向きどうしで、元の設定画での大きさの比をそろえる
-          return [side, { geometry: photoGeometry(height, v.aspect, v.footX), material, top: height }] as const;
-        }),
-      )
-        .then((loaded) => {
-          const views = Object.fromEntries(loaded) as Record<ViewSide, { geometry: THREE.PlaneGeometry; material: THREE.MeshLambertMaterial; top: number }>;
-          this.viewPhotos.set(id, views);
-          this.refreshEnemyKind(id);
-          if (SHAPED_ENEMIES[id]) this.loadShape(id, set, views);
-        })
-        .catch(() => undefined);
-    }
-  }
-
-  /** 絵の輪郭から削り出した模型の形を読み込む（読めなければ、絵の板のまま） */
-  private loadShape(id: EnemyId, set: NonNullable<(typeof ENEMY_VIEWS)[EnemyId]>, views: Record<ViewSide, { material: THREE.MeshLambertMaterial }>) {
-    fetch(`${import.meta.env.BASE_URL}models/enemies/${id}.bin`)
-      .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(res.statusText))))
-      .then((buffer) => {
-        if (this.disposed) return;
-        const textures = { front: views.front.material.map!, side: views.side.material.map!, back: views.back.material.map! };
-        const material = applyFog(enemySkin(set, textures), this.fog, 'darken', 'enemy-skin');
-        this.shapes.set(id, { geometry: parseEnemyShape(buffer), material });
-        this.refreshEnemyKind(id);
-      })
-      .catch(() => undefined);
-  }
-
-  /** ある種類の敵の絵が読み込めたとき、表示中のその敵を作り直す（次のフレームで描き直す） */
-  private refreshEnemyKind(id: EnemyId) {
-    for (const [uid, view] of this.enemies) {
-      if (view.id !== id) continue;
-      this.removeEnemyView(uid);
-    }
-    this.shownState = null;
   }
 
   /** ダンジョン特性のテクスチャ。まだ読み込んでいなければ読み込みを始めて null を返す */
@@ -931,35 +799,24 @@ export class DungeonView3D {
         // 強敵は赤い輪、ボスは金の輪を足元に置く
         const ring = e.elite ? new THREE.Mesh(this.shared.ring, def.boss ? this.shared.bossMat : this.shared.eliteMat) : null;
         const model = this.makeEnemyModel(e.id);
-        const photo = this.viewPhotos.get(e.id)?.front ?? this.photos.get(e.id);
         let body: THREE.Object3D;
         if (model) body = model.root;
         else {
-          const mesh = photo
-            ? new THREE.Mesh(photo.geometry, photo.material)
-            : new THREE.Mesh(this.billboard, this.litSpriteMaterial(look.sprite, look.recolor ?? {}));
+          const mesh = new THREE.Mesh(this.billboard, this.litSpriteMaterial(look.sprite, look.recolor ?? {}));
           mesh.receiveShadow = true; // 壁の影に入れば暗くなる
           body = mesh;
         }
         if (ring) ring.receiveShadow = true;
-        const top = model ? (ENEMY_VIEWS[e.id]?.height ?? 1) + (SHAPED_ENEMIES[e.id] === 'float' ? FLOAT_HEIGHT : 0) : (photo?.top ?? 1);
+        const top = model?.height ?? 1;
         view = { id: e.id, body, model, mark: new THREE.Sprite(), hp: new THREE.Sprite(), ring, top, facing: 'down' };
         this.scene.add(view.body, view.mark, view.hp);
         if (ring) this.scene.add(ring);
         this.enemies.set(e.uid, view);
       }
-      // 向き：歩いたらその向き、止まっていても主人公を追っていれば主人公の方を向く。向きに合わせて正面・側面・背面の絵を出す
+      // 向き：歩いたらその向き、止まっていても主人公を追っていれば主人公の方を向く
       const from = frame.from.enemies.get(e.uid);
       if (from && (from.x !== e.pos.x || from.y !== e.pos.y)) view.facing = facingToward(from, e.pos);
       else if (e.mode !== 'wander') view.facing = facingToward(e.pos, state.player);
-      const views = this.viewPhotos.get(e.id);
-      if (views && !view.model && view.body instanceof THREE.Mesh) {
-        const shown = views[VIEW_OF_DIR[view.facing]];
-        view.body.geometry = shown.geometry;
-        view.body.material = shown.material;
-        view.body.scale.x = view.facing === 'right' ? -1 : 1; // 側面の絵は左向きなので、右を向くときは反転する
-        view.top = shown.top;
-      }
       // 頭上のマーク。気付いた瞬間の「！」だけ大きく強調する
       view.mark.material = this.textMaterial(ENEMY_MARK[e.mode].mark, e.mode === 'wander' ? '#b9b29f' : '#e2c178');
       view.mark.scale.setScalar(e.justNoticed ? 0.7 : 0.45);
@@ -983,16 +840,10 @@ export class DungeonView3D {
     this.enemies.delete(uid);
   }
 
-  /** 立体の模型で描く敵なら、模型を作る（向きごとの絵がまだ読み込めていなければ null） */
+  /** 立体の模型で描く敵なら、模型を作る（模型のない敵は null で、ドット絵の板で描く） */
   private makeEnemyModel(id: EnemyId): EnemyModel | null {
-    const shape = this.shapes.get(id);
-    const motion = SHAPED_ENEMIES[id];
-    if (shape && motion) return new ShapedEnemy(shape.geometry, shape.material, this.modelShadow, motion);
-    const spec = ENEMY_MODELS[id];
-    const views = this.viewPhotos.get(id);
-    if (!spec || !views) return null;
-    const textures = { front: views.front.material.map!, side: views.side.material.map!, back: views.back.material.map! };
-    return spec.make(textures, (m, name) => applyFog(m, this.fog, 'darken', name));
+    if (!isCreature(id)) return null;
+    return new Creature(id, (m, name) => applyFog(m, this.fog, 'darken', name));
   }
 
   // ===== 素材 =====
