@@ -1,17 +1,17 @@
 {
   "rooms": {
-    "attemptRate": 0.04,
-    "minSize": 3,
+    "attemptRate": 0.3,
+    "minSize": 5,
     "maxSize": 9
   },
   "enemies": {
-    "amount": 1,
+    "amount": 2,
     "placement": "mixed",
     "roomWeight": 1,
-    "nestChance": 0,
+    "nestChance": 0.2,
     "nestMin": 3,
-    "nestMax": 5,
-    "stayInRoom": false
+    "nestMax": 12,
+    "stayInRoom": true
   },
   "growth": {
     "expBase": 30,
