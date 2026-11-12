@@ -1422,6 +1422,60 @@ button.card:disabled {
   font-weight: 700;
 }
 
+/* 設定の種類ごとのタブ。狭い画面では、タブの列だけ横にスクロールする */
+.admin__tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0 0 1.5rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--pine-line);
+  scrollbar-width: thin;
+}
+
+.admin__tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.9rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  color: var(--bone-dim);
+  font: inherit;
+  font-size: var(--step--1);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.admin__tab:hover {
+  color: var(--bone);
+}
+
+.admin__tab[aria-selected='true'] {
+  border-bottom-color: var(--bone);
+  color: var(--bone);
+  font-weight: 700;
+}
+
+/* タブは「変えたところ」の枠ではなく、点で示す（下線は、選んでいるタブだけ） */
+.admin .admin__tab.is-changed {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.admin .admin__tab.is-changed[aria-selected='true'] {
+  border-bottom-color: var(--bone);
+}
+
+.admin__tab-mark {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--procure);
+}
+
 /* ダンジョンの設定：項目名・入力欄・説明を1行ずつ並べる（狭い画面では説明を下に回す） */
 .gen__fields {
   display: grid;

@@ -29,7 +29,7 @@ import {
 import { generateFloor, type FloorMap } from '../game/map';
 import { RANK_CONFIG, rankParams } from '../game/rank';
 import type { SpellId } from '../game/types';
-import { AdminNav, cls, NumberField, PublishPanel, usePublish } from './adminParts';
+import { AdminNav, AdminTabs, cls, NumberField, PublishPanel, usePublish } from './adminParts';
 
 const FILE = 'src/game/dungeonGen.json';
 const CANVAS_PX = 640; // 見本の長い辺の描画解像度。表示サイズは CSS で合わせる
@@ -40,6 +40,7 @@ export function GenAdmin() {
   const [base, setBase] = useState<GenSettings>(() => copy(GEN_SETTINGS));
   const [draft, setDraft] = useState<GenSettings>(() => copy(GEN_SETTINGS));
   const [rank, setRank] = useState(1);
+  const [tab, setTab] = useState<GenTab>(firstTab);
   const [seed, setSeed] = useState(1);
   const publisher = usePublish(FILE);
 
@@ -79,14 +80,25 @@ export function GenAdmin() {
         </div>
       </header>
       <AdminNav current="gen" />
+      <AdminTabs
+        label="設定の種類"
+        idPrefix="gen"
+        tabs={GEN_TABS.map((t) => ({ ...t, changed: changedIn(t.id, base, draft) }))}
+        current={tab}
+        onSelect={(t) => {
+          setTab(t);
+          rememberTab(t);
+        }}
+      />
 
       <p className="admin__lead">
         値を変えると、下の見本のマップがすぐに作り直されます。「変更を公開」を押すと、リポジトリの <code>{FILE}</code>{' '}
         に保存され、自動チェックが通れば数分で公開版に反映されます（ボスの階は形が決まっているので変わりません）。
       </p>
 
-      <section className="admin__section" aria-labelledby="gen-floors">
-        <h2 id="gen-floors" className="admin__heading">階の数と広さ</h2>
+      {tab === 'floors' && (
+      <section className="admin__section" role="tabpanel" id="gen-floors-panel" aria-labelledby="gen-floors-tab">
+        <h2 className="admin__heading">階の数と広さ</h2>
         <p className="admin__note">
           広さは、ランクごとに決めます（上のランクほど、同じか広く）。満腹度の上限・敵の数・HPの回復の速さは、広さと階の数から自動で決まります。
           大きく変えると、自動チェックのバランステストに通らず、公開されないことがあります。
@@ -111,9 +123,11 @@ export function GenAdmin() {
           ))}
         </div>
       </section>
+      )}
 
-      <section className="admin__section" aria-labelledby="gen-rooms">
-        <h2 id="gen-rooms" className="admin__heading">小部屋</h2>
+      {tab === 'rooms' && (
+      <section className="admin__section" role="tabpanel" id="gen-rooms-panel" aria-labelledby="gen-rooms-tab">
+        <h2 className="admin__heading">小部屋</h2>
         <div className="gen__fields">
           <Field label={GEN_LABELS.attemptRate} hint="大きいほど部屋が増え、迷路の通路が減る（0：部屋なし）。通路が減ると、行き止まりに置く宝箱と強敵も少し減る">
             <NumberField {...GEN_LIMITS.attemptRate} value={r.attemptRate} changed={r.attemptRate !== br.attemptRate} label={GEN_LABELS.attemptRate} onChange={(v) => setRooms({ attemptRate: v })} />
@@ -126,9 +140,11 @@ export function GenAdmin() {
           </Field>
         </div>
       </section>
+      )}
 
-      <section className="admin__section" aria-labelledby="gen-enemies">
-        <h2 id="gen-enemies" className="admin__heading">敵の数と置き方</h2>
+      {tab === 'enemies' && (
+      <section className="admin__section" role="tabpanel" id="gen-enemies-panel" aria-labelledby="gen-enemies-tab">
+        <h2 className="admin__heading">敵の数と置き方</h2>
         <div className="gen__fields">
           <Field label={GEN_LABELS.amount} hint="通常の敵の数（1：今の数。ランクで広くなるほど増える分は、そのまま）。強敵とボスは変わらない">
             <NumberField {...GEN_LIMITS.amount} value={e.amount} changed={e.amount !== be.amount} label={GEN_LABELS.amount} onChange={(v) => setEnemies({ amount: v })} />
@@ -179,9 +195,11 @@ export function GenAdmin() {
           </Field>
         </div>
       </section>
+      )}
 
-      <section className="admin__section" aria-labelledby="gen-growth">
-        <h2 id="gen-growth" className="admin__heading">レベルと強敵の報酬</h2>
+      {tab === 'growth' && (
+      <section className="admin__section" role="tabpanel" id="gen-growth-panel" aria-labelledby="gen-growth-tab">
+        <h2 className="admin__heading">レベルと強敵の報酬</h2>
         <p className="admin__note">
           敵を倒して経験値がたまると、その挑戦のあいだだけレベルが上がります。敵ごとの金貨・経験値・道具を落とす確率は、敵のマスターデータの画面で変えます。
           強くしすぎると、自動チェックのバランステスト（外れた準備でクリアできすぎないか）に通らず、公開されません。
@@ -204,9 +222,11 @@ export function GenAdmin() {
         </div>
         <LevelTable growth={g} />
       </section>
+      )}
 
-      <section className="admin__section" aria-labelledby="gen-magic">
-        <h2 id="gen-magic" className="admin__heading">魔法</h2>
+      {tab === 'magic' && (
+      <section className="admin__section" role="tabpanel" id="gen-magic-panel" aria-labelledby="gen-magic-tab">
+        <h2 className="admin__heading">魔法</h2>
         <p className="admin__note">
           呪文書（準備の魔法屋で買う）を持っていくと、魔力を使ってその呪文を何度でも唱えられます。呪文書を持っていなければ、魔力の棒も出ません。
         </p>
@@ -248,6 +268,7 @@ export function GenAdmin() {
           ))}
         </div>
       </section>
+      )}
 
       <section className="admin__section" aria-labelledby="gen-preview">
         <h2 id="gen-preview" className="admin__heading">見本</h2>
@@ -323,6 +344,43 @@ interface PreviewData {
   map: FloorMap;
   enemies: MapEnemy[];
   nest: Set<number>; // 群れ部屋に置いた敵の uid
+}
+
+// ===== タブ =====
+
+/** 設定の種類ごとのタブ。どれを選んでも、下の見本と「変更を公開」はそのまま出す */
+const GEN_TABS = [
+  { id: 'floors', label: '階の数と広さ' },
+  { id: 'rooms', label: '小部屋' },
+  { id: 'enemies', label: '敵の数と置き方' },
+  { id: 'growth', label: 'レベルと強敵の報酬' },
+  { id: 'magic', label: '魔法' },
+] as const;
+type GenTab = (typeof GEN_TABS)[number]['id'];
+
+/** そのタブの値を、公開している値から変えたか */
+function changedIn(tab: GenTab, base: GenSettings, draft: GenSettings): boolean {
+  const parts: Record<GenTab, (g: GenSettings) => unknown> = {
+    floors: (g) => g.floors,
+    rooms: (g) => g.rooms,
+    enemies: (g) => g.enemies,
+    growth: (g) => g.growth,
+    magic: (g) => [g.magic, g.spells],
+  };
+  return JSON.stringify(parts[tab](base)) !== JSON.stringify(parts[tab](draft));
+}
+
+/** 開いたときのタブ：住所の tab=（?view=gen&tab=magic のように、タブを指して開ける）、なければ最初のタブ */
+function firstTab(): GenTab {
+  const want = new URLSearchParams(window.location.search).get('tab');
+  return GEN_TABS.find((t) => t.id === want)?.id ?? GEN_TABS[0].id;
+}
+
+/** 選んだタブを住所に残す（読み込み直しても、同じタブが開くように。履歴は増やさない） */
+function rememberTab(tab: GenTab) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('tab', tab);
+  window.history.replaceState(window.history.state, '', url);
 }
 
 /** 見本のマップと敵。群れの敵を見分けるため、群れ部屋なしでも置いてみて、増えた分を群れの敵とする */
