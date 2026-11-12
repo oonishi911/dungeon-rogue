@@ -31,6 +31,11 @@
   box-sizing: border-box;
 }
 
+/* スマホで横にスワイプしたとき、ブラウザの「戻る・進む」にならないようにする（効かないブラウザもある） */
+html {
+  overscroll-behavior-x: none;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -568,6 +573,19 @@ button.card:disabled {
 
 .explore__ending p {
   margin: 0;
+}
+
+/* ブラウザの「戻る」を受け止めたときの確認。探索の終わりの表示より上に出す */
+.explore__leave {
+  z-index: 5;
+  padding: 1rem;
+}
+
+.explore__leave-note {
+  max-width: 22em;
+  font-family: var(--sans);
+  font-size: var(--step-0);
+  font-weight: 400;
 }
 
 .explore__side {

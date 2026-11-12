@@ -146,8 +146,19 @@ interface ExploreScreenProps {
   start: () => ExploreState;
   run?: number; // 何回目の挑戦か。省略すると開発用の表示になる
   onFinish?: (state: ExploreState) => void; // 省略すると、終わったあと同じ条件でやり直せる
+  onProgress?: (state: ExploreState) => void; // 始まったときと、行動するたびに呼ぶ（途中の状態を保存するため）
+  guardBack?: boolean; // ブラウザの「戻る」を一度受け止めて、ページを離れるかを確かめる
   renderMode?: RenderMode; // 省略すると3D表示（WebGL2 が使えない環境では2D表示）
   devBest?: boolean; // 開発用画面で、いちばん強い装備で試しているか（切り替えのリンクを出す）
+}
+
+const BACK_GUARD_REARM_MS = 600;
+
+/** ブラウザの「戻る」を受け止めるための見張りを、履歴に1つ積む（もう積んであれば何もしない） */
+function armBackGuard() {
+  const state: unknown = history.state;
+  const armed = typeof state === 'object' && state !== null && (state as { backGuard?: boolean }).backGuard === true;
+  if (!armed) history.pushState({ backGuard: true }, '');
 }
 
 /** WebGL2 が使えるか。Three.js の3D表示に必要 */
@@ -159,13 +170,17 @@ function webglAvailable(): boolean {
   }
 }
 
-export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3d', devBest }: ExploreScreenProps) {
+export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, guardBack = false, renderMode = '3d', devBest }: ExploreScreenProps) {
   // 3D表示ができない環境（WebGL2 が使えない、準備に失敗した）では2D表示に切り替える
   const [mode, setMode] = useState<RenderMode>(() => (renderMode === '3d' && webglAvailable() ? '3d' : '2d'));
   const [state, setState] = useState<ExploreState>(start);
   // スマホで、装備・敵・記録をまとめた画面を開いているか（PCでは常に横に出ている）
   const [infoOpen, setInfoOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // ブラウザの「戻る」が押されて、ページを離れるかを確かめているところ
+  const [leaving, setLeaving] = useState(false);
+  const onProgressRef = useRef(onProgress);
+  onProgressRef.current = onProgress;
   const viewRef = useRef<HTMLCanvasElement>(null);
   const miniRef = useRef<HTMLCanvasElement>(null);
 
@@ -248,6 +263,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
     stateRef.current = next;
     setError(null);
     setState(next);
+    onProgressRef.current?.(next);
     // 階段を踏んだら、そのまま次の階へ降りる・上の階へ戻る（踏む動きを見せてから移るよう、次の行動として予約する）
     if (action.kind === 'move' && next.map === prev.map && next.outcome === 'ongoing' && !samePos(prev.player, next.player)) {
       const up = upStairs(next);
@@ -415,6 +431,34 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
 
   // このダンジョンの足音を、最初の一歩から鳴るように読み込んでおく
   useEffect(() => preloadSounds(state.trait), [state.trait]);
+
+  // 始まった時点の状態も知らせる（1歩も動かずに閉じても、同じ探索の続きから始まるように）
+  useEffect(() => onProgressRef.current?.(stateRef.current), []);
+
+  // ブラウザの「戻る」を一度受け止める：履歴に「見張り」を1つ積んでおき、戻るで見張りが外れたら、ページを離れるかを確かめる。
+  // 完全には防げない（iPhone の端からのスワイプや、戻るの連打は止められない。画面に一度も触れていないと、ブラウザが見張りを無視することもある）。
+  // 途中の状態は保存してあるので、離れてしまっても続きから遊べる
+  useEffect(() => {
+    if (!guardBack) return;
+    armBackGuard();
+    const onPop = () => setLeaving(true);
+    window.addEventListener('popstate', onPop);
+    window.addEventListener('pageshow', armBackGuard); // 離れたあと、進むで戻ってきたときに張り直す
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      window.removeEventListener('pageshow', armBackGuard);
+    };
+  }, [guardBack]);
+  const stay = () => {
+    armBackGuard();
+    setLeaving(false);
+  };
+  const leave = () => {
+    setLeaving(false);
+    history.back();
+    // 戻る先がなくてページに残ったときは、見張りを張り直す
+    window.setTimeout(armBackGuard, BACK_GUARD_REARM_MS);
+  };
 
   // ダンジョンにいるあいだ、特性の環境音を流す（探索画面を離れたら止める）
   useEffect(() => {
@@ -681,7 +725,19 @@ export function ExploreScreen({ start, run: runNumber, onFinish, renderMode = '3
               {lastLog}
             </p>
           )}
-          {ended && (
+          {leaving && (
+            <div className="explore__ending explore__leave" role="alertdialog" aria-labelledby="explore-leave">
+              <p id="explore-leave">ページを離れますか？</p>
+              <p className="explore__leave-note">ここまでの探索は保存されています。次に開いたとき、続きから遊べます。</p>
+              <button type="button" className="primary" autoFocus onClick={stay}>
+                探索に戻る
+              </button>
+              <button type="button" onClick={leave}>
+                ページを離れる
+              </button>
+            </div>
+          )}
+          {ended && !leaving && (
             <div className="explore__ending">
               <p>{lastLog}</p>
               {onFinish ? (
