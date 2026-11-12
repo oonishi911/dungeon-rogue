@@ -27,21 +27,43 @@ function act(state: ExploreState, ...actions: ExploreAction[]): ExploreState {
   return actions.reduce((s, a) => unwrap(step(s, a)), state);
 }
 
-/** 本道をたどって階段まで歩く */
+/**
+ * 本道をたどって階段まで歩く。
+ * その階の敵は、歩く前に取り除く（歩く道のりを確かめるためのもので、敵に道をふさがれると確かめられない。
+ * 敵の密度を0にしても、設定によっては群れ部屋の敵が本道の上に置かれる）
+ */
 function walkMainPath(state: ExploreState): ExploreState {
   const path = state.map.mainPath;
-  let s = state;
+  let s: ExploreState = { ...state, enemies: [] };
   for (let i = 1; i < path.length; i++) s = act(s, { kind: 'move', dir: dirBetween(path[i - 1]!, path[i]!) });
   return s;
 }
 
-/** 入口の隣の通路と、壁の方向 */
+/** 条件に合う探索が始まるシードを、from から順に探す（マップの形は設定で変わるので、シードを決め打ちしない） */
+function seedWhere(test: (state: ExploreState) => boolean, options: Parameters<typeof startExplore>[1] = {}, from = 1): number {
+  for (let seed = from; seed < from + 500; seed++) if (test(startExplore(seed, options))) return seed;
+  throw new Error('条件に合うシードが見つからない');
+}
+
+/** 壁の隣の床に主人公を置いた状態（入口が部屋の中にあると、入口の隣に壁がないことがある） */
+function besideWall(state: ExploreState): ExploreState {
+  const { map } = state;
+  for (let y = 1; y < map.height - 1; y++) {
+    for (let x = 1; x < map.width - 1; x++) {
+      const s = { ...state, player: { x, y }, enemies: [] };
+      if (tileAt(map, { x, y }) === 'floor' && neighbors(s).wall) return s;
+    }
+  }
+  throw new Error('壁の隣の床がない');
+}
+
+/** 主人公の隣の通路と、壁の方向（なければ undefined） */
 function neighbors(state: ExploreState) {
   const dirs = ['up', 'down', 'left', 'right'] as const;
   const delta = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] } as const;
   const kind = (d: (typeof dirs)[number]) =>
     tileAt(state.map, { x: state.player.x + delta[d][0], y: state.player.y + delta[d][1] });
-  return { open: dirs.find((d) => kind(d) === 'floor')!, wall: dirs.find((d) => kind(d) === 'wall')! };
+  return { open: dirs.find((d) => kind(d) === 'floor')!, wall: dirs.find((d) => kind(d) === 'wall') };
 }
 
 describe('startExplore', () => {
@@ -77,8 +99,8 @@ describe('step', () => {
   });
 
   it('壁へは動けず、行動も消費しない', () => {
-    const s = startExplore(3);
-    const r = step(s, { kind: 'move', dir: neighbors(s).wall });
+    const s = besideWall(startExplore(3));
+    const r = step(s, { kind: 'move', dir: neighbors(s).wall! });
     expect(r.ok).toBe(false);
   });
 
@@ -248,6 +270,9 @@ describe('道具', () => {
 });
 
 describe('宝箱と金貨', () => {
+  // 宝箱のある階から始まるシード（部屋の多い設定では、宝箱を置く行き止まりのない階もある）
+  const CHEST_SEED = seedWhere((s) => s.chests.length > 0, { enemyDensity: 0 }, 11);
+
   /** 宝箱の隣まで本道と脇道をたどる代わりに、宝箱の上へ直接動かす状態を作る */
   function besideChest(seed: number, items: ItemId[] = []) {
     const s0 = startExplore(seed, { enemyDensity: 0, loadout: items });
@@ -262,7 +287,7 @@ describe('宝箱と金貨', () => {
   }
 
   it('宝箱は「宝箱」の行き止まりに置かれ、金貨は本道から遠いほど多い', () => {
-    const s = startExplore(11, { enemyDensity: 0 });
+    const s = startExplore(CHEST_SEED, { enemyDensity: 0 });
     const spots = s.map.features.filter((f) => f.kind === 'treasure');
     expect(s.chests.map((c) => c.pos)).toEqual(spots.map((f) => f.pos));
     for (const c of s.chests) {
@@ -272,7 +297,7 @@ describe('宝箱と金貨', () => {
   });
 
   it('宝箱の上に乗ると中身を手に入れ、宝箱は開いて空のまま残る。もう一度乗っても何も起きない', () => {
-    const { state, chest, dir } = besideChest(11);
+    const { state, chest, dir } = besideChest(CHEST_SEED);
     const s = act(state, { kind: 'move', dir });
     expect(s.gold).toBe(chest.gold);
     if (chest.item) expect(s.stats.items).toContain(chest.item);
