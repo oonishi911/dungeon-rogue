@@ -1,5 +1,5 @@
 // 開発用：ダンジョンの設定（src/game/dungeonGen.json）を管理する画面。?view=gen で開く。
-// 小部屋の多さと大きさ、敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋・部屋から出さない）、
+// 階の数とランクごとの広さ、小部屋の多さと大きさ、敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋・部屋から出さない）、
 // 敵を倒したときのレベルの上がり方と強敵の報酬の倍率、魔力と呪文の強さを変えられる。
 // 変えた値で作ったマップの見本を、その場で見て確かめられる。
 // 変えた内容は「変更を公開」でリポジトリに保存され、自動チェックが通れば数分で公開版に反映される
@@ -19,6 +19,7 @@ import {
   PLACEMENTS,
   serializeGenSettings,
   type EnemySettings,
+  type FloorSettings,
   type GenSettings,
   type GrowthSettings,
   type MagicSettings,
@@ -46,6 +47,10 @@ export function GenAdmin() {
   const problems = useMemo(() => genProblems(draft), [draft]);
   const preview = useMemo(() => (problems.length ? null : makePreview(draft, rank, seed)), [draft, rank, seed, problems.length]);
 
+  const setFloors = (patch: Partial<FloorSettings>) => setDraft((d) => ({ ...d, floors: { ...d.floors, ...patch } }));
+  const setFloorSize = (index: number, size: number) => setFloors({ sizes: draft.floors.sizes.map((v, i) => (i === index ? size : v)) });
+  const f = draft.floors;
+  const bf = base.floors;
   const setRooms = (patch: Partial<RoomSettings>) => setDraft((d) => ({ ...d, rooms: { ...d.rooms, ...patch } }));
   const setEnemies = (patch: Partial<EnemySettings>) => setDraft((d) => ({ ...d, enemies: { ...d.enemies, ...patch } }));
   const setGrowth = (patch: Partial<GrowthSettings>) => setDraft((d) => ({ ...d, growth: { ...d.growth, ...patch } }));
@@ -79,6 +84,33 @@ export function GenAdmin() {
         値を変えると、下の見本のマップがすぐに作り直されます。「変更を公開」を押すと、リポジトリの <code>{FILE}</code>{' '}
         に保存され、自動チェックが通れば数分で公開版に反映されます（ボスの階は形が決まっているので変わりません）。
       </p>
+
+      <section className="admin__section" aria-labelledby="gen-floors">
+        <h2 id="gen-floors" className="admin__heading">階の数と広さ</h2>
+        <p className="admin__note">
+          広さは、ランクごとに決めます（上のランクほど、同じか広く）。満腹度の上限・敵の数・HPの回復の速さは、広さと階の数から自動で決まります。
+          大きく変えると、自動チェックのバランステストに通らず、公開されないことがあります。
+        </p>
+        <div className="gen__fields">
+          <Field label={GEN_LABELS.floorCount} hint="通常の階の数。その下に、ボスの階が1つある。満腹度の上限は、階の数に合わせて増える">
+            <NumberField {...GEN_LIMITS.floorCount} value={f.count} changed={f.count !== bf.count} label={GEN_LABELS.floorCount} onChange={(v) => setFloors({ count: v })} />
+          </Field>
+        </div>
+        <h3 className="gen__subheading">ランクごとの広さ（一辺のマス数）</h3>
+        <div className="gen__fields">
+          {f.sizes.map((size, i) => (
+            <Field key={i} label={`ランク${i + 1}`} hint={`${size}×${size}マス ・ 満腹度の上限 ${rankParams(i + 1, f).maxSatiety}`}>
+              <NumberField
+                {...GEN_LIMITS.floorSize}
+                value={size}
+                changed={size !== bf.sizes[i]}
+                label={`ランク${i + 1}の${GEN_LABELS.floorSize}`}
+                onChange={(v) => setFloorSize(i, v)}
+              />
+            </Field>
+          ))}
+        </div>
+      </section>
 
       <section className="admin__section" aria-labelledby="gen-rooms">
         <h2 id="gen-rooms" className="admin__heading">小部屋</h2>
@@ -225,7 +257,7 @@ export function GenAdmin() {
             <select className="admin__select" value={rank} onChange={(ev) => setRank(Number(ev.target.value))}>
               {Array.from({ length: RANK_CONFIG.maxRank }, (_, i) => i + 1).map((n) => (
                 <option key={n} value={n}>
-                  ランク{n}（{rankParams(n).mapSize}×{rankParams(n).mapSize}）
+                  ランク{n}（{f.sizes[n - 1]}×{f.sizes[n - 1]}）
                 </option>
               ))}
             </select>
@@ -295,7 +327,7 @@ interface PreviewData {
 
 /** 見本のマップと敵。群れの敵を見分けるため、群れ部屋なしでも置いてみて、増えた分を群れの敵とする */
 function makePreview(settings: GenSettings, rank: number, seed: number): PreviewData {
-  const params = rankParams(rank);
+  const params = rankParams(rank, settings.floors);
   const map = generateFloor(seed, { width: params.mapSize, height: params.mapSize, rooms: settings.rooms });
   const { enemies } = spawnEnemies(map, 'neutral', seed, 0, params.enemyDensity, settings.enemies);
   const plain = spawnEnemies(map, 'neutral', seed, 0, params.enemyDensity, { ...settings.enemies, nestChance: 0 }).enemies.length;

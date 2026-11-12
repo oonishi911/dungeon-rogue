@@ -23,7 +23,7 @@ import type { EnemyDef, EnemyId, ItemId, PlayerStats, Result, SpellId, TraitId }
 
 // 数値はすべて仮。バランス調整で見直す
 export const EXPLORE_CONFIG = {
-  floors: 3, // 通常の階の数。その下にボス階がある
+  floors: GEN_SETTINGS.floors.count, // 通常の階の数。その下にボス階がある（ダンジョンの設定で決める）
   sightRadius: 6, // 視界の半径（マス）
   satietyPerAction: 1,
   starveDamage: 1, // 満腹度0のとき、1行動ごとに減るHP

@@ -6,6 +6,7 @@ import { generateFloor, type FloorMap, type Room } from './map';
 
 // 関数を確かめるための、決まった中身の設定（管理画面で dungeonGen.json を変えても、こちらは変わらない）
 const SAMPLE: GenSettings = {
+  floors: { count: 3, sizes: [20, 30, 40, 50, 60, 70, 80, 90, 100] },
   rooms: { attemptRate: 0.04, minSize: 3, maxSize: 9 },
   enemies: { amount: 1, placement: 'mixed', roomWeight: 1, nestChance: 0, nestMin: 3, nestMax: 5, stayInRoom: false },
   growth: { expBase: 30, expStep: 20, hpPerLevel: 2, atkPerLevel: 1, maxLevel: 10, eliteRate: 3 },
@@ -52,14 +53,38 @@ describe('ダンジョン生成の設定（dungeonGen.json）', () => {
     expect(() => parseGenSettings(bad)).toThrow();
   });
 
+  it('階の数と広さ：範囲の外、整数でない、数が足りない、上のランクの方が狭い、は問題として返す', () => {
+    const check = (edit: (g: GenSettings) => void) => {
+      const bad = clone();
+      edit(bad);
+      return genProblems(bad);
+    };
+    expect(check((g) => void (g.floors.count = 0))).toEqual(['階の数：1〜10の数にする']);
+    expect(check((g) => void (g.floors.count = 2.5))).toEqual(['階の数：整数にする']);
+    expect(check((g) => void (g.floors.sizes[0] = 19))).toEqual(['ランク1の階の広さ：20〜100の数にする']);
+    expect(check((g) => void (g.floors.sizes[8] = 101))).toEqual(['ランク9の階の広さ：20〜100の数にする']);
+    expect(check((g) => void (g.floors.sizes[1] = 30.5))).toEqual(['ランク2の階の広さ：整数にする']);
+    expect(check((g) => void (g.floors.sizes[3] = 35))).toEqual(['ランク4の階の広さ：ランク3の広さ（40）以上にする']);
+    expect(check((g) => void g.floors.sizes.pop())).toEqual(['階の広さ：ランク1〜9の9個を並べる']);
+    // 同じ広さが続くのは構わない
+    expect(check((g) => void (g.floors.sizes = [20, 20, 20, 40, 40, 40, 100, 100, 100]))).toEqual([]);
+    expect(genProblems({ ...clone(), floors: undefined })).toEqual(['floors・rooms・enemies・growth・magic・spells のどれかがない']);
+  });
+
   it('変えたところを日本語で説明する', () => {
     const after = clone();
+    after.floors.count = 4;
+    after.floors.sizes[0] = 25;
+    after.floors.sizes[8] = 90;
     after.rooms.attemptRate = 0.1;
     after.enemies.stayInRoom = true;
     after.growth.hpPerLevel = 4;
     after.magic.maxMp = 30;
     after.spells.shockwave.push = 2;
     expect(describeGenChanges(SAMPLE, after)).toEqual([
+      '階の数：3 → 4',
+      'ランク1の階の広さ：20 → 25',
+      'ランク9の階の広さ：100 → 90',
       '部屋の多さ：0.04 → 0.1',
       '部屋の敵は部屋から出ない：しない → する',
       '1レベルで増える最大HP：2 → 4',

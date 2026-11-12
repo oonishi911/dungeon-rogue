@@ -93,7 +93,7 @@ describe('step', () => {
   });
 
   it('階段で降りると次の階の入口に出て、霧も新しくなる', () => {
-    const s = walkMainPath(startExplore(4, { enemyDensity: 0 }));
+    const s = walkMainPath(startExplore(4, { enemyDensity: 0, floors: 3 }));
     const next = act(s, { kind: 'descend' });
     expect(next.floor).toBe(1);
     expect(next.map).not.toEqual(s.map);
@@ -108,7 +108,7 @@ describe('step', () => {
   });
 
   it('2階目からは入口が上り階段になり、上ると前の階の下り階段の上に、離れたときの様子のまま戻る', () => {
-    const before = walkMainPath(startExplore(4, { enemyDensity: 0 }));
+    const before = walkMainPath(startExplore(4, { enemyDensity: 0, floors: 3 }));
     const below = act(before, { kind: 'descend' });
     expect(step(below, { kind: 'ascend' }).ok).toBe(true);
     const back = act(below, { kind: 'ascend' });
@@ -133,7 +133,7 @@ describe('step', () => {
   });
 
   it('階段の上でなければ上れない', () => {
-    const below = act(walkMainPath(startExplore(4, { enemyDensity: 0 })), { kind: 'descend' });
+    const below = act(walkMainPath(startExplore(4, { enemyDensity: 0, floors: 3 })), { kind: 'descend' });
     const off = neighbors(below).open;
     expect(step(act(below, { kind: 'move', dir: off }), { kind: 'ascend' }).ok).toBe(false);
   });

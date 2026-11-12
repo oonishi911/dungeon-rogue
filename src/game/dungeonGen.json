@@ -1,4 +1,18 @@
 {
+  "floors": {
+    "count": 3,
+    "sizes": [
+      20,
+      30,
+      40,
+      50,
+      60,
+      70,
+      80,
+      90,
+      100
+    ]
+  },
   "rooms": {
     "attemptRate": 0.3,
     "minSize": 5,

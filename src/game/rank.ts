@@ -1,15 +1,16 @@
 // ランク（強化）。踏破した経験と金貨を払って上げる。
 // ランクが上がると満腹度の上限が増えるかわりに、ダンジョンも広くなり、報酬も良くなる。
 // 数値は自動プレイで測って決めた（docs/dungeon-design.md の「ランク」を参照）。
+// ランクごとの階の広さと、階の数は、ダンジョンの設定（dungeonGen.json の floors。管理画面 ?view=gen）で決める。
 
 import { ENEMY_CONFIG } from './enemies';
 import { TREASURE_CONFIG } from './data';
+import { GEN_SETTINGS, RANK_COUNT, type FloorSettings } from './genMaster';
 
 export const RANK_CONFIG = {
-  maxRank: 9, // 広さが上限の100×100になるランク
-  baseSize: 20, // ランク1の広さ
-  sizeStep: 10, // 1ランクごとに広くなるマス数
+  maxRank: RANK_COUNT, // 最高のランク
   referenceSize: 40, // 満腹度と敵の密度の式の基準にした広さ（自動プレイで測った広さ）
+  referenceFloors: 3, // 満腹度の式の基準にした階の数（自動プレイで測った階の数）
   regenInterval: 20, // 基準の広さでの、HPが1回復するまでのターン数
   costPerRank: 50, // 強化の費用＝これ×今のランク（G）
   expPerUpgrade: 1, // 強化に使う踏破経験
@@ -27,20 +28,20 @@ export interface RankParams {
 }
 
 /**
- * ランクごとの探索の条件。
+ * ランクごとの探索の条件。floors は階の数とランクごとの広さ（省略すると、ゲームの設定。管理画面の見本は、公開前の値を渡す）。
  * - 満腹度：霧の中で踏破までに歩く距離はほぼ面積に比例する。40×40より広いと少し余分にかかるので、
- *   広さ²×max(1, 広さ/40)^0.3（40×40までは広さ²）
+ *   広さ²×max(1, 広さ/40)^0.3（40×40までは広さ²）。歩く距離は階の数にも比例するので、階の数÷3 を掛ける（階が3つなら、そのまま）
  * - 敵の数：密度が一定だと面積に比例して増えすぎるので、広さに比例する程度に抑える
  * - HPの回復：狭いマップは探索が短く回復する時間が足りないので、広さに合わせて速くする（regenIntervalFor）
  */
-export function rankParams(rank: number): RankParams {
+export function rankParams(rank: number, floors: FloorSettings = GEN_SETTINGS.floors): RankParams {
   const r = Math.min(RANK_CONFIG.maxRank, Math.max(1, Math.floor(rank)));
-  const mapSize = RANK_CONFIG.baseSize + RANK_CONFIG.sizeStep * (r - 1);
+  const mapSize = floors.sizes[r - 1]!;
   const ratio = mapSize / RANK_CONFIG.referenceSize;
   return {
     rank: r,
     mapSize,
-    maxSatiety: Math.round(mapSize * mapSize * Math.pow(Math.max(1, ratio), 0.3)),
+    maxSatiety: Math.round(mapSize * mapSize * Math.pow(Math.max(1, ratio), 0.3) * (floors.count / RANK_CONFIG.referenceFloors)),
     enemyDensity: ENEMY_CONFIG.density / ratio,
     chestGoldRate: 1 + RANK_CONFIG.goldBonusPerRank * (r - 1),
     bossGold: TREASURE_CONFIG.bossGold * r,
