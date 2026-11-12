@@ -10,7 +10,7 @@
     "roomWeight": 1,
     "nestChance": 0.2,
     "nestMin": 3,
-    "nestMax": 12,
+    "nestMax": 8,
     "stayInRoom": true
   },
   "growth": {
