@@ -83,7 +83,17 @@ export function spawnEnemies(
 ): { enemies: MapEnemy[]; rngState: number } {
   let s = rngState;
   const enemies: MapEnemy[] = [];
-  const roomAt = (p: Pos) => map.rooms.find((r) => p.x >= r.x && p.x < r.x + r.width && p.y >= r.y && p.y < r.y + r.height);
+  // マスごとの「どの部屋の中か」を先に調べておく（敵を1体置くたびに全部の部屋を調べ直すと、部屋の多い広い階でとても遅い）。
+  // 部屋どうしは重ならないが、念のため、前の書き方と同じく、先に並んでいる部屋を選ぶ
+  const roomIndex = new Int16Array(map.tiles.length).fill(-1);
+  for (let i = map.rooms.length - 1; i >= 0; i--) {
+    const r = map.rooms[i]!;
+    for (let y = Math.max(0, r.y); y < Math.min(map.height, r.y + r.height); y++) {
+      roomIndex.fill(i, y * map.width + Math.max(0, r.x), y * map.width + Math.min(map.width, r.x + r.width));
+    }
+  }
+  const inMap = (p: Pos) => p.x >= 0 && p.y >= 0 && p.x < map.width && p.y < map.height;
+  const roomAt = (p: Pos) => (inMap(p) ? map.rooms[roomIndex[p.y * map.width + p.x]!] : undefined);
   const make = (id: EnemyId, pos: Pos, elite: boolean): MapEnemy => {
     const room = !elite && settings.stayInRoom ? roomAt(pos) : undefined;
     return {
@@ -151,13 +161,17 @@ export function spawnEnemies(
       if (roll.value >= settings.nestChance) continue;
       const size = nextInt(s, settings.nestMax - settings.nestMin + 1);
       s = size.state;
+      // この部屋の中の、空いている床（candidates の中の番号。小さい順）
+      const free = candidates.flatMap((p, i) => (roomAt(p) === room ? [i] : []));
       for (let n = 0; n < settings.nestMin + size.value; n++) {
-        const free = candidates.flatMap((p, i) => (roomAt(p) === room ? [i] : []));
         if (free.length === 0) break;
         const pick = nextInt(s, free.length);
         const kind = nextInt(pick.state, pool.length);
         s = kind.state;
         const [pos] = candidates.splice(free[pick.value]!, 1);
+        // 置いたマスを空きから外し、それより後ろの番号を1つずつ詰める（candidates から1つ抜いたので）
+        free.splice(pick.value, 1);
+        for (let k = pick.value; k < free.length; k++) free[k]!--;
         enemies.push(make(pool[kind.value]!, pos!, false));
       }
     }
