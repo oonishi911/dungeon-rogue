@@ -83,8 +83,8 @@ describe('generateFloor', () => {
   });
 
   it('小部屋はマップの内側にあり、重ならず、中はすべて通路', () => {
+    // 部屋のない設定（部屋の多さ 0）もあるので、数は確かめない（部屋が置かれることは genMaster.test.ts で、決まった設定で確かめる）
     forEachMap((map) => {
-      expect(map.rooms.length).toBeGreaterThan(0);
       const cells = new Set<string>();
       let walls = 0;
       let overlapped = 0;
@@ -116,8 +116,8 @@ describe('generateFloor', () => {
   });
 
   it('脇道の行き止まりに宝箱か強敵が置かれる', () => {
+    // 部屋の多い設定では、置ける行き止まりのない階もある（1つ以上あることは、下の「宝箱と強敵の両方が出る」で確かめる）
     forEachMap((map) => {
-      expect(map.features.length).toBeGreaterThan(0);
       const onMain = new Set(map.mainPath.map(key));
       const deadEnds = new Set(findDeadEnds(map).map(key));
       for (const f of map.features) {
