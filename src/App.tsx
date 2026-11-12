@@ -3,11 +3,12 @@
 
 import { useState } from 'react';
 import { PREP_CONFIG } from './game/data';
-import { startExplore, toResult, type ExploreResult } from './game/explore';
+import { startExplore, toResult, type ExploreResult, type ExploreState } from './game/explore';
 import { buyItem, createPrep, departWithoutPrep, endDay, finishPrep, playCard, upgradeRank } from './game/prep';
+import { packRun } from './game/runSave';
 import { newSave, type SaveData } from './game/save';
 import type { ItemId, PrepResult, PrepState, Result } from './game/types';
-import { clearSave, loadSave, writeSave } from './storage';
+import { clearRun, clearSave, loadRun, loadSave, writeRun, writeSave } from './storage';
 import { CarryScreen } from './ui/CarryScreen';
 import { ExploreScreen } from './ui/ExploreScreen';
 import { PrepScreen } from './ui/PrepScreen';
@@ -16,7 +17,7 @@ import { ResultScreen } from './ui/ResultScreen';
 type Stage =
   | { kind: 'prep'; prep: PrepState }
   | { kind: 'carry'; prep: PrepState }
-  | { kind: 'dungeon'; outcome: PrepResult; seed: number }
+  | { kind: 'dungeon'; outcome: PrepResult; seed: number; resume?: ExploreState } // resume：前に中断した探索の続き
   | { kind: 'result'; outcome: PrepResult; expedition: ExploreResult; next: SaveData };
 
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
@@ -48,9 +49,27 @@ function firstStage(save: SaveData): Stage {
   return { kind: 'dungeon', outcome, seed };
 }
 
+/** 開いたときの始まり。探索の途中で閉じていれば（戻る・再読み込みなど）、その続きから始める */
+function firstLoad(): { save: SaveData; stage: Stage } {
+  const run = loadRun();
+  if (run) return { save: run.base, stage: { kind: 'dungeon', outcome: run.outcome, seed: run.seed, resume: run.state } };
+  const save = loadSave() ?? newSave();
+  return { save, stage: firstStage(save) };
+}
+
+/** 探索の結果を入れた、次の挑戦のセーブデータ */
+function saveAfter(save: SaveData, outcome: PrepResult, expedition: ExploreResult): SaveData {
+  return {
+    ...nextSave(save, outcome),
+    exp: outcome.exp + (expedition.outcome === 'cleared' ? 1 : 0),
+    bonusGold: expedition.goldBrought,
+  };
+}
+
 export function App() {
-  const [save, setSave] = useState<SaveData>(() => loadSave() ?? newSave());
-  const [stage, setStage] = useState<Stage>(() => firstStage(save));
+  const [first] = useState(firstLoad);
+  const [save, setSave] = useState<SaveData>(first.save);
+  const [stage, setStage] = useState<Stage>(first.stage);
   const [error, setError] = useState<string | null>(null);
 
   // ロジックの Result を受け取り、成功なら状態を更新、失敗ならメッセージを出す
@@ -83,6 +102,7 @@ export function App() {
           onEndDay={() => apply(endDay(stage.prep))}
           onReset={() => {
             clearSave();
+            clearRun();
             begin(newSave());
           }}
         />
@@ -108,23 +128,32 @@ export function App() {
         />
       );
     case 'dungeon': {
-      const { outcome, seed } = stage;
+      const { outcome, seed, resume } = stage;
       return (
         <ExploreScreen
           key={`${save.run}-${seed}`}
           run={save.run}
           // 準備で決まった特性・持ち物・ランクで探索を始める。階層の形は準備と同じシードから作る
+          // 前に中断した探索があれば、その続きから
           start={() =>
-            startExplore(seed, { trait: outcome.trait, loadout: outcome.loadout, hasMap: outcome.hasMap, rank: outcome.rank })
+            resume ?? startExplore(seed, { trait: outcome.trait, loadout: outcome.loadout, hasMap: outcome.hasMap, rank: outcome.rank })
           }
+          // 1手ごとに途中の状態を保存する（戻る・再読み込み・ページが閉じられたときに、続きから遊べるように）。
+          // 探索が終わったら、その時点で結果を記録して、途中の状態は消す（結果の画面へ進む前に閉じても、結果が残るように）
+          onProgress={(state) => {
+            if (state.outcome === 'ongoing') {
+              writeRun(packRun(save, outcome, seed, state));
+            } else {
+              writeSave(saveAfter(save, outcome, toResult(state)));
+              clearRun();
+            }
+          }}
+          guardBack
           onFinish={(state) => {
             const expedition = toResult(state);
-            const next = {
-              ...nextSave(save, outcome),
-              exp: outcome.exp + (expedition.outcome === 'cleared' ? 1 : 0),
-              bonusGold: expedition.goldBrought,
-            };
+            const next = saveAfter(save, outcome, expedition);
             writeSave(next);
+            clearRun();
             setStage({ kind: 'result', outcome, expedition, next });
           }}
         />

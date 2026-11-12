@@ -227,7 +227,7 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
       const left = leaveFloor(state);
       const memory = state.visited[floor];
       if (memory) return ok(spendAction(returnToFloor(left, floor, memory, memory.map.start, `地下${floor + 1}階に降りた`)));
-      const map = floor >= state.floors ? generateBossFloor() : floorMap(state.seed, floor, state.mapSize);
+      const map = mapOfFloor(state.seed, state.floors, state.mapSize, floor);
       return ok(spendAction(enterFloor(left, floor, map)));
     }
     case 'ascend': {
@@ -253,6 +253,11 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
 
 function floorMap(seed: number, floor: number, mapSize: number): FloorMap {
   return generateFloor(floorSeed(seed, floor), { width: mapSize, height: mapSize });
+}
+
+/** その階のマップ。通常の階（0 から floors - 1）はシードから作り、その次はボス階。同じ値からは、いつも同じ形になる */
+export function mapOfFloor(seed: number, floors: number, mapSize: number, floor: number): FloorMap {
+  return floor >= floors ? generateBossFloor() : floorMap(seed, floor, mapSize);
 }
 
 /** 上り階段の場所。2階目からは、降りてきた入口が上り階段になる（1階目の入口はダンジョンの外への出口なので上れない） */
