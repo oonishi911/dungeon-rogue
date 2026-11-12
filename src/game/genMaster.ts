@@ -1,11 +1,20 @@
 // ダンジョンの設定（src/game/dungeonGen.json）を読み、正しい形かを確かめる。
 // dungeonGen.json は、開発用の管理画面（?view=gen、src/ui/GenAdmin.tsx）から書き換えて公開できる。
-// rooms は小部屋の多さと大きさ、enemies は敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋など）、
+// floors は階の数とランクごとの広さ、rooms は小部屋の多さと大きさ、enemies は敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋など）、
 // growth は敵を倒したときのレベルの上がり方と強敵の報酬の倍率、magic は魔力と魔法の強さ、spells は呪文ごとの魔力と効き目。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
 
 import raw from './dungeonGen.json';
 import type { SpellId } from './types';
+
+/** ランクの数（広さをランクごとに決めるので、sizes はこの数だけ並ぶ） */
+export const RANK_COUNT = 9;
+
+/** 階の数と広さ（explore.ts、rank.ts） */
+export interface FloorSettings {
+  count: number; // 通常の階の数。その下にボスの階がある
+  sizes: number[]; // ランクごとの階の広さ（一辺のマス数）。ランク1から順に RANK_COUNT 個
+}
 
 /** 小部屋の置き方（map.ts） */
 export interface RoomSettings {
@@ -54,6 +63,7 @@ export interface MagicSettings {
 export type SpellSettings = Record<SpellId, Record<string, number>>;
 
 export interface GenSettings {
+  floors: FloorSettings;
   rooms: RoomSettings;
   enemies: EnemySettings;
   growth: GrowthSettings;
@@ -112,6 +122,8 @@ export const SPELL_NAMES: Record<SpellId, string> = {
 
 /** 値の範囲（管理画面の入力欄も、この範囲にする）。step は管理画面で1回に動かす量 */
 export const GEN_LIMITS = {
+  floorCount: { min: 1, max: 10, step: 1 },
+  floorSize: { min: 20, max: 100, step: 1 }, // map.ts の MAP_CONFIG（作れるマップの広さ）と同じ範囲
   attemptRate: { min: 0, max: 0.3, step: 0.01 },
   amount: { min: 0, max: 3, step: 0.1 },
   roomSize: { min: 3, max: 15, step: 2 },
@@ -128,6 +140,8 @@ export const GEN_LIMITS = {
 
 /** 項目の名前（管理画面と、変更の説明で使う） */
 export const GEN_LABELS = {
+  floorCount: '階の数',
+  floorSize: '階の広さ',
   attemptRate: '部屋の多さ',
   minSize: '部屋の大きさ（最小）',
   maxSize: '部屋の大きさ（最大）',
@@ -149,13 +163,28 @@ export const GEN_LABELS = {
 /** 形のおかしいところを、すべて日本語の文で返す（なければ空） */
 export function genProblems(data: unknown): string[] {
   const problems: string[] = [];
-  if (!isObject(data) || !isObject(data.rooms) || !isObject(data.enemies) || !isObject(data.growth) || !isObject(data.magic) || !isObject(data.spells)) {
-    return ['rooms・enemies・growth・magic・spells のどれかがない'];
+  if (!isObject(data) || !isObject(data.floors) || !isObject(data.rooms) || !isObject(data.enemies) || !isObject(data.growth) || !isObject(data.magic) || !isObject(data.spells)) {
+    return ['floors・rooms・enemies・growth・magic・spells のどれかがない'];
   }
   const { rooms, enemies } = data;
   const num = (v: unknown, label: string, lim: { min: number; max: number }) => {
     if (typeof v !== 'number' || !Number.isFinite(v) || v < lim.min || v > lim.max) problems.push(`${label}：${lim.min}〜${lim.max}の数にする`);
   };
+  const { floors } = data;
+  num(floors.count, GEN_LABELS.floorCount, GEN_LIMITS.floorCount);
+  if (typeof floors.count === 'number' && !Number.isInteger(floors.count)) problems.push(`${GEN_LABELS.floorCount}：整数にする`);
+  const sizes = floors.sizes;
+  if (!Array.isArray(sizes) || sizes.length !== RANK_COUNT) {
+    problems.push(`${GEN_LABELS.floorSize}：ランク1〜${RANK_COUNT}の${RANK_COUNT}個を並べる`);
+  } else {
+    sizes.forEach((v: unknown, i) => {
+      const label = `ランク${i + 1}の${GEN_LABELS.floorSize}`;
+      num(v, label, GEN_LIMITS.floorSize);
+      if (typeof v === 'number' && !Number.isInteger(v)) problems.push(`${label}：整数にする`);
+      const prev: unknown = sizes[i - 1];
+      if (i > 0 && typeof v === 'number' && typeof prev === 'number' && v < prev) problems.push(`${label}：ランク${i}の広さ（${prev}）以上にする`);
+    });
+  }
   num(rooms.attemptRate, GEN_LABELS.attemptRate, GEN_LIMITS.attemptRate);
   for (const k of ['minSize', 'maxSize'] as const) {
     const v = rooms[k];
@@ -220,6 +249,11 @@ export function describeGenChanges(before: GenSettings, after: GenSettings): str
   const out: string[] = [];
   const show = (v: number | boolean | string) =>
     typeof v === 'boolean' ? (v ? 'する' : 'しない') : typeof v === 'string' ? (PLACEMENT_LABELS[v as Placement] ?? v) : String(v);
+  if (before.floors.count !== after.floors.count) out.push(`${GEN_LABELS.floorCount}：${before.floors.count} → ${after.floors.count}`);
+  after.floors.sizes.forEach((size, i) => {
+    const old = before.floors.sizes[i];
+    if (old !== size) out.push(`ランク${i + 1}の${GEN_LABELS.floorSize}：${old} → ${size}`);
+  });
   for (const group of ['rooms', 'enemies', 'growth'] as const) {
     const a = before[group] as unknown as Record<string, number | boolean | string>;
     const b = after[group] as unknown as Record<string, number | boolean | string>;

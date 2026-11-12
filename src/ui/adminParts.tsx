@@ -37,6 +37,56 @@ export function AdminNav({ current }: { current: (typeof ADMIN_VIEWS)[number]['v
 }
 
 /**
+ * 設定の種類ごとのタブ。選んだタブの中身だけを出す（中身は、呼ぶ側で role="tabpanel"・id="{idPrefix}-{id}-panel"・aria-labelledby="{idPrefix}-{id}-tab" にする）。
+ * 公開している値から変えたタブには、目印（・）を付ける（ほかのタブで変えたことを忘れないように）。左右の矢印キーでもタブを移れる
+ */
+export function AdminTabs<T extends string>({
+  label,
+  idPrefix,
+  tabs,
+  current,
+  onSelect,
+}: {
+  label: string;
+  idPrefix: string;
+  tabs: readonly { id: T; label: string; changed: boolean }[];
+  current: T;
+  onSelect: (id: T) => void;
+}) {
+  const move = (from: number, step: number) => {
+    const next = tabs[(from + step + tabs.length) % tabs.length]!;
+    onSelect(next.id);
+    document.getElementById(`${idPrefix}-${next.id}-tab`)?.focus();
+  };
+  return (
+    <div className="admin__tabs" role="tablist" aria-label={label}>
+      {tabs.map((t, i) => (
+        <button
+          key={t.id}
+          type="button"
+          role="tab"
+          id={`${idPrefix}-${t.id}-tab`}
+          aria-controls={`${idPrefix}-${t.id}-panel`}
+          aria-selected={t.id === current}
+          tabIndex={t.id === current ? 0 : -1}
+          className={cls('admin__tab', t.changed)}
+          onClick={() => onSelect(t.id)}
+          onKeyDown={(ev) => {
+            if (ev.key === 'ArrowRight') move(i, 1);
+            else if (ev.key === 'ArrowLeft') move(i, -1);
+            else return;
+            ev.preventDefault();
+          }}
+        >
+          {t.label}
+          {t.changed && <span className="admin__tab-mark" aria-label="（変更あり）" />}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
  * ファイル1つを公開する仕組み。publish(text, base, message) で保存し、そのあとは公開が終わるまで進み具合を確かめ続ける。
  * 保存できたら onSaved を呼ぶ（次の変更は、今保存した内容をもとにする）
  */
