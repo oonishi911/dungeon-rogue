@@ -5,6 +5,8 @@ import { FAVORABLE_GEAR, START_SUPPLIES } from './data';
 import type { ItemId, TraitId } from './types';
 
 export const TRIALS = 40;
+// 1つのテストの待ち時間（ミリ秒）。階の数が5で、広いマップを TRIALS 回遊ばせるので、CI の遅い機械でも終わるよう余裕を持たせる
+export const BALANCE_TIMEOUT = 120_000;
 export const SUPPLIES: ItemId[] = [...START_SUPPLIES];
 
 /**

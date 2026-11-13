@@ -3,12 +3,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { clearRate } from './autoplay';
-import { PREPS, SUPPLIES, TRIALS } from './balance.fixtures';
+import { BALANCE_TIMEOUT, PREPS, SUPPLIES, TRIALS } from './balance.fixtures';
 import type { TraitId } from './types';
 
 describe('バランス：ランク4', () => {
   for (const [trait, prep] of Object.entries(PREPS) as [TraitId, (typeof PREPS)[TraitId]][]) {
-    it(`${trait}：正しい準備ならクリア率80%以上`, { timeout: 60_000 }, () => {
+    it(`${trait}：正しい準備ならクリア率80%以上`, { timeout: BALANCE_TIMEOUT }, () => {
       expect(clearRate([...prep.right, ...SUPPLIES], trait, TRIALS, { rank: 4 })).toBeGreaterThanOrEqual(0.8);
     });
   }

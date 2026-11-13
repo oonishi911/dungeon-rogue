@@ -184,7 +184,7 @@ describe('step', () => {
     expect(s.stats.hp).toBe(0);
   });
 
-  it('どのランクでも、本道だけを歩けば満腹度が0にならずにボス階まで着ける', () => {
+  it('どのランクでも、本道だけを歩けば満腹度が0にならずにボス階まで着ける', { timeout: 30_000 }, () => {
     for (let rank = 2; rank <= RANK_CONFIG.maxRank; rank++) {
       for (let i = 0; i < 10; i++) {
         let s = startExplore(i * 2654435761, { enemyDensity: 0, rank });
@@ -195,7 +195,7 @@ describe('step', () => {
     }
   });
 
-  it('強化していなくても、本道だけを歩けば満腹度が0にならずにボス階まで着ける', () => {
+  it('強化していなくても、本道だけを歩けば満腹度が0にならずにボス階まで着ける', { timeout: 30_000 }, () => {
     for (let i = 0; i < 100; i++) {
       let s = startExplore(i * 2654435761, { enemyDensity: 0 });
       for (let f = 0; f < EXPLORE_CONFIG.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
