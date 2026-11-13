@@ -28,7 +28,7 @@ export const copyJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as
 export const ADMIN_TABS = [
   { id: 'enemies', label: '敵', part: 'enemies' },
   { id: 'pool', label: 'ダンジョンに出る敵', part: 'enemies' },
-  { id: 'floors', label: '階の数と広さ', part: 'gen' },
+  { id: 'floors', label: '階の数・広さ・満腹度', part: 'gen' },
   { id: 'rooms', label: '小部屋', part: 'gen' },
   { id: 'placement', label: '敵の数と置き方', part: 'gen' },
   { id: 'growth', label: 'レベルと強敵の報酬', part: 'gen' },
@@ -41,7 +41,7 @@ export const showsPreview = (tab: AdminTab): boolean => ADMIN_TABS.find((t) => t
 
 /**
  * 開いたときのタブ。住所の tab= で指す（?tab=magic）。
- * 前の住所も使える：?view=enemies は「敵」、?view=gen は「階の数と広さ」（?view=gen&tab=enemies の「敵の数と置き方」は placement になった）
+ * 前の住所も使える：?view=enemies は「敵」、?view=gen は「階の数・広さ・満腹度」（?view=gen&tab=enemies の「敵の数と置き方」は placement になった）
  */
 export function adminTabFromUrl(search: string): AdminTab {
   const params = new URLSearchParams(search);

@@ -144,7 +144,7 @@ export function buyItem(state: PrepState, itemId: ItemId): Result<PrepState> {
 
 /**
  * ランクを1つ上げる。踏破経験と金貨を払う。カードも日数も使わない。
- * ランクが上がるとダンジョンが広くなるかわりに、満腹度の上限と報酬が増える。
+ * ランクが上がるとダンジョンが広くなり、満腹度の上限（設定でランクごとに決める）と報酬が増える。
  */
 export function upgradeRank(state: PrepState): Result<PrepState> {
   if (state.phase !== 'prep') return err('準備フェーズは終わっています');

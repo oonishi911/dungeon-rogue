@@ -85,7 +85,7 @@ export interface FloorMemory {
 export interface ExploreState {
   seed: number;
   trait: TraitId;
-  rank: number; // 広さ・満腹度の上限・敵の数・報酬が決まる
+  rank: number; // 広さ・満腹度（設定）・敵の数・報酬が決まる
   floor: number; // 0始まり。floors と同じならボス階
   floors: number; // 通常の階の数
   mapSize: number;

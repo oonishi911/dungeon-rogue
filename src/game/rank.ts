@@ -1,7 +1,7 @@
 // ランク（強化）。踏破した経験と金貨を払って上げる。
-// ランクが上がると満腹度の上限が増えるかわりに、ダンジョンも広くなり、報酬も良くなる。
-// 数値は自動プレイで測って決めた（docs/dungeon-design.md の「ランク」を参照）。
-// ランクごとの階の広さと、階の数は、ダンジョンの設定（dungeonGen.json の floors。管理画面 ?view=admin の「階の数と広さ」タブ）で決める。
+// ランクが上がると、ダンジョンが広くなり、報酬も良くなる。
+// ランクごとの階の広さ・満腹度と、階の数は、ダンジョンの設定（dungeonGen.json の floors。管理画面 ?view=admin の「階の数・広さ・満腹度」タブ）で決める。
+// 満腹度は、広さや階の数からは計算しない（設定した値をそのまま使う）。敵の密度と回復の速さは、広さから決まる。数値は自動プレイで測って決めた（docs/dungeon-design.md の「ランク」を参照）。
 
 import { ENEMY_CONFIG } from './enemies';
 import { TREASURE_CONFIG } from './data';
@@ -9,8 +9,7 @@ import { GEN_SETTINGS, RANK_COUNT, type FloorSettings } from './genMaster';
 
 export const RANK_CONFIG = {
   maxRank: RANK_COUNT, // 最高のランク
-  referenceSize: 40, // 満腹度と敵の密度の式の基準にした広さ（自動プレイで測った広さ）
-  referenceFloors: 3, // 満腹度の式の基準にした階の数（自動プレイで測った階の数）
+  referenceSize: 40, // 敵の密度と回復の速さの式の基準にした広さ（自動プレイで測った広さ）
   regenInterval: 20, // 基準の広さでの、HPが1回復するまでのターン数
   costPerRank: 50, // 強化の費用＝これ×今のランク（G）
   expPerUpgrade: 1, // 強化に使う踏破経験
@@ -28,9 +27,8 @@ export interface RankParams {
 }
 
 /**
- * ランクごとの探索の条件。floors は階の数とランクごとの広さ（省略すると、ゲームの設定。管理画面の見本は、公開前の値を渡す）。
- * - 満腹度：霧の中で踏破までに歩く距離はほぼ面積に比例する。40×40より広いと少し余分にかかるので、
- *   広さ²×max(1, 広さ/40)^0.3（40×40までは広さ²）。歩く距離は階の数にも比例するので、階の数÷3 を掛ける（階が3つなら、そのまま）
+ * ランクごとの探索の条件。floors は階の数とランクごとの広さ・満腹度（省略すると、ゲームの設定。管理画面の見本は、公開前の値を渡す）。
+ * - 満腹度：設定（floors.satiety）のランクの値そのまま。広さや階の数を変えても、自動では変わらない
  * - 敵の数：密度が一定だと面積に比例して増えすぎるので、広さに比例する程度に抑える
  * - HPの回復：狭いマップは探索が短く回復する時間が足りないので、広さに合わせて速くする（regenIntervalFor）
  */
@@ -41,7 +39,7 @@ export function rankParams(rank: number, floors: FloorSettings = GEN_SETTINGS.fl
   return {
     rank: r,
     mapSize,
-    maxSatiety: Math.round(mapSize * mapSize * Math.pow(Math.max(1, ratio), 0.3) * (floors.count / RANK_CONFIG.referenceFloors)),
+    maxSatiety: floors.satiety[r - 1]!,
     enemyDensity: ENEMY_CONFIG.density / ratio,
     chestGoldRate: 1 + RANK_CONFIG.goldBonusPerRank * (r - 1),
     bossGold: TREASURE_CONFIG.bossGold * r,

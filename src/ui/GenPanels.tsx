@@ -1,5 +1,5 @@
 // 開発用の管理画面（Admin.tsx）の、ダンジョンの設定（src/game/dungeonGen.json）のタブ：
-// 「階の数と広さ」（階の数とランクごとの広さ）、「小部屋」（多さと大きさ）、
+// 「階の数・広さ・満腹度」（階の数と、ランクごとの広さ・満腹度）、「小部屋」（多さと大きさ）、
 // 「敵の数と置き方」（部屋に集める・部屋には置かない・群れ部屋・部屋から出さない）、
 // 「レベルと強敵の報酬」（敵を倒したときのレベルの上がり方と強敵の報酬の倍率）、「魔法」（魔力と呪文の強さ）と、
 // 変えた値で作ったマップの見本。
@@ -39,28 +39,30 @@ export interface GenPanelProps {
   setDraft: Dispatch<SetStateAction<GenSettings>>;
 }
 
-/** 「階の数と広さ」のタブ */
+/** 「階の数・広さ・満腹度」のタブ */
 export function FloorsPanel({ base, draft, setDraft }: GenPanelProps) {
   const f = draft.floors;
   const bf = base.floors;
   const setFloors = (patch: Partial<FloorSettings>) => setDraft((d) => ({ ...d, floors: { ...d.floors, ...patch } }));
   const setFloorSize = (index: number, size: number) => setFloors({ sizes: f.sizes.map((v, i) => (i === index ? size : v)) });
+  const setFloorSatiety = (index: number, satiety: number) => setFloors({ satiety: f.satiety.map((v, i) => (i === index ? satiety : v)) });
   return (
     <section className="admin__section" role="tabpanel" id="admin-floors-panel" aria-labelledby="admin-floors-tab">
-      <h2 className="admin__heading">階の数と広さ</h2>
+      <h2 className="admin__heading">階の数・広さ・満腹度</h2>
       <p className="admin__note">
-        広さは、ランクごとに決めます（上のランクほど、同じか広く）。満腹度の上限・敵の数・HPの回復の速さは、広さと階の数から自動で決まります。
+        広さと満腹度は、ランクごとに決めます（広さは、上のランクほど同じか広く）。満腹度は、探索のはじめの満腹度で、上限でもあります。
+        広さや階の数を変えても、満腹度は自動では変わらないので、いっしょに見直してください。敵の数・HPの回復の速さは、広さから自動で決まります。
         大きく変えると、自動チェックのバランステストに通らず、公開されないことがあります。
       </p>
       <div className="gen__fields">
-        <Field label={GEN_LABELS.floorCount} hint="通常の階の数。その下に、ボスの階が1つある。満腹度の上限は、階の数に合わせて増える">
+        <Field label={GEN_LABELS.floorCount} hint="通常の階の数。その下に、ボスの階が1つある。階を増やしたら、満腹度も見直す">
           <NumberField {...GEN_LIMITS.floorCount} value={f.count} changed={f.count !== bf.count} label={GEN_LABELS.floorCount} onChange={(v) => setFloors({ count: v })} />
         </Field>
       </div>
       <h3 className="gen__subheading">ランクごとの広さ（一辺のマス数）</h3>
       <div className="gen__fields">
         {f.sizes.map((size, i) => (
-          <Field key={i} label={`ランク${i + 1}`} hint={`${size}×${size}マス ・ 満腹度の上限 ${rankParams(i + 1, f).maxSatiety}`}>
+          <Field key={i} label={`ランク${i + 1}`} hint={`${size}×${size}マス`}>
             <NumberField
               {...GEN_LIMITS.floorSize}
               value={size}
@@ -68,6 +70,20 @@ export function FloorsPanel({ base, draft, setDraft }: GenPanelProps) {
               label={`ランク${i + 1}の${GEN_LABELS.floorSize}`}
               error={i > 0 ? orderError('atLeast', `ランク${i + 1}の広さ`, size, `ランク${i}の広さ`, f.sizes[i - 1]!) : null}
               onChange={(v) => setFloorSize(i, v)}
+            />
+          </Field>
+        ))}
+      </div>
+      <h3 className="gen__subheading">ランクごとの満腹度（探索のはじめの満腹度。これが上限）</h3>
+      <div className="gen__fields">
+        {f.satiety.map((satiety, i) => (
+          <Field key={i} label={`ランク${i + 1}`} hint={`マップの面積（${f.sizes[i]! ** 2}）の${(satiety / f.sizes[i]! ** 2).toFixed(1)}倍`}>
+            <NumberField
+              {...GEN_LIMITS.satiety}
+              value={satiety}
+              changed={satiety !== bf.satiety[i]}
+              label={`ランク${i + 1}の${GEN_LABELS.satiety}`}
+              onChange={(v) => setFloorSatiety(i, v)}
             />
           </Field>
         ))}

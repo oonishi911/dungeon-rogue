@@ -18,7 +18,7 @@ import sample from './enemyMaster.sample.json';
 import { serializeGenSettings, type GenSettings } from './genMaster';
 
 const GEN: GenSettings = {
-  floors: { count: 3, sizes: [20, 30, 40, 50, 60, 70, 80, 90, 100] },
+  floors: { count: 3, sizes: [20, 30, 40, 50, 60, 70, 80, 90, 100], satiety: [400, 900, 1600, 2500, 3600, 4900, 6400, 8100, 10000] },
   rooms: { attemptRate: 0.04, minSize: 3, maxSize: 9 },
   enemies: { amount: 1, placement: 'mixed', roomWeight: 1, nestChance: 0, nestMin: 3, nestMax: 5, stayInRoom: false },
   growth: { expBase: 30, expStep: 20, hpPerLevel: 2, atkPerLevel: 1, maxLevel: 10, eliteRate: 3 },
@@ -64,6 +64,14 @@ describe('管理画面の公開（敵とダンジョンの設定をまとめて�
     const plan = planPublish(BASE, draft);
     expect(plan.files).toEqual([{ path: GEN_FILE, text: serializeGenSettings(draft.gen), base: serializeGenSettings(BASE.gen) }]);
     expect(plan.message.split('\n')[0]).toBe('ダンジョンの設定を更新する（管理画面から）');
+  });
+
+  it('満腹度だけ変えても、dungeonGen.json を保存する（説明にランクごとの満腹度が出る）', () => {
+    const draft = edited((d) => void (d.gen.floors.satiety[1] = 1200));
+    const plan = planPublish(BASE, draft);
+    expect(plan.files.map((f) => f.path)).toEqual([GEN_FILE]);
+    expect(plan.changes).toEqual(['ランク2の満腹度：900 → 1200']);
+    expect(JSON.parse(plan.files[0]!.text).floors.satiety[1]).toBe(1200);
   });
 
   it('両方変えたら、2つのファイルを、1つの説明でまとめて保存する', () => {
@@ -130,6 +138,7 @@ describe('管理画面のタブ', () => {
     expect(changedTabs(edited(goblinHp))).toEqual(['enemies']);
     expect(changedTabs(edited((d) => void (d.enemies.dungeons.fire.pool = setWeight(d.enemies.dungeons.fire.pool, 'goblin', 3))))).toEqual(['pool']);
     expect(changedTabs(edited(floorCount))).toEqual(['floors']);
+    expect(changedTabs(edited((d) => void (d.gen.floors.satiety[0] = 500)))).toEqual(['floors']);
     expect(changedTabs(edited((d) => void (d.gen.rooms.maxSize = 11)))).toEqual(['rooms']);
     expect(changedTabs(edited((d) => void (d.gen.enemies.nestMax = 6)))).toEqual(['placement']);
     expect(changedTabs(edited((d) => void (d.gen.growth.maxLevel = 12)))).toEqual(['growth']);
