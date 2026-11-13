@@ -26,6 +26,7 @@ import {
   type Placement,
   type RoomSettings,
 } from '../game/genMaster';
+import { orderError } from '../game/fieldCheck';
 import { generateFloor, type FloorMap } from '../game/map';
 import { RANK_CONFIG, rankParams } from '../game/rank';
 import type { SpellId } from '../game/types';
@@ -117,6 +118,7 @@ export function GenAdmin() {
                 value={size}
                 changed={size !== bf.sizes[i]}
                 label={`ランク${i + 1}の${GEN_LABELS.floorSize}`}
+                error={i > 0 ? orderError('atLeast', `ランク${i + 1}の広さ`, size, `ランク${i}の広さ`, f.sizes[i - 1]!) : null}
                 onChange={(v) => setFloorSize(i, v)}
               />
             </Field>
@@ -133,10 +135,26 @@ export function GenAdmin() {
             <NumberField {...GEN_LIMITS.attemptRate} value={r.attemptRate} changed={r.attemptRate !== br.attemptRate} label={GEN_LABELS.attemptRate} onChange={(v) => setRooms({ attemptRate: v })} />
           </Field>
           <Field label={GEN_LABELS.minSize} hint="部屋の一辺のマス数（奇数）">
-            <NumberField {...GEN_LIMITS.roomSize} value={r.minSize} changed={r.minSize !== br.minSize} label={GEN_LABELS.minSize} onChange={(v) => setRooms({ minSize: v })} />
+            <NumberField
+              {...GEN_LIMITS.roomSize}
+              odd
+              value={r.minSize}
+              changed={r.minSize !== br.minSize}
+              label={GEN_LABELS.minSize}
+              error={orderError('atMost', '最小', r.minSize, '最大', r.maxSize)}
+              onChange={(v) => setRooms({ minSize: v })}
+            />
           </Field>
           <Field label={GEN_LABELS.maxSize} hint="小さくすると、部屋の数が増えて一つ一つが小さくなる">
-            <NumberField {...GEN_LIMITS.roomSize} value={r.maxSize} changed={r.maxSize !== br.maxSize} label={GEN_LABELS.maxSize} onChange={(v) => setRooms({ maxSize: v })} />
+            <NumberField
+              {...GEN_LIMITS.roomSize}
+              odd
+              value={r.maxSize}
+              changed={r.maxSize !== br.maxSize}
+              label={GEN_LABELS.maxSize}
+              error={orderError('atLeast', '最大', r.maxSize, '最小', r.minSize)}
+              onChange={(v) => setRooms({ maxSize: v })}
+            />
           </Field>
         </div>
       </section>
@@ -179,10 +197,24 @@ export function GenAdmin() {
             <NumberField {...GEN_LIMITS.nestChance} value={e.nestChance} changed={e.nestChance !== be.nestChance} label={GEN_LABELS.nestChance} onChange={(v) => setEnemies({ nestChance: v })} />
           </Field>
           <Field label={GEN_LABELS.nestMin} hint="部屋に入りきらないときは、入る分だけ置く">
-            <NumberField {...GEN_LIMITS.nestCount} value={e.nestMin} changed={e.nestMin !== be.nestMin} label={GEN_LABELS.nestMin} onChange={(v) => setEnemies({ nestMin: v })} />
+            <NumberField
+              {...GEN_LIMITS.nestCount}
+              value={e.nestMin}
+              changed={e.nestMin !== be.nestMin}
+              label={GEN_LABELS.nestMin}
+              error={orderError('atMost', '最小', e.nestMin, '最大', e.nestMax)}
+              onChange={(v) => setEnemies({ nestMin: v })}
+            />
           </Field>
           <Field label={GEN_LABELS.nestMax}>
-            <NumberField {...GEN_LIMITS.nestCount} value={e.nestMax} changed={e.nestMax !== be.nestMax} label={GEN_LABELS.nestMax} onChange={(v) => setEnemies({ nestMax: v })} />
+            <NumberField
+              {...GEN_LIMITS.nestCount}
+              value={e.nestMax}
+              changed={e.nestMax !== be.nestMax}
+              label={GEN_LABELS.nestMax}
+              error={orderError('atLeast', '最大', e.nestMax, '最小', e.nestMin)}
+              onChange={(v) => setEnemies({ nestMax: v })}
+            />
           </Field>
           <Field label={GEN_LABELS.stayInRoom} hint="部屋に置いた敵は、主人公に気付くまで部屋の中だけを歩く（気付いたら追ってくる）">
             <input
@@ -257,6 +289,7 @@ export function GenAdmin() {
                     min={f.min}
                     max={f.max}
                     step={f.step}
+                    integer={f.integer}
                     value={draft.spells[spell][f.key]!}
                     changed={draft.spells[spell][f.key] !== base.spells[spell][f.key]}
                     label={`${SPELL_NAMES[spell]}の${f.label}`}

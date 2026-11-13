@@ -27,7 +27,8 @@ import {
 } from '../game/enemyMaster';
 import { Sprite } from '../sprites/Sprite';
 import type { Body, Element, EnemyId, TraitId } from '../game/types';
-import { AdminNav, cls, NumberField, PublishPanel, usePublish } from './adminParts';
+import { textError } from '../game/fieldCheck';
+import { AdminNav, cls, NumberField, PublishPanel, TextField, usePublish } from './adminParts';
 
 const FILE = 'src/game/enemies.json';
 const copy = (m: EnemyMaster): EnemyMaster => JSON.parse(JSON.stringify(m)) as EnemyMaster;
@@ -118,12 +119,12 @@ export function EnemyAdmin() {
                     <th scope="row">
                       <span className="admin__who">
                         <Sprite id={e.look.sprite} recolor={e.look.recolor} scale={1} label={`${e.name}の見た目`} className="admin__sprite" />
-                        <input
-                          className={cls('admin__name', e.name !== b.name)}
-                        value={e.name}
-                        maxLength={LIMITS.name.max}
-                        aria-label={`${id} の名前`}
-                          onChange={(ev) => setEnemy(id, { name: ev.target.value })}
+                        <TextField
+                          value={e.name}
+                          rule={{ max: LIMITS.name.max, taken: otherNames(draft, id), takenText: 'ほかの敵の名前です' }}
+                          changed={e.name !== b.name}
+                          label={`${id} の名前`}
+                          onChange={(v) => setEnemy(id, { name: v })}
                         />
                       </span>
                       <span className="admin__id">
@@ -311,26 +312,25 @@ function AddEnemy({ master, disabled, onAdd }: { master: EnemyMaster; disabled: 
   const [from, setFrom] = useState(ids[0] ?? '');
   const template = master.enemies[from] ?? master.enemies[ids[0] ?? ''];
   const names = new Set(Object.values(master.enemies).map((e) => e.name));
-  const problem = !id
-    ? null
-    : !LIMITS.id.pattern.test(id)
-      ? `ID は英小文字で始まり、英小文字・数字・_ だけの2〜${LIMITS.id.max}文字にします`
-      : id in master.enemies
-        ? 'その ID の敵はもういます'
-        : name && names.has(name.trim())
-          ? '同じ名前の敵がもういます'
-          : null;
-  const ready = Boolean(id && name.trim() && template && !problem);
+  // まだ何も入れていない欄には、エラーを出さない（quietWhenEmpty）。「足す」は、両方の欄が決まりに合うまで押せない
+  const idRule = {
+    max: LIMITS.id.max,
+    pattern: { test: LIMITS.id.pattern, text: `英小文字で始まり、英小文字・数字・_ だけの2〜${LIMITS.id.max}文字` },
+    taken: new Set(ids),
+    takenText: 'ほかの敵の ID です',
+  };
+  const nameRule = { max: LIMITS.name.max, taken: names, takenText: 'ほかの敵の名前です' };
+  const ready = Boolean(template && !textError(id, idRule) && !textError(name, nameRule));
   return (
     <div className="admin__add" role="group" aria-label="敵を足す">
       <p className="admin__add-title">敵を足す</p>
       <label>
         <span>ID（英小文字・数字・_）</span>
-        <input className="admin__name" value={id} maxLength={LIMITS.id.max} spellCheck={false} onChange={(e) => setId(e.target.value.trim())} placeholder="cave_bat" />
+        <TextField value={id} rule={idRule} quietWhenEmpty changed={false} label="足す敵の ID" spellCheck={false} onChange={(v) => setId(v.trim())} placeholder="cave_bat" />
       </label>
       <label>
         <span>名前</span>
-        <input className="admin__name" value={name} maxLength={LIMITS.name.max} onChange={(e) => setName(e.target.value)} placeholder="洞窟コウモリ" />
+        <TextField value={name} rule={nameRule} quietWhenEmpty changed={false} label="足す敵の名前" onChange={setName} placeholder="洞窟コウモリ" />
       </label>
       <label>
         <span>見た目と強さのもと</span>
@@ -355,9 +355,13 @@ function AddEnemy({ master, disabled, onAdd }: { master: EnemyMaster; disabled: 
       >
         足す
       </button>
-      {problem && <p className="admin__add-problem">{problem}</p>}
     </div>
   );
+}
+
+/** ほかの敵の名前（名前の欄で、同じ名前にしないため） */
+function otherNames(master: EnemyMaster, id: EnemyId): Set<string> {
+  return new Set(enemyIds(master).flatMap((other) => (other === id ? [] : [master.enemies[other]!.name])));
 }
 
 /** 見た目の候補（今いる敵の見た目。同じ見た目は1つにまとめる） */

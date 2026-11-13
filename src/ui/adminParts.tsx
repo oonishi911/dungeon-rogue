@@ -1,7 +1,8 @@
 // 開発用の管理画面で共通に使う部品：変更の一覧・トークン・「変更を公開」と、公開の進み具合。
 // 敵のマスターデータ（EnemyAdmin.tsx）と、ダンジョンの設定（GenAdmin.tsx）で使う
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+import { numberError, textError, type TextRule } from '../game/fieldCheck';
 import { deployStage, loadToken, publishFile, PublishError, REPO, saveToken, type DeployStage } from './githubPublish';
 
 const POLL_MS = 10_000; // 公開の進み具合を確かめる間隔
@@ -221,11 +222,19 @@ function PublishStatus({ publish }: { publish: Publish }) {
 }
 
 /** 数の入力欄。入力中は空欄や途中の値も許し、数として読めたときだけデータに入れる（範囲の外の値は、公開の欄に問題として出る） */
+/**
+ * 数の入力欄。入力した直後に決まり（範囲・整数・奇数）を確かめ、合わなければ、欄の下に原因と正しい値の範囲を出す。
+ * error は、ほかの欄との大小（最小は最大以下、など）のように、この欄だけでは決まらないエラー（欄の決まりに合っているときだけ出す）。
+ * 決まりに合わない値も、数として読めれば onChange で渡す（公開の欄の「直すところ」にも出て、公開できないようにするため）
+ */
 export function NumberField(props: {
   value: number;
   min: number;
   max: number;
   step?: number;
+  integer?: boolean;
+  odd?: boolean;
+  error?: string | null;
   changed: boolean;
   label: string;
   onChange: (v: number) => void;
@@ -233,23 +242,74 @@ export function NumberField(props: {
   const [text, setText] = useState(String(props.value));
   useEffect(() => setText(String(props.value)), [props.value]);
   const step = props.step ?? 1;
+  const rule = { min: props.min, max: props.max, step, ...(props.integer !== undefined ? { integer: props.integer } : {}), odd: props.odd ?? false };
+  const error = numberError(text, rule) ?? props.error ?? null;
+  const errorId = useId();
   return (
-    <input
-      className={cls('admin__number', props.changed)}
-      type="number"
-      inputMode={Number.isInteger(step) ? 'numeric' : 'decimal'}
-      min={props.min}
-      max={props.max}
-      step={step}
-      value={text}
-      aria-label={props.label}
-      onChange={(e) => {
-        setText(e.target.value);
-        const v = Number(e.target.value);
-        if (e.target.value !== '' && Number.isFinite(v)) props.onChange(v);
-      }}
-      onBlur={() => setText(String(props.value))}
-    />
+    <span className="admin__field">
+      <input
+        className={cls(cls('admin__number', props.changed), Boolean(error), 'is-invalid')}
+        type="number"
+        inputMode={Number.isInteger(step) ? 'numeric' : 'decimal'}
+        min={props.min}
+        max={props.max}
+        step={step}
+        value={text}
+        aria-label={props.label}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        onChange={(e) => {
+          setText(e.target.value);
+          const v = Number(e.target.value);
+          if (e.target.value.trim() !== '' && Number.isFinite(v)) props.onChange(v);
+        }}
+        // 空や数でない文字のまま離れたら、今の値に戻す（範囲の外の数は、直すまでそのまま残してエラーを出す）
+        onBlur={() => {
+          if (text.trim() === '' || !Number.isFinite(Number(text))) setText(String(props.value));
+        }}
+      />
+      <FieldError id={errorId} error={error} />
+    </span>
+  );
+}
+
+/** 文字の入力欄。入力した直後に決まり（長さ・使える文字・ほかと同じでないか）を確かめ、合わなければ欄の下に原因と直し方を出す */
+export function TextField(props: {
+  value: string;
+  rule: TextRule;
+  changed: boolean;
+  label: string;
+  className?: string;
+  placeholder?: string;
+  spellCheck?: boolean;
+  quietWhenEmpty?: boolean; // 空のときはエラーを出さない（入力を始める前の欄）
+  onChange: (v: string) => void;
+}) {
+  const error = props.quietWhenEmpty && props.value === '' ? null : textError(props.value, props.rule);
+  const errorId = useId();
+  return (
+    <span className="admin__field">
+      <input
+        className={cls(cls(props.className ?? 'admin__name', props.changed), Boolean(error), 'is-invalid')}
+        value={props.value}
+        aria-label={props.label}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        placeholder={props.placeholder}
+        spellCheck={props.spellCheck}
+        onChange={(e) => props.onChange(e.target.value)}
+      />
+      <FieldError id={errorId} error={error} />
+    </span>
+  );
+}
+
+/** 入力欄の下に出すエラー。読み上げでも、出たときに伝わるようにする */
+function FieldError({ id, error }: { id: string; error: string | null }) {
+  return (
+    <span id={id} className="admin__error" role="status" aria-live="polite">
+      {error}
+    </span>
   );
 }
 

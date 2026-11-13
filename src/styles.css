@@ -1323,16 +1323,39 @@ button.card:disabled {
   margin-top: 0.75rem;
 }
 
-.admin__add-problem {
-  flex-basis: 100%;
-  margin: 0;
+
+/* 入力欄と、その下のエラー。エラーは入力した直後に出し、原因と正しい値の範囲を書く */
+.admin__field {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: 100%;
+}
+
+.admin__error {
+  max-width: 18rem;
   color: var(--alert);
+  font-size: var(--step--1);
+  line-height: 1.4;
+  font-weight: 400;
+  white-space: normal;
+}
+
+.admin__error:empty {
+  display: none;
 }
 
 /* 公開版から変えたところ */
 .admin .is-changed {
   border-color: var(--procure);
   box-shadow: 0 0 0 1px var(--procure);
+}
+
+/* 決まりに合わない値（変えたところの色より優先する） */
+.admin .is-invalid,
+.admin .is-invalid.is-changed {
+  border-color: var(--alert);
+  box-shadow: 0 0 0 1px var(--alert);
 }
 
 .admin__check {
@@ -1521,6 +1544,17 @@ button.card:disabled {
   width: 6rem;
 }
 
+/* 欄の下のエラーは、行をまたいで広く出す（欄の幅を広げて、項目名を押し縮めないように） */
+.gen__field > .admin__field {
+  display: contents;
+}
+
+.gen__field .admin__error {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  max-width: none;
+}
+
 .gen__subheading {
   margin: 1.5rem 0 0.75rem;
   font-size: var(--step-0);
@@ -1586,6 +1620,10 @@ button.card:disabled {
   }
 
   .gen__hint {
+    grid-column: 1 / -1;
+  }
+
+  .gen__field .admin__error {
     grid-column: 1 / -1;
   }
 }
