@@ -306,7 +306,7 @@ export const ENCHANT_VS_ELEMENT: Record<Element, Partial<Record<Element, number>
   neutral: {},
 };
 
-// 敵のマスターデータは src/game/enemies.json にある（開発用の管理画面 ?view=enemies から書き換えて公開できる）。
+// 敵のマスターデータは src/game/enemies.json にある（開発用の管理画面 ?view=admin から書き換えて公開できる）。
 // 攻撃力は自動プレイのバランステスト（balance.test.ts）を満たすように調整している。
 // ボス：ダンジョンの属性と体質の傾向に合わせる。動かない。正しい準備で挑んだとき、ボス戦で受ける合計ダメージが
 // どのボスでも40前後になるようにそろえている。光のダンジョンは、光の衣で防げない炎・無属性の敵も混ざり道中で消耗するので、
@@ -367,7 +367,7 @@ export const TREASURE_CONFIG = {
  * - 強敵：金貨と経験値は elite 倍。さらに必ず宝箱を落とし、eliteGold の金貨と eliteItems のどれかが入っている
  * - 経験値：たまるとレベルが上がり、最大HPと攻撃力が上がる（上がった分だけHPも回復する）。挑戦が終わると1に戻る
  */
-// レベルの上がり方と強敵の倍率は、管理画面（?view=gen）で変えられる設定（dungeonGen.json の growth）にある。
+// レベルの上がり方と強敵の倍率は、管理画面（?view=admin の「レベルと強敵の報酬」タブ）で変えられる設定（dungeonGen.json の growth）にある。
 // 自動プレイのバランステスト（外れた準備でクリアできすぎない）を満たす範囲にする。満たさないと公開されない。
 // 無属性のダンジョンの外れた準備は、報酬なしで77.5%、今の値で87.5%（上限90%）
 export const REWARD_CONFIG = {

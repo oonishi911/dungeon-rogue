@@ -1136,7 +1136,7 @@ button.card:disabled {
   cursor: pointer;
 }
 
-/* ===== 開発用：敵のマスターデータの管理画面（?view=enemies） ===== */
+/* ===== 開発用：管理画面（?view=admin。敵のマスターデータとダンジョンの設定） ===== */
 .admin {
   max-width: 64rem;
   /* 横に長い表に合わせて画面が広がらないよう、列の幅を画面に合わせる（表の中だけ横にスクロールする） */
@@ -1443,24 +1443,6 @@ button.card:disabled {
 
 .admin__status--bad {
   color: var(--alert);
-}
-
-/* 管理画面どうしを行き来するリンク */
-.admin__nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 1.25rem;
-  margin: 0 0 1rem;
-  font-size: var(--step--1);
-}
-
-.admin__nav a {
-  color: var(--bone-dim);
-}
-
-.admin__nav [aria-current='page'] {
-  color: var(--bone);
-  font-weight: 700;
 }
 
 /* 設定の種類ごとのタブ。狭い画面では、タブの列だけ横にスクロールする */

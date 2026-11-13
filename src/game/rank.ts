@@ -1,7 +1,7 @@
 // ランク（強化）。踏破した経験と金貨を払って上げる。
 // ランクが上がると満腹度の上限が増えるかわりに、ダンジョンも広くなり、報酬も良くなる。
 // 数値は自動プレイで測って決めた（docs/dungeon-design.md の「ランク」を参照）。
-// ランクごとの階の広さと、階の数は、ダンジョンの設定（dungeonGen.json の floors。管理画面 ?view=gen）で決める。
+// ランクごとの階の広さと、階の数は、ダンジョンの設定（dungeonGen.json の floors。管理画面 ?view=admin の「階の数と広さ」タブ）で決める。
 
 import { ENEMY_CONFIG } from './enemies';
 import { TREASURE_CONFIG } from './data';

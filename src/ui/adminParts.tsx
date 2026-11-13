@@ -1,9 +1,9 @@
-// 開発用の管理画面で共通に使う部品：変更の一覧・トークン・「変更を公開」と、公開の進み具合。
-// 敵のマスターデータ（EnemyAdmin.tsx）と、ダンジョンの設定（GenAdmin.tsx）で使う
+// 開発用の管理画面（Admin.tsx）で使う部品：タブ、変更の一覧・トークン・「変更を公開」と、公開の進み具合、入力欄。
+// 敵のマスターデータ（EnemyPanels.tsx）と、ダンジョンの設定（GenPanels.tsx）のタブで使う
 
 import { useEffect, useId, useState } from 'react';
 import { numberError, textError, type TextRule } from '../game/fieldCheck';
-import { deployStage, loadToken, publishFile, PublishError, REPO, saveToken, type DeployStage } from './githubPublish';
+import { deployStage, loadToken, publishFiles, PublishError, REPO, saveToken, type DeployStage, type PublishItem } from './githubPublish';
 
 const POLL_MS = 10_000; // 公開の進み具合を確かめる間隔
 
@@ -13,33 +13,10 @@ export type Publish =
   | { state: 'watching'; commit: string; stage: DeployStage }
   | { state: 'error'; message: string };
 
-/** 管理画面どうしを行き来するリンク */
-export const ADMIN_VIEWS = [
-  { view: 'enemies', label: '敵のマスターデータ' },
-  { view: 'gen', label: 'ダンジョンの設定' },
-] as const;
-
-export function AdminNav({ current }: { current: (typeof ADMIN_VIEWS)[number]['view'] }) {
-  return (
-    <nav className="admin__nav" aria-label="管理画面">
-      {ADMIN_VIEWS.map((v) =>
-        v.view === current ? (
-          <span key={v.view} aria-current="page">
-            {v.label}
-          </span>
-        ) : (
-          <a key={v.view} href={`?view=${v.view}`}>
-            {v.label}
-          </a>
-        ),
-      )}
-    </nav>
-  );
-}
-
 /**
  * 設定の種類ごとのタブ。選んだタブの中身だけを出す（中身は、呼ぶ側で role="tabpanel"・id="{idPrefix}-{id}-panel"・aria-labelledby="{idPrefix}-{id}-tab" にする）。
- * 公開している値から変えたタブには、目印（・）を付ける（ほかのタブで変えたことを忘れないように）。左右の矢印キーでもタブを移れる
+ * 公開している値から変えたタブには、目印（・）を付ける（ほかのタブで変えたことを忘れないように）。左右の矢印キーでもタブを移れる。
+ * 狭い画面では、タブの列だけ横にスクロールする。選んだタブは、いつも見える位置に寄せる
  */
 export function AdminTabs<T extends string>({
   label,
@@ -59,6 +36,15 @@ export function AdminTabs<T extends string>({
     onSelect(next.id);
     document.getElementById(`${idPrefix}-${next.id}-tab`)?.focus();
   };
+  // 狭い画面では、選んだタブ（住所の tab= で開いたものも）がタブの列の外に隠れないよう、列の中だけを動かして見える位置に寄せる
+  useEffect(() => {
+    const tab = document.getElementById(`${idPrefix}-${current}-tab`);
+    const row = tab?.parentElement;
+    if (!tab || !row) return;
+    const left = tab.offsetLeft - row.offsetLeft;
+    if (left < row.scrollLeft) row.scrollLeft = left;
+    else if (left + tab.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = left + tab.offsetWidth - row.clientWidth;
+  }, [idPrefix, current]);
   return (
     <div className="admin__tabs" role="tablist" aria-label={label}>
       {tabs.map((t, i) => (
@@ -88,10 +74,11 @@ export function AdminTabs<T extends string>({
 }
 
 /**
- * ファイル1つを公開する仕組み。publish(text, base, message) で保存し、そのあとは公開が終わるまで進み具合を確かめ続ける。
+ * ファイルを公開する仕組み。send(files, message, onSaved) で、いくつかのファイルを1回のコミットでまとめて保存し、
+ * そのあとは公開が終わるまで進み具合を確かめ続ける。
  * 保存できたら onSaved を呼ぶ（次の変更は、今保存した内容をもとにする）
  */
-export function usePublish(file: string) {
+export function usePublish() {
   const [token, setToken] = useState(loadToken);
   const [remember, setRemember] = useState(() => loadToken() !== '');
   const [publish, setPublish] = useState<Publish>({ state: 'idle' });
@@ -110,12 +97,12 @@ export function usePublish(file: string) {
     return () => window.clearTimeout(timer);
   }, [publish, token]);
 
-  const send = async (text: string, base: string, message: string, onSaved: () => void) => {
+  const send = async (files: PublishItem[], message: string, onSaved: () => void) => {
     if (!token) return;
     saveToken(remember ? token : null);
     setPublish({ state: 'sending' });
     try {
-      const commit = await publishFile(token, file, text, base, message);
+      const commit = await publishFiles(token, files, message);
       onSaved();
       setPublish({ state: 'watching', commit, stage: { stage: 'waiting' } });
     } catch (e) {
@@ -129,12 +116,13 @@ export function usePublish(file: string) {
 /** 「変更を公開」の欄：変えたところの一覧、問題、トークン、元に戻す・公開のボタン、進み具合 */
 export function PublishPanel(props: {
   changes: string[];
+  files: string[]; // 保存するファイル（変えたほうだけ）
   problems: string[];
   publisher: ReturnType<typeof usePublish>;
   onReset: () => void;
   onPublish: () => void;
 }) {
-  const { changes, problems, publisher } = props;
+  const { changes, files, problems, publisher } = props;
   const { token, setToken, remember, setRemember, publish, busy } = publisher;
   return (
     <section className="admin__section admin__publish" aria-labelledby="admin-publish">
@@ -147,6 +135,18 @@ export function PublishPanel(props: {
         </ul>
       ) : (
         <p className="admin__note">まだ何も変えていません。</p>
+      )}
+      {files.length > 0 && (
+        <p className="admin__note">
+          保存するファイル：
+          {files.map((f, i) => (
+            <span key={f}>
+              {i > 0 && '、'}
+              <code>{f}</code>
+            </span>
+          ))}
+          {files.length > 1 && '（1回のコミットでまとめて保存します）'}
+        </p>
       )}
       {problems.length > 0 && (
         <ul className="admin__problems" role="alert">
@@ -221,7 +221,6 @@ function PublishStatus({ publish }: { publish: Publish }) {
   );
 }
 
-/** 数の入力欄。入力中は空欄や途中の値も許し、数として読めたときだけデータに入れる（範囲の外の値は、公開の欄に問題として出る） */
 /**
  * 数の入力欄。入力した直後に決まり（範囲・整数・奇数）を確かめ、合わなければ、欄の下に原因と正しい値の範囲を出す。
  * error は、ほかの欄との大小（最小は最大以下、など）のように、この欄だけでは決まらないエラー（欄の決まりに合っているときだけ出す）。
