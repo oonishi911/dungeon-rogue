@@ -6,7 +6,7 @@ import { generateFloor, type FloorMap, type Room } from './map';
 
 // 関数を確かめるための、決まった中身の設定（管理画面で dungeonGen.json を変えても、こちらは変わらない）
 const SAMPLE: GenSettings = {
-  floors: { count: 3, sizes: [20, 30, 40, 50, 60, 70, 80, 90, 100] },
+  floors: { count: 3, sizes: [20, 30, 40, 50, 60, 70, 80, 90, 100], satiety: [400, 900, 1600, 2500, 3600, 4900, 6400, 8100, 10000] },
   rooms: { attemptRate: 0.04, minSize: 3, maxSize: 9 },
   enemies: { amount: 1, placement: 'mixed', roomWeight: 1, nestChance: 0, nestMin: 3, nestMax: 5, stayInRoom: false },
   growth: { expBase: 30, expStep: 20, hpPerLevel: 2, atkPerLevel: 1, maxLevel: 10, eliteRate: 3 },
@@ -53,7 +53,7 @@ describe('ダンジョン生成の設定（dungeonGen.json）', () => {
     expect(() => parseGenSettings(bad)).toThrow();
   });
 
-  it('階の数と広さ：範囲の外、整数でない、数が足りない、上のランクの方が狭い、は問題として返す', () => {
+  it('階の数・広さ・満腹度：範囲の外、整数でない、数が足りない、上のランクの方が狭い（広さのみ）、は問題として返す', () => {
     const check = (edit: (g: GenSettings) => void) => {
       const bad = clone();
       edit(bad);
@@ -66,6 +66,15 @@ describe('ダンジョン生成の設定（dungeonGen.json）', () => {
     expect(check((g) => void (g.floors.sizes[1] = 30.5))).toEqual(['ランク2の階の広さ：整数にする']);
     expect(check((g) => void (g.floors.sizes[3] = 35))).toEqual(['ランク4の階の広さ：ランク3の広さ（40）以上にする']);
     expect(check((g) => void g.floors.sizes.pop())).toEqual(['階の広さ：ランク1〜9の9個を並べる']);
+    // 満腹度（ランクごと）
+    expect(check((g) => void (g.floors.satiety[0] = 99))).toEqual(['ランク1の満腹度：100〜100000の数にする']);
+    expect(check((g) => void (g.floors.satiety[8] = 100001))).toEqual(['ランク9の満腹度：100〜100000の数にする']);
+    expect(check((g) => void (g.floors.satiety[2] = 1600.5))).toEqual(['ランク3の満腹度：整数にする']);
+    expect(check((g) => void g.floors.satiety.pop())).toEqual(['満腹度：ランク1〜9の9個を並べる']);
+    expect(check((g) => void ((g.floors as { satiety?: number[] }).satiety = undefined))).toEqual(['満腹度：ランク1〜9の9個を並べる']);
+    // 満腹度は、広さや階の数とは関係なく決められる（上のランクの方が少なくても、階の数を変えても構わない）
+    expect(check((g) => void (g.floors.satiety = [10000, 100, 500, 100000, 100, 100, 100, 100, 100]))).toEqual([]);
+    expect(check((g) => void (g.floors.count = 10))).toEqual([]);
     // 同じ広さが続くのは構わない
     expect(check((g) => void (g.floors.sizes = [20, 20, 20, 40, 40, 40, 100, 100, 100]))).toEqual([]);
     expect(genProblems({ ...clone(), floors: undefined })).toEqual(['floors・rooms・enemies・growth・magic・spells のどれかがない']);
@@ -76,6 +85,8 @@ describe('ダンジョン生成の設定（dungeonGen.json）', () => {
     after.floors.count = 4;
     after.floors.sizes[0] = 25;
     after.floors.sizes[8] = 90;
+    after.floors.satiety[1] = 1200;
+    after.floors.satiety[8] = 12000;
     after.rooms.attemptRate = 0.1;
     after.enemies.stayInRoom = true;
     after.growth.hpPerLevel = 4;
@@ -85,6 +96,8 @@ describe('ダンジョン生成の設定（dungeonGen.json）', () => {
       '階の数：3 → 4',
       'ランク1の階の広さ：20 → 25',
       'ランク9の階の広さ：100 → 90',
+      'ランク2の満腹度：900 → 1200',
+      'ランク9の満腹度：10000 → 12000',
       '部屋の多さ：0.04 → 0.1',
       '部屋の敵は部屋から出ない：しない → する',
       '1レベルで増える最大HP：2 → 4',

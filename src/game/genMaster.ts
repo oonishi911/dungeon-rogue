@@ -1,6 +1,6 @@
 // ダンジョンの設定（src/game/dungeonGen.json）を読み、正しい形かを確かめる。
-// dungeonGen.json は、開発用の管理画面（?view=admin の「階の数と広さ」から「魔法」までのタブ。src/ui/Admin.tsx、src/ui/GenPanels.tsx）から書き換えて公開できる。
-// floors は階の数とランクごとの広さ、rooms は小部屋の多さと大きさ、enemies は敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋など）、
+// dungeonGen.json は、開発用の管理画面（?view=admin の「階の数・広さ・満腹度」から「魔法」までのタブ。src/ui/Admin.tsx、src/ui/GenPanels.tsx）から書き換えて公開できる。
+// floors は階の数とランクごとの広さ・満腹度、rooms は小部屋の多さと大きさ、enemies は敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋など）、
 // growth は敵を倒したときのレベルの上がり方と強敵の報酬の倍率、magic は魔力と魔法の強さ、spells は呪文ごとの魔力と効き目。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
 
@@ -10,10 +10,11 @@ import type { SpellId } from './types';
 /** ランクの数（広さをランクごとに決めるので、sizes はこの数だけ並ぶ） */
 export const RANK_COUNT = 9;
 
-/** 階の数と広さ（explore.ts、rank.ts） */
+/** 階の数・広さ・満腹度（explore.ts、rank.ts） */
 export interface FloorSettings {
   count: number; // 通常の階の数。その下にボスの階がある
   sizes: number[]; // ランクごとの階の広さ（一辺のマス数）。ランク1から順に RANK_COUNT 個
+  satiety: number[]; // ランクごとの満腹度（探索のはじめの満腹度で、上限でもある）。広さや階の数からは計算しない。ランク1から順に RANK_COUNT 個
 }
 
 /** 小部屋の置き方（map.ts） */
@@ -124,6 +125,7 @@ export const SPELL_NAMES: Record<SpellId, string> = {
 export const GEN_LIMITS = {
   floorCount: { min: 1, max: 10, step: 1 },
   floorSize: { min: 20, max: 100, step: 1 }, // map.ts の MAP_CONFIG（作れるマップの広さ）と同じ範囲
+  satiety: { min: 100, max: 100000, step: 100 },
   attemptRate: { min: 0, max: 0.3, step: 0.01 },
   amount: { min: 0, max: 3, step: 0.1 },
   roomSize: { min: 3, max: 15, step: 2 },
@@ -142,6 +144,7 @@ export const GEN_LIMITS = {
 export const GEN_LABELS = {
   floorCount: '階の数',
   floorSize: '階の広さ',
+  satiety: '満腹度',
   attemptRate: '部屋の多さ',
   minSize: '部屋の大きさ（最小）',
   maxSize: '部屋の大きさ（最大）',
@@ -183,6 +186,16 @@ export function genProblems(data: unknown): string[] {
       if (typeof v === 'number' && !Number.isInteger(v)) problems.push(`${label}：整数にする`);
       const prev: unknown = sizes[i - 1];
       if (i > 0 && typeof v === 'number' && typeof prev === 'number' && v < prev) problems.push(`${label}：ランク${i}の広さ（${prev}）以上にする`);
+    });
+  }
+  const satiety = floors.satiety;
+  if (!Array.isArray(satiety) || satiety.length !== RANK_COUNT) {
+    problems.push(`${GEN_LABELS.satiety}：ランク1〜${RANK_COUNT}の${RANK_COUNT}個を並べる`);
+  } else {
+    satiety.forEach((v: unknown, i) => {
+      const label = `ランク${i + 1}の${GEN_LABELS.satiety}`;
+      num(v, label, GEN_LIMITS.satiety);
+      if (typeof v === 'number' && !Number.isInteger(v)) problems.push(`${label}：整数にする`);
     });
   }
   num(rooms.attemptRate, GEN_LABELS.attemptRate, GEN_LIMITS.attemptRate);
@@ -253,6 +266,10 @@ export function describeGenChanges(before: GenSettings, after: GenSettings): str
   after.floors.sizes.forEach((size, i) => {
     const old = before.floors.sizes[i];
     if (old !== size) out.push(`ランク${i + 1}の${GEN_LABELS.floorSize}：${old} → ${size}`);
+  });
+  after.floors.satiety.forEach((satiety, i) => {
+    const old = before.floors.satiety[i];
+    if (old !== satiety) out.push(`ランク${i + 1}の${GEN_LABELS.satiety}：${old} → ${satiety}`);
   });
   for (const group of ['rooms', 'enemies', 'growth'] as const) {
     const a = before[group] as unknown as Record<string, number | boolean | string>;

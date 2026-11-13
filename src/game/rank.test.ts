@@ -3,11 +3,15 @@ import { ENEMY_CONFIG } from './enemies';
 import { GEN_SETTINGS, type FloorSettings } from './genMaster';
 import { RANK_CONFIG, rankParams, upgradeCost } from './rank';
 
-// 関数を確かめるための、決まった中身の設定（管理画面で階の数や広さを変えても、こちらは変わらない）
-const FLOORS: FloorSettings = { count: 3, sizes: [20, 30, 40, 50, 60, 70, 80, 90, 100] };
+// 関数を確かめるための、決まった中身の設定（管理画面で階の数・広さ・満腹度を変えても、こちらは変わらない）
+const FLOORS: FloorSettings = {
+  count: 3,
+  sizes: [20, 30, 40, 50, 60, 70, 80, 90, 100],
+  satiety: [400, 900, 1600, 2673, 4066, 5796, 7879, 10331, 13164],
+};
 
 describe('rankParams', () => {
-  it('20×20・階が3つなら、満腹度の上限は広さ²、敵の密度と回復の速さは基準（40×40）の2倍', () => {
+  it('20×20なら、敵の密度と回復の速さは基準（40×40）の2倍。満腹度は、設定したランクの値そのまま', () => {
     expect(rankParams(1, FLOORS)).toEqual({
       rank: 1,
       mapSize: 20,
@@ -19,7 +23,7 @@ describe('rankParams', () => {
     });
   });
 
-  it('基準の広さ（40×40）では、自動プレイで測ったときの条件になる', () => {
+  it('基準の広さ（40×40）では、敵の密度と回復の速さが、自動プレイで測ったときの条件になる', () => {
     const p = rankParams(3, FLOORS);
     expect(p.mapSize).toBe(RANK_CONFIG.referenceSize);
     expect(p.maxSatiety).toBe(1600);
@@ -27,30 +31,32 @@ describe('rankParams', () => {
     expect(p.regenInterval).toBe(RANK_CONFIG.regenInterval);
   });
 
-  it('広さは、設定でランクごとに決めた値になる', () => {
-    const floors: FloorSettings = { count: 3, sizes: [20, 20, 25, 40, 40, 60, 60, 80, 100] };
+  it('広さと満腹度は、設定でランクごとに決めた値になる', () => {
+    const floors: FloorSettings = { count: 3, sizes: [20, 20, 25, 40, 40, 60, 60, 80, 100], satiety: [500, 700, 700, 900, 3000, 1000, 8000, 8000, 50000] };
     floors.sizes.forEach((size, i) => expect(rankParams(i + 1, floors).mapSize).toBe(size));
-    // 同じ広さなら、満腹度の上限も敵の密度も同じ（報酬だけがランクで増える）
+    floors.satiety.forEach((satiety, i) => expect(rankParams(i + 1, floors).maxSatiety).toBe(satiety));
+    // 同じ広さなら、敵の密度は同じ（満腹度は、同じ広さでもランクごとに別の値にできる。報酬はランクで増える）
     const a = rankParams(1, floors);
     const b = rankParams(2, floors);
-    expect(b.maxSatiety).toBe(a.maxSatiety);
     expect(b.enemyDensity).toBe(a.enemyDensity);
+    expect(b.maxSatiety).not.toBe(a.maxSatiety);
     expect(b.chestGoldRate).toBeGreaterThan(a.chestGoldRate);
   });
 
-  it('満腹度の上限は、階の数に比例する（階が3つのときが基準）', () => {
-    expect(rankParams(1, { ...FLOORS, count: 6 }).maxSatiety).toBe(800);
-    expect(rankParams(1, { ...FLOORS, count: 1 }).maxSatiety).toBe(133);
+  it('満腹度は、広さや階の数を変えても、自動では変わらない', () => {
+    const base = rankParams(3, FLOORS);
+    expect(rankParams(3, { ...FLOORS, count: 6 }).maxSatiety).toBe(base.maxSatiety);
+    expect(rankParams(3, { ...FLOORS, count: 1 }).maxSatiety).toBe(base.maxSatiety);
+    expect(rankParams(3, { ...FLOORS, sizes: FLOORS.sizes.map((s) => s + 10) }).maxSatiety).toBe(base.maxSatiety);
     // 広さ・敵の密度・報酬は、階の数では変わらない
-    expect({ ...rankParams(3, { ...FLOORS, count: 5 }), maxSatiety: 0 }).toEqual({ ...rankParams(3, FLOORS), maxSatiety: 0 });
+    expect({ ...rankParams(3, { ...FLOORS, count: 5 }) }).toEqual(base);
   });
 
-  it('広くなるほど、満腹度の上限が増え、敵の密度は下がる。ランクが上がるほど、報酬が増える', () => {
+  it('広くなるほど、敵の密度は下がる。ランクが上がるほど、報酬が増える', () => {
     for (let r = 1; r < RANK_CONFIG.maxRank; r++) {
       const a = rankParams(r, FLOORS);
       const b = rankParams(r + 1, FLOORS);
       expect(b.mapSize).toBeGreaterThan(a.mapSize);
-      expect(b.maxSatiety).toBeGreaterThan(a.maxSatiety);
       expect(b.chestGoldRate).toBeGreaterThan(a.chestGoldRate);
       expect(b.bossGold).toBeGreaterThan(a.bossGold);
       expect(b.enemyDensity).toBeLessThan(a.enemyDensity);
