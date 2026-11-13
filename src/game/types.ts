@@ -151,7 +151,7 @@ export interface PrepResult {
 }
 
 // ===== 敵 =====
-// 敵の ID。敵の種類はプログラムに決め打ちせず、src/game/enemies.json にある敵がすべて（管理画面 ?view=enemies で足す・消すことができる）
+// 敵の ID。敵の種類はプログラムに決め打ちせず、src/game/enemies.json にある敵がすべて（管理画面 ?view=admin の「敵」タブで足す・消すことができる）
 export type EnemyId = string;
 
 export interface EnemyDef {

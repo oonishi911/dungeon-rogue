@@ -1,5 +1,5 @@
 // ダンジョンの設定（src/game/dungeonGen.json）を読み、正しい形かを確かめる。
-// dungeonGen.json は、開発用の管理画面（?view=gen、src/ui/GenAdmin.tsx）から書き換えて公開できる。
+// dungeonGen.json は、開発用の管理画面（?view=admin の「階の数と広さ」から「魔法」までのタブ。src/ui/Admin.tsx、src/ui/GenPanels.tsx）から書き換えて公開できる。
 // floors は階の数とランクごとの広さ、rooms は小部屋の多さと大きさ、enemies は敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋など）、
 // growth は敵を倒したときのレベルの上がり方と強敵の報酬の倍率、magic は魔力と魔法の強さ、spells は呪文ごとの魔力と効き目。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）

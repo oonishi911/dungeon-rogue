@@ -1,4 +1,4 @@
-// テストで使う敵。敵の種類は管理画面（?view=enemies）で足す・消すことができるので、
+// テストで使う敵。敵の種類は管理画面（?view=admin の「敵」タブ）で足す・消すことができるので、
 // テストは特定の敵（ゴブリンなど）に頼らず、データにある敵から選ぶ
 import { ENEMIES } from './data';
 import type { EnemyDef, EnemyId } from './types';

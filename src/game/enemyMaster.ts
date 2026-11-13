@@ -1,5 +1,5 @@
 // 敵のマスターデータ（src/game/enemies.json）を読み、正しい形かを確かめる。
-// enemies.json は、開発用の管理画面（?view=enemies、src/ui/EnemyAdmin.tsx）から書き換えて公開できる。
+// enemies.json は、開発用の管理画面（?view=admin の「敵」「ダンジョンに出る敵」タブ。src/ui/Admin.tsx、src/ui/EnemyPanels.tsx）から書き換えて公開できる。
 // 敵を足す・消すこともできる（敵の種類はプログラムに決め打ちせず、このデータにある敵がすべて）。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
 

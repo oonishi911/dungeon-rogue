@@ -1,5 +1,6 @@
 // 管理画面から、リポジトリのファイルを書き換えて公開する（GitHub の API を使う）。
 // 書き換えると main に保存され、CI（自動チェック → 公開）が動く。自動チェックが通らなければ公開されない。
+// 複数のファイルは、1回のコミットでまとめて保存する（CI も1回だけ動く）
 // GitHub のトークンは、使う人のブラウザにだけ保存する（このリポジトリへの書き込みだけを許した、期限つきのものを使う）
 
 export const REPO = { owner: 'oonishi911', repo: 'dungeon-rogue', branch: 'main' } as const;
@@ -45,22 +46,40 @@ async function api(token: string, path: string, init?: RequestInit): Promise<unk
 }
 
 const decode = (base64: string) => new TextDecoder().decode(Uint8Array.from(atob(base64.replace(/\n/g, '')), (c) => c.charCodeAt(0)));
-const encode = (text: string) => btoa(Array.from(new TextEncoder().encode(text), (b) => String.fromCharCode(b)).join(''));
+
+/** 保存するファイル1つ。base は、画面を開いたときの（公開版の）中身 */
+export interface PublishItem {
+  path: string;
+  text: string;
+  base: string;
+}
+
+const NEWER = '公開版より新しい変更が、すでにリポジトリに入っています。公開が終わるのを待ち、画面を読み込み直してから変更してください';
 
 /**
- * ファイルを書き換えて main に保存する。今リポジトリにある中身が base と違う（ほかの変更が先に入っている）ときは、
- * 上書きしないで止める。返すのは保存したコミット
+ * ファイルをいくつか書き換えて、1回のコミットで main に保存する（途中までしか保存されない、ということがない）。
+ * 今リポジトリにある中身が base と違う（ほかの変更が先に入っている）ときは、何も保存しないで止める。
+ * 調べてから保存するまでのあいだに、ほかの変更が入ったときも、上書きしないで止まる。返すのは保存したコミット
  */
-export async function publishFile(token: string, path: string, text: string, base: string, message: string): Promise<string> {
-  const current = (await api(token, `/contents/${path}?ref=${REPO.branch}`)) as { sha: string; content: string };
-  if (decode(current.content) !== base) {
-    throw new PublishError('公開版より新しい変更が、すでにリポジトリに入っています。公開が終わるのを待ち、画面を読み込み直してから変更してください');
-  }
-  const saved = (await api(token, `/contents/${path}`, {
-    method: 'PUT',
-    body: JSON.stringify({ message, content: encode(text), sha: current.sha, branch: REPO.branch }),
-  })) as { commit: { sha: string } };
-  return saved.commit.sha;
+export async function publishFiles(token: string, items: PublishItem[], message: string): Promise<string> {
+  if (!items.length) throw new PublishError('保存するファイルがありません');
+  // 今の main の先頭。このコミットの上に、1つコミットを足す
+  const head = ((await api(token, `/git/ref/heads/${REPO.branch}`)) as { object: { sha: string } }).object.sha;
+  const { tree } = (await api(token, `/git/commits/${head}`)) as { tree: { sha: string } };
+  const current = await Promise.all(items.map((item) => api(token, `/contents/${item.path}?ref=${head}`) as Promise<{ content: string }>));
+  if (current.some((c, i) => decode(c.content) !== items[i]!.base)) throw new PublishError(NEWER);
+
+  const newTree = (await api(token, '/git/trees', {
+    method: 'POST',
+    body: JSON.stringify({ base_tree: tree.sha, tree: items.map((item) => ({ path: item.path, mode: '100644', type: 'blob', content: item.text })) }),
+  })) as { sha: string };
+  const commit = (await api(token, '/git/commits', {
+    method: 'POST',
+    body: JSON.stringify({ message, tree: newTree.sha, parents: [head] }),
+  })) as { sha: string };
+  // 先頭を進めるだけ（force しない）。ほかの変更が先に入っていたら、ここで 422 になって止まる
+  await api(token, `/git/refs/heads/${REPO.branch}`, { method: 'PATCH', body: JSON.stringify({ sha: commit.sha, force: false }) });
+  return commit.sha;
 }
 
 export type DeployStage =
