@@ -3,12 +3,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { autoPlay, clearRate } from './autoplay';
-import { PREPS, SUPPLIES, TRIALS, WRONG_LIMIT } from './balance.fixtures';
+import { BALANCE_TIMEOUT, PREPS, SUPPLIES, TRIALS, WRONG_LIMIT } from './balance.fixtures';
 import { ITEMS, PREP_CONFIG } from './data';
 import type { TraitId } from './types';
 
 describe('自動プレイ', () => {
-  it('AIは不正な行動を選ばず、最後まで遊び切る', () => {
+  it('AIは不正な行動を選ばず、最後まで遊び切る', { timeout: BALANCE_TIMEOUT }, () => {
     for (let i = 0; i < 10; i++) {
       const r = autoPlay(i * 7919, { loadout: ['sword', 'plate', 'potion', 'food', 'fire_whetstone'] });
       expect(['cleared', 'defeated']).toContain(r.outcome);
@@ -22,15 +22,15 @@ describe('自動プレイ', () => {
 
 describe('バランス：準備で勝負が決まる', () => {
   for (const [trait, prep] of Object.entries(PREPS) as [TraitId, (typeof PREPS)[TraitId]][]) {
-    it(`${trait}：正しい準備ならクリア率80%以上`, { timeout: 30_000 }, () => {
+    it(`${trait}：正しい準備ならクリア率80%以上`, { timeout: BALANCE_TIMEOUT }, () => {
       expect(clearRate([...prep.right, ...SUPPLIES], trait, TRIALS)).toBeGreaterThanOrEqual(0.8);
     });
 
-    it(`${trait}：外れた準備では${WRONG_LIMIT[trait] * 100}%未満`, { timeout: 30_000 }, () => {
+    it(`${trait}：外れた準備では${WRONG_LIMIT[trait] * 100}%未満`, { timeout: BALANCE_TIMEOUT }, () => {
       expect(clearRate([...prep.wrong, ...SUPPLIES], trait, TRIALS)).toBeLessThan(WRONG_LIMIT[trait]);
     });
 
-    it(`${trait}：何も準備しなければ20%未満`, { timeout: 30_000 }, () => {
+    it(`${trait}：何も準備しなければ20%未満`, { timeout: BALANCE_TIMEOUT }, () => {
       expect(clearRate([], trait, TRIALS)).toBeLessThan(0.2);
     });
   }
@@ -46,7 +46,7 @@ describe('バランス：準備フェーズのお金', () => {
 });
 
 describe('バランス：地図', () => {
-  it('地図があると、探索にかかるターン数が大きく減る', { timeout: 30_000 }, () => {
+  it('地図があると、探索にかかるターン数が大きく減る', { timeout: BALANCE_TIMEOUT }, () => {
     const average = (hasMap: boolean) => {
       let turns = 0;
       for (let i = 0; i < 20; i++) {
