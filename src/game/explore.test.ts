@@ -166,17 +166,44 @@ describe('step', () => {
     expect(step(act(below, { kind: 'move', dir: off }), { kind: 'ascend' }).ok).toBe(false);
   });
 
-  it('最後の階の階段を降りるとボス階に出る。ボス階に階段はなく、ボスが1体だけいる', () => {
+  it('最後の階の階段を降りるとボス階に出る。ボス階に階段はなく、ボスと、設定の数の雑魚敵がいる', () => {
     let s = startExplore(6, { enemyDensity: 0 });
     expect(s.floors).toBe(GEN.floors.count);
     for (let f = 0; f < s.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
     expect(isBossFloor(s)).toBe(true);
     expect(s.outcome).toBe('ongoing');
     expect(s.map.stairs).toBeNull();
-    expect(s.enemies).toHaveLength(1);
+    expect(s.enemies).toHaveLength(1 + GEN.enemies.bossMinions);
     expect(enemyDef(s.enemies[0]!).boss).toBe(true);
     expect(s.enemies[0]!.id).toBe(GEN.encounters[s.trait].boss);
+    // 雑魚敵：その属性の道中の敵で、ボスの部屋の中。ボスのすぐそばと入口の近くにはいない。同じマスに重ならない
+    const room = s.map.rooms[0]!;
+    const minions = s.enemies.slice(1);
+    for (const e of minions) {
+      expect(GEN.encounters[s.trait].pool).toContain(e.id);
+      expect(e.elite).toBe(false);
+      expect(e.pos.x >= room.x && e.pos.x < room.x + room.width && e.pos.y >= room.y && e.pos.y < room.y + room.height).toBe(true);
+      expect(Math.max(Math.abs(e.pos.x - s.map.boss!.x), Math.abs(e.pos.y - s.map.boss!.y))).toBeGreaterThan(2);
+      expect(Math.max(Math.abs(e.pos.x - s.player.x), Math.abs(e.pos.y - s.player.y))).toBeGreaterThan(4);
+    }
+    expect(new Set(s.enemies.map((e) => `${e.pos.x},${e.pos.y}`)).size).toBe(s.enemies.length);
+    expect(new Set(s.enemies.map((e) => e.uid)).size).toBe(s.enemies.length);
     expect(s.chests).toEqual([]);
+  });
+
+  it('ボスの部屋の雑魚敵の数は、ダンジョンの設定で変えられる（0ならボスだけ）', () => {
+    // テストのためだけのダンジョンを、一覧に一時的に足す
+    const registry = DUNGEONS as Record<string, DungeonFile>;
+    try {
+      for (const bossMinions of [0, 3]) {
+        registry['boss-minions'] = { ...GEN, enemies: { ...GEN.enemies, bossMinions } };
+        let s = startExplore(6, { enemyDensity: 0, dungeon: 'boss-minions' });
+        for (let f = 0; f < s.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
+        expect(s.enemies).toHaveLength(1 + bossMinions);
+      }
+    } finally {
+      delete registry['boss-minions'];
+    }
   });
 
   it('満腹度が0になると、行動のたびにHPが減り、0で力尽きる', () => {
@@ -396,7 +423,9 @@ describe('遊ぶダンジョン', () => {
     expect(s.enemies.every((e) => e.id === FIELD_ENEMY)).toBe(true);
     for (let f = 0; f < s.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
     expect(isBossFloor(s)).toBe(true);
-    expect(s.enemies.map((e) => e.id)).toEqual([BOSS_ENEMY]);
+    // ボスと、ボスの部屋の雑魚敵（このダンジョンの道中の敵）
+    expect(s.enemies[0]!.id).toBe(BOSS_ENEMY);
+    expect(s.enemies.slice(1).every((e) => e.id === FIELD_ENEMY)).toBe(true);
   });
 
   it('ないダンジョンを指定すると、エラーになる', () => {

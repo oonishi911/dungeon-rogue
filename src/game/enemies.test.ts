@@ -285,12 +285,20 @@ describe('報酬とボス', () => {
     expect(step(s, WAIT).ok).toBe(false);
   });
 
-  it('ボスは動かず、離れようとすると必ず背後から攻撃してくる', () => {
+  it('ボスは、離れようとすると必ず背後から攻撃してきて、そのあと歩いて追ってくる', () => {
     const boss = { ...spawnBoss({ x: 2, y: 2 }, GEN.encounters.ice.boss, 0), mode: 'chase' as const };
     const s0 = arena(ROOM, { x: 1, y: 2 }, [boss]);
     const s = act(s0, { kind: 'move', dir: 'up' });
-    expect(s.enemies[0]!.pos).toEqual({ x: 2, y: 2 });
+    expect(s.enemies[0]!.pos).toEqual({ x: 2, y: 1 });
     expect(s.stats.hp).toBe(s0.stats.hp - enemyHitDamage(s0.stats, enemyDef(boss)));
+  });
+
+  it('ボスは強敵とちがって歩き、気付いたら追ってくる（強敵はその場から動かない）', () => {
+    const boss = { ...spawnBoss({ x: 5, y: 2 }, GEN.encounters.ice.boss, 0), mode: 'chase' as const, lastSeen: { x: 1, y: 2 } };
+    const s = act(arena(ROOM, { x: 1, y: 2 }, [boss]), WAIT);
+    expect(s.enemies[0]!.pos).toEqual({ x: 4, y: 2 });
+    const elite = { ...boss, id: FIELD_ENEMY, mode: 'chase' as const };
+    expect(act(arena(ROOM, { x: 1, y: 2 }, [elite]), WAIT).enemies[0]!.pos).toEqual({ x: 5, y: 2 });
   });
 
   it('ボスの能力は強敵の倍率で上がらない', () => {

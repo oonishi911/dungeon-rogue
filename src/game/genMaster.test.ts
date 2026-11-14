@@ -25,7 +25,7 @@ const POOL = [FIELD_ENEMY];
 const SAMPLE: GenSettings = {
   floors: { count: 3, size: 40, satiety: 1600 },
   rooms: { attemptRate: 0.04, minSize: 3, maxSize: 9 },
-  enemies: { amount: 1, placement: 'mixed', roomWeight: 1, nestChance: 0, nestMin: 3, nestMax: 5, stayInRoom: false },
+  enemies: { amount: 1, placement: 'mixed', roomWeight: 1, nestChance: 0, nestMin: 3, nestMax: 5, stayInRoom: false, bossMinions: 4 },
   growth: { expBase: 30, expStep: 20, hpPerLevel: 2, atkPerLevel: 1, maxLevel: 10, eliteRate: 3 },
   magic: { maxMp: 20, regenEvery: 6, power: 8, staffPower: 1.5, staffMp: 10, noiseRadius: 3 },
   spells: {

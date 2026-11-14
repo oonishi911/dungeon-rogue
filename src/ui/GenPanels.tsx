@@ -177,6 +177,15 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
             onChange={(ev) => setEnemies({ stayInRoom: ev.target.checked })}
           />
         </Field>
+        <Field label={GEN_LABELS.bossMinions} hint="ボスの部屋に、ボスといっしょに置く雑魚敵の数。種類は、その属性の道中の敵から選ぶ（0：ボスだけ）">
+          <NumberField
+            {...GEN_LIMITS.bossMinions}
+            value={e.bossMinions}
+            changed={e.bossMinions !== be.bossMinions}
+            label={GEN_LABELS.bossMinions}
+            onChange={(v) => setEnemies({ bossMinions: v })}
+          />
+        </Field>
       </div>
     </section>
   );

@@ -38,6 +38,7 @@ export interface EnemySettings {
   nestMin: number; // 群れ部屋に置く敵の数の最小
   nestMax: number; // 群れ部屋に置く敵の数の最大
   stayInRoom: boolean; // 部屋に置いた敵は、主人公に気付くまで部屋の中だけを歩く
+  bossMinions: number; // ボスの部屋に、ボスといっしょに置く雑魚敵の数（道中と同じ種類から選ぶ）
 }
 
 /** 敵を倒したときのレベルの上がり方と、強敵の報酬の倍率（data.ts の REWARD_CONFIG） */
@@ -147,6 +148,7 @@ export const GEN_LIMITS = {
   weight: { min: 0, max: 10, step: 0.5 },
   nestChance: { min: 0, max: 1, step: 0.05 },
   nestCount: { min: 1, max: 12, step: 1 },
+  bossMinions: { min: 0, max: 40, step: 1 },
   expBase: { min: 1, max: 999, step: 1 },
   expStep: { min: 0, max: 999, step: 1 },
   hpPerLevel: { min: 0, max: 50, step: 1 },
@@ -170,6 +172,7 @@ export const GEN_LABELS = {
   nestMin: '群れの敵の数（最小）',
   nestMax: '群れの敵の数（最大）',
   stayInRoom: '部屋の敵は部屋から出ない',
+  bossMinions: 'ボスの部屋の雑魚敵の数',
   expBase: '最初のレベルアップに要る経験値',
   expStep: '1レベルごとに増える必要経験値',
   hpPerLevel: '1レベルで増える最大HP',
@@ -216,6 +219,8 @@ export function genProblems(data: unknown): string[] {
   if (typeof enemies.nestMin === 'number' && typeof enemies.nestMax === 'number' && enemies.nestMin > enemies.nestMax) {
     problems.push('群れの敵の数：最小を最大以下にする');
   }
+  num(enemies.bossMinions, GEN_LABELS.bossMinions, GEN_LIMITS.bossMinions);
+  if (typeof enemies.bossMinions === 'number' && !Number.isInteger(enemies.bossMinions)) problems.push(`${GEN_LABELS.bossMinions}：整数にする`);
   const { growth } = data;
   for (const k of ['expBase', 'expStep', 'hpPerLevel', 'atkPerLevel', 'maxLevel'] as const) {
     num(growth[k], GEN_LABELS[k], GEN_LIMITS[k]);
