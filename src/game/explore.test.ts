@@ -347,15 +347,8 @@ describe('宝箱と金貨', () => {
   });
 });
 
-describe('地図', () => {
-  it('地図があると、各階の入口から階段までの道筋が最初から見えている', () => {
-    const s = startExplore(12, { hasMap: true, enemyDensity: 0 });
-    for (const p of s.map.mainPath) expect(s.seen[p.y * s.map.width + p.x]).toBe(true);
-    const next = act(walkMainPath(s), { kind: 'descend' });
-    for (const p of next.map.mainPath) expect(next.seen[p.y * next.map.width + p.x]).toBe(true);
-  });
-
-  it('地図がなければ、階段は最初は見えていない', () => {
+describe('階段の見え方', () => {
+  it('階段は最初は見えていない', () => {
     const s = startExplore(12, { enemyDensity: 0 });
     expect(s.seen[s.map.stairs!.y * s.map.width + s.map.stairs!.x]).toBe(false);
   });

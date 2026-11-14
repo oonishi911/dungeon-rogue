@@ -184,7 +184,7 @@ export function parseRun(text: string | null): ResumedRun | null {
   if (!outcome || !isObject(s)) return null;
 
   // 数や決まった値
-  if (s.outcome !== 'ongoing' || s.trait !== outcome.trait || typeof s.hasMap !== 'boolean') return null;
+  if (s.outcome !== 'ongoing' || s.trait !== outcome.trait) return null;
   if (dungeonIdOf(s.dungeon) !== outcome.dungeon) return null;
   const rooms = dungeonOf(outcome.dungeon).rooms;
   if (!isCount(s.seed) || !isCount(s.floor) || !isCount(s.floors, 1) || s.floor > s.floors) return null;
@@ -231,7 +231,6 @@ export function parseRun(text: string | null): ResumedRun | null {
     enemies: current.enemies,
     chests: current.chests,
     gold: s.gold,
-    hasMap: s.hasMap,
     nextUid: s.nextUid,
     defeated: s.defeated,
     level: s.level,

@@ -1,6 +1,6 @@
 // 呪文の演出の道具：計算の小道具、画面全体の板、白で描くテクスチャ。spellFx.ts から使う。
 import * as THREE from 'three';
-import type { CastEvent, Dir } from '../game/exploreTypes';
+import { DIR_DELTA, type CastEvent } from '../game/exploreTypes';
 import type { Pos } from '../game/map';
 
 // ===== 計算の小道具 =====
@@ -28,14 +28,12 @@ export function muted(color: number, amount: number): number {
   return c.lerp(new THREE.Color(gray, gray, gray), amount).multiplyScalar(0.8).getHex();
 }
 
-const DIR_VECTORS: Record<Dir, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-
 /** 呪文の向き（床の上の向き。x と z） */
 export function directionOf(cast: CastEvent, from: Pos): THREE.Vector3 {
   const end = cast.path.at(-1);
   if (end && (end.x !== from.x || end.y !== from.y)) return new THREE.Vector3(end.x - from.x, 0, end.y - from.y).normalize();
-  const [dx, dz] = DIR_VECTORS[cast.dir ?? 'down'];
-  return new THREE.Vector3(dx, 0, dz);
+  const d = DIR_DELTA[cast.dir ?? 'down'];
+  return new THREE.Vector3(d.x, 0, d.y);
 }
 
 /** 画面全体に直接描く板。vignette なら、画面の端ほど濃くする（暗くする幕） */

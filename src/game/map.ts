@@ -63,7 +63,8 @@ export interface FloorOptions {
   rooms?: RoomSettings; // 小部屋の置き方（ふつうは遊んでいるダンジョンの設定。省略すると標準のダンジョン。管理画面の見本では、変えている途中の値を使う）
 }
 
-const DIRS: readonly Pos[] = [
+/** 隣のマスへの向き（上・右・下・左の順。道探しや生成の結果が変わらないよう、この順を変えない） */
+export const DIRS: readonly Pos[] = [
   { x: 0, y: -1 },
   { x: 1, y: 0 },
   { x: 0, y: 1 },

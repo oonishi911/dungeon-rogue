@@ -90,7 +90,6 @@ export interface ExploreState {
   enemies: MapEnemy[];
   chests: Chest[]; // この階の宝箱（開けて空になったものも残す）
   gold: number; // この挑戦で手に入れた金貨
-  hasMap: boolean; // 地図があれば、各階の入口から階段までの道筋が最初から見える
   nextUid: number;
   defeated: number; // 倒した敵の数
   level: number; // この挑戦のあいだのレベル（1から。敵を倒して経験値がたまると上がる）
@@ -112,7 +111,6 @@ export interface ExploreOptions {
   trait?: TraitId; // 省略時はシードから決める
   loadout?: readonly ItemId[];
   enemyDensity?: number;
-  hasMap?: boolean;
 }
 
 // ===== 結果 =====
