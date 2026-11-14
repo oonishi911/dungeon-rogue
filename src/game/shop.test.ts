@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ITEMS, LOADOUT_CONFIG } from './data';
 import { newSave, parseSave, type SaveData } from './save';
-import { recommended, buy, departWith, equip, kitLoadout, returnWith, shelfItems, takeSupply, toggleBook } from './shop';
+import { recommended, buy, canTake, count, departWith, equip, kitLoadout, returnWith, shelfItems, takeCount, takeLimit, takeSupply, toggleBook } from './shop';
 import type { ItemId, Result } from './types';
 
 const rich = (gold = 100000): SaveData => ({ ...newSave(), gold });
@@ -154,5 +154,42 @@ describe('おすすめの印', () => {
     expect(recommended([clear('body', { body: 'spirit' })]).has('staff')).toBe(true);
     expect(recommended([clear('body', { body: 'soft' })]).has('sword')).toBe(true);
     expect([...recommended([clear('body', { body: 'normal' })])].some((id) => ITEMS[id].effect.kind === 'weapon')).toBe(false);
+  });
+});
+
+describe('大きな袋', () => {
+  const bonus = (() => {
+    const e = ITEMS.bag.effect;
+    return e.kind === 'capacity' ? e.slots : NaN;
+  })();
+  const stocked = (ids: ItemId[]) => buyAll(rich(), ids);
+
+  it('袋を入れると、持っていける道具が増える（袋そのものは数えない）', () => {
+    let s = stocked(Array.from({ length: LOADOUT_CONFIG.maxItems + bonus + 1 }, () => 'potion' as ItemId));
+    expect(takeCount(s.kit.take)).toBe(LOADOUT_CONFIG.maxItems);
+    expect(takeSupply(s, 'potion', 1).ok).toBe(false);
+    s = must(buy(s, 'bag')); // 買うと、そのまま持っていくものに入る
+    expect(s.kit.take).toContain('bag');
+    expect(takeLimit(s.kit.take)).toBe(LOADOUT_CONFIG.maxItems + bonus);
+    for (let i = 0; i < bonus; i++) s = must(takeSupply(s, 'potion', 1));
+    expect(takeCount(s.kit.take)).toBe(LOADOUT_CONFIG.maxItems + bonus);
+    expect(takeSupply(s, 'potion', 1).ok).toBe(false);
+  });
+
+  it('袋は1つまで。外すと、増えた分の道具も外れる', () => {
+    let s = stocked(['bag', 'bag', ...Array.from({ length: LOADOUT_CONFIG.maxItems + bonus }, () => 'food' as ItemId)]);
+    expect(count(s.kit.take, 'bag')).toBe(1);
+    expect(takeSupply(s, 'bag', 1).ok).toBe(false);
+    while (canTake(s.kit.take, 'food') && count(s.kit.take, 'food') < count(s.stock, 'food')) s = must(takeSupply(s, 'food', 1));
+    expect(takeCount(s.kit.take)).toBe(LOADOUT_CONFIG.maxItems + bonus);
+    s = must(takeSupply(s, 'bag', -1));
+    expect(s.kit.take).not.toContain('bag');
+    expect(takeCount(s.kit.take)).toBe(LOADOUT_CONFIG.maxItems);
+  });
+
+  it('持っていった袋は、倉庫に戻らない', () => {
+    const s = stocked(['bag', 'potion']);
+    const back = returnWith(departWith(s), 0, ['potion']);
+    expect(back.stock).toEqual(['potion']);
   });
 });

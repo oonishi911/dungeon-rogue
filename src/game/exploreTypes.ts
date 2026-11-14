@@ -96,6 +96,7 @@ export interface ExploreState {
   exp: number; // 今のレベルになってからためた経験値（expToNext(level, growth) で次のレベル）
   seen: boolean[]; // この階で一度でも見えたマス（霧が晴れた場所）
   sightRadius: number; // 主人公の視界の半径（マス）。持っていった道具で決まり、探索のあいだ変わらない
+  maxItems: number; // 道具を持てる数。大きな袋を持っていくと増える（探索のあいだ変わらない）
   turn: number; // 行動した回数
   rngState: number;
   outcome: ExploreOutcome;

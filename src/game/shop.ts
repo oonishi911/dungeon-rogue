@@ -2,11 +2,12 @@
 // - 金貨は最初は0。ダンジョンで持ち帰った金貨が貯まっていく（足りなくなっても補わない）
 // - 武器・防具・呪文書は、一度買えばずっと使える（owned）。出発のたびに、武器1つ・防具1つ・呪文書を選ぶ
 // - 道具（回復薬など）は倉庫（stock）に入り、出発のたびに持っていく数を選ぶ。使わずに残った道具は、持ち帰って倉庫に戻る
+// - 大きな袋を持っていくと、持っていける道具の数が増える（袋そのものは数えない。持っていけるのは1つ）
 // - 武器と防具は種類ごとに10段階。店に並ぶのは、店に入ったときに持っていたいちばん上の段階の2つ上まで（持っていなければ2段目まで）。
 //   店で上の段階を買っても、並びはその場では広がらず、次に潜るときの店で広がる
 // ほかのロジックと同じく、状態を受け取り新しい状態を返す純粋関数でできている。
 
-import { enemyHitDamage, itemSlot } from './combat';
+import { enemyHitDamage, itemCapacity, itemSlot } from './combat';
 import { ENCHANT_VS_ELEMENT, ITEMS, LOADOUT_CONFIG, SPELLS, WEAPON_VS_BODY } from './data';
 import type { Intel } from './informant';
 import { ARMOR_BASES, GEAR_TIERS, gearId, gearOf, SPELLBOOK_IDS, SUPPLY_IDS, WEAPON_BASES } from './itemMaster';
@@ -74,7 +75,7 @@ export function buy(save: SaveData, id: ItemId, atEntry: readonly ItemId[] = sav
   const gold = save.gold - item.price;
   const kit = { ...save.kit };
   if (shelf === 'supply') {
-    if (kit.take.length < LOADOUT_CONFIG.maxItems) kit.take = [...kit.take, id];
+    if (canTake(kit.take, id)) kit.take = [...kit.take, id];
     return ok({ ...save, gold, stock: [...save.stock, id], kit });
   }
   if (shelf === 'weapon') kit.weapon = id;
@@ -104,14 +105,30 @@ export function takeSupply(save: SaveData, id: ItemId, delta: 1 | -1): Result<Sa
   if (delta < 0) {
     const i = take.lastIndexOf(id);
     if (i < 0) return err('持っていかない');
-    return ok({ ...save, kit: { ...save.kit, take: take.filter((_, j) => j !== i) } });
+    // 大きな袋を外したときは、持っていける数を超えた分（あとから入れた道具）も外す
+    return ok(fitKit({ ...save, kit: { ...save.kit, take: take.filter((_, j) => j !== i) } }));
   }
   if (count(take, id) >= count(save.stock, id)) return err('倉庫にもうない');
-  if (take.length >= LOADOUT_CONFIG.maxItems) return err(`道具は${LOADOUT_CONFIG.maxItems}つまで`);
+  if (isBag(id) && take.some(isBag)) return err('大きな袋は1つまで');
+  if (!canTake(take, id)) return err(`道具は${takeLimit(take)}つまで`);
   return ok({ ...save, kit: { ...save.kit, take: [...take, id] } });
 }
 
 export const count = (list: readonly ItemId[], id: ItemId): number => list.filter((x) => x === id).length;
+
+const isBag = (id: ItemId) => ITEMS[id].effect.kind === 'capacity';
+
+/** 持っていく道具のうち、数に入るもの（大きな袋は数えない） */
+export const takeCount = (take: readonly ItemId[]): number => take.filter((id) => !isBag(id)).length;
+
+/** 持っていける道具の数（大きな袋を入れていれば増える） */
+export const takeLimit = (take: readonly ItemId[]): number => itemCapacity(take);
+
+/** その道具を、もう1つ持っていくものに入れられるか（倉庫の数は見ない） */
+export function canTake(take: readonly ItemId[], id: ItemId): boolean {
+  if (isBag(id)) return !take.some(isBag);
+  return takeCount(take) < takeLimit(take);
+}
 
 /** 持っていくもの（探索の持ち物） */
 export function kitLoadout(save: SaveData): ItemId[] {
@@ -138,17 +155,21 @@ export function returnWith(save: SaveData, goldBrought: number, leftovers: reado
   return fitKit({ ...save, gold: save.gold + goldBrought, stock });
 }
 
-/** 持っていく道具を、倉庫にある数と、持てる数までに減らす（店を開くとき・探索から戻ったとき） */
+/** 持っていく道具を、倉庫にある数と、持てる数までに減らす（店を開くとき・探索から戻ったとき・大きな袋を外したとき） */
 export function fitKit(save: SaveData): SaveData {
   const left = [...save.stock];
-  const take = save.kit.take
-    .filter((id) => {
-      const i = left.indexOf(id);
-      if (i < 0) return false;
-      left.splice(i, 1);
-      return true;
-    })
-    .slice(0, LOADOUT_CONFIG.maxItems);
+  const inStock = save.kit.take.filter((id) => {
+    const i = left.indexOf(id);
+    if (i < 0) return false;
+    left.splice(i, 1);
+    return true;
+  });
+  // 大きな袋は1つだけ。袋を除いた道具は、持っていける数まで（前に入れたものから残す）
+  const bag = inStock.find(isBag);
+  const limit = takeLimit(bag ? [bag] : []);
+  let kept = 0;
+  let bags = 0;
+  const take = inStock.filter((id) => (isBag(id) ? bags++ === 0 : kept++ < limit));
   return { ...save, kit: { ...save.kit, take } };
 }
 

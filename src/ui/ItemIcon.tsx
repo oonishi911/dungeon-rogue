@@ -180,6 +180,14 @@ const SHAPES: Partial<Record<ItemId, () => ReactElement>> = {
   ice_whetstone: () => whetstone(snowflake()),
   holy_water: () => flask(C.light, sparkle('#fff')),
   dark_oil: () => flask(C.dark, moon('#e3d6fb')),
+  bag: () => (
+    <>
+      <path d="M8.5 6.5c-1-1.6-.4-3 1-3h5c1.4 0 2 1.4 1 3" fill="none" stroke={C.woodDark} strokeWidth="1.4" />
+      <path d="M7 7.5h10l2.5 9.5a3.5 3.5 0 0 1-3.4 4.5H7.9a3.5 3.5 0 0 1-3.4-4.5z" fill={C.wood} />
+      <path d="M7 7.5h10l.6 2.3H6.4z" fill={C.woodDark} />
+      <path d="M12 12v6M9 15h6" stroke={C.light} strokeWidth="1.6" strokeLinecap="round" />
+    </>
+  ),
   lantern: () => (
     <>
       <path d="M9 4.5a3 3 0 0 1 6 0" stroke={C.steelDark} strokeWidth="1.6" fill="none" />

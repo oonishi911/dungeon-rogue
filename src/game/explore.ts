@@ -5,8 +5,8 @@
 //
 // 型と数値は exploreTypes.ts、視界の計算は exploreSight.ts、魔法の計算（魔力・ダメージ・相性）は magic.ts にある。
 
-import { buildPlayer, enemyHitDamage, playerHitDamage } from './combat';
-import { COMBAT_CONFIG, enemyReward, expToNext, ITEMS, LOADOUT_CONFIG, REWARD_CONFIG, SPELLS, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
+import { buildPlayer, enemyHitDamage, itemCapacity, playerHitDamage } from './combat';
+import { COMBAT_CONFIG, enemyReward, expToNext, ITEMS, REWARD_CONFIG, SPELLS, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
 import { DEFAULT_DUNGEON_ID, dungeonOf } from './dungeons';
 import {
   DIR_DELTA,
@@ -91,6 +91,7 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     exp: 0,
     seen: [],
     sightRadius: sightRadiusOf(options.loadout ?? []),
+    maxItems: itemCapacity(options.loadout ?? []),
     turn: 0,
     rngState: traitRoll.state,
     outcome: 'ongoing',
@@ -301,7 +302,7 @@ function openChest(state: ExploreState): ExploreState {
     log.push(`宝箱から金貨${chest.gold}Gを手に入れた`);
   }
   if (item) {
-    if (stats.items.length < LOADOUT_CONFIG.maxItems) {
+    if (stats.items.length < state.maxItems) {
       stats = { ...stats, items: [...stats.items, item] };
       log.push(`宝箱から${ITEMS[item].name}を手に入れた`);
       item = null;
@@ -360,6 +361,7 @@ function useItem(state: ExploreState, itemId: ItemId): Result<ExploreState> {
     case 'spellbook':
       return err('呪文書は道具として使えません（呪文として唱える）');
     case 'sight':
+    case 'capacity':
       return err('持っていくだけで効く道具です');
     default: {
       const unreachable: never = effect;
@@ -526,7 +528,7 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
     s = pick.state;
     if (enemy.elite || roll.value * 100 < reward.drop) item = items[pick.value]!;
   }
-  if (item && !enemy.elite && stats.items.length < LOADOUT_CONFIG.maxItems) {
+  if (item && !enemy.elite && stats.items.length < state.maxItems) {
     stats = { ...stats, items: [...stats.items, item] };
     log.push(`${ITEMS[item].name}を手に入れた`);
     item = null;
