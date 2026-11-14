@@ -126,16 +126,10 @@ describe('packRun / parseRun', () => {
     expect(parseRun(edited(state, (r) => void (r.state.current.enemies[0]!.pos = pos)))).toBeNull();
   });
 
-  it('ダンジョンを選べるようになる前の中断データ（ダンジョンの ID がない）は、標準のダンジョンとして読む', () => {
+  it('ダンジョンの ID がない中断データは null', () => {
     const state = play(start(), 40);
-    const old = edited(state, (r) => {
-      delete (r.outcome as Partial<Departure>).dungeon;
-      delete (r.state as { dungeon?: string }).dungeon;
-    });
-    const run = parseRun(old);
-    expect(run).not.toBeNull();
-    expect(run!.outcome.dungeon).toBe(DEFAULT_DUNGEON_ID);
-    expect(run!.state.dungeon).toBe(DEFAULT_DUNGEON_ID);
+    expect(parseRun(edited(state, (r) => void delete (r.outcome as Partial<Departure>).dungeon))).toBeNull();
+    expect(parseRun(edited(state, (r) => void delete (r.state as { dungeon?: string }).dungeon))).toBeNull();
   });
 
   it('遊んでいたダンジョンの設定ファイルがもうない、または結果と食い違うときは null', () => {
