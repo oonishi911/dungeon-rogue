@@ -10,7 +10,6 @@ import type { Pos } from '../game/map';
 export interface WalkGoal {
   pos: Pos;
   enemy: number | null; // 敵をタップしたときはその敵（動いても追いかける）
-  seenEnemies: Set<number>; // 前の1歩のときに見えていた敵。新しく敵が見えたら立ち止まる
 }
 
 /** タップで歩くときに、できるだけ通らないマス。階段は踏むと階を移ってしまうので、行き先でなければ避ける */
