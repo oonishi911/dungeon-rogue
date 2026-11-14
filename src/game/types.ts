@@ -132,8 +132,6 @@ export interface PrepState {
   gold: number;
   knowledge: Knowledge;
   hasMap: boolean;
-  rank: number; // ランク（強化の段階）
-  exp: number; // 強化に使える踏破経験
   openShop: ShopId | null;
   inventory: ItemId[];
   rngState: number; // 乱数の状態も state に持たせ、処理を純粋関数に保つ
@@ -146,8 +144,6 @@ export interface PrepResult {
   trait: TraitId;
   knowledge: Knowledge;
   hasMap: boolean;
-  rank: number;
-  exp: number; // 強化で使った残り
   loadout: ItemId[];
   carried: CardInstance[];
 }

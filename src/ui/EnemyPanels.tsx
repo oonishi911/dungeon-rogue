@@ -152,7 +152,7 @@ export function EnemiesPanel({
                   {(['gold', 'exp', 'drop'] as const).map((key) => (
                     <td key={key}>
                       {e.boss ? (
-                        <span className="admin__ingame" title="ボスを倒したときは、ランクごとの報酬が出る">—</span>
+                        <span className="admin__ingame" title="ボスを倒したときは、ボスの報酬が出る">—</span>
                       ) : (
                         <NumberField
                           value={e.reward[key]}

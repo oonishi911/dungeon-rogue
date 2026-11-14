@@ -2,7 +2,7 @@
 // ファイルは、開発用の管理画面（?view=admin の「名前と説明」から「魔法」までのタブ。src/ui/Admin.tsx、src/ui/GenPanels.tsx）から、
 // 書き換える・複製して新しく作る・消すことができる。読み込むのは dungeons.ts。
 // name と description はダンジョンを選ぶ画面に出す名前と説明、
-// floors は階の数とランクごとの広さ・満腹度、rooms は小部屋の多さと大きさ、enemies は敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋など）、
+// floors は階の数と広さ・満腹度、rooms は小部屋の多さと大きさ、enemies は敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋など）、
 // growth は敵を倒したときのレベルの上がり方と強敵の報酬の倍率、magic は魔力と魔法の強さ、spells は呪文ごとの魔力と効き目、
 // encounters はダンジョンの属性ごとに出る敵（敵のマスター enemies.json から選ぶ）。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
@@ -10,14 +10,11 @@
 import { cleanEncounters, describeEncounterChanges, encounterProblems, type EnemyMaster, type Encounters } from './enemyMaster';
 import type { EnemyId, SpellId } from './types';
 
-/** ランクの数（広さをランクごとに決めるので、sizes はこの数だけ並ぶ） */
-export const RANK_COUNT = 9;
-
-/** 階の数・広さ・満腹度（explore.ts、rank.ts） */
+/** 階の数・広さ・満腹度（explore.ts、floorParams.ts） */
 export interface FloorSettings {
   count: number; // 通常の階の数。その下にボスの階がある
-  sizes: number[]; // ランクごとの階の広さ（一辺のマス数）。ランク1から順に RANK_COUNT 個
-  satiety: number[]; // ランクごとの満腹度（探索のはじめの満腹度で、上限でもある）。広さや階の数からは計算しない。ランク1から順に RANK_COUNT 個
+  size: number; // 階の広さ（一辺のマス数）
+  satiety: number; // 満腹度（探索のはじめの満腹度で、上限でもある）。広さや階の数からは計算しない
 }
 
 /** 小部屋の置き方（map.ts） */
@@ -34,7 +31,7 @@ export const PLACEMENT_LABELS: Record<Placement, string> = { mixed: '部屋に�
 
 /** 敵の数と置き方（enemies.ts） */
 export interface EnemySettings {
-  amount: number; // 通常の敵の数の倍率（1：今の数。ランクで広くなるほど増える分は、そのまま）
+  amount: number; // 通常の敵の数の倍率（1：今の数。広さに合わせて増える分は、そのまま）
   placement: Placement;
   roomWeight: number; // mixed のとき、部屋の床が通路の床の何倍選ばれやすいか（1：同じ、0：部屋に置かない）
   nestChance: number; // 部屋が「群れ部屋」（敵がまとまっている部屋）になる確率（0〜1）。群れの敵は通常の敵とは別に足す。通路だけのときは作らない
@@ -194,28 +191,10 @@ export function genProblems(data: unknown): string[] {
   const { floors } = data;
   num(floors.count, GEN_LABELS.floorCount, GEN_LIMITS.floorCount);
   if (typeof floors.count === 'number' && !Number.isInteger(floors.count)) problems.push(`${GEN_LABELS.floorCount}：整数にする`);
-  const sizes = floors.sizes;
-  if (!Array.isArray(sizes) || sizes.length !== RANK_COUNT) {
-    problems.push(`${GEN_LABELS.floorSize}：ランク1〜${RANK_COUNT}の${RANK_COUNT}個を並べる`);
-  } else {
-    sizes.forEach((v: unknown, i) => {
-      const label = `ランク${i + 1}の${GEN_LABELS.floorSize}`;
-      num(v, label, GEN_LIMITS.floorSize);
-      if (typeof v === 'number' && !Number.isInteger(v)) problems.push(`${label}：整数にする`);
-      const prev: unknown = sizes[i - 1];
-      if (i > 0 && typeof v === 'number' && typeof prev === 'number' && v < prev) problems.push(`${label}：ランク${i}の広さ（${prev}）以上にする`);
-    });
-  }
-  const satiety = floors.satiety;
-  if (!Array.isArray(satiety) || satiety.length !== RANK_COUNT) {
-    problems.push(`${GEN_LABELS.satiety}：ランク1〜${RANK_COUNT}の${RANK_COUNT}個を並べる`);
-  } else {
-    satiety.forEach((v: unknown, i) => {
-      const label = `ランク${i + 1}の${GEN_LABELS.satiety}`;
-      num(v, label, GEN_LIMITS.satiety);
-      if (typeof v === 'number' && !Number.isInteger(v)) problems.push(`${label}：整数にする`);
-    });
-  }
+  num(floors.size, GEN_LABELS.floorSize, GEN_LIMITS.floorSize);
+  if (typeof floors.size === 'number' && !Number.isInteger(floors.size)) problems.push(`${GEN_LABELS.floorSize}：整数にする`);
+  num(floors.satiety, GEN_LABELS.satiety, GEN_LIMITS.satiety);
+  if (typeof floors.satiety === 'number' && !Number.isInteger(floors.satiety)) problems.push(`${GEN_LABELS.satiety}：整数にする`);
   num(rooms.attemptRate, GEN_LABELS.attemptRate, GEN_LIMITS.attemptRate);
   for (const k of ['minSize', 'maxSize'] as const) {
     const v = rooms[k];
@@ -302,14 +281,8 @@ export function describeGenChanges(before: GenSettings, after: GenSettings): str
   const show = (v: number | boolean | string) =>
     typeof v === 'boolean' ? (v ? 'する' : 'しない') : typeof v === 'string' ? (PLACEMENT_LABELS[v as Placement] ?? v) : String(v);
   if (before.floors.count !== after.floors.count) out.push(`${GEN_LABELS.floorCount}：${before.floors.count} → ${after.floors.count}`);
-  after.floors.sizes.forEach((size, i) => {
-    const old = before.floors.sizes[i];
-    if (old !== size) out.push(`ランク${i + 1}の${GEN_LABELS.floorSize}：${old} → ${size}`);
-  });
-  after.floors.satiety.forEach((satiety, i) => {
-    const old = before.floors.satiety[i];
-    if (old !== satiety) out.push(`ランク${i + 1}の${GEN_LABELS.satiety}：${old} → ${satiety}`);
-  });
+  if (before.floors.size !== after.floors.size) out.push(`${GEN_LABELS.floorSize}：${before.floors.size} → ${after.floors.size}`);
+  if (before.floors.satiety !== after.floors.satiety) out.push(`${GEN_LABELS.satiety}：${before.floors.satiety} → ${after.floors.satiety}`);
   for (const group of ['rooms', 'enemies', 'growth'] as const) {
     const a = before[group] as unknown as Record<string, number | boolean | string>;
     const b = after[group] as unknown as Record<string, number | boolean | string>;

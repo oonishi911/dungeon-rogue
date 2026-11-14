@@ -1,23 +1,21 @@
 // 挑戦の始まり：どのダンジョンに挑むかを選ぶ画面。
 // 並ぶのは src/game/dungeons/ にある設定ファイル（管理画面で作ったダンジョン）すべて。
-// ダンジョンごとに、今のランクでの階の数・広さ・満腹度を見せる（ダンジョンの属性は、選んだあとに決まる）
+// ダンジョンごとに、階の数・広さ・満腹度を見せる（ダンジョンの属性は、選んだあとに決まる）
 
 import { DUNGEON_IDS, dungeonOf } from '../game/dungeons';
-import { rankParams } from '../game/rank';
 
 interface DungeonSelectScreenProps {
   run: number;
-  rank: number;
   onChoose: (dungeon: string) => void;
 }
 
-export function DungeonSelectScreen({ run, rank, onChoose }: DungeonSelectScreenProps) {
+export function DungeonSelectScreen({ run, onChoose }: DungeonSelectScreenProps) {
   return (
     <main className="screen screen--narrow screen--fit">
       <header className="top">
         <div>
           <p className="top__run">
-            {run}回目の挑戦 ・ ランク{rank}
+            {run}回目の挑戦
           </p>
           <h1 className="top__title">ダンジョンを選ぶ</h1>
         </div>
@@ -27,7 +25,6 @@ export function DungeonSelectScreen({ run, rank, onChoose }: DungeonSelectScreen
       <ul className="choose__list screen__scroll" aria-label="挑めるダンジョン">
         {DUNGEON_IDS.map((id) => {
           const d = dungeonOf(id);
-          const params = rankParams(rank, d.floors);
           const headingId = `choose-${id}`;
           return (
             <li key={id} className="choose__item">
@@ -44,12 +41,12 @@ export function DungeonSelectScreen({ run, rank, onChoose }: DungeonSelectScreen
                   <div>
                     <dt>広さ</dt>
                     <dd>
-                      {params.mapSize}×{params.mapSize}マス
+                      {d.floors.size}×{d.floors.size}マス
                     </dd>
                   </div>
                   <div>
                     <dt>満腹度</dt>
-                    <dd>{params.maxSatiety}</dd>
+                    <dd>{d.floors.satiety}</dd>
                   </div>
                 </dl>
                 <button type="button" className="primary choose__go" onClick={() => onChoose(id)} aria-describedby={headingId}>

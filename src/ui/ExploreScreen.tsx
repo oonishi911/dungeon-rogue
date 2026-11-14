@@ -81,8 +81,6 @@ const KEY_ACTIONS: Record<string, ExploreAction> = {
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 // ?seed=123 で同じ階層を再現できる（不具合の再現や見た目の確認用）
 const urlSeed = Number(new URLSearchParams(location.search).get('seed'));
-// ?rank=3 でランクを指定できる（広いマップの確認用）
-const urlRank = Number(new URLSearchParams(location.search).get('rank')) || 1;
 // ?best=1 で、ダンジョンの特性に合わせた、いちばん強い装備・道具・呪文書で始める
 const urlBest = new URLSearchParams(location.search).get('best') === '1';
 // ?trait=fire でダンジョン特性を指定できる（タイル素材の確認用）
@@ -119,7 +117,7 @@ function visibleEnemyIds(state: ExploreState): Set<number> {
 const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fire_whetstone', 'ice_whetstone', 'book_shockwave', 'book_fire_bolt', 'book_heal'];
 
 /**
- * 開発用：準備フェーズを通さずに探索だけを試す。?seed=・?rank=・?trait=・?dungeon=・?render= で条件を指定できる。
+ * 開発用：準備フェーズを通さずに探索だけを試す。?seed=・?trait=・?dungeon=・?render= で条件を指定できる。
  * ?best=1 なら、そのダンジョンの特性に合わせて、いちばん強い装備・道具・呪文書で始める（bestLoadout.ts）
  */
 export function ExploreDevScreen() {
@@ -130,10 +128,10 @@ export function ExploreDevScreen() {
       start={() => {
         const seed = Number.isInteger(urlSeed) && urlSeed > 0 ? urlSeed : newSeed();
         const dungeon = urlDungeon;
-        if (!urlBest) return startExplore(seed, { dungeon, loadout: DEV_LOADOUT, rank: urlRank, trait: urlTrait });
+        if (!urlBest) return startExplore(seed, { dungeon, loadout: DEV_LOADOUT, trait: urlTrait });
         // 特性を決めてから、その特性に合う装備で始め直す（同じシードなら同じダンジョン）
-        const trait = urlTrait ?? startExplore(seed, { dungeon, rank: urlRank }).trait;
-        return startExplore(seed, { dungeon, loadout: bestLoadout(trait, dungeonOf(dungeon)), rank: urlRank, trait });
+        const trait = urlTrait ?? startExplore(seed, { dungeon }).trait;
+        return startExplore(seed, { dungeon, loadout: bestLoadout(trait, dungeonOf(dungeon)), trait });
       }}
     />
   );
@@ -677,7 +675,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
                 <a href={devBestHref(!devBest, state.trait)}>{devBest ? 'ふつうの装備に戻す' : 'いちばん強い装備で試す'}</a>）
               </>
             )}{' '}
-            ・ {dungeon.name} ・ ランク{state.rank} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体 ・ 金貨{' '}
+            ・ {dungeon.name} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体 ・ 金貨{' '}
             {state.gold}G
           </p>
           <h1 className="top__title">{floorName}</h1>

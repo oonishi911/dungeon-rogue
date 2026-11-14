@@ -18,7 +18,7 @@ export const ENEMY_SPRITES = (Object.keys(SPRITES) as SpriteId[]).filter((s) => 
 export type EnemyLook = { sprite: SpriteId; recolor?: Record<string, string> };
 
 /**
- * 倒したときの報酬。gold：落とす金貨（ランクが上がると増える）、exp：経験値（たまるとその挑戦のあいだレベルが上がる）、
+ * 倒したときの報酬。gold：落とす金貨、exp：経験値（たまるとその挑戦のあいだレベルが上がる）、
  * drop：回復薬か食料を落とす確率（%）。強敵は data.ts の REWARD_CONFIG の倍率で増え、道具は必ず宝箱で落とす。ボスは使わない
  */
 export type EnemyReward = { gold: number; exp: number; drop: number };

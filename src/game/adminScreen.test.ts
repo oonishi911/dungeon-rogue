@@ -25,7 +25,7 @@ import sample from './enemyMaster.sample.json';
 import { serializeDungeon, type DungeonFile, type GenSettings } from './genMaster';
 
 const GEN: GenSettings = {
-  floors: { count: 3, sizes: [20, 30, 40, 50, 60, 70, 80, 90, 100], satiety: [400, 900, 1600, 2500, 3600, 4900, 6400, 8100, 10000] },
+  floors: { count: 3, size: 40, satiety: 1600 },
   rooms: { attemptRate: 0.04, minSize: 3, maxSize: 9 },
   enemies: { amount: 1, placement: 'mixed', roomWeight: 1, nestChance: 0, nestMin: 3, nestMax: 5, stayInRoom: false },
   growth: { expBase: 30, expStep: 20, hpPerLevel: 2, atkPerLevel: 1, maxLevel: 10, eliteRate: 3 },
@@ -72,10 +72,10 @@ describe('管理画面の公開（敵のデータと、いくつものダンジ�
   });
 
   it('1つのダンジョンだけ変えたら、そのダンジョンのファイルだけを保存する（変えたところの頭に、ダンジョンの名前を付ける）', () => {
-    const draft = edited((d) => void (d.dungeons.cave!.floors.satiety[1] = 1200));
+    const draft = edited((d) => void (d.dungeons.cave!.floors.satiety = 1200));
     const plan = planPublish(BASE, draft);
     expect(plan.files).toEqual([{ path: dungeonPath('cave'), text: serializeDungeon(draft.dungeons.cave!), base: serializeDungeon(BASE.dungeons.cave!) }]);
-    expect(plan.changes).toEqual(['ほら穴：ランク2の満腹度：900 → 1200']);
+    expect(plan.changes).toEqual(['ほら穴：満腹度：1600 → 1200']);
     expect(plan.message.split('\n')[0]).toBe('ダンジョンの設定を更新する（管理画面から）');
   });
 
@@ -206,7 +206,7 @@ describe('管理画面のタブ', () => {
     expect(changedTabs(edited((d) => void (d.dungeons.standard!.name = '別の名前')))).toEqual(['about']);
     expect(changedTabs(edited((d) => void (d.dungeons.standard!.description = '')))).toEqual(['about']);
     expect(changedTabs(edited(floorCount))).toEqual(['floors']);
-    expect(changedTabs(edited((d) => void (d.dungeons.standard!.floors.satiety[0] = 500)))).toEqual(['floors']);
+    expect(changedTabs(edited((d) => void (d.dungeons.standard!.floors.satiety = 500)))).toEqual(['floors']);
     expect(changedTabs(edited((d) => void (d.dungeons.standard!.rooms.maxSize = 11)))).toEqual(['rooms']);
     expect(changedTabs(edited((d) => void (d.dungeons.standard!.enemies.nestMax = 6)))).toEqual(['placement']);
     expect(changedTabs(edited((d) => void (d.dungeons.standard!.growth.maxLevel = 12)))).toEqual(['growth']);

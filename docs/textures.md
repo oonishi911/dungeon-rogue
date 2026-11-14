@@ -108,4 +108,4 @@ npx tsx scripts/build-textures.ts
 npm run dev
 ```
 
-`http://localhost:5173/?view=explore&trait=fire` のように特性を指定して開くと、そのテクスチャで探索画面を確かめられる（`&seed=1` で同じ階層、`&rank=3` で広さを指定）。
+`http://localhost:5173/?view=explore&trait=fire` のように特性を指定して開くと、そのテクスチャで探索画面を確かめられる（`&seed=1` で同じ階層を指定）。

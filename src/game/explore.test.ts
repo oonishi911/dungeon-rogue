@@ -15,9 +15,9 @@ import {
   type ExploreState,
 } from './explore';
 import { PREP_CONFIG, TREASURE_CONFIG } from './data';
+import { floorParams } from './floorParams';
 import type { DungeonFile } from './genMaster';
 import { tileAt, type FloorMap } from './map';
-import { RANK_CONFIG, rankParams } from './rank';
 import type { ItemId } from './types';
 import type { Result } from './types';
 
@@ -77,7 +77,7 @@ describe('startExplore', () => {
     const s = startExplore(1);
     expect(s.floor).toBe(0);
     expect(s.player).toEqual(s.map.start);
-    expect(s.satiety).toBe(rankParams(1, GEN.floors).maxSatiety);
+    expect(s.satiety).toBe(floorParams(GEN.floors).maxSatiety);
     expect(s.stats.hp).toBe(s.stats.maxHp);
     expect(s.seen[s.player.y * s.map.width + s.player.x]).toBe(true);
   });
@@ -113,7 +113,7 @@ describe('step', () => {
   it('足踏みも1行動', () => {
     const s = act(startExplore(3), { kind: 'wait' });
     expect(s.turn).toBe(1);
-    expect(s.satiety).toBe(rankParams(1, GEN.floors).maxSatiety - 1);
+    expect(s.satiety).toBe(floorParams(GEN.floors).maxSatiety - 1);
   });
 
   it('階段の上でなければ降りられない', () => {
@@ -192,10 +192,10 @@ describe('step', () => {
   });
 
   // 満腹度が足りるか（バランス）は、balance.test.ts で確かめる。ここでは、本道をたどれば必ず次の階に降りられることだけを確かめる
-  it('どのランクでも、本道だけを歩けばボス階まで着ける', { timeout: 30_000 }, () => {
-    for (let rank = 1; rank <= RANK_CONFIG.maxRank; rank++) {
+  it('どの広さでも、本道だけを歩けばボス階まで着ける', { timeout: 30_000 }, () => {
+    for (const mapSize of [20, 40, 60, 80, 100]) {
       for (let i = 0; i < 3; i++) {
-        let s = startExplore(i * 2654435761, { enemyDensity: 0, rank, maxSatiety: 100000 });
+        let s = startExplore(i * 2654435761, { enemyDensity: 0, mapSize, maxSatiety: 100000 });
         for (let f = 0; f < s.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
         expect(isBossFloor(s)).toBe(true);
         expect(s.outcome).toBe('ongoing');
@@ -343,23 +343,6 @@ describe('地図', () => {
   });
 });
 
-describe('ランク', () => {
-  it('ランクで広さと満腹度の上限が決まる', () => {
-    const s = startExplore(3, { rank: 3 });
-    expect(s.rank).toBe(3);
-    expect(s.map.width).toBe(rankParams(3, GEN.floors).mapSize);
-    expect(s.maxSatiety).toBe(rankParams(3, GEN.floors).maxSatiety);
-  });
-
-  it('ランクが高いほど宝箱の金貨が多い', () => {
-    // 同じシード・同じ広さで比べ、ランクの倍率だけを変える
-    const low = startExplore(5, { rank: 1, mapSize: 50 });
-    const high = startExplore(5, { rank: 3, mapSize: 50 });
-    expect(high.chests.map((c) => c.pos)).toEqual(low.chests.map((c) => c.pos));
-    high.chests.forEach((c, i) => expect(c.gold).toBe(Math.round(low.chests[i]!.gold * rankParams(3, GEN.floors).chestGoldRate)));
-  });
-});
-
 describe('リタイア', () => {
   it('リタイアすると、ターンを使わず、敵も動かないまま探索が終わる', () => {
     const s0 = startExplore(3);
@@ -389,7 +372,7 @@ describe('遊ぶダンジョン', () => {
   const testDungeon: DungeonFile = {
     ...(JSON.parse(JSON.stringify(GEN)) as DungeonFile),
     name: 'テスト用',
-    floors: { count: 2, sizes: GEN.floors.sizes.map(() => 30), satiety: GEN.floors.satiety.map(() => 777) },
+    floors: { count: 2, size: 30, satiety: 777 },
     encounters: { fire: one, ice: one, neutral: one, light: one, dark: one },
   };
   afterEach(() => {
@@ -404,7 +387,7 @@ describe('遊ぶダンジョン', () => {
 
   it('選んだダンジョンの設定（階の数・広さ・満腹度・出る敵・ボス）で遊ぶ', () => {
     registry[TEST_ID] = testDungeon;
-    let s = startExplore(4, { dungeon: TEST_ID, rank: 2 });
+    let s = startExplore(4, { dungeon: TEST_ID });
     expect(s.dungeon).toBe(TEST_ID);
     expect(s.floors).toBe(2);
     expect(s.mapSize).toBe(30);
