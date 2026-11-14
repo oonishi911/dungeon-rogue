@@ -1659,36 +1659,55 @@ button {
 
 .shop__row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.625rem 0.75rem;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
   border: 1px solid var(--pine-line);
   border-radius: 8px;
   background: var(--pine-deep);
 }
 
 .shop__name {
+  display: block;
   margin: 0;
   font-weight: 700;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem 0.5rem;
+  line-height: 1.4;
 }
 
 
 .shop__desc {
+  display: block;
   margin: 0;
   color: var(--bone-dim);
   font-size: var(--step--1);
-  line-height: 1.5;
+  line-height: 1.4;
+  /* 説明は1行に収め、はみ出す分は「…」にする（品物を押すと全文） */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shop__about {
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shop__about[aria-expanded='true'] .shop__desc {
+  white-space: normal;
 }
 
 .shop__deal {
-  display: grid;
-  justify-items: end;
-  gap: 0.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  max-width: 11rem;
 }
 
 .shop__price {
@@ -1697,9 +1716,9 @@ button {
 }
 
 .shop__buy {
-  min-width: 5.5rem;
-  min-height: 2.25rem;
-  padding: 0.25rem 0.75rem;
+  min-width: 4rem;
+  min-height: 2rem;
+  padding: 0.125rem 0.625rem;
   font-size: var(--step--1);
 }
 
@@ -1772,16 +1791,19 @@ button {
 }
 
 .shop__stock {
+  flex-basis: 100%;
   display: inline-flex;
+  justify-content: flex-end;
   align-items: center;
-  gap: 0.375rem;
-  font-size: var(--step--1);
+  gap: 0.25rem;
+  font-size: 0.75rem;
   color: var(--bone-dim);
 }
 
 .shop__step {
-  width: 2rem;
-  height: 2rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
   border: 1px solid var(--pine-line);
   border-radius: 4px;
   background: var(--pine);
@@ -1830,25 +1852,6 @@ button {
 }
 
 @media (max-width: 40rem) {
-  .shop__row {
-    grid-template-columns: auto 1fr;
-  }
-
-  .shop__deal {
-    grid-column: 1 / -1;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-  }
-
-  .shop__stock {
-    grid-column: 1 / -1;
-    justify-self: end;
-  }
-
-  .shop__price {
-    justify-self: start;
-  }
-
   .shop__slots {
     grid-template-columns: 1fr;
     gap: 0.25rem;
@@ -1859,4 +1862,121 @@ button {
     grid-template-columns: 5.5rem 1fr;
     align-items: center;
   }
+}
+
+/* ===== 情報屋との会話 ===== */
+.talk__log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+
+.talk__line {
+  display: grid;
+  gap: 0.125rem;
+  max-width: 88%;
+}
+
+.talk__line--hero {
+  justify-self: end;
+  text-align: right;
+}
+
+.talk__who {
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.talk__text {
+  margin: 0;
+  padding: 0.625rem 0.875rem;
+  border-radius: 10px;
+  line-height: 1.7;
+}
+
+.talk__line--informant .talk__text {
+  background: var(--pine-deep);
+  border: 1px solid var(--pine-line);
+  border-top-left-radius: 2px;
+}
+
+.talk__line--hero .talk__text {
+  background: var(--bone);
+  color: var(--ink);
+  border-top-right-radius: 2px;
+  text-align: left;
+}
+
+.talk__error:empty {
+  display: none;
+}
+
+.talk__ask {
+  padding: 0.75rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 8px;
+  background: var(--pine-deep);
+  display: grid;
+  gap: 0.625rem;
+}
+
+.talk__questions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.talk__question {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.talk__q {
+  font-weight: 700;
+  font-size: var(--step--1);
+}
+
+.talk__buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+}
+
+.talk__btn {
+  min-height: 2rem;
+  padding: 0.25rem 0.75rem;
+  font-size: var(--step--1);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.talk__btn:not(.primary) {
+  border: 1px solid var(--pine-line);
+  background: var(--pine);
+}
+
+.talk__btn--off {
+  color: var(--bone-dim);
+  background: transparent;
+  cursor: default;
+}
+
+/* 店の画面の、情報屋から聞いたことのメモ */
+.shop__memo {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--procure);
+  background: var(--pine-deep);
+  list-style: none;
+  font-size: var(--step--1);
+  display: grid;
+  gap: 0.125rem;
 }

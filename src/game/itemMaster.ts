@@ -1,6 +1,6 @@
 // 品物の設定（src/game/items.json）を読み、正しい形かを確かめる。
 // items.json には、店で売るすべての品物の名前と値段がある。武器と防具は種類ごとに10段階あり、段階ごとに性能も決める
-// （武器：攻撃力、防具：守りと、効く属性のダメージを何%に減らすか）。
+// （武器：攻撃力、防具：守りと、効く属性のダメージを何%に減らすか）。情報屋の情報料（information）もここにある。
 // 品物の働き（回復薬はHPを15回復する、など）と、武器と体質の相性・防具の効く属性は、ここではなくプログラムで決まっている。
 // items.json は、開発用の管理画面（?view=admin の「品物」タブ。src/ui/ItemPanels.tsx）から書き換えて公開できる。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
@@ -41,7 +41,13 @@ export type ItemMaster = {
   armors: Record<ArmorBaseId, ArmorTier[]>;
   supplies: Record<SupplyId, PlainItem>;
   spellbooks: Record<SpellbookId, PlainItem>;
+  information: Record<InfoTopic, number>; // 情報屋で「はっきり聞く」ときの情報料（informant.ts）
 };
+
+/** 情報屋に聞けること（informant.ts の Topic と同じ） */
+export const INFO_TOPICS = ['trait', 'body', 'boss'] as const;
+export type InfoTopic = (typeof INFO_TOPICS)[number];
+export const INFO_LABELS: Record<InfoTopic, string> = { trait: 'ダンジョンの属性', body: '多い魔物の体', boss: 'ボス' };
 
 export const ITEM_LIMITS = {
   name: { max: 16 },
@@ -49,6 +55,7 @@ export const ITEM_LIMITS = {
   atk: { min: 0, max: 99 },
   def: { min: 0, max: 99 },
   rate: { min: 0, max: 100 },
+  info: { min: 0, max: 99999 }, // 情報料（0なら、はっきり聞くのも無料）
 } as const;
 
 // ===== 種類ごとに決まっていること（プログラムで決める） =====
@@ -222,6 +229,10 @@ export function itemProblems(data: unknown): string[] {
   };
   plain(data.supplies, SUPPLY_IDS, '道具');
   plain(data.spellbooks, SPELLBOOK_IDS, '呪文書');
+  for (const t of INFO_TOPICS) {
+    const v = isObj(data.information) ? data.information[t] : undefined;
+    checkInt(`情報料（${INFO_LABELS[t]}）`, '値段', v, ITEM_LIMITS.info);
+  }
   return out;
 }
 
@@ -248,5 +259,8 @@ export function describeItemChanges(before: ItemMaster, after: ItemMaster): stri
   for (const b of ARMOR_BASES) after.armors[b].forEach((t, i) => diff(`${before.armors[b][i]?.name ?? ARMOR_INFO[b].label}（${i + 1}段目）`, before.armors[b][i] ?? {}, t));
   for (const id of SUPPLY_IDS) diff(before.supplies[id].name, before.supplies[id], after.supplies[id]);
   for (const id of SPELLBOOK_IDS) diff(before.spellbooks[id].name, before.spellbooks[id], after.spellbooks[id]);
+  for (const t of INFO_TOPICS) {
+    if (before.information[t] !== after.information[t]) out.push(`情報料（${INFO_LABELS[t]}）：${before.information[t]} → ${after.information[t]}`);
+  }
   return out;
 }
