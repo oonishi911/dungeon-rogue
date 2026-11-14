@@ -13,7 +13,7 @@ interface DungeonSelectScreenProps {
 
 export function DungeonSelectScreen({ run, rank, onChoose }: DungeonSelectScreenProps) {
   return (
-    <main className="screen screen--narrow">
+    <main className="screen screen--narrow screen--fit">
       <header className="top">
         <div>
           <p className="top__run">
@@ -23,7 +23,8 @@ export function DungeonSelectScreen({ run, rank, onChoose }: DungeonSelectScreen
         </div>
       </header>
 
-      <ul className="choose__list" aria-label="挑めるダンジョン">
+      {/* スマホでは、画面全体は動かさず、この一覧の中だけを動かす */}
+      <ul className="choose__list screen__scroll" aria-label="挑めるダンジョン">
         {DUNGEON_IDS.map((id) => {
           const d = dungeonOf(id);
           const params = rankParams(rank, d.floors);
