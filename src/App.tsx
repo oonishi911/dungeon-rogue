@@ -2,6 +2,7 @@
 // ルールはすべて src/game 側にあり、ここには書かない。
 // 流れは「ダンジョンを選ぶ → 情報屋（informant.ts）→ 出発の準備（店。shop.ts）→ ダンジョン → 結果 → 次のダンジョンを選ぶ」。
 // 金貨・買った持ち物・道具の倉庫はセーブデータに残り、店で買うたびに保存する。
+// 始めるときに、テクスチャと音をすべて読み込む（読み込み画面。preload.ts）。
 
 import { useState } from 'react';
 import { depart } from './game/depart';
@@ -18,6 +19,7 @@ import { DungeonSelectScreen } from './ui/DungeonSelectScreen';
 import { ExploreScreen } from './ui/ExploreScreen';
 import { ResultScreen } from './ui/ResultScreen';
 import { InformantScreen } from './ui/InformantScreen';
+import { LoadingScreen } from './ui/LoadingScreen';
 import { ShopScreen } from './ui/ShopScreen';
 
 type Stage =
@@ -45,6 +47,9 @@ export function App() {
   const [first] = useState(firstLoad);
   const [save, setSave] = useState<SaveData>(first.save);
   const [stage, setStage] = useState<Stage>(first.stage);
+  // テクスチャと音をすべて読み込むまでは、読み込み画面を出す（preload.ts）
+  const [loaded, setLoaded] = useState(false);
+  if (!loaded) return <LoadingScreen onDone={() => setLoaded(true)} />;
 
   switch (stage.kind) {
     case 'choose':

@@ -121,6 +121,8 @@ export function unlockSound() {
       if (document.hidden) void context.suspend();
       else void context.resume();
     });
+    // 読み込み済みの音を、すぐ鳴らせる形にしておく（最初に鳴らすときに待たないように）
+    for (const name of files.keys()) void bufferOf(context, name);
     // 画面に触れる前に入ったダンジョンの環境音を、ここで流し始める
     syncAmbient();
   }
@@ -180,6 +182,24 @@ export function preloadSounds(trait: TraitId) {
   for (const name of [...Object.values(ATTACK_SOUNDS), ...Object.values(ENEMY_ATTACK_SOUNDS), ...Object.values(SPELL_SOUNDS)]) fetchFile(name);
   const ambient = AMBIENT_SOUNDS[trait];
   if (ambient) fetchFile(ambient);
+}
+
+/** すべての音のファイルの名前（ゲームの始まりに、まとめて読み込むため。preload.ts） */
+export function allSoundFiles(): string[] {
+  const names = [
+    ...Object.values(STEP_SOUNDS).flat(),
+    CHEST_SOUND,
+    ...Object.values(ATTACK_SOUNDS),
+    ...Object.values(ENEMY_ATTACK_SOUNDS),
+    ...Object.values(SPELL_SOUNDS),
+    ...Object.values(AMBIENT_SOUNDS),
+  ].filter((n): n is string => typeof n === 'string');
+  return [...new Set(names)];
+}
+
+/** 音のファイルを1つ読み込む（読み込めなくても失敗にはしない。鳴らさないだけ） */
+export function loadSoundFile(name: string): Promise<void> {
+  return fetchFile(name).then(() => undefined);
 }
 
 /** 宝箱から中身（金貨か道具）を取ったときの音 */
