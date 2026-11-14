@@ -1710,6 +1710,19 @@ button {
   max-width: 11rem;
 }
 
+.shop__pick {
+  display: inline-block;
+  margin-left: 0.375rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--procure);
+  color: var(--ink);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.6;
+  vertical-align: middle;
+}
+
 .shop__price {
   font-weight: 700;
   color: var(--hp-enemy);

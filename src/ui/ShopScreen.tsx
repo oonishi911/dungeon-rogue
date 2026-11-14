@@ -1,13 +1,14 @@
 // 出発の準備：ダンジョンを選んだあと、貯めた金貨で品物を買い、持っていくものを選んで出発する画面。
 // ルールはすべて src/game/shop.ts にあり、ここでは呼び出して表示するだけ。
 // ダンジョンの属性は出さず、情報屋から聞いたことだけを、上にメモとして出す。
+// はっきり聞いたこと（うわさでない）があれば、それに合う品物に「おすすめ」の印を付ける（shop.ts の recommended）。
 // 売り場は「武器・防具・道具・呪文書」のタブで切り替える。下の「持ち物」の欄は、たたんでおける（スマホで品物を多く見るため）。
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ITEMS, LOADOUT_CONFIG } from '../game/data';
 import type { Intel } from '../game/informant';
 import type { SaveData } from '../game/save';
-import { buy, count, equip, kitLoadout, shelfItems, SHELVES, takeSupply, toggleBook, type Shelf } from '../game/shop';
+import { buy, count, equip, kitLoadout, recommended, shelfItems, SHELVES, takeSupply, toggleBook, type Shelf } from '../game/shop';
 import type { ItemId, Result } from '../game/types';
 import { ItemIcon } from './ItemIcon';
 
@@ -27,6 +28,8 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<ItemId | null>(null); // 説明を全部出している品物
   const { kit } = save;
+  // 情報屋からはっきり聞いたことに合う品物（うわさだけでは付けない）
+  const picks = useMemo(() => recommended(intel), [intel]);
 
   const apply = (r: Result<SaveData>) => {
     if (!r.ok) return setError(r.error);
@@ -74,7 +77,10 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
             <ItemIcon id={id} size={28} className="shop__icon" />
             {/* 説明は1行に切ってある。押すと全文を出す */}
             <button type="button" className="shop__about" aria-expanded={open === id} onClick={() => setOpen((o) => (o === id ? null : id))}>
-              <span className="shop__name">{ITEMS[id].name}</span>
+              <span className="shop__name">
+                {ITEMS[id].name}
+                {picks.has(id) && <span className="shop__pick">おすすめ</span>}
+              </span>
               <span className="shop__desc">{ITEMS[id].description}</span>
             </button>
             <div className="shop__deal">
