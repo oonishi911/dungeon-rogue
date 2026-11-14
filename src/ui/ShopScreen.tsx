@@ -24,6 +24,7 @@ export function ShopScreen({ run, dungeonName, intel, save, onChange, onDepart }
   const [shelf, setShelf] = useState<Shelf>('weapon');
   const [bagOpen, setBagOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<ItemId | null>(null); // 説明を全部出している品物
   const { kit } = save;
 
   const apply = (r: Result<SaveData>) => {
@@ -69,11 +70,12 @@ export function ShopScreen({ run, dungeonName, intel, save, onChange, onDepart }
       <ul className="shop__list screen__scroll" aria-label={SHELVES.find((s) => s.id === shelf)!.name}>
         {shelfItems(save.owned, shelf).map((id) => (
           <li key={id} className="shop__row">
-            <ItemIcon id={id} size={36} className="shop__icon" />
-            <div className="shop__about">
-              <p className="shop__name">{ITEMS[id].name}</p>
-              <p className="shop__desc">{ITEMS[id].description}</p>
-            </div>
+            <ItemIcon id={id} size={28} className="shop__icon" />
+            {/* 説明は1行に切ってある。押すと全文を出す */}
+            <button type="button" className="shop__about" aria-expanded={open === id} onClick={() => setOpen((o) => (o === id ? null : id))}>
+              <span className="shop__name">{ITEMS[id].name}</span>
+              <span className="shop__desc">{ITEMS[id].description}</span>
+            </button>
             <div className="shop__deal">
               <Deal id={id} shelf={shelf} save={save} apply={apply} />
             </div>
@@ -147,7 +149,7 @@ function Deal({ id, shelf, save, apply }: { id: ItemId; shelf: Shelf; save: Save
     <>
       <span className="shop__price">{price}G</span>
       <button type="button" className={short ? 'shop__buy shop__buy--off' : 'primary shop__buy'} disabled={short} onClick={() => apply(buy(save, id))}>
-        {short ? '金貨が足りない' : '買う'}
+        {short ? '足りない' : '買う'}
       </button>
     </>
   );
@@ -158,7 +160,7 @@ function Deal({ id, shelf, save, apply }: { id: ItemId; shelf: Shelf; save: Save
       <>
         {buyButton}
         <span className="shop__stock">
-          倉庫 {inStock}・持っていく {taking}
+          倉庫{inStock}・持っていく{taking}
           <button type="button" className="shop__step" aria-label={`${ITEMS[id].name}を1つ減らす`} disabled={taking === 0} onClick={() => apply(takeSupply(save, id, -1))}>
             −
           </button>

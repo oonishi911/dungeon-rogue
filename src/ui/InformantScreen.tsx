@@ -60,32 +60,32 @@ export function InformantScreen({ run, dungeonName, state, save, onChange, onLea
         <h2 id="talk-ask" className="shop__bag-title">
           聞く <span className="muted">あと{left}回</span>
         </h2>
-        <ul className="talk__questions">
-          {TOPICS.map((t) => {
-            const done = alreadyAsked(state, t.id);
-            const price = priceOf(t.id);
-            return (
-              <li key={t.id} className="talk__question">
-                <span className="talk__q">「{t.ask}」</span>
-                <span className="talk__buttons">
-                  {vagueOk && !done && (
-                    <button type="button" className="talk__btn" onClick={() => go(t.id, false)}>
-                      それとなく聞く（無料）
+        {left > 0 ? (
+          <ul className="talk__questions">
+            {TOPICS.map((t) => {
+              const done = alreadyAsked(state, t.id);
+              const price = priceOf(t.id);
+              const short = price > save.gold;
+              return (
+                <li key={t.id} className="talk__question">
+                  <span className="talk__q">「{t.ask}」</span>
+                  <span className="talk__buttons">
+                    {vagueOk && !done && (
+                      <button type="button" className="talk__btn" onClick={() => go(t.id, false)}>
+                        それとなく（無料）
+                      </button>
+                    )}
+                    <button type="button" className={done || short ? 'talk__btn talk__btn--off' : 'primary talk__btn'} disabled={done || short} onClick={() => go(t.id, true)}>
+                      {done ? '聞いた' : short ? `はっきり ${price}G（足りない）` : `はっきり ${price}G`}
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className={done || left <= 0 || price > save.gold ? 'talk__btn talk__btn--off' : 'primary talk__btn'}
-                    disabled={done || left <= 0 || price > save.gold}
-                    onClick={() => go(t.id, true)}
-                  >
-                    {done ? '聞いた' : price > save.gold ? `はっきり聞く（${price}G・足りない）` : `はっきり聞く（${price}G）`}
-                  </button>
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="muted">今日はもう聞けない。聞いたことは、店の画面にメモとして残る。</p>
+        )}
         <button type="button" className="primary shop__go" onClick={onLeave}>
           店へ行く
         </button>
