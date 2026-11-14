@@ -3,8 +3,7 @@
 
 import { itemSlot } from './combat';
 import { CARDS, DECK, FAVORABLE_GEAR, ITEMS, PREP_CONFIG, START_SUPPLIES, TRAITS, TRAIT_IDS } from './data';
-import { DEFAULT_DUNGEON_ID, dungeonOf } from './dungeons';
-import { RANK_CONFIG, rankParams, upgradeCost } from './rank';
+import { DEFAULT_DUNGEON_ID } from './dungeons';
 import { nextInt, nextRandom, shuffle } from './rng';
 import type { CardInstance, ItemId, PrepResult, PrepState, Result } from './types';
 
@@ -15,8 +14,6 @@ export interface PrepOptions {
   maxDays?: number;
   handSize?: number;
   startGold?: number;
-  rank?: number;
-  exp?: number;
   dungeon?: string; // 挑むダンジョンの ID（省略時は標準のダンジョン）
 }
 
@@ -51,8 +48,6 @@ export function createPrep(seed: number, carried: CardInstance[] = [], options: 
     gold,
     knowledge: { status: 'unknown' },
     hasMap: false,
-    rank: options.rank ?? 1,
-    exp: options.exp ?? 0,
     openShop: null,
     inventory: [],
     rngState: shuffled.state,
@@ -145,26 +140,6 @@ export function buyItem(state: PrepState, itemId: ItemId): Result<PrepState> {
   );
 }
 
-/**
- * ランクを1つ上げる。踏破経験と金貨を払う。カードも日数も使わない。
- * ランクが上がるとダンジョンが広くなり、満腹度の上限（設定でランクごとに決める）と報酬が増える。
- */
-export function upgradeRank(state: PrepState): Result<PrepState> {
-  if (state.phase !== 'prep') return err('準備フェーズは終わっています');
-  if (state.rank >= RANK_CONFIG.maxRank) return err('これ以上ランクは上げられません');
-  if (state.exp < RANK_CONFIG.expPerUpgrade) return err('ダンジョンを踏破した経験が足りません');
-  const cost = upgradeCost(state.rank);
-  if (state.gold < cost) return err(`お金が足りません（${cost}G必要）`);
-  const rank = state.rank + 1;
-  const size = rankParams(rank, dungeonOf(state.dungeon).floors).mapSize;
-  return ok(
-    withLog(
-      { ...state, rank, exp: state.exp - RANK_CONFIG.expPerUpgrade, gold: state.gold - cost },
-      `ランク${rank}に上がった。ダンジョンは${size}×${size}になる`,
-    ),
-  );
-}
-
 /** 1日を終える。カードを使わずに終えることもできる */
 export function endDay(state: PrepState): Result<PrepState> {
   if (state.phase !== 'prep') return err('準備フェーズは終わっています');
@@ -195,8 +170,6 @@ export function finishPrep(state: PrepState, keepUids: string[]): Result<PrepRes
     trait: state.trait,
     knowledge: state.knowledge,
     hasMap: state.hasMap,
-    rank: state.rank,
-    exp: state.exp,
     loadout: state.inventory,
     carried: carried as CardInstance[],
   });
@@ -230,7 +203,7 @@ function withLog(state: PrepState, message: string): PrepState {
  */
 export function departWithoutPrep(
   seed: number,
-  save: { rank: number; exp: number; carried: CardInstance[] },
+  save: { carried: CardInstance[] },
   dungeon: string = DEFAULT_DUNGEON_ID,
 ): PrepResult {
   const trait = TRAIT_IDS[nextInt(seed, TRAIT_IDS.length).value]!;
@@ -239,8 +212,6 @@ export function departWithoutPrep(
     trait,
     knowledge: { status: 'unknown' },
     hasMap: false,
-    rank: save.rank,
-    exp: save.exp,
     loadout: [...FAVORABLE_GEAR[trait], ...START_SUPPLIES],
     carried: save.carried,
   };

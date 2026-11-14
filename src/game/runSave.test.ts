@@ -6,7 +6,7 @@ import { packRun, packSeen, parseRun, unpackSeen, type RunSave } from './runSave
 import { newSave } from './save';
 import type { PrepResult } from './types';
 
-const outcome: PrepResult = { dungeon: DEFAULT_DUNGEON_ID, trait: 'fire', knowledge: { status: 'unknown' }, hasMap: false, rank: 1, exp: 0, loadout: ['potion'], carried: [] };
+const outcome: PrepResult = { dungeon: DEFAULT_DUNGEON_ID, trait: 'fire', knowledge: { status: 'unknown' }, hasMap: false, loadout: ['potion'], carried: [] };
 const SEED = 7;
 
 /** 自動プレイで turns 手まで進める（探索が終わったら、その手前で止める） */
@@ -29,7 +29,7 @@ function playToSecondFloor(state: ExploreState): ExploreState {
   return state;
 }
 
-const start = () => startExplore(SEED, { dungeon: outcome.dungeon, trait: outcome.trait, loadout: outcome.loadout, hasMap: outcome.hasMap, rank: outcome.rank });
+const start = () => startExplore(SEED, { dungeon: outcome.dungeon, trait: outcome.trait, loadout: outcome.loadout, hasMap: outcome.hasMap });
 const saved = (state: ExploreState) => JSON.stringify(packRun(newSave(), outcome, SEED, state));
 /** 保存した文字列の中身を書き換える */
 const edited = (state: ExploreState, edit: (run: RunSave) => void) => {

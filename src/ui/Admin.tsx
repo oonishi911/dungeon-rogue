@@ -40,7 +40,6 @@ export function Admin() {
   const [draft, setDraft] = useState<AdminData>(published);
   const [tab, setTab] = useState<AdminTab>(() => adminTabFromUrl(window.location.search));
   const [dungeonId, setDungeonId] = useState(() => adminDungeonFromUrl(window.location.search, DUNGEON_IDS));
-  const [rank, setRank] = useState(1);
   const [seed, setSeed] = useState(1);
   const publisher = usePublish();
   const plan = useMemo(() => planPublish(base, draft), [base, draft]);
@@ -145,7 +144,7 @@ export function Admin() {
       {tab === 'magic' && <MagicPanel {...genProps} />}
 
       {showsPreview(tab) && (
-        <PreviewSection settings={dungeon} rank={rank} onRank={setRank} seed={seed} onNewMap={() => setSeed(Math.floor(Math.random() * 2 ** 31))} />
+        <PreviewSection settings={dungeon} seed={seed} onNewMap={() => setSeed(Math.floor(Math.random() * 2 ** 31))} />
       )}
 
       <PublishPanel

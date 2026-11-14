@@ -1,6 +1,6 @@
 // 開発用の管理画面（Admin.tsx）の、ダンジョンの設定（src/game/dungeons/<ID>.json のうち、マップと探索の設定）のタブ。
 // 直すダンジョンは、タブの上の欄で選ぶ（DungeonPanels.tsx）：
-// 「階の数・広さ・満腹度」（階の数と、ランクごとの広さ・満腹度）、「小部屋」（多さと大きさ）、
+// 「階の数・広さ・満腹度」、「小部屋」（多さと大きさ）、
 // 「敵の数と置き方」（部屋に集める・部屋には置かない・群れ部屋・部屋から出さない）、
 // 「レベルと強敵の報酬」（敵を倒したときのレベルの上がり方と強敵の報酬の倍率）、「魔法」（魔力と呪文の強さ）と、
 // 変えた値で作ったマップの見本。
@@ -28,7 +28,7 @@ import {
 } from '../game/genMaster';
 import { orderError } from '../game/fieldCheck';
 import { generateFloor, type FloorMap } from '../game/map';
-import { RANK_CONFIG, rankParams } from '../game/rank';
+import { floorParams } from '../game/floorParams';
 import type { SpellId } from '../game/types';
 import { cls, NumberField } from './adminParts';
 
@@ -46,48 +46,23 @@ export function FloorsPanel({ base, draft, setDraft }: GenPanelProps) {
   const f = draft.floors;
   const bf = base.floors;
   const setFloors = (patch: Partial<FloorSettings>) => setDraft((d) => ({ ...d, floors: { ...d.floors, ...patch } }));
-  const setFloorSize = (index: number, size: number) => setFloors({ sizes: f.sizes.map((v, i) => (i === index ? size : v)) });
-  const setFloorSatiety = (index: number, satiety: number) => setFloors({ satiety: f.satiety.map((v, i) => (i === index ? satiety : v)) });
   return (
     <section className="admin__section" role="tabpanel" id="admin-floors-panel" aria-labelledby="admin-floors-tab">
       <h2 className="admin__heading">階の数・広さ・満腹度</h2>
       <p className="admin__note">
-        広さと満腹度は、ランクごとに決めます（広さは、上のランクほど同じか広く）。満腹度は、探索のはじめの満腹度で、上限でもあります。
-        広さや階の数を変えても、満腹度は自動では変わらないので、いっしょに見直してください。敵の数・HPの回復の速さは、広さから自動で決まります。
+        満腹度は、探索のはじめの満腹度で、上限でもあります。広さや階の数を変えても、満腹度は自動では変わらないので、いっしょに見直してください。
+        敵の数・HPの回復の速さは、広さから自動で決まります。難しさの段階を作りたいときは、ダンジョンを複製して、広さや満腹度を変えた別のダンジョンにします。
       </p>
       <div className="gen__fields">
         <Field label={GEN_LABELS.floorCount} hint="通常の階の数。その下に、ボスの階が1つある。階を増やしたら、満腹度も見直す">
           <NumberField {...GEN_LIMITS.floorCount} value={f.count} changed={f.count !== bf.count} label={GEN_LABELS.floorCount} onChange={(v) => setFloors({ count: v })} />
         </Field>
-      </div>
-      <h3 className="gen__subheading">ランクごとの広さ（一辺のマス数）</h3>
-      <div className="gen__fields">
-        {f.sizes.map((size, i) => (
-          <Field key={i} label={`ランク${i + 1}`} hint={`${size}×${size}マス`}>
-            <NumberField
-              {...GEN_LIMITS.floorSize}
-              value={size}
-              changed={size !== bf.sizes[i]}
-              label={`ランク${i + 1}の${GEN_LABELS.floorSize}`}
-              error={i > 0 ? orderError('atLeast', `ランク${i + 1}の広さ`, size, `ランク${i}の広さ`, f.sizes[i - 1]!) : null}
-              onChange={(v) => setFloorSize(i, v)}
-            />
-          </Field>
-        ))}
-      </div>
-      <h3 className="gen__subheading">ランクごとの満腹度（探索のはじめの満腹度。これが上限）</h3>
-      <div className="gen__fields">
-        {f.satiety.map((satiety, i) => (
-          <Field key={i} label={`ランク${i + 1}`} hint={`マップの面積（${f.sizes[i]! ** 2}）の${(satiety / f.sizes[i]! ** 2).toFixed(1)}倍`}>
-            <NumberField
-              {...GEN_LIMITS.satiety}
-              value={satiety}
-              changed={satiety !== bf.satiety[i]}
-              label={`ランク${i + 1}の${GEN_LABELS.satiety}`}
-              onChange={(v) => setFloorSatiety(i, v)}
-            />
-          </Field>
-        ))}
+        <Field label={GEN_LABELS.floorSize} hint={`一辺のマス数（${f.size}×${f.size}マス）`}>
+          <NumberField {...GEN_LIMITS.floorSize} value={f.size} changed={f.size !== bf.size} label={GEN_LABELS.floorSize} onChange={(v) => setFloors({ size: v })} />
+        </Field>
+        <Field label={GEN_LABELS.satiety} hint={`探索のはじめの満腹度。これが上限。マップの面積（${f.size ** 2}）の${(f.satiety / f.size ** 2).toFixed(1)}倍`}>
+          <NumberField {...GEN_LIMITS.satiety} value={f.satiety} changed={f.satiety !== bf.satiety} label={GEN_LABELS.satiety} onChange={(v) => setFloors({ satiety: v })} />
+        </Field>
       </div>
     </section>
   );
@@ -141,7 +116,7 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
     <section className="admin__section" role="tabpanel" id="admin-placement-panel" aria-labelledby="admin-placement-tab">
       <h2 className="admin__heading">敵の数と置き方</h2>
       <div className="gen__fields">
-        <Field label={GEN_LABELS.amount} hint="通常の敵の数（1：今の数。ランクで広くなるほど増える分は、そのまま）。強敵とボスは変わらない">
+        <Field label={GEN_LABELS.amount} hint="通常の敵の数（1：今の数。広さに合わせて増える分は、そのまま）。強敵とボスは変わらない">
           <NumberField {...GEN_LIMITS.amount} value={e.amount} changed={e.amount !== be.amount} label={GEN_LABELS.amount} onChange={(v) => setEnemies({ amount: v })} />
         </Field>
         <Field label={GEN_LABELS.placement} hint="部屋だけにすると、通常の敵をすべて部屋に集める。通路だけにすると、部屋には敵を置かない（群れ部屋も作らない）">
@@ -293,26 +268,16 @@ export function MagicPanel({ base, draft, setDraft }: GenPanelProps) {
   );
 }
 
-/** 変えた値で作ったマップの見本（ダンジョンの設定のタブの下に出す）。ランクと、見本の種（別のマップ）は、呼ぶ側で持つ */
-export function PreviewSection(props: { settings: DungeonFile; rank: number; onRank: (rank: number) => void; onNewMap: () => void; seed: number }) {
-  const { settings, rank, seed } = props;
+/** 変えた値で作ったマップの見本（ダンジョンの設定のタブの下に出す）。見本の種（別のマップ）は、呼ぶ側で持つ */
+export function PreviewSection(props: { settings: DungeonFile; onNewMap: () => void; seed: number }) {
+  const { settings, seed } = props;
   const problems = useMemo(() => genProblems(settings), [settings]);
-  const preview = useMemo(() => (problems.length ? null : makePreview(settings, rank, seed)), [settings, rank, seed, problems.length]);
+  const preview = useMemo(() => (problems.length ? null : makePreview(settings, seed)), [settings, seed, problems.length]);
   return (
     <section className="admin__section" aria-labelledby="admin-preview">
       <h2 id="admin-preview" className="admin__heading">見本</h2>
       <p className="admin__note">値を変えると、見本のマップがすぐに作り直されます（ボスの階は形が決まっているので変わりません）。</p>
       <div className="gen__preview-controls">
-        <label>
-          <span>ランク</span>
-          <select className="admin__select" value={rank} onChange={(ev) => props.onRank(Number(ev.target.value))}>
-            {Array.from({ length: RANK_CONFIG.maxRank }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>
-                ランク{n}（{settings.floors.sizes[n - 1]}×{settings.floors.sizes[n - 1]}）
-              </option>
-            ))}
-          </select>
-        </label>
         <button type="button" className="explore__wait" onClick={props.onNewMap}>
           別のマップを作る
         </button>
@@ -377,8 +342,8 @@ interface PreviewData {
  * 見本のマップと敵。群れの敵を見分けるため、群れ部屋なしでも置いてみて、増えた分を群れの敵とする。
  * 敵は、無属性のときに出る敵で置く（まだ敵を選んでいないときは、ボスでない敵のどれか）
  */
-function makePreview(settings: DungeonFile, rank: number, seed: number): PreviewData {
-  const params = rankParams(rank, settings.floors);
+function makePreview(settings: DungeonFile, seed: number): PreviewData {
+  const params = floorParams(settings.floors);
   const map = generateFloor(seed, { width: params.mapSize, height: params.mapSize, rooms: settings.rooms });
   const chosen = settings.encounters.neutral.pool.filter((id) => ENEMIES[id] && !ENEMIES[id].boss);
   const pool = chosen.length ? chosen : Object.values(ENEMIES).filter((e) => !e.boss).map((e) => e.id).slice(0, 1);

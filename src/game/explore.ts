@@ -19,7 +19,7 @@ import {
   type MapEnemy,
 } from './enemies';
 import { generateBossFloor, generateFloor, tileAt, type FloorMap, type Pos } from './map';
-import { rankParams, regenIntervalFor } from './rank';
+import { floorParams, regenIntervalFor } from './floorParams';
 import { nextInt, nextRandom } from './rng';
 import type { EnemyDef, EnemyId, ItemId, PlayerStats, Result, SpellId, TraitId } from './types';
 
@@ -88,7 +88,6 @@ export interface ExploreState {
   seed: number;
   dungeon: string; // 遊んでいるダンジョンの ID（設定は dungeonOf で引く）
   trait: TraitId;
-  rank: number; // 広さ・満腹度（設定）・敵の数・報酬が決まる
   floor: number; // 0始まり。floors と同じならボス階
   floors: number; // 通常の階の数（ダンジョンの設定で決まる）。その下にボス階がある
   mapSize: number;
@@ -123,8 +122,7 @@ export interface ExploreState {
 export interface ExploreOptions {
   dungeon?: string; // 遊ぶダンジョンの ID。省略時は標準のダンジョン
   floors?: number;
-  rank?: number; // 省略時は1。広さ・満腹度・敵の密度は、個別に指定するとそちらが優先される
-  mapSize?: number;
+  mapSize?: number; // 広さ・満腹度・敵の密度は、ダンジョンの設定で決まる。個別に指定するとそちらが優先される
   maxSatiety?: number;
   trait?: TraitId; // 省略時はシードから決める
   loadout?: readonly ItemId[];
@@ -153,7 +151,7 @@ export function dungeonOfState(state: Pick<ExploreState, 'dungeon'>): DungeonFil
 export function startExplore(seed: number, options: ExploreOptions = {}): ExploreState {
   const dungeon = options.dungeon ?? DEFAULT_DUNGEON_ID;
   const settings = dungeonOf(dungeon);
-  const params = rankParams(options.rank ?? 1, settings.floors);
+  const params = floorParams(settings.floors);
   const mapSize = options.mapSize ?? params.mapSize;
   const maxSatiety = options.maxSatiety ?? params.maxSatiety;
   const traitRoll = nextInt(seed, TRAIT_IDS.length);
@@ -161,7 +159,6 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     seed,
     dungeon,
     trait: options.trait ?? TRAIT_IDS[traitRoll.value]!,
-    rank: params.rank,
     floor: 0,
     floors: options.floors ?? settings.floors.count,
     mapSize,
@@ -328,7 +325,7 @@ function enterFloor(state: ExploreState, floor: number, map: FloorMap): ExploreS
   }
 
   const spawned = spawnEnemies(map, encounter.pool, state.rngState, state.nextUid, state.enemyDensity, settings.enemies);
-  const filled = fillChests(map, spawned.rngState, rankParams(state.rank, settings.floors).chestGoldRate);
+  const filled = fillChests(map, spawned.rngState);
   return reveal({
     ...state,
     floor,
@@ -349,8 +346,8 @@ export function isBossFloor(state: ExploreState): boolean {
 
 // ===== 宝箱 =====
 
-/** マップの「宝箱」の行き止まりに中身を入れる。金貨は本道から遠いほど、ランクが高いほど多く、道具は一定の確率で入る */
-function fillChests(map: FloorMap, rngState: number, goldRate: number): { chests: Chest[]; rngState: number } {
+/** マップの「宝箱」の行き止まりに中身を入れる。金貨は本道から遠いほど多く、道具は一定の確率で入る */
+function fillChests(map: FloorMap, rngState: number): { chests: Chest[]; rngState: number } {
   let s = rngState;
   const chests: Chest[] = [];
   for (const f of map.features) {
@@ -360,7 +357,7 @@ function fillChests(map: FloorMap, rngState: number, goldRate: number): { chests
     s = pick.state;
     chests.push({
       pos: f.pos,
-      gold: Math.round(f.depth * TREASURE_CONFIG.goldPerDepth * goldRate),
+      gold: Math.round(f.depth * TREASURE_CONFIG.goldPerDepth),
       item: has.value < TREASURE_CONFIG.itemChance ? TREASURE_CONFIG.items[pick.value]! : null,
       opened: false,
     });
@@ -593,7 +590,7 @@ function hurtEnemy(state: ExploreState, uid: number, dmg: number): ExploreState 
     log.push(`${def.name}を倒した`);
     const defeated = { ...state, enemies: state.enemies.filter((e) => e.uid !== uid), defeated: state.defeated + 1 };
     if (def.boss) {
-      const reward = rankParams(state.rank, dungeonOfState(state).floors).bossGold;
+      const reward = TREASURE_CONFIG.bossGold;
       log.push(`報酬として金貨${reward}Gを手に入れた`, 'ダンジョンを踏破した');
       return { ...defeated, gold: state.gold + reward, outcome: 'cleared', log };
     }
@@ -619,7 +616,7 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
   let { stats } = state;
   let chests = state.chests;
 
-  const gold = Math.round(reward.gold * rate * rankParams(state.rank, settings.floors).chestGoldRate);
+  const gold = Math.round(reward.gold * rate);
   if (gold > 0) log.push(`金貨${gold}Gを手に入れた`);
 
   // 道具：強敵は必ず宝箱で、通常の敵は確率で落とす
@@ -690,7 +687,7 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
     log.push(`${def.name}を倒した`);
     const defeated = { ...state, stats, enemies: state.enemies.filter((e) => e.uid !== target.uid), defeated: state.defeated + 1 };
     if (def.boss) {
-      const reward = rankParams(state.rank, dungeonOfState(state).floors).bossGold;
+      const reward = TREASURE_CONFIG.bossGold;
       log.push(`報酬として金貨${reward}Gを手に入れた`, 'ダンジョンを踏破した');
       return { ...defeated, gold: state.gold + reward, outcome: 'cleared', log };
     }

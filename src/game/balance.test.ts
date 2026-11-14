@@ -8,7 +8,6 @@ import { autoPlay, clearRate } from './autoplay';
 import { BALANCE_TIMEOUT, PREPS, SUPPLIES, TRIALS, WRONG_LIMIT } from './balance.fixtures';
 import { ITEMS, PREP_CONFIG } from './data';
 import { dirBetween, isBossFloor, startExplore, step, type ExploreState } from './explore';
-import { RANK_CONFIG } from './rank';
 import type { TraitId } from './types';
 
 describe('自動プレイ', () => {
@@ -79,14 +78,12 @@ describe('バランス：満腹度', () => {
     return r.value;
   };
 
-  it('どのランクでも、本道だけを歩けば満腹度が0にならずにボス階まで着ける', { timeout: BALANCE_TIMEOUT }, () => {
-    for (let rank = 1; rank <= RANK_CONFIG.maxRank; rank++) {
-      for (let i = 0; i < (rank === 1 ? 100 : 10); i++) {
-        let s = startExplore(i * 2654435761, { enemyDensity: 0, rank });
-        for (let f = 0; f < s.floors; f++) s = walkDown(s);
-        expect(isBossFloor(s)).toBe(true);
-        expect(s.satiety).toBeGreaterThan(0);
-      }
+  it('本道だけを歩けば、満腹度が0にならずにボス階まで着ける', { timeout: BALANCE_TIMEOUT }, () => {
+    for (let i = 0; i < 100; i++) {
+      let s = startExplore(i * 2654435761, { enemyDensity: 0 });
+      for (let f = 0; f < s.floors; f++) s = walkDown(s);
+      expect(isBossFloor(s)).toBe(true);
+      expect(s.satiety).toBeGreaterThan(0);
     }
   });
 });

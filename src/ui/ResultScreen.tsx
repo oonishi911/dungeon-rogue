@@ -22,7 +22,7 @@ export function ResultScreen({ run, outcome, expedition, onNextRun }: ResultScre
       <header className="top">
         <div>
           <p className="top__run">
-            {run}回目の挑戦 ・ {dungeonName && `${dungeonName} ・ `}ランク{outcome.rank}
+            {run}回目の挑戦{dungeonName && ` ・ ${dungeonName}`}
           </p>
           <h1 className="top__title">{cleared ? 'ダンジョンを踏破した' : expedition.outcome === 'retired' ? `${where}でリタイアした` : `${where}で力尽きた`}</h1>
         </div>
@@ -44,10 +44,6 @@ export function ResultScreen({ run, outcome, expedition, onNextRun }: ResultScre
           <div>
             <dt>倒した敵</dt>
             <dd>{expedition.defeated}体</dd>
-          </div>
-          <div>
-            <dt>踏破した経験</dt>
-            <dd>{cleared ? `1つ得た（今${outcome.exp + 1}つ。準備で強化に使える）` : `得られなかった（今${outcome.exp}つ）`}</dd>
           </div>
           <div>
             <dt>持ち帰った金貨</dt>

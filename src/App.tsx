@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { PREP_CONFIG } from './game/data';
 import { startExplore, toResult, type ExploreResult, type ExploreState } from './game/explore';
-import { buyItem, createPrep, departWithoutPrep, endDay, finishPrep, playCard, upgradeRank } from './game/prep';
+import { buyItem, createPrep, departWithoutPrep, endDay, finishPrep, playCard } from './game/prep';
 import { packRun } from './game/runSave';
 import { newSave, type SaveData } from './game/save';
 import type { ItemId, PrepResult, PrepState, Result } from './game/types';
@@ -28,19 +28,17 @@ const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 // 準備フェーズの画面とロジックは残してあるので、false に戻せば元の流れ（ダンジョンを選ぶ → 準備 → 出発の朝 → ダンジョン → 結果）になる
 const SKIP_PREP = true;
 
-/** セーブデータ（持ち越したカード・持ち帰った金貨・ランク・経験）から、選んだダンジョンの準備フェーズを始める */
+/** セーブデータ（持ち越したカード・持ち帰った金貨）から、選んだダンジョンの準備フェーズを始める */
 function prepFrom(save: SaveData, dungeon: string): PrepState {
   return createPrep(newSeed(), save.carried, {
     startGold: PREP_CONFIG.startGold + save.bonusGold,
-    rank: save.rank,
-    exp: save.exp,
     dungeon,
   });
 }
 
-/** 次の挑戦のセーブデータ。経験と金貨は探索の結果で決まるので、呼び出し側で上書きする */
+/** 次の挑戦のセーブデータ。金貨は探索の結果で決まるので、呼び出し側で上書きする */
 function nextSave(save: SaveData, outcome: PrepResult): SaveData {
-  return { ...save, run: save.run + 1, rank: outcome.rank, exp: outcome.exp, carried: outcome.carried, bonusGold: 0 };
+  return { ...save, run: save.run + 1, carried: outcome.carried, bonusGold: 0 };
 }
 
 /** 挑戦の始まり。まず、挑むダンジョンを選ぶ */
@@ -67,11 +65,7 @@ function firstLoad(): { save: SaveData; stage: Stage } {
 
 /** 探索の結果を入れた、次の挑戦のセーブデータ */
 function saveAfter(save: SaveData, outcome: PrepResult, expedition: ExploreResult): SaveData {
-  return {
-    ...nextSave(save, outcome),
-    exp: outcome.exp + (expedition.outcome === 'cleared' ? 1 : 0),
-    bonusGold: expedition.goldBrought,
-  };
+  return { ...nextSave(save, outcome), bonusGold: expedition.goldBrought };
 }
 
 export function App() {
@@ -99,7 +93,7 @@ export function App() {
 
   switch (stage.kind) {
     case 'choose':
-      return <DungeonSelectScreen run={save.run} rank={save.rank} onChoose={(dungeon) => setStage(stageAfterChoosing(save, dungeon))} />;
+      return <DungeonSelectScreen run={save.run} onChoose={(dungeon) => setStage(stageAfterChoosing(save, dungeon))} />;
     case 'prep':
       return (
         <PrepScreen
@@ -108,7 +102,6 @@ export function App() {
           error={error}
           onPlay={(uid) => apply(playCard(stage.prep, uid))}
           onBuy={(item: ItemId) => apply(buyItem(stage.prep, item))}
-          onUpgrade={() => apply(upgradeRank(stage.prep))}
           onEndDay={() => apply(endDay(stage.prep))}
           onReset={() => {
             clearSave();
@@ -143,11 +136,11 @@ export function App() {
         <ExploreScreen
           key={`${save.run}-${seed}`}
           run={save.run}
-          // 選んだダンジョンと、準備で決まった特性・持ち物・ランクで探索を始める。階層の形は準備と同じシードから作る
+          // 選んだダンジョンと、準備で決まった特性・持ち物で探索を始める。階層の形は準備と同じシードから作る
           // 前に中断した探索があれば、その続きから
           start={() =>
             resume ??
-            startExplore(seed, { dungeon: outcome.dungeon, trait: outcome.trait, loadout: outcome.loadout, hasMap: outcome.hasMap, rank: outcome.rank })
+            startExplore(seed, { dungeon: outcome.dungeon, trait: outcome.trait, loadout: outcome.loadout, hasMap: outcome.hasMap })
           }
           // 1手ごとに途中の状態を保存する（戻る・再読み込み・ページが閉じられたときに、続きから遊べるように）。
           // 探索が終わったら、その時点で結果を記録して、途中の状態は消す（結果の画面へ進む前に閉じても、結果が残るように）

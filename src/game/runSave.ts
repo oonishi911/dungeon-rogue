@@ -39,7 +39,7 @@ type PackedState = Omit<ExploreState, 'map' | 'seen' | 'visited' | 'hits' | 'cas
 export interface RunSave {
   version: typeof RUN_SAVE_VERSION;
   base: SaveData; // この挑戦を始めたときの記録（何回目か、など）
-  outcome: PrepResult; // 準備の結果（特性・持ち物・ランク）
+  outcome: PrepResult; // 準備の結果（特性・持ち物など）
   seed: number;
   state: PackedState;
 }
@@ -161,17 +161,15 @@ function parseOutcome(v: unknown, base: SaveData): PrepResult | null {
   if (!isObject(v) || !TRAIT_IDS.includes(v.trait as TraitId) || typeof v.hasMap !== 'boolean' || !isObject(v.knowledge)) return null;
   const dungeon = dungeonIdOf(v.dungeon);
   if (!dungeon) return null;
-  if (!isCount(v.exp) || !Array.isArray(v.loadout) || !v.loadout.every(isItem)) return null;
-  // ランク・経験・持ち越すカードは、周回の記録と同じ確かめ方をする
-  const checked = parseSave(JSON.stringify({ ...base, rank: v.rank, exp: v.exp, carried: v.carried }));
+  if (!Array.isArray(v.loadout) || !v.loadout.every(isItem)) return null;
+  // 持ち越すカードは、周回の記録と同じ確かめ方をする
+  const checked = parseSave(JSON.stringify({ ...base, carried: v.carried }));
   if (!checked) return null;
   return {
     dungeon,
     trait: v.trait as TraitId,
     knowledge: v.knowledge as PrepResult['knowledge'],
     hasMap: v.hasMap,
-    rank: checked.rank,
-    exp: checked.exp,
     loadout: v.loadout,
     carried: checked.carried,
   };
@@ -197,7 +195,7 @@ export function parseRun(text: string | null): ResumedRun | null {
   if (s.outcome !== 'ongoing' || s.trait !== outcome.trait || typeof s.hasMap !== 'boolean') return null;
   if (dungeonIdOf(s.dungeon) !== outcome.dungeon) return null;
   const rooms = dungeonOf(outcome.dungeon).rooms;
-  if (!isCount(s.seed) || !isCount(s.rank, 1) || !isCount(s.floor) || !isCount(s.floors, 1) || s.floor > s.floors) return null;
+  if (!isCount(s.seed) || !isCount(s.floor) || !isCount(s.floors, 1) || s.floor > s.floors) return null;
   if (!isCount(s.mapSize, 5) || s.mapSize > 200 || !isNumber(s.enemyDensity) || !isNumber(s.satiety) || !isNumber(s.maxSatiety)) return null;
   if (!isNumber(s.mp) || !isNumber(s.maxMp) || !isCount(s.gold) || !isCount(s.nextUid) || !isCount(s.defeated)) return null;
   if (!isCount(s.level, 1) || !isCount(s.exp) || !isCount(s.turn) || !isCount(s.rngState)) return null;
@@ -224,7 +222,6 @@ export function parseRun(text: string | null): ResumedRun | null {
     seed: s.seed,
     dungeon: outcome.dungeon,
     trait: outcome.trait,
-    rank: s.rank,
     floor: s.floor,
     floors: s.floors,
     mapSize: s.mapSize,

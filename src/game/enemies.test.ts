@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { enemyHitDamage, playerHitDamage } from './combat';
 import { enemyBase, enemyReward, expToNext, PREP_CONFIG, REWARD_CONFIG, TREASURE_CONFIG } from './data';
 import { DEFAULT_DUNGEON } from './dungeons';
-import { rankParams } from './rank';
 import { BOSS_ENEMY, FIELD_ENEMY } from './enemies.fixtures';
 import { ENEMY_CONFIG, enemyDef, key, spawnBoss, type MapEnemy } from './enemies';
 import { startExplore, step, type ExploreAction, type ExploreState } from './explore';
@@ -225,7 +224,7 @@ describe('報酬とボス', () => {
   it('通常の敵を倒すと、敵ごとの金貨と経験値が入る', () => {
     const s = act(arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { hp: 1 })]), { kind: 'move', dir: 'right' });
     const reward = enemyReward(FIELD_ENEMY);
-    expect(s.gold).toBe(Math.round(reward.gold * rankParams(1, GEN.floors).chestGoldRate));
+    expect(s.gold).toBe(reward.gold);
     expect(s.exp).toBe(reward.exp);
     expect(s.level).toBe(1);
   });
@@ -267,7 +266,7 @@ describe('報酬とボス', () => {
       dir: 'right',
     });
     const reward = enemyReward(FIELD_ENEMY);
-    expect(s.gold).toBe(Math.round(reward.gold * GEN.growth.eliteRate * rankParams(1, GEN.floors).chestGoldRate));
+    expect(s.gold).toBe(Math.round(reward.gold * GEN.growth.eliteRate));
     const chest = s.chests.find((c) => c.pos.x === 2 && c.pos.y === 2);
     expect(chest).toMatchObject({ gold: TREASURE_CONFIG.eliteGold, opened: false });
     expect(REWARD_CONFIG.eliteItems).toContain(chest!.item);
@@ -282,12 +281,7 @@ describe('報酬とボス', () => {
     const s = act(arena(ROOM, { x: 1, y: 2 }, [boss]), { kind: 'move', dir: 'right' });
     expect(s.outcome).toBe('cleared');
     expect(s.gold).toBe(TREASURE_CONFIG.bossGold);
-  });
-
-  it('ボスの報酬はランクに比例する', () => {
-    const boss = { ...spawnBoss({ x: 2, y: 2 }, GEN.encounters.fire.boss, 0), hp: 1 };
-    const s = act({ ...arena(ROOM, { x: 1, y: 2 }, [boss]), rank: 3 }, { kind: 'move', dir: 'right' });
-    expect(s.gold).toBe(TREASURE_CONFIG.bossGold * 3);
+    // 踏破したあとは、もう動けない
     expect(step(s, WAIT).ok).toBe(false);
   });
 

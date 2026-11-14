@@ -358,7 +358,7 @@ export const TREASURE_CONFIG = {
 
 /**
  * 敵を倒したときの報酬と、挑戦のあいだだけのレベル（数値はすべて仮。バランステストを満たすように調整する）。
- * - 金貨：敵ごとの金貨（enemies.json の reward.gold）に、ランクの宝箱の倍率（chestGoldRate）を掛ける
+ * - 金貨：敵ごとの金貨（enemies.json の reward.gold）。強敵は elite 倍
  * - 道具：敵ごとの確率（reward.drop %）で、dropItems のどれかを落とす。持ち物がいっぱいなら、その場に宝箱で残す
  * - 強敵：金貨と経験値は elite 倍。さらに必ず宝箱を落とし、eliteGold の金貨と eliteItems のどれかが入っている
  * - 経験値：たまるとレベルが上がり、最大HPと攻撃力が上がる（上がった分だけHPも回復する）。挑戦が終わると1に戻る
