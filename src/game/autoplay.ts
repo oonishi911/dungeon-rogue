@@ -9,7 +9,8 @@ import { startExplore, step, toResult } from './explore';
 import { type ExploreAction, type ExploreOptions, type ExploreResult, type ExploreState } from './exploreTypes';
 import { dirBetween } from './exploreSight';
 import type { Pos } from './map';
-import { DIRS, findPath } from './path';
+import { DIRS } from './map';
+import { findPath } from './path';
 import type { ItemId, TraitId } from './types';
 
 export const AUTOPLAY_CONFIG = {

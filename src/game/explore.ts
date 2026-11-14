@@ -85,7 +85,6 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     enemies: [],
     chests: [],
     gold: 0,
-    hasMap: options.hasMap ?? false,
     nextUid: 0,
     defeated: 0,
     level: 1,
@@ -218,7 +217,6 @@ function enterFloor(state: ExploreState, floor: number, map: FloorMap): ExploreS
   const settings = dungeonOfState(state);
   const encounter = settings.encounters[state.trait];
   const seen = new Array<boolean>(map.tiles.length).fill(false);
-  if (state.hasMap) for (const p of map.mainPath) seen[p.y * map.width + p.x] = true;
 
   if (map.boss) {
     // ボスは部屋の中を歩き、まわりには道中と同じ種類の雑魚敵がいる

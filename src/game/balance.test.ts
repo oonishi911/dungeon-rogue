@@ -40,21 +40,6 @@ describe('バランス：準備で勝負が決まる', () => {
   }
 });
 
-describe('バランス：地図', () => {
-  it('地図があると、探索にかかるターン数が大きく減る', { timeout: BALANCE_TIMEOUT }, () => {
-    const average = (hasMap: boolean) => {
-      let turns = 0;
-      for (let i = 0; i < 20; i++) {
-        turns += autoPlay((i * 2654435761) >>> 0, { trait: 'fire', loadout: [...PREPS.fire.right, ...SUPPLIES], hasMap }).turns;
-      }
-      return turns / 20;
-    };
-    // 主人公の視界を壁にさえぎられないようにしたため、地図で減るターン数が約28%に下がった（以前は40%以上）。
-    // 準備フェーズを飛ばしているあいだの一時的な値として、20%以上減ればよいことにしている。準備フェーズを戻すときに見直す
-    expect(average(true)).toBeLessThan(average(false) * 0.8);
-  });
-});
-
 describe('バランス：満腹度', () => {
   /** 本道をたどって階段まで歩き、降りる（敵は歩く前に取り除く） */
   const walkDown = (state: ExploreState): ExploreState => {

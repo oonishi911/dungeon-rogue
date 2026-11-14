@@ -4,14 +4,7 @@
 import { key } from './enemies';
 import { type ExploreAction, type ExploreState } from './exploreTypes';
 import { dirBetween, samePos } from './exploreSight';
-import type { Pos } from './map';
-
-export const DIRS: readonly Pos[] = [
-  { x: 0, y: -1 },
-  { x: 1, y: 0 },
-  { x: 0, y: 1 },
-  { x: -1, y: 0 },
-];
+import { DIRS, type Pos } from './map';
 
 /**
  * 一度見た通路だけを通って、isGoal を満たす最も近いマスへ向かう最短路。

@@ -3,7 +3,7 @@
 
 import { enemyBase } from './data';
 import type { EnemySettings } from './genMaster';
-import { tileAt, type FloorMap, type Pos, type Room } from './map';
+import { DIRS, tileAt, type FloorMap, type Pos, type Room } from './map';
 import { nextInt, nextRandom } from './rng';
 import type { EnemyDef, EnemyId } from './types';
 
@@ -267,7 +267,7 @@ export function nextStepToward(map: FloorMap, from: Pos, to: Pos, blocked: Reado
     if (d >= ENEMY_CONFIG.chaseSearchLimit) continue;
     const x = at % width;
     const y = (at - x) / width;
-    for (const step of STEPS) {
+    for (const step of DIRS) {
       const nx = x + step.x;
       const ny = y + step.y;
       if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
@@ -312,14 +312,6 @@ export function isAdjacent(a: Pos, b: Pos): boolean {
 export function key(p: Pos): string {
   return `${p.x},${p.y}`;
 }
-
-// 隣のマスへの向き（上・右・下・左）。neighbors と同じ順（道探しの結果が変わらないように）
-const STEPS: readonly Pos[] = [
-  { x: 0, y: -1 },
-  { x: 1, y: 0 },
-  { x: 0, y: 1 },
-  { x: -1, y: 0 },
-];
 
 function neighbors(p: Pos): Pos[] {
   return [
