@@ -328,7 +328,7 @@ describe('宝箱と金貨', () => {
     expect(again.log.filter((l) => l.includes('宝箱'))).toEqual(s.log.filter((l) => l.includes('宝箱')));
   });
 
-  it('持ち物がいっぱいなら、道具は宝箱に残る', () => {
+  it('持ち物がいっぱいなら、道具は宝箱に残り、宝箱は閉じたまま（金貨は取る）。あとで乗ると道具を取れて、開く', () => {
     // 道具の入った宝箱があるシードを探す
     let seed = 1;
     while (!startExplore(seed, { enemyDensity: 0 }).chests[0]?.item) seed++;
@@ -337,7 +337,14 @@ describe('宝箱と金貨', () => {
     const s = act(state, { kind: 'move', dir });
     expect(s.gold).toBe(chest.gold);
     expect(s.stats.items).toHaveLength(LOADOUT_CONFIG.maxItems);
-    expect(s.chests.find((c) => c.pos.x === chest.pos.x && c.pos.y === chest.pos.y)).toEqual({ ...chest, gold: 0, opened: true });
+    expect(s.chests.find((c) => c.pos.x === chest.pos.x && c.pos.y === chest.pos.y)).toEqual({ ...chest, gold: 0, opened: false });
+    // 持ち物に空きを作って乗り直すと、道具を取って開く
+    const back = { up: 'down', down: 'up', left: 'right', right: 'left' } as const;
+    const away = act(s, { kind: 'move', dir: back[dir] });
+    const room = { ...away, stats: { ...away.stats, items: away.stats.items.slice(1) } };
+    const again = act(room, { kind: 'move', dir });
+    expect(again.stats.items).toContain(chest.item);
+    expect(again.chests.find((c) => c.pos.x === chest.pos.x && c.pos.y === chest.pos.y)).toEqual({ ...chest, gold: 0, item: null, opened: true });
   });
 
   it('踏破すれば金貨を全額、力尽きたら半分持ち帰る', () => {
