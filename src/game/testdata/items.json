@@ -493,6 +493,10 @@
     "dark_oil": {
       "name": "闇の香油",
       "price": 20
+    },
+    "lantern": {
+      "name": "遠見のランタン",
+      "price": 40
     }
   },
   "spellbooks": {

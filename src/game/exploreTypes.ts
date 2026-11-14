@@ -6,7 +6,7 @@ import type { EnemyId, ItemId, PlayerStats, SpellId, TraitId } from './types';
 
 // 数値はすべて仮。バランス調整で見直す
 export const EXPLORE_CONFIG = {
-  sightRadius: 6, // 視界の半径（マス）
+  sightRadius: 3, // 視界の半径（マス）。視界を広げる道具（遠見のランタン）を持っていくと広がる（ExploreState.sightRadius）
   satietyPerAction: 1,
   starveDamage: 1, // 満腹度0のとき、1行動ごとに減るHP
 } as const;
@@ -95,6 +95,7 @@ export interface ExploreState {
   level: number; // この挑戦のあいだのレベル（1から。敵を倒して経験値がたまると上がる）
   exp: number; // 今のレベルになってからためた経験値（expToNext(level, growth) で次のレベル）
   seen: boolean[]; // この階で一度でも見えたマス（霧が晴れた場所）
+  sightRadius: number; // 主人公の視界の半径（マス）。持っていった道具で決まり、探索のあいだ変わらない
   turn: number; // 行動した回数
   rngState: number;
   outcome: ExploreOutcome;

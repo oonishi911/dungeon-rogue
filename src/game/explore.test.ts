@@ -5,7 +5,7 @@ import { BOSS_ENEMY, FIELD_ENEMY } from './enemies.fixtures';
 import { isBossFloor, toResult, startExplore, step } from './explore';
 import { EXPLORE_CONFIG, type ExploreAction, type ExploreState } from './exploreTypes';
 import { canSee, dirBetween, visibleTiles } from './exploreSight';
-import { LOADOUT_CONFIG, TREASURE_CONFIG } from './data';
+import { ITEMS, LOADOUT_CONFIG, TREASURE_CONFIG } from './data';
 import { floorParams } from './floorParams';
 import type { DungeonFile } from './genMaster';
 import { tileAt, type FloorMap } from './map';
@@ -253,6 +253,32 @@ describe('visibleTiles', () => {
     const v = visibleTiles(map, { x: 1, y: 4 }, 2);
     expect(v.has(i(3, 4))).toBe(true);
     expect(v.has(i(5, 4))).toBe(false);
+  });
+});
+
+describe('視界の広さ', () => {
+  it('ふつうは EXPLORE_CONFIG.sightRadius。遠見のランタンを持っていくと広がる', () => {
+    expect(startExplore(1).sightRadius).toBe(EXPLORE_CONFIG.sightRadius);
+    const lantern = ITEMS.lantern.effect;
+    const radius = lantern.kind === 'sight' ? lantern.radius : NaN;
+    expect(radius).toBeGreaterThan(EXPLORE_CONFIG.sightRadius);
+    expect(startExplore(1, { loadout: ['lantern'] }).sightRadius).toBe(radius);
+  });
+
+  it('霧が晴れるのは、視界の半径の中だけ', () => {
+    for (const loadout of [[], ['lantern']] as ItemId[][]) {
+      const s = startExplore(3, { loadout, enemyDensity: 0 });
+      const far = s.seen.findIndex((seen, i) => seen && Math.hypot((i % s.map.width) - s.player.x, Math.floor(i / s.map.width) - s.player.y) > s.sightRadius);
+      expect(far).toBe(-1);
+    }
+    const wide = startExplore(3, { loadout: ['lantern'], enemyDensity: 0 }).seen.filter(Boolean).length;
+    expect(wide).toBeGreaterThan(startExplore(3, { enemyDensity: 0 }).seen.filter(Boolean).length);
+  });
+
+  it('ランタンは持ち物に入らない（ダンジョンでは使わず、持ち帰る道具は持ち物から決まるので、なくなる）', () => {
+    const s = startExplore(1, { loadout: ['lantern', 'potion'] });
+    expect(s.stats.items).toEqual(['potion']);
+    expect(step(s, { kind: 'use_item', item: 'lantern' }).ok).toBe(false);
   });
 });
 
