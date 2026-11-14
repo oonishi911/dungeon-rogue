@@ -26,8 +26,8 @@ import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
-import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, RESOLUTION, SHADOW_SIDES, SPELL_KNOCK, SUN, TEXTURE_FILES, TILE_PX, TORCH, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, type HitPulse } from './explore3dConfig';
-import { applyFog, createFog, litBillboard, worldMapped } from './explore3dKit';
+import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, RESOLUTION, SHADOW_SIDES, SPELL_KNOCK, SUN, TEXTURE_FILES, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, type HitPulse } from './explore3dConfig';
+import { applyFog, createFog, createGroundMist, litBillboard, worldMapped } from './explore3dKit';
 
 
 interface Atlas {
@@ -95,6 +95,12 @@ export class DungeonView3D {
   // 霧：描いている床と壁の1つ1つ（どの入れ物の何番目か・どのマスか・元の色）と、マスごとの今の明るさ
   // 霧：マスごとの「見えている」「一度見た」を1マス1ドットの小さな画像にして、描くときにピクセルごとになめらかに読む
   private readonly fog = createFog();
+  // 地面をはう霧（?mist=off、または処理の弱い端末では出さない）
+  private readonly mist: THREE.Mesh | null =
+    new URLSearchParams(location.search).get('mist') !== 'off' && (navigator.hardwareConcurrency ?? 4) >= 4
+      ? createGroundMist(this.fog, DRAW_RANGE.x * 2 + 2, DRAW_RANGE.z * 2 + 2)
+      : null;
+  private flickerTime = 0; // たいまつのゆらぎの時間（秒）
   private readonly enemies = new Map<
     number,
     {
@@ -162,6 +168,7 @@ export class DungeonView3D {
     const sun = new THREE.DirectionalLight(0xffffff, SUN); // 壁の側面に陰をつける
     sun.position.set(-3, 10, 4);
     this.scene.add(sun, this.torch, this.props);
+    if (this.mist) this.scene.add(this.mist);
 
     // 床と壁は、描く範囲のマス数ぶんの入れ物を最初に用意しておき、1歩ごとに中身を入れ替える。
     // 床はテクスチャがないときに明るさを少し変えて描き分けるので、FLOOR_KINDS 種類の入れ物に分ける（テクスチャは共通）
@@ -268,7 +275,13 @@ export class DungeonView3D {
       this.heroDir = dirBetween(frame.from.player, s.player);
     }
     this.hero.update(p.x, p.y, this.heroDir, moved ? frame.progress : 1, dt, this.reduceMotion);
-    this.fog.update(p, dt, this.reduceMotion);
+    // たいまつのゆらぎ：いくつかの波を重ねて、炎のように不規則にちらつかせる（-1〜1。「動きを減らす」設定では止める）
+    if (!this.reduceMotion) this.flickerTime += dt * TORCH_FLICKER.speed;
+    const t = this.flickerTime;
+    const flicker = this.reduceMotion ? 0 : 0.5 * Math.sin(t * 7.3) + 0.3 * Math.sin(t * 13.1 + 1.7) + 0.2 * Math.sin(t * 23.7 + 4.1);
+    this.torch.intensity = TORCH.intensity * (1 + TORCH_FLICKER.light * flicker);
+    this.fog.update(p, dt, this.reduceMotion, TORCH_FLICKER.sight * flicker);
+    this.mist?.position.set(p.x, GROUND_MIST.height, p.y);
     this.updateDamagePops(now);
     this.spellFx.update(now);
     const zoom = this.updateCombatZoom(s, now, dt) * this.pulseZoom(now);
@@ -537,6 +550,10 @@ export class DungeonView3D {
     for (const m of this.litMaterials.values()) m.dispose();
     this.billboard.dispose();
     this.fog.dispose();
+    if (this.mist) {
+      this.mist.geometry.dispose();
+      (this.mist.material as THREE.Material).dispose();
+    }
     for (const t of this.textures.values()) t.dispose();
     this.renderer.dispose();
   }
