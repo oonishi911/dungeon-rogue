@@ -18,7 +18,8 @@
     "nestChance": 0.5,
     "nestMin": 3,
     "nestMax": 8,
-    "stayInRoom": true
+    "stayInRoom": true,
+    "bossMinions": 10
   },
   "growth": {
     "expBase": 30,

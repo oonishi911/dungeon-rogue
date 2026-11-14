@@ -427,6 +427,11 @@ export class DungeonView3D {
     this.renderer.setPixelRatio(this.pixelRatio);
   }
 
+  /** 主人公をその向きに向ける（壁にぶつかって歩けなかったときも向く。向きのある呪文は、この向きに唱える） */
+  face(dir: Dir) {
+    this.heroDir = dir;
+  }
+
   /**
    * 呪文を唱えたとき：向きを選ぶ呪文ならその向きを向き、呪文の演出を出す。from は唱えたマス。
    * 返す値は、唱えてから矢が当たるまでのミリ秒（当たったときにダメージの数字を出すため）。

@@ -31,7 +31,7 @@ export type EnemyMode = 'wander' | 'chase' | 'search';
 export interface MapEnemy {
   uid: number;
   id: EnemyId;
-  elite: boolean; // 強敵とボスは動かず、離れようとすると必ず背後から攻撃してくる
+  elite: boolean; // 強敵（とボス）は、離れようとすると必ず背後から攻撃してくる。強敵は動かないが、ボスは歩いて追ってくる
   pos: Pos;
   hp: number;
   mode: EnemyMode;
@@ -177,8 +177,11 @@ export function spawnEnemies(
   return { enemies, rngState: s };
 }
 
-/** ボス階のボス（id はダンジョンの設定の encounters の、その属性の boss）。動かない点は強敵と同じなので elite として扱う */
-export function spawnBoss(pos: Pos, id: EnemyId, uid: number): MapEnemy {
+/**
+ * ボス階のボス（id はダンジョンの設定の encounters の、その属性の boss）。背後から必ず攻撃してくる点は強敵と同じなので elite として扱う。
+ * 強敵とちがって歩く：気付くまではボスの部屋（room）の中をうろつき、気付いたら追ってくる
+ */
+export function spawnBoss(pos: Pos, id: EnemyId, uid: number, room?: Room): MapEnemy {
   return {
     uid,
     id,
@@ -189,7 +192,57 @@ export function spawnBoss(pos: Pos, id: EnemyId, uid: number): MapEnemy {
     justNoticed: false,
     lastSeen: null,
     searchTurns: 0,
+    ...(room ? { room: { ...room } } : {}),
   };
+}
+
+/** ボスの部屋で、ボスや入口から離しておく距離（マス。斜めも1と数える） */
+const MINION_CLEARANCE = { boss: 2, start: 4 } as const;
+
+/**
+ * ボスの部屋に置く雑魚敵（pool はその属性の道中の敵）。部屋の床から、ボスのまわりと入口の近くを除いて、ばらばらに count 体置く。
+ * stayInRoom なら、気付くまでは部屋の中だけを歩く
+ */
+export function spawnBossMinions(
+  map: FloorMap,
+  pool: readonly EnemyId[],
+  count: number,
+  rngState: number,
+  firstUid: number,
+  stayInRoom: boolean,
+): { enemies: MapEnemy[]; rngState: number } {
+  const room = map.rooms[0];
+  if (!room || !map.boss || pool.length === 0 || count <= 0) return { enemies: [], rngState };
+  const far = (p: Pos, q: Pos, d: number) => Math.max(Math.abs(p.x - q.x), Math.abs(p.y - q.y)) > d;
+  const free: Pos[] = [];
+  for (let y = room.y; y < room.y + room.height; y++) {
+    for (let x = room.x; x < room.x + room.width; x++) {
+      const p = { x, y };
+      if (map.tiles[y * map.width + x] === 'floor' && far(p, map.boss, MINION_CLEARANCE.boss) && far(p, map.start, MINION_CLEARANCE.start)) free.push(p);
+    }
+  }
+  const enemies: MapEnemy[] = [];
+  let s = rngState;
+  for (let i = 0; i < count && free.length > 0; i++) {
+    const spot = nextInt(s, free.length);
+    const kind = nextInt(spot.state, pool.length);
+    s = kind.state;
+    const pos = free.splice(spot.value, 1)[0]!;
+    const id = pool[kind.value]!;
+    enemies.push({
+      uid: firstUid + i,
+      id,
+      elite: false,
+      pos,
+      hp: enemyDef({ id, elite: false }).hp,
+      mode: 'wander',
+      justNoticed: false,
+      lastSeen: null,
+      searchTurns: 0,
+      ...(stayInRoom ? { room: { ...room } } : {}),
+    });
+  }
+  return { enemies, rngState: s };
 }
 
 /**

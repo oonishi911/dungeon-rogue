@@ -14,6 +14,7 @@ import {
   key,
   nextStepToward,
   spawnBoss,
+  spawnBossMinions,
   spawnEnemies,
   wanderStep,
   type MapEnemy,
@@ -314,15 +315,18 @@ function enterFloor(state: ExploreState, floor: number, map: FloorMap): ExploreS
   if (state.hasMap) for (const p of map.mainPath) seen[p.y * map.width + p.x] = true;
 
   if (map.boss) {
-    const boss = spawnBoss(map.boss, encounter.boss, state.nextUid);
+    // ボスは部屋の中を歩き、まわりには道中と同じ種類の雑魚敵がいる
+    const boss = spawnBoss(map.boss, encounter.boss, state.nextUid, map.rooms[0]);
+    const minions = spawnBossMinions(map, encounter.pool, settings.enemies.bossMinions, state.rngState, state.nextUid + 1, settings.enemies.stayInRoom);
     return reveal({
       ...state,
       floor,
       map,
       player: map.start,
-      enemies: [boss],
+      enemies: [boss, ...minions.enemies],
       chests: [],
-      nextUid: state.nextUid + 1,
+      nextUid: state.nextUid + 1 + minions.enemies.length,
+      rngState: minions.rngState,
       seen,
       log: [...state.log, '最深部に降りた。強い気配がする'],
     });
@@ -737,7 +741,7 @@ function backAttacks(state: ExploreState, to: Pos): ExploreState {
 /**
  * 敵が1体ずつ行動する。
  * 1. プレイヤーが見えるか調べ、状態（うろつき・追跡・探索）を切り替える。気付いたターンは動かない
- * 2. 追跡中・探索中で隣にいれば攻撃し、そうでなければ移動する（強敵は動かない）
+ * 2. 追跡中・探索中で隣にいれば攻撃し、そうでなければ移動する（強敵は動かない。ボスは歩く）
  */
 function enemiesTurn(state: ExploreState): ExploreState {
   let s = state;
@@ -789,8 +793,8 @@ function enemiesTurn(state: ExploreState): ExploreState {
       continue;
     }
 
-    // 移動（自分のいるマスは、自分にとっては通れないマスに数えない）
-    if (!e.elite) {
+    // 移動（自分のいるマスは、自分にとっては通れないマスに数えない）。強敵はその場から動かないが、ボスは歩いて追ってくる
+    if (!e.elite || def.boss) {
       leave(key(e.pos));
       if (e.mode !== 'wander' && e.lastSeen && !samePos(e.pos, e.lastSeen)) {
         const nextPos = nextStepToward(s.map, e.pos, e.lastSeen, blocked);

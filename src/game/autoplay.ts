@@ -52,7 +52,8 @@ export function autoAction(state: ExploreState): ExploreAction {
   if (stairs && player.x === stairs.x && player.y === stairs.y) return { kind: 'descend' };
 
   // 4. 目的地（階段、ボス階ではボス）が見えていれば向かう。5. 見えていなければ、まだ見ていない場所へ近づく
-  const goal = stairs ?? map.boss;
+  // ボスは歩くので、ボス階では今ボスがいるマスへ向かう
+  const goal = stairs ?? state.enemies.find((e) => enemyDef(e).boss)?.pos ?? map.boss;
   const isGoal = (p: Pos) => goal !== null && p.x === goal.x && p.y === goal.y;
   const goalKnown = goal !== null && state.seen[goal.y * map.width + goal.x] === true;
   const avoid = eliteZone(state);

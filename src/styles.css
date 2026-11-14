@@ -940,32 +940,6 @@ button.card:disabled {
   font-size: 0.85em;
 }
 
-.explore__spell.is-aiming {
-  border-color: #b6aef0;
-  box-shadow: 0 0 0 2px rgb(143 134 224 / 0.45);
-}
-
-/* 呪文の向きを選ぶ欄 */
-.explore__aim {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  min-height: 2.75rem;
-}
-
-.explore__aim-label {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: var(--step--1);
-  color: #b6aef0;
-}
-
-.explore__aim-dir {
-  min-width: 2.75rem;
-  min-height: 2.75rem;
-  font-size: 1.1rem;
-}
-
 .explore__log {
   list-style: none;
   margin: 0;
@@ -1196,9 +1170,15 @@ button.card:disabled {
     white-space: nowrap;
   }
 
-  /* スマホでは、道具は名前を出さずアイコンだけにして、たくさん並べる（名前は読み上げで伝える） */
+  /* スマホでは、道具の名前をアイコンの下に小さく出して、横幅を取りすぎないようにする */
+  .explore__items .explore__item-face {
+    flex-direction: column;
+    gap: 0;
+  }
+
   .explore__items .explore__item-name {
-    display: none;
+    font-size: 0.625rem;
+    line-height: 1.1;
   }
 
   .explore__items .explore__use:not(.explore__spell) {
@@ -1329,6 +1309,18 @@ button.card:disabled {
 }
 
 /* 道具のボタン：同じ道具の数 */
+.explore__item-face {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* 道具の名前は小さい字にする */
+.explore__item-name {
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
 .explore__count {
   color: var(--bone-dim);
   font-size: 0.9em;

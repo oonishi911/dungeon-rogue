@@ -72,7 +72,6 @@ const KEY_DIRS: Record<string, Dir> = {
 
 // 呪文は z・x・c キーで唱える（持ってきた順）
 const SPELL_KEYS = ['z', 'x', 'c'] as const;
-const DIR_ARROWS: Record<Dir, string> = { up: '↑', down: '↓', left: '←', right: '→' };
 
 const KEY_ACTIONS: Record<string, ExploreAction> = {
   ' ': { kind: 'wait' },
@@ -223,14 +222,19 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   }, [state.stats.items]);
   const itemGroupsRef = useRef(itemGroups);
   itemGroupsRef.current = itemGroups;
-  // 向きを選んで唱える呪文（なぎ払い・矢）を選んだあと、向きを選んでいるところ
-  const [aiming, setAiming] = useState<SpellId | null>(null);
-  const aimingRef = useRef<SpellId | null>(null);
-  aimingRef.current = aiming;
+  // 主人公が向いている方向（最後に歩こうとした向き）。向きのある呪文（なぎ払い・矢）は、この向きに唱える。
+  // 壁にぶつかって歩けなかったときも、その向きを向く（呪文を撃つ向きを変えるため）
+  const facingRef = useRef<Dir>('down');
 
   /** 行動を1つ行い、前の位置から新しい位置への動きを始める。行動にならなければ false */
   const perform = useCallback((action: ExploreAction): boolean => {
     const prev = stateRef.current;
+    if (action.kind === 'move') {
+      facingRef.current = action.dir;
+      view3dRef.current?.face(action.dir);
+    }
+    // 向きのある呪文は、主人公が向いている方向に唱える
+    if (action.kind === 'cast' && SPELLS[action.spell].aim && !action.dir) action = { ...action, dir: facingRef.current };
     const result = step(prev, action);
     if (!result.ok) {
       // 壁にぶつかったときは知らせない（なぞって歩いていると何度もぶつかるので、うるさいだけ）
@@ -242,7 +246,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       return false;
     }
     const next = result.value;
-    if (action.kind !== 'cast') setAiming(null);
     // 攻撃したとき・攻撃されたときは、画面を少し拡大縮小し、ダメージの数字を出す（3D表示のみ）
     // 敵を攻撃したときは、主人公が敵の方を向いて武器を振り、武器ごとの音を鳴らす（1回の行動で1回だけ）
     // 呪文を唱えたときは、武器を振らずに呪文の演出と音にする
@@ -304,15 +307,10 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     if (queueRef.current.length < QUEUE_MAX) queueRef.current = [...queueRef.current, action];
   }, []);
 
-  /** 呪文を選ぶ。向きを選ぶ呪文なら向きを選ぶ状態にし（もう一度選ぶとやめる）、ほかはすぐ唱える */
+  /** 呪文を唱える。向きのある呪文（なぎ払い・矢）は、唱えるときに主人公が向いている方向へ飛ぶ（perform で向きを入れる） */
   const chooseSpell = useCallback(
     (spell: SpellId) => {
-      if (!SPELLS[spell].aim) {
-        setAiming(null);
-        request({ kind: 'cast', spell });
-        return;
-      }
-      setAiming((now) => (now === spell ? null : spell));
+      request({ kind: 'cast', spell });
     },
     [request],
   );
@@ -502,13 +500,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       }
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       const dir = KEY_DIRS[key];
-      // 呪文の向きを選んでいるときは、方向キーで唱える（Esc でやめる）
-      if (aimingRef.current && (dir || key === 'Escape')) {
-        e.preventDefault();
-        if (dir && !e.repeat) request({ kind: 'cast', spell: aimingRef.current, dir });
-        setAiming(null);
-        return;
-      }
       if (dir) {
         e.preventDefault(); // 矢印キーでページがスクロールしないように
         if (!e.repeat) hold(dir);
@@ -844,11 +835,10 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
                     <li key={spell}>
                       <button
                         type="button"
-                        className={`explore__use explore__spell${aiming === spell ? ' is-aiming' : ''}`}
+                        className="explore__use explore__spell"
                         onClick={() => chooseSpell(spell)}
                         disabled={ended || state.mp < cost}
-                        aria-pressed={SPELLS[spell].aim ? aiming === spell : undefined}
-                        title={ITEMS[`book_${spell}` as ItemId].description}
+                        title={`${ITEMS[`book_${spell}` as ItemId].description}${SPELLS[spell].aim ? '（主人公が向いている方向に唱える）' : ''}`}
                       >
                         <span className="explore__key">{SPELL_KEYS[i]?.toUpperCase()}</span>
                         <SpellIcon spell={spell} size={22} />
@@ -860,29 +850,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
                 })}
               </ul>
             )}
-            {/* 向きを選んでいるあいだは、道具の列のかわりに向きのボタンを出す（画面の高さを変えないため） */}
-            {aiming ? (
-              <div className="explore__aim" role="group" aria-label={`${SPELLS[aiming].name}の向きを選ぶ`}>
-                <span className="explore__aim-label">{SPELLS[aiming].name}の向き</span>
-                {(['up', 'left', 'down', 'right'] as const).map((dir) => (
-                  <button
-                    key={dir}
-                    type="button"
-                    className="explore__wait explore__aim-dir"
-                    aria-label={`${DIR_ARROWS[dir]}の向きに唱える`}
-                    onClick={() => {
-                      request({ kind: 'cast', spell: aiming, dir });
-                      setAiming(null);
-                    }}
-                  >
-                    {DIR_ARROWS[dir]}
-                  </button>
-                ))}
-                <button type="button" className="explore__wait" onClick={() => setAiming(null)}>
-                  やめる
-                </button>
-              </div>
-            ) : itemGroups.length === 0 ? (
+            {itemGroups.length === 0 ? (
               <p className="muted explore__items">道具はない</p>
             ) : (
               <ul className="explore__items" aria-label="道具">
@@ -893,13 +861,18 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
                       className="explore__use"
                       onClick={() => request({ kind: 'use_item', item: g.id })}
                       disabled={ended}
-                      // スマホでは名前を出さずアイコンだけにするので、読み上げとマウスを重ねたときに、名前を伝える
+                      // 読み上げでは、名前と個数をまとめて伝える
                       aria-label={g.count > 1 ? `${ITEMS[g.id].name}（${g.count}個）` : ITEMS[g.id].name}
                       title={`${ITEMS[g.id].name}：${ITEMS[g.id].description}`}
                     >
                       <span className="explore__key">{i + 1}</span>
-                      <ItemIcon id={g.id} size={26} />
-                      <span className="explore__item-name">{ITEMS[g.id].name}</span>
+                      {/* アイコンと名前（名前は小さい字。スマホでは、アイコンの下に置く） */}
+                      <span className="explore__item-face">
+                        <ItemIcon id={g.id} size={26} />
+                        <span className="explore__item-name" aria-hidden="true">
+                          {ITEMS[g.id].name}
+                        </span>
+                      </span>
                       {g.count > 1 && <span className="explore__count">×{g.count}</span>}
                     </button>
                   </li>
