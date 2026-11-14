@@ -2,9 +2,9 @@
   "name": "標準",
   "description": "いちばん基本のダンジョン。ここで遊び方を覚える。",
   "floors": {
-    "count": 5,
-    "size": 80,
-    "satiety": 13132
+    "count": 1,
+    "size": 20,
+    "satiety": 350
   },
   "rooms": {
     "attemptRate": 0.3,
@@ -15,7 +15,7 @@
     "amount": 2,
     "placement": "mixed",
     "roomWeight": 1,
-    "nestChance": 0.2,
+    "nestChance": 0.5,
     "nestMin": 3,
     "nestMax": 8,
     "stayInRoom": true
@@ -23,9 +23,9 @@
   "growth": {
     "expBase": 30,
     "expStep": 20,
-    "hpPerLevel": 2,
+    "hpPerLevel": 5,
     "atkPerLevel": 1,
-    "maxLevel": 10,
+    "maxLevel": 99,
     "eliteRate": 3
   },
   "magic": {
