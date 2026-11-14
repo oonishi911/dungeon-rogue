@@ -39,6 +39,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh; /* スマホでは、アドレスバーを除いた高さ（100vh だと、見えている高さより高くなり、ページが少し動いてしまう） */
   background: var(--pine);
   color: var(--bone);
   font-family: var(--sans);
@@ -377,12 +378,44 @@ button.card:disabled {
   font-weight: 700;
 }
 
+/* ===== スマホ：遊ぶ画面は、画面全体を動かさない =====
+   ダンジョンを選ぶ・結果の画面は、画面の高さぴったりにする。中身が入り切らないときは、
+   一覧などの枠（.screen__scroll）の中だけを指で動かす（探索の画面は、下の「スマホ：1画面に収める」で同じようにしている） */
+@media (max-width: 48rem) {
+  .screen--fit {
+    height: 100vh;
+    height: 100dvh;
+    padding: calc(env(safe-area-inset-top, 0px) + 1rem) 1rem calc(env(safe-area-inset-bottom, 0px) + 1rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow: hidden;
+  }
+
+  .screen--fit > * {
+    flex: none;
+  }
+
+  .screen--fit > .screen__scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain; /* 枠の端まで動かしても、画面全体は動かさない */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .screen--fit .top__title {
+    font-size: var(--step-2);
+  }
+}
+
 /* ===== ダンジョンを選ぶ ===== */
 .choose__list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
+  align-content: start; /* 一覧の枠が高くても、カードを縦に伸ばさない */
   gap: 1rem;
 }
 

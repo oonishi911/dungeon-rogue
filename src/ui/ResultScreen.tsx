@@ -17,7 +17,7 @@ export function ResultScreen({ run, outcome, expedition, onNextRun }: ResultScre
   const dungeonName = hasDungeon(outcome.dungeon) ? dungeonOf(outcome.dungeon).name : '';
 
   return (
-    <main className="screen screen--narrow">
+    <main className="screen screen--narrow screen--fit">
       <header className="top">
         <div>
           <p className="top__run">
@@ -27,7 +27,8 @@ export function ResultScreen({ run, outcome, expedition, onNextRun }: ResultScre
         </div>
       </header>
 
-      <section className="panel reveal" aria-labelledby="reveal-heading">
+      {/* スマホでは、画面全体は動かさず、この枠の中だけを動かす（下のボタンは、いつも見えている） */}
+      <section className="panel reveal screen__scroll" aria-labelledby="reveal-heading">
         <h2 id="reveal-heading" className="panel__title">ダンジョンの正体</h2>
         <p className="reveal__trait">{TRAITS[outcome.trait].name}のダンジョンだった</p>
         <dl className="facts">
