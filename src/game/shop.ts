@@ -2,7 +2,8 @@
 // - 金貨は最初は0。ダンジョンで持ち帰った金貨が貯まっていく（足りなくなっても補わない）
 // - 武器・防具・呪文書は、一度買えばずっと使える（owned）。出発のたびに、武器1つ・防具1つ・呪文書を選ぶ
 // - 道具（回復薬など）は倉庫（stock）に入り、出発のたびに持っていく数を選ぶ。使わずに残った道具は、持ち帰って倉庫に戻る
-// - 武器と防具は種類ごとに10段階。店に並ぶのは、その種類で持っているいちばん上の段階の2つ上まで（持っていなければ2段目まで）
+// - 武器と防具は種類ごとに10段階。店に並ぶのは、店に入ったときに持っていたいちばん上の段階の2つ上まで（持っていなければ2段目まで）。
+//   店で上の段階を買っても、並びはその場では広がらず、次に潜るときの店で広がる
 // ほかのロジックと同じく、状態を受け取り新しい状態を返す純粋関数でできている。
 
 import { itemSlot } from './combat';
@@ -56,14 +57,17 @@ export function shelfItems(owned: readonly ItemId[], shelf: Shelf): ItemId[] {
   });
 }
 
-/** 店に並んでいるか（並んでいない段階は買えない） */
-const onShelf = (owned: readonly ItemId[], id: ItemId) => shelfItems(owned, shelfOf(id)).includes(id);
+/** 店に並んでいるか（並んでいない段階は買えない）。atEntry：店に入ったときに持っていたもの */
+const onShelf = (atEntry: readonly ItemId[], id: ItemId) => shelfItems(atEntry, shelfOf(id)).includes(id);
 
-/** 買う。武器・防具は買うとすぐ装備し、呪文書・道具は持っていく数に余りがあれば、持っていくものに入れる */
-export function buy(save: SaveData, id: ItemId): Result<SaveData> {
+/**
+ * 買う。武器・防具は買うとすぐ装備し、呪文書・道具は持っていく数に余りがあれば、持っていくものに入れる。
+ * atEntry は店に入ったときに持っていたもの（店の並びは、これで決まる。省略すると今持っているもの）
+ */
+export function buy(save: SaveData, id: ItemId, atEntry: readonly ItemId[] = save.owned): Result<SaveData> {
   const item = ITEMS[id];
   const shelf = shelfOf(id);
-  if (!onShelf(save.owned, id)) return err('まだ店に並んでいない');
+  if (!onShelf(atEntry, id)) return err('まだ店に並んでいない');
   if (shelf !== 'supply' && save.owned.includes(id)) return err('もう持っている');
   if (item.price > save.gold) return err('金貨が足りない');
   const gold = save.gold - item.price;

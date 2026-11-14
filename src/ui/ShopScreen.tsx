@@ -16,11 +16,12 @@ interface ShopScreenProps {
   dungeonName: string;
   intel: readonly Intel[]; // 情報屋から聞いたこと（ダンジョンの属性は、聞かなければわからない）
   save: SaveData;
+  atEntry: readonly ItemId[]; // 店に入ったときに持っていたもの（並びはこれで決まり、店で買っても広がらない）
   onChange: (save: SaveData) => void; // 買った・選んだたびに呼ぶ（すぐ保存する）
   onDepart: () => void;
 }
 
-export function ShopScreen({ run, dungeonName, intel, save, onChange, onDepart }: ShopScreenProps) {
+export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, onDepart }: ShopScreenProps) {
   const [shelf, setShelf] = useState<Shelf>('weapon');
   const [bagOpen, setBagOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +69,7 @@ export function ShopScreen({ run, dungeonName, intel, save, onChange, onDepart }
       </div>
 
       <ul className="shop__list screen__scroll" aria-label={SHELVES.find((s) => s.id === shelf)!.name}>
-        {shelfItems(save.owned, shelf).map((id) => (
+        {shelfItems(atEntry, shelf).map((id) => (
           <li key={id} className="shop__row">
             <ItemIcon id={id} size={28} className="shop__icon" />
             {/* 説明は1行に切ってある。押すと全文を出す */}
@@ -77,7 +78,7 @@ export function ShopScreen({ run, dungeonName, intel, save, onChange, onDepart }
               <span className="shop__desc">{ITEMS[id].description}</span>
             </button>
             <div className="shop__deal">
-              <Deal id={id} shelf={shelf} save={save} apply={apply} />
+              <Deal id={id} shelf={shelf} save={save} atEntry={atEntry} apply={apply} />
             </div>
           </li>
         ))}
@@ -141,14 +142,14 @@ export function ShopScreen({ run, dungeonName, intel, save, onChange, onDepart }
 }
 
 /** 品物の右側：値段と「買う」、または持っているものの「装備する」「持っていく」 */
-function Deal({ id, shelf, save, apply }: { id: ItemId; shelf: Shelf; save: SaveData; apply: (r: Result<SaveData>) => void }) {
+function Deal({ id, shelf, save, atEntry, apply }: { id: ItemId; shelf: Shelf; save: SaveData; atEntry: readonly ItemId[]; apply: (r: Result<SaveData>) => void }) {
   const owned = save.owned.includes(id);
   const price = ITEMS[id].price;
   const short = price > save.gold;
   const buyButton = (
     <>
       <span className="shop__price">{price}G</span>
-      <button type="button" className={short ? 'shop__buy shop__buy--off' : 'primary shop__buy'} disabled={short} onClick={() => apply(buy(save, id))}>
+      <button type="button" className={short ? 'shop__buy shop__buy--off' : 'primary shop__buy'} disabled={short} onClick={() => apply(buy(save, id, atEntry))}>
         {short ? '足りない' : '買う'}
       </button>
     </>
