@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { unlockSound } from './audio/sound';
 import { Admin } from './ui/Admin';
-import { ExploreDevScreen } from './ui/ExploreScreen';
+import { ExploreDevScreen } from './ui/ExploreDevScreen';
 import { MapViewer } from './ui/MapViewer';
 import './styles.css';
 

@@ -6,7 +6,9 @@
 import { describe, expect, it } from 'vitest';
 import { autoPlay, clearRate } from './autoplay';
 import { BALANCE_TIMEOUT, PREPS, SUPPLIES, TRIALS, WRONG_LIMIT } from './balance.fixtures';
-import { dirBetween, isBossFloor, startExplore, step, type ExploreState } from './explore';
+import { isBossFloor, startExplore, step } from './explore';
+import { type ExploreState } from './exploreTypes';
+import { dirBetween } from './exploreSight';
 import type { TraitId } from './types';
 
 describe('自動プレイ', () => {

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { FIELD_ENEMY } from './enemies.fixtures';
 import { enemyDef, type MapEnemy } from './enemies';
-import { magicPower, spellAffinity, spellDamage, startExplore, step, type ExploreAction, type ExploreState } from './explore';
+import { startExplore, step } from './explore';
+import { type ExploreAction, type ExploreState } from './exploreTypes';
+import { magicPower, spellAffinity, spellDamage } from './magic';
 import { DEFAULT_DUNGEON } from './dungeons';
 import type { FloorMap, Pos } from './map';
 import type { ItemId, Result } from './types';

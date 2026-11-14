@@ -11,7 +11,9 @@
 import * as THREE from 'three';
 import { ITEMS } from '../game/data';
 import { enemyDef, isAdjacent } from '../game/enemies';
-import { dirBetween, EXPLORE_CONFIG, upStairs, type CastEvent, type Dir, type ExploreState } from '../game/explore';
+import { upStairs } from '../game/explore';
+import { type CastEvent, type Dir, type ExploreState } from '../game/exploreTypes';
+import { dirBetween } from '../game/exploreSight';
 import type { Pos } from '../game/map';
 import type { EnemyId, ItemId, TraitId, WeaponType } from '../game/types';
 import { drawSprite } from '../sprites/canvas';
@@ -24,102 +26,9 @@ import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
+import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, RESOLUTION, SHADOW_SIDES, SPELL_KNOCK, SUN, TEXTURE_FILES, TILE_PX, TORCH, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, type HitPulse } from './explore3dConfig';
+import { applyFog, createFog, litBillboard, worldMapped } from './explore3dKit';
 
-// マスの大きさを1とした壁の高さ。高くすると通路が深く見える。
-// 今のカメラの角度（約63度）では、高さ1までなら、すぐ手前の壁は隣のマスに立つキャラクターの足元に届く程度で、体は隠れない
-const WALL_HEIGHT = 1;
-// 壁の角の丸み：床に面した縁と、出っ張った縦の角を丸める半径（マス）
-const WALL_ROUND = 0.16;
-// 壁の表面のでこぼこ：岩肌のように、面をその向きへ少し押し出したり引っ込めたりする。
-// amount はいちばん大きくずらす距離（マス）、scale は1マスあたりの波の細かさ。上面は top を掛けて控えめにする。
-// ずらし方はダンジョンの中の位置で決めるので、となり合う壁の面はつながったまま波打つ
-const WALL_ROUGH = { amount: 0.045, scale: 2.6, top: 0.5 } as const;
-const WALL_SHAPES = 16; // 4つの側面のどれが床に面しているかの組み合わせ（softWall.ts の exposureIndex）
-const CAMERA = { height: 15, back: 7.5 }; // 主人公の真上15・手前7.5から見下ろす（約63度）
-// 画面の大きさによらず、主人公のいるあたりの1マスが画面上でこの大きさ（CSSピクセル）に映るよう、視野の広さを決める。
-// スマホの縦画面（幅約390px）で横に約8マス、PCの探索画面（幅約670px）で横に約14マス映る
-const TILE_PX = 48;
-const FOV_LIMIT = { min: 10, max: 75 }; // 極端に大きい・小さい画面でもゆがみすぎないように
-// 攻撃したとき・攻撃されたときの画面効果：カメラを少し寄せて戻す（拡大縮小）。zoom は 1 からのずれの最大、ms は長さ
-const HIT_PULSE = {
-  attack: { zoom: 0.05, ms: 180 }, // 自分の攻撃：ぐっと寄って戻る
-  hurt: { zoom: 0.08, ms: 260 }, // 敵の攻撃：寄ったあと少し引いて戻る
-} as const;
-export type HitPulse = keyof typeof HIT_PULSE;
-// 戦闘中は、主人公を中心に画面を寄せる。戦闘中とは、追ってきた敵が主人公の隣（上下左右）にいるか、攻撃が起きてから
-// holdMs 以内のこと（敵を倒した直後や、敵が1歩離れてまた来たときに、寄ったり引いたりをくり返さないように）。
-// zoom は寄せたときの倍率。inSec・outSec は寄せる・戻すときのなめらかさで、その3倍ほどの時間でほぼ着く（寄せるのは約0.4秒、戻すのは約0.75秒）
-// 呪文が当たった敵ののけぞり：当たった向きへ amount マス押されて、ms で元に戻る（相性の強さを掛ける）
-const SPELL_KNOCK = { amount: 0.3, ms: 280 } as const;
-// 呪文で倒した敵は、矢が当たるまで（と少しのあいだ）消さずに残す
-const DYING_EXTRA_MS = 160;
-const COMBAT_ZOOM = { zoom: 1.35, inSec: 0.12, outSec: 0.25, holdMs: 900 } as const;
-// ダメージの数字：受けた側の頭の上に小さく出て、なめらかに大きくなりながら少し浮かび、透けて消える
-const DAMAGE_POP = {
-  ms: 250, // 出てから消えるまで
-  from: 0.6, // 出たときの大きさ（マス）
-  to: 1.3, // 消えるときの大きさ（マス）
-  height: 1.05, // 出る高さ（マス）
-  rise: 0.35, // 消えるまでに浮かぶ高さ（マス）
-  colors: { dealt: '#ece5d3', taken: '#e5624f' }, // 与えた：明るい生成り / 受けた：赤
-} as const;
-const REMEMBERED = 0.3; // 一度見たが今は見えていないマスの明るさ
-// 見える範囲の明るさ。主人公のそばは1で、視界の端へ向かってなめらかに edge まで暗くする。
-// マスの明るさは、見え始め・見えなくなるときに fade の速さ（1秒あたり）で少しずつ変える。
-// 明るさはピクセルごとに決める（霧の地図 → FogState と applyFog）ので、マスの形の段は出ない
-const SIGHT_LIGHT = { edge: 0.5, fade: 9 };
-// 壁の根元の影：壁に接する床の辺に敷く帯。幅（マスの何倍か）と、壁際でのいちばん濃いところ、薄くなり方
-const WALL_SHADOW = { depth: 0.4, darkness: 0.8, falloff: 1.5 }; // falloff：大きいほど壁際で急に薄くなる
-// 影の帯を敷く向き。dx・dz は壁のある方向、angle は帯の暗い側をその方向へ向ける回転
-const SHADOW_SIDES = [
-  { dx: 0, dz: -1, angle: 0 },
-  { dx: 1, dz: 0, angle: -Math.PI / 2 },
-  { dx: 0, dz: 1, angle: Math.PI },
-  { dx: -1, dz: 0, angle: Math.PI / 2 },
-] as const;
-const BACKGROUND = 0x0b1413;
-// 床と壁を描く範囲（主人公からのマス数）。画面に映る範囲（1マス48pxで、PCなら横14×縦11、スマホの縦画面なら横8×縦16マスほど）より、
-// 動いている途中の分と、大きな画面の分だけ広くとる
-const DRAW_RANGE = { x: 13, z: 17 };
-const DRAW_CAPACITY = (DRAW_RANGE.x * 2 + 1) * (DRAW_RANGE.z * 2 + 1);
-const PATH_CAPACITY = 256; // 歩く道筋の点を、いくつまで描くか
-
-/**
- * テクスチャの画像（public/textures/{特性}/ の中）。なめらかな質感の絵。詳しくは docs/textures.md。
- * 床も壁も、1枚の絵を何マスにもまたがって貼る（床と壁の上面は TEXTURE_SPAN×TEXTURE_SPAN マス、壁の側面は横 TEXTURE_SPAN マス×高さ1）。
- * マスごとに絵のどこを使うかはダンジョンの中の位置で決めるので、隣り合うマスの模様がつながり、マスの境目が見えない
- */
-export const TEXTURE_FILES = {
-  floor: 'floor.png',
-  wallTop: 'wall-top.png',
-  wallSide: 'wall-side.png',
-} as const;
-// たいまつの光と影。環境光と上からの光を弱くして、たいまつの光が見える範囲を決めるようにする。
-// 影の地図（シャドウマップ）は6方向から描くので重い。たいまつが動いたときと、壁が入れ替わったときだけ描き直す
-const TORCH = {
-  color: 0xffd9a0, // 暖かいオレンジ色の炎
-  // 特性ごとに光の色を変えるときの色。暖かい光は氷の青を打ち消して黄色っぽい灰色に見せてしまうので、氷は青白い光にする
-  colorByTrait: { ice: 0xd6ecff } as Partial<Record<TraitId, number>>,
-  intensity: 10,
-  distance: 9, // 光が届く距離（マス）。視界の半径6より少し遠くまで
-  decay: 1,
-  height: 0.85, // 手に持った高さ（壁の上面1より低い）
-  forward: 0.3, // 主人公より少し手前（カメラ側）に掲げる。主人公の体の中に光があると、体が照らされず暗くなるため
-  shadowMapSize: 512,
-};
-const AMBIENT = 0.3; // 全体を均等に照らす弱い光。光の届かない場所や、一度見ただけのマスがかろうじて見える明るさ
-const SUN = 0.25; // 上からの弱い光。壁の側面に陰をつける
-// 描く解像度（画面の1ピクセルを何ピクセルで描くか）。細かい画面でも max まで。
-// 描くのが間に合わない端末では、滑らかに動く方を優先して low まで下げる：1コマに slowMs より長くかかることが frames 回たまったら下げる
-// （速いコマが続けば数え直す。一度下げたら戻さない。low は、ぼやけが目立たない程度にとどめる）
-const RESOLUTION = { max: 2, low: 1.5, slowMs: 26, frames: 60 } as const;
-const MAX_ANISOTROPY = 8; // 斜めから見た床がぼけないようにする強さの上限（スマホで重くなりすぎないように）
-// 宝箱の大きさ（マス）。ふたは奥行きを直径とするかまぼこ形で、本体の上に載る（いちばん上は高さ + 奥行き/2）
-const CHEST = { width: 0.56, height: 0.3, depth: 0.38 };
-// 開けた宝箱：ふたを奥の縁（蝶番）を軸に後ろへ倒す角度（ラジアン）と、箱の口に見える中の暗さ
-const OPENED_CHEST = { lidAngle: 1.75, inside: 0x1c130c, lidInside: 0x3e2a1a };
-const TEXTURE_SPAN = 4; // 床と壁の絵1枚が何マス分にまたがるか（scripts/build-textures.ts・build-photo-textures.py と合わせる）
-const FLOOR_KINDS = 4; // テクスチャがないとき、床を何通りの明るさで描き分けるか
 
 interface Atlas {
   floor: THREE.Texture;
@@ -144,23 +53,6 @@ function facingToward(from: Pos, to: Pos): Dir {
   return dy >= 0 ? 'down' : 'up';
 }
 
-/** テクスチャを読み込む前（または読み込めなかったとき）の、ダンジョン特性ごとの床と壁の色 */
-// 床と壁のツヤ（フォンシェーディングの照り返し）。たいまつの光が、主人公のすぐ手前の床に映り込む。
-// 氷は強く（凍った床が濡れたように光る）、光は中くらい（磨いた石）、炎は弱く（照った黒い岩）。ほかの特性はツヤなし
-const TRAIT_GLOSS: Partial<Record<TraitId, { shininess: number; specular: number }>> = {
-  ice: { shininess: 90, specular: 0x5f7180 },
-  light: { shininess: 45, specular: 0x403c34 },
-  fire: { shininess: 22, specular: 0x2e2220 },
-};
-const NO_GLOSS = { shininess: 30, specular: 0x000000 } as const;
-
-const TRAIT_COLORS: Record<TraitId, { floor: number; wall: number }> = {
-  fire: { floor: 0x4a2a22, wall: 0x8a3a26 },
-  ice: { floor: 0x253a48, wall: 0x6a9cbc },
-  neutral: { floor: 0x2e3a36, wall: 0x66766f },
-  light: { floor: 0x4a4430, wall: 0xc9bb8a },
-  dark: { floor: 0x241d32, wall: 0x52466e },
-};
 
 export class DungeonView3D {
   private readonly renderer: THREE.WebGLRenderer;
@@ -1024,243 +916,18 @@ export class DungeonView3D {
   }
 }
 
-/**
- * 敵の絵を立てる板（ふつうは1×1、中心が原点）。板はカメラの方へ向けて使うが、そのままだと面の向きがカメラを向くので、
- * 主人公とカメラのあいだにいる敵は、たいまつの光を背中から受けて真っ暗になる。
- * そこで面の向き（法線）を、カメラの方へ向けたときにちょうど真上になるようにしておき、足元の床と同じ当たり方にする
- */
-function litBillboard(width = 1, height = 1): THREE.PlaneGeometry {
-  const geo = new THREE.PlaneGeometry(width, height);
-  const camera = new THREE.PerspectiveCamera();
-  camera.position.set(0, CAMERA.height, CAMERA.back);
-  camera.lookAt(0, 0, 0);
-  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion.clone().invert());
-  const normals = geo.getAttribute('normal') as THREE.BufferAttribute;
-  for (let i = 0; i < normals.count; i++) normals.setXYZ(i, up.x, up.y, up.z);
-  normals.needsUpdate = true;
-  return geo;
-}
-
-/**
- * 床と壁の素材の、テクスチャの貼り方を変える。普通は面ごとに絵全体を貼るが、ここでは面のダンジョンの中の位置から、
- * 絵のどこを使うかを決める（床と壁の上面は x・z、壁の側面は壁に沿った向きの位置と高さ）。絵は TEXTURE_SPAN マスごとに繰り返す。
- * こうすると隣り合うマスの模様がつながり、マスの境目に縁取りや目地のような線が出ない。霧（applyFog）もかける
- */
-function worldMapped<T extends THREE.MeshLambertMaterial | THREE.MeshPhongMaterial>(material: T, face: 'floor' | 'top' | 'side', fog: Fog, rough = false): T {
-  const defines: Record<string, string> = { TEXTURE_SPAN: TEXTURE_SPAN.toFixed(1), WALL_HEIGHT_F: WALL_HEIGHT.toFixed(1) };
-  defines[`MAPPED_${face.toUpperCase()}`] = '';
-  // 壁は表面を岩肌のように波打たせる（WALL_ROUGH）
-  if (rough) defines.WALL_ROUGH = '';
-  material.defines = { ...material.defines, ...defines };
-  return applyFog(material as THREE.Material, fog, 'darken', `world-mapped-${face}`) as T;
-}
-
-// 壁の表面のでこぼこ（WALL_ROUGH を定めた素材だけ）。ダンジョンの中の位置で決まるなめらかな値のノイズを2段重ね、
-// 面の向き（法線）の方へ頂点をずらす。底（下向きの面）はずらさない
-const WALL_ROUGH_GLSL = `
-#ifdef WALL_ROUGH
-float wallHash( vec3 p ) {
-  p = fract( p * 0.3183099 + 0.1 );
-  p *= 17.0;
-  return fract( p.x * p.y * p.z * ( p.x + p.y + p.z ) );
-}
-float wallNoise( vec3 x ) {
-  vec3 i = floor( x );
-  vec3 f = fract( x );
-  f = f * f * ( 3.0 - 2.0 * f );
-  return mix(
-    mix( mix( wallHash( i ), wallHash( i + vec3( 1, 0, 0 ) ), f.x ), mix( wallHash( i + vec3( 0, 1, 0 ) ), wallHash( i + vec3( 1, 1, 0 ) ), f.x ), f.y ),
-    mix( mix( wallHash( i + vec3( 0, 0, 1 ) ), wallHash( i + vec3( 1, 0, 1 ) ), f.x ), mix( wallHash( i + vec3( 0, 1, 1 ) ), wallHash( i + vec3( 1, 1, 1 ) ), f.x ), f.y ),
-    f.z );
-}
-#endif
-`;
-const WALL_ROUGH_VERTEX = `#include <begin_vertex>
-#ifdef WALL_ROUGH
-{
-  vec4 roughAt = vec4( position, 1.0 );
-  #ifdef USE_INSTANCING
-    roughAt = instanceMatrix * roughAt;
-  #endif
-  vec3 rp = ( modelMatrix * roughAt ).xyz * ${WALL_ROUGH.scale.toFixed(2)};
-  float bump = ( wallNoise( rp ) - 0.5 ) * 1.4 + ( wallNoise( rp * 2.3 + 7.1 ) - 0.5 ) * 0.6;
-  float along = objectNormal.y < -0.5 ? 0.0 : mix( 1.0, ${WALL_ROUGH.top.toFixed(2)}, max( objectNormal.y, 0.0 ) );
-  transformed += objectNormal * bump * ${WALL_ROUGH.amount.toFixed(3)} * along;
-}
-#endif`;
-
-// ===== 霧（ピクセル単位） =====
-
-/**
- * 霧の地図と、描くときに使う値。地図は1マス1ドットで、R が「今見えている」、G が「一度見た」の度合い（0〜255）。
- * 描くときはこの地図をなめらかに引き伸ばして読むので、見えている・一度見た・まだ見ていない場所の境目が、
- * マスの形ではなく1マスほどのなだらかなグラデーションになる
- */
-interface Fog {
-  readonly uniforms: {
-    fogMap: { value: THREE.DataTexture };
-    fogSize: { value: THREE.Vector2 };
-    fogPlayer: { value: THREE.Vector2 };
-  };
-  /** 状態が変わったときに、目標の見え方を入れる（階が変わったら地図を作り直し、今の見え方にすぐ合わせる） */
-  setTargets(state: ExploreState, visible: Set<number>): void;
-  /** 毎フレーム：主人公の位置（動いている途中）を伝え、見え方を目標へ少しずつ近づける */
-  update(player: Pos, dt: number, reduceMotion: boolean): void;
-  dispose(): void;
-}
-
-function createFog(): Fog {
-  let map: unknown = null;
-  let width = 1;
-  let height = 1;
-  let visible = new Float32Array(1); // 今の見え方（0〜1）。目標へ少しずつ近づける
-  let seen = new Float32Array(1);
-  let visibleTarget = new Uint8Array(1); // 目標（0 か 1）
-  let seenTarget = new Uint8Array(1);
-  let dirty = true;
-  let texture = new THREE.DataTexture(new Uint8Array(4), 1, 1);
-  const uniforms = {
-    fogMap: { value: texture },
-    fogSize: { value: new THREE.Vector2(1, 1) },
-    fogPlayer: { value: new THREE.Vector2() },
-  };
-  const write = () => {
-    const data = texture.image.data as Uint8Array;
-    for (let i = 0; i < width * height; i++) {
-      data[i * 4] = Math.round(visible[i]! * 255);
-      data[i * 4 + 1] = Math.round(seen[i]! * 255);
-    }
-    texture.needsUpdate = true;
-  };
-  return {
-    uniforms,
-    setTargets(state, visibleTiles) {
-      const fresh = state.map !== map;
-      if (fresh) {
-        map = state.map;
-        width = state.map.width;
-        height = state.map.height;
-        visible = new Float32Array(width * height);
-        seen = new Float32Array(width * height);
-        visibleTarget = new Uint8Array(width * height);
-        seenTarget = new Uint8Array(width * height);
-        texture.dispose();
-        texture = new THREE.DataTexture(new Uint8Array(width * height * 4), width, height);
-        // なめらかに引き伸ばして読む（マスとマスのあいだが、なだらかにつながる）
-        texture.magFilter = THREE.LinearFilter;
-        texture.minFilter = THREE.LinearFilter;
-        uniforms.fogMap.value = texture;
-        uniforms.fogSize.value.set(width, height);
-      }
-      for (let i = 0; i < width * height; i++) {
-        visibleTarget[i] = visibleTiles.has(i) ? 1 : 0;
-        seenTarget[i] = state.seen[i] ? 1 : 0;
-      }
-      // 階を移ったとき（戻ったときも）は、ゆっくり変えずに今の見え方にすぐ合わせる
-      if (fresh) {
-        visible.set(visibleTarget);
-        seen.set(seenTarget);
-      }
-      dirty = true;
-    },
-    update(player, dt, reduceMotion) {
-      uniforms.fogPlayer.value.set(player.x, player.y);
-      if (!dirty) return;
-      const step = reduceMotion ? 1 : Math.min(1, dt * SIGHT_LIGHT.fade);
-      let moving = false;
-      for (let i = 0; i < width * height; i++) {
-        const v = visible[i]! + (visibleTarget[i]! - visible[i]!) * step;
-        const s = seen[i]! + (seenTarget[i]! - seen[i]!) * step;
-        visible[i] = Math.abs(visibleTarget[i]! - v) < 0.004 ? visibleTarget[i]! : v;
-        seen[i] = Math.abs(seenTarget[i]! - s) < 0.004 ? seenTarget[i]! : s;
-        if (visible[i] !== visibleTarget[i] || seen[i] !== seenTarget[i]) moving = true;
-      }
-      write();
-      dirty = moving; // 目標に着いたら、次に状態が変わるまで書き直さない
-    },
-    dispose() {
-      texture.dispose();
-    },
-  };
-}
-
-const FOG_BACKGROUND = new THREE.Color(BACKGROUND); // 画面の色空間（sRGB）のまま、シェーダで背景と混ぜる
-
-/**
- * 素材に霧をかける。ピクセルごとに、霧の地図から「今見えている」「一度見た」の度合いを読み、
- * - 見えている場所は、主人公から離れるほどなめらかに暗く（端で SIGHT_LIGHT.edge）
- * - 一度見ただけの場所は REMEMBERED の明るさ
- * - まだ見ていない場所へ向かっては、背景の色に溶け込ませる（mode が 'fade-alpha' なら、色ではなく濃さを消す）
- * worldMapped の素材では、テクスチャの貼り方の変更（MAPPED_* の定義）も一緒に行う
- */
-function applyFog<T extends THREE.Material>(material: T, fog: Fog, mode: 'darken' | 'fade-alpha' = 'darken', key = ''): T {
-  const bg = FOG_BACKGROUND.clone().convertLinearToSRGB();
-  const before = material.onBeforeCompile.bind(material); // 先に付いている手直し（絵を投影して貼る素材など）も生かす
-  material.onBeforeCompile = (shader, renderer) => {
-    before(shader, renderer);
-    Object.assign(shader.uniforms, fog.uniforms);
-    shader.vertexShader =
-      'varying vec3 vFogWorld;\n' +
-      WALL_ROUGH_GLSL +
-      shader.vertexShader.replace('#include <begin_vertex>', WALL_ROUGH_VERTEX).replace(
-        '#include <uv_vertex>',
-        `#include <uv_vertex>
-        {
-          vec4 world = vec4( position, 1.0 );
-          #ifdef USE_INSTANCING
-            world = instanceMatrix * world;
-          #endif
-          world = modelMatrix * world;
-          vFogWorld = world.xyz;
-          #ifdef USE_MAP
-            #if defined( MAPPED_FLOOR )
-              // 画像から作った素材は、床と壁の上面が同じ絵なので、床は90度回して位置もずらし、模様がそろわないようにする
-              vMapUv = vec2( -world.z, world.x ) / TEXTURE_SPAN + vec2( 0.37, 0.61 );
-            #elif defined( MAPPED_TOP )
-              // 上から見て、絵の上が奥（-z）になるように
-              vMapUv = vec2( world.x, -world.z ) / TEXTURE_SPAN;
-            #elif defined( MAPPED_SIDE )
-              // 外から見て、絵が左右反転しないように、面の向きで進む向きを決める
-              float along = abs( normal.x ) > 0.5 ? -world.z * sign( normal.x ) : world.x * sign( normal.z );
-              vMapUv = vec2( along / TEXTURE_SPAN, world.y / WALL_HEIGHT_F );
-            #endif
-          #endif
-        }`,
-      );
-    shader.fragmentShader =
-      `varying vec3 vFogWorld;
-      uniform sampler2D fogMap;
-      uniform vec2 fogSize;
-      uniform vec2 fogPlayer;
-      ` +
-      shader.fragmentShader
-        .replace(
-          '#include <opaque_fragment>',
-          `// マスの中心が整数の座標なので、半マスずらして霧の地図のドットの中心に合わせる
-          vec2 fogTexel = texture2D( fogMap, ( vFogWorld.xz + 0.5 ) / fogSize ).rg;
-          float fogD = clamp( length( vFogWorld.xz - fogPlayer ) / ${(EXPLORE_CONFIG.sightRadius + 0.5).toFixed(2)}, 0.0, 1.0 );
-          float fogNear = 1.0 - ${(1 - SIGHT_LIGHT.edge).toFixed(2)} * fogD * fogD * ( 3.0 - 2.0 * fogD );
-          float fogSeen = smoothstep( 0.5, 1.0, fogTexel.g ); // マスの境目（0.5）で、ちょうど背景に溶け込む
-          ${mode === 'darken' ? `outgoingLight *= mix( ${REMEMBERED.toFixed(2)}, fogNear, smoothstep( 0.0, 1.0, fogTexel.r ) );` : ''}
-          #include <opaque_fragment>`,
-        )
-        .replace(
-          '#include <colorspace_fragment>',
-          `#include <colorspace_fragment>
-          ${
-            mode === 'darken'
-              ? `gl_FragColor.rgb = mix( vec3( ${bg.r.toFixed(4)}, ${bg.g.toFixed(4)}, ${bg.b.toFixed(4)} ), gl_FragColor.rgb, fogSeen );`
-              : 'gl_FragColor.a *= fogSeen;'
-          }`,
-        );
-  };
-  material.customProgramCacheKey = () => `fog-${mode}-${key}`;
-  return material;
-}
-
 /** 装備している武器の種類（武器でなければ null） */
 export function weaponOf(item: ItemId | null): WeaponType | null {
   if (!item) return null;
   const effect = ITEMS[item].effect;
   return effect.kind === 'weapon' ? effect.weapon : null;
+}
+
+/** WebGL2 が使えるか。Three.js の3D表示に必要 */
+export function webglAvailable(): boolean {
+  try {
+    return document.createElement('canvas').getContext('webgl2') !== null;
+  } catch {
+    return false;
+  }
 }

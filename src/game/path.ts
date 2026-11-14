@@ -2,7 +2,8 @@
 // 霧に覆われた場所は通らないので、プレイヤーが知らない近道を使うことはない。
 
 import { key } from './enemies';
-import { dirBetween, samePos, type ExploreAction, type ExploreState } from './explore';
+import { type ExploreAction, type ExploreState } from './exploreTypes';
+import { dirBetween, samePos } from './exploreSight';
 import type { Pos } from './map';
 
 export const DIRS: readonly Pos[] = [

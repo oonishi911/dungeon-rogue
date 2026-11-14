@@ -2,7 +2,8 @@
 // ダンジョンそのものは3Dで描く（explore3d.ts）。ミニマップだけは Canvas に2Dで描いて、3D画面の右上に重ねる。
 
 import type { EnemyMode } from '../game/enemies';
-import { upStairs, type ExploreState } from '../game/explore';
+import { upStairs } from '../game/explore';
+import { type ExploreState } from '../game/exploreTypes';
 import type { Pos } from '../game/map';
 
 export const MINI_CELL = 3; // ミニマップの1マスの大きさ（px）

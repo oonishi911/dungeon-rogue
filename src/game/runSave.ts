@@ -14,7 +14,8 @@
 import { ENEMIES, ITEMS, SPELLS, TRAIT_IDS } from './data';
 import { DEFAULT_DUNGEON_ID, dungeonOf, hasDungeon } from './dungeons';
 import type { MapEnemy } from './enemies';
-import { mapOfFloor, type Chest, type ExploreState, type FloorMemory } from './explore';
+import { mapOfFloor } from './explore';
+import { type Chest, type ExploreState, type FloorMemory } from './exploreTypes';
 import type { FloorMap, Pos } from './map';
 import { parseSave, type SaveData } from './save';
 import type { Departure, ItemId, SpellId, TraitId } from './types';

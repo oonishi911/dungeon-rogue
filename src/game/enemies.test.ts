@@ -4,7 +4,8 @@ import { enemyBase, enemyReward, expToNext, LOADOUT_CONFIG, REWARD_CONFIG, TREAS
 import { DEFAULT_DUNGEON } from './dungeons';
 import { BOSS_ENEMY, FIELD_ENEMY } from './enemies.fixtures';
 import { ENEMY_CONFIG, enemyDef, key, spawnBoss, type MapEnemy } from './enemies';
-import { startExplore, step, type ExploreAction, type ExploreState } from './explore';
+import { startExplore, step } from './explore';
+import { type ExploreAction, type ExploreState } from './exploreTypes';
 import { tileAt, type FloorMap, type Pos } from './map';
 import type { Result } from './types';
 

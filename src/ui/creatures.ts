@@ -4,7 +4,7 @@
 // 道具（形の部品、凹凸、光る目、素材）は creatureKit.ts。ここでは、組んだ模型を向かせ、動かす。
 
 import * as THREE from 'three';
-import type { Dir } from '../game/explore';
+import type { Dir } from '../game/exploreTypes';
 import { type Builder, Kit, mergeStatic, type Rig, type Wrap } from './creatureKit';
 import { DARK_BUILDERS } from './creaturesDark';
 import { SHEET_BUILDERS } from './creaturesSheet';

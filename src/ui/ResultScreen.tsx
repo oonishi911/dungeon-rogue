@@ -1,6 +1,6 @@
 import { TRAITS } from '../game/data';
 import { hasDungeon, dungeonOf } from '../game/dungeons';
-import type { ExploreResult } from '../game/explore';
+import type { ExploreResult } from '../game/exploreTypes';
 import type { Departure } from '../game/types';
 import { ItemList } from './ItemIcon';
 

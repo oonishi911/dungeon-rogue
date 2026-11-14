@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { autoAction } from './autoplay';
 import { DEFAULT_DUNGEON_ID } from './dungeons';
-import { startExplore, step, type ExploreState } from './explore';
+import { startExplore, step } from './explore';
+import { type ExploreState } from './exploreTypes';
 import { packRun, packSeen, parseRun, unpackSeen, type RunSave } from './runSave';
 import { newSave } from './save';
 import type { Departure } from './types';

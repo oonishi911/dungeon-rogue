@@ -4,7 +4,8 @@
 
 import { useState } from 'react';
 import { depart } from './game/depart';
-import { startExplore, toResult, type ExploreResult, type ExploreState } from './game/explore';
+import { startExplore, toResult } from './game/explore';
+import { type ExploreResult, type ExploreState } from './game/exploreTypes';
 import { packRun } from './game/runSave';
 import { newSave, type SaveData } from './game/save';
 import type { Departure } from './game/types';

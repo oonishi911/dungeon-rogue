@@ -1,37 +1,33 @@
 // ダンジョンの探索画面。マップを歩き、敵と戦い、道具を使う。
-// ゲーム本体では出発で決まった持ち物（depart.ts）で始まり、開発用には ?view=explore で単独でも開ける。
+// ゲーム本体では出発で決まった持ち物（depart.ts）で始まり、開発用には ?view=explore で単独でも開ける（ExploreDevScreen.tsx）。
 //
 // 操作はすべて「意図」として記録し、毎フレームの処理で、前の1歩の動きが終わっていれば1つ実行する。
 // キーを押し続けたときの歩く速さが、OS のキーリピートの設定に左右されず一定になる。
+//
+// このファイルは操作と毎フレームの進行を受け持つ。ほかは次のファイルに分けてある：
+//   exploreFeedback.ts 1手ごとの音・振動・3D の演出 / exploreKeys.ts キーの割り当て / exploreWalk.ts タップで歩く判断
+//   ExploreSide.tsx 右側（下）の欄 / ExploreDialogs.tsx 重ねて出す確かめる画面 / ExploreParts.tsx ゲージと記録 / backGuard.ts 戻るの見張り
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { playAttack, playChestOpen, playEnemyAttack, playSpell, playFootstep, preloadSounds, setAmbient } from '../audio/sound';
-import { BODY_NAMES, enemyBase, expToNext, ITEMS, SPELLS, TRAIT_IDS, TRAITS } from '../game/data';
-import { bestLoadout } from '../game/bestLoadout';
-import { DEFAULT_DUNGEON_ID, dungeonOf, hasDungeon } from '../game/dungeons';
-import { enemyDef, key } from '../game/enemies';
-import {
-  DIR_DELTA,
-  dungeonOfState,
-  EXPLORE_CONFIG,
-  isBossFloor,
-  samePos,
-  startExplore,
-  step,
-  upStairs,
-  visibleTiles,
-  type Dir,
-  type ExploreAction,
-  type ExploreState,
-} from '../game/explore';
+import { preloadSounds, setAmbient } from '../audio/sound';
+import { SPELLS } from '../game/data';
+import { dungeonOfState, isBossFloor, step, upStairs } from '../game/explore';
+import { DIR_DELTA, EXPLORE_CONFIG, type Dir, type ExploreAction, type ExploreState } from '../game/exploreTypes';
+import { samePos, visibleTiles } from '../game/exploreSight';
 import { tileAt, type Pos } from '../game/map';
-import { ItemIcon, ItemLabel, SpellIcon } from './ItemIcon';
 import { SoundButton } from './SoundButton';
 import { walkPath, walkToward } from '../game/path';
-import type { ItemId, SpellId, TraitId } from '../game/types';
-import { drawMinimap, ENEMY_MARK, MINI_CELL, motionOf, readColors, type Frame, type Motion } from './exploreRender';
-import { DungeonView3D, weaponOf } from './explore3d';
-import { HAPTICS, vibrate } from './haptics';
+import type { ItemId, SpellId } from '../game/types';
+import { useBackGuard } from './backGuard';
+import { drawMinimap, MINI_CELL, motionOf, readColors, type Frame, type Motion } from './exploreRender';
+import { DungeonView3D, webglAvailable } from './explore3d';
+import { devBestHref } from './exploreDev';
+import { EndingPanel, LeaveDialog, RetireDialog } from './ExploreDialogs';
+import { playFeedback } from './exploreFeedback';
+import { KEY_ACTIONS, KEY_DIRS, SPELL_KEYS } from './exploreKeys';
+import { LogList } from './ExploreParts';
+import { ExploreSide } from './ExploreSide';
+import { avoidOnWalk, visibleEnemyIds, type WalkGoal } from './exploreWalk';
 import { chooseDirection, knobOffset, STICK, stickDirections } from './stick';
 
 // ミニマップの元の大きさ（px）がこれ以下なら、拡大してもぼかさずドットのまま見せる。
@@ -41,92 +37,7 @@ const MINI_SHARP_MAX = 96;
 // 1マス動くのにかける時間。なぞり続けたとき・タップで歩くときの速さもこれで決まる（1秒に約2.6マス。以前の270ミリ秒から、速さを3割落とした）
 const STEP_MS = 385;
 const DOUBLE_TAP_MS = 350; // この時間（ミリ秒）以内に主人公を2回タップすると、ダブルタップとしてその場で待つ
-// 敵の攻撃の音を鳴らす間合い（秒）。afterAttack：主人公も攻撃したとき、その音のあとに鳴らすまで。gap：敵が何体も攻撃したとき、1体ずつずらす間。max：1回の行動で鳴らす数
-const ENEMY_SOUND = { afterAttack: 0.2, gap: 0.12, max: 3 } as const;
-const CAST_THEN_HURT_MS = 150; // 呪文の矢が当たってから、敵の攻撃を見せるまで（ミリ秒）
 const QUEUE_MAX = 2; // 動いている途中に押した操作を、いくつまで覚えておくか（多すぎると指を止めても歩き続ける）
-
-const KEY_DIRS: Record<string, Dir> = {
-  ArrowUp: 'up',
-  ArrowDown: 'down',
-  ArrowLeft: 'left',
-  ArrowRight: 'right',
-  w: 'up',
-  s: 'down',
-  a: 'left',
-  d: 'right',
-};
-
-// 呪文は z・x・c キーで唱える（持ってきた順）
-const SPELL_KEYS = ['z', 'x', 'c'] as const;
-
-const KEY_ACTIONS: Record<string, ExploreAction> = {
-  ' ': { kind: 'wait' },
-  '.': { kind: 'wait' },
-};
-
-const newSeed = () => Math.floor(Math.random() * 2 ** 31);
-// ?seed=123 で同じ階層を再現できる（不具合の再現や見た目の確認用）
-const urlSeed = Number(new URLSearchParams(location.search).get('seed'));
-// ?best=1 で、ダンジョンの特性に合わせた、いちばん強い装備・道具・呪文書で始める
-const urlBest = new URLSearchParams(location.search).get('best') === '1';
-// ?trait=fire でダンジョン特性を指定できる（タイル素材の確認用）
-const traitParam = new URLSearchParams(location.search).get('trait');
-const urlTrait = TRAIT_IDS.find((t) => t === traitParam);
-// ?dungeon=standard で、遊ぶダンジョン（src/game/dungeons/ の設定ファイルの名前）を指定できる
-const dungeonParam = new URLSearchParams(location.search).get('dungeon') ?? DEFAULT_DUNGEON_ID;
-const urlDungeon = hasDungeon(dungeonParam) ? dungeonParam : DEFAULT_DUNGEON_ID;
-
-/** タップ・クリックで向かっている先 */
-interface WalkGoal {
-  pos: Pos;
-  enemy: number | null; // 敵をタップしたときはその敵（動いても追いかける）
-  seenEnemies: Set<number>; // 前の1歩のときに見えていた敵。新しく敵が見えたら立ち止まる
-}
-
-/** タップで歩くときに、できるだけ通らないマス。階段は踏むと階を移ってしまうので、行き先でなければ避ける */
-function avoidOnWalk(state: ExploreState): Set<string> {
-  const up = upStairs(state);
-  return new Set([state.map.stairs, up].filter((p): p is Pos => p !== null).map(key));
-}
-
-/** 今見えている敵の番号 */
-function visibleEnemyIds(state: ExploreState): Set<number> {
-  const visible = visibleTiles(state.map, state.player, EXPLORE_CONFIG.sightRadius);
-  return new Set(state.enemies.filter((e) => visible.has(e.pos.y * state.map.width + e.pos.x)).map((e) => e.uid));
-}
-
-// 開発用画面で持たせる装備と道具
-const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fire_whetstone', 'ice_whetstone', 'book_shockwave', 'book_fire_bolt', 'book_heal'];
-
-/**
- * 開発用：ダンジョンを選ばずに探索だけを試す。?seed=・?trait=・?dungeon= で条件を指定できる。
- * ?best=1 なら、そのダンジョンの特性に合わせて、いちばん強い装備・道具・呪文書で始める（bestLoadout.ts）
- */
-export function ExploreDevScreen() {
-  return (
-    <ExploreScreen
-      devBest={urlBest}
-      start={() => {
-        const seed = Number.isInteger(urlSeed) && urlSeed > 0 ? urlSeed : newSeed();
-        const dungeon = urlDungeon;
-        if (!urlBest) return startExplore(seed, { dungeon, loadout: DEV_LOADOUT, trait: urlTrait });
-        // 特性を決めてから、その特性に合う装備で始め直す（同じシードなら同じダンジョン）
-        const trait = urlTrait ?? startExplore(seed, { dungeon }).trait;
-        return startExplore(seed, { dungeon, loadout: bestLoadout(trait, dungeonOf(dungeon)), trait });
-      }}
-    />
-  );
-}
-
-/** 開発用画面の「いちばん強い装備で試す」の切り替え先（今のダンジョンの特性のまま、装備だけを切り替える） */
-function devBestHref(best: boolean, trait: TraitId): string {
-  const params = new URLSearchParams(location.search);
-  if (best) params.set('best', '1');
-  else params.delete('best');
-  params.set('trait', trait);
-  return `?${params.toString()}`;
-}
 
 interface ExploreScreenProps {
   start: () => ExploreState;
@@ -137,24 +48,6 @@ interface ExploreScreenProps {
   devBest?: boolean; // 開発用画面で、いちばん強い装備で試しているか（切り替えのリンクを出す）
 }
 
-const BACK_GUARD_REARM_MS = 600;
-
-/** ブラウザの「戻る」を受け止めるための見張りを、履歴に1つ積む（もう積んであれば何もしない） */
-function armBackGuard() {
-  const state: unknown = history.state;
-  const armed = typeof state === 'object' && state !== null && (state as { backGuard?: boolean }).backGuard === true;
-  if (!armed) history.pushState({ backGuard: true }, '');
-}
-
-/** WebGL2 が使えるか。Three.js の3D表示に必要 */
-function webglAvailable(): boolean {
-  try {
-    return document.createElement('canvas').getContext('webgl2') !== null;
-  } catch {
-    return false;
-  }
-}
-
 export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, guardBack = false, devBest }: ExploreScreenProps) {
   // 3D表示ができない環境（WebGL2 が使えない、3D表示を作れなかった）では、遊べないことを伝える
   const [no3d, setNo3d] = useState(() => !webglAvailable());
@@ -163,8 +56,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const [infoOpen, setInfoOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mpShake, setMpShake] = useState(0); // 魔力が足りずに唱えられなかった回数（魔力のゲージを震わせる）
-  // ブラウザの「戻る」が押されて、ページを離れるかを確かめているところ
-  const [leaving, setLeaving] = useState(false);
   // リタイアするかを確かめているところ
   const [retiring, setRetiring] = useState(false);
   const retiringRef = useRef(retiring);
@@ -226,45 +117,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       return false;
     }
     const next = result.value;
-    // 攻撃したとき・攻撃されたときは、画面を少し拡大縮小し、ダメージの数字を出す（3D表示のみ）
-    // 敵を攻撃したときは、主人公が敵の方を向いて武器を振り、武器ごとの音を鳴らす（1回の行動で1回だけ）
-    // 呪文を唱えたときは、武器を振らずに呪文の演出と音にする
-    // 矢が当たるまでのミリ秒。そのあいだは次の行動を待たせ、与えたダメージの数字は当たったときに出す
-    let impactMs = 0;
-    if (next.cast) {
-      impactMs = view3dRef.current?.castSpell(next.cast, prev.player) ?? 0;
-      busyUntilRef.current = performance.now() + impactMs;
-      playSpell(next.cast.spell);
-    }
-    const struck = next.cast ? undefined : next.hits.find((hit) => hit.kind === 'dealt');
-    if (struck) {
-      view3dRef.current?.heroAttack(struck.at);
-      playAttack(weaponOf(next.stats.weapon));
-    }
-    // 敵に攻撃されたときは、敵の体質ごとの音を鳴らす。主人公の攻撃の音のあと、敵ごとに少しずつずらして鳴らす
-    const attackers = next.hits.flatMap((hit) => (hit.kind === 'taken' && hit.by ? [enemyBase(hit.by)] : [])).slice(0, ENEMY_SOUND.max);
-    attackers.forEach((enemy, i) => playEnemyAttack(enemy, (struck ? ENEMY_SOUND.afterAttack : 0) + (impactMs > 0 ? (impactMs + CAST_THEN_HURT_MS) / 1000 : 0) + i * ENEMY_SOUND.gap));
-    for (const hit of next.hits) {
-      const show = () => {
-        view3dRef.current?.hitPulse(hit.kind === 'dealt' ? 'attack' : 'hurt');
-        view3dRef.current?.popDamage(hit.at, hit.amount, hit.kind);
-        // スマホを震わせる（振動に対応したスマホだけ）。踏破したとき・力尽きたときは、長く震わせる
-        if (hit.kind === 'dealt') vibrate(next.outcome === 'cleared' ? HAPTICS.cleared : HAPTICS.attack);
-        else vibrate(next.outcome === 'defeated' ? HAPTICS.defeated : HAPTICS.hurt);
-      };
-      // 呪文の矢のあとに敵が攻撃してきたときは、矢が当たってから見せる
-      const delay = impactMs > 0 ? impactMs + (hit.kind === 'taken' ? CAST_THEN_HURT_MS : 0) : 0;
-      if (delay > 0) window.setTimeout(show, delay);
-      else show();
-    }
-    // 同じ階で1歩進んだら足音を鳴らす（階を移ったとき・その場で戦ったときは鳴らさない）
-    if (next.map === prev.map && !samePos(prev.player, next.player)) playFootstep(next.trait);
-    // 宝箱から金貨か道具を取ったら、宝箱の音を鳴らす（持ち物がいっぱいで何も取れなかったときは鳴らさない）
-    // （敵を倒して宝箱が落ちたときや、倒して金貨を得たときは鳴らさない。主人公のいるマスの宝箱を開けたときだけ）
-    const openedHere = next.chests.some((c) => c.opened && samePos(c.pos, next.player) && !prev.chests.some((p) => p.opened && samePos(p.pos, c.pos)));
-    if (next.map === prev.map && openedHere && (next.gold > prev.gold || next.stats.items.length > prev.stats.items.length)) {
-      playChestOpen();
-    }
+    // 音・振動・3D 画面の演出を始める。呪文を唱えたときは、矢が当たるまで次の行動を待たせる
+    const impactMs = playFeedback(prev, next, view3dRef.current);
+    if (next.cast) busyUntilRef.current = performance.now() + impactMs;
     // 階を移ったときは動かさずに切り替える
     motionRef.current = { from: motionOf(next.map === prev.map ? prev : next), start: performance.now() };
     stateRef.current = next;
@@ -424,30 +279,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   // 始まった時点の状態も知らせる（1歩も動かずに閉じても、同じ探索の続きから始まるように）
   useEffect(() => onProgressRef.current?.(stateRef.current), []);
 
-  // ブラウザの「戻る」を一度受け止める：履歴に「見張り」を1つ積んでおき、戻るで見張りが外れたら、ページを離れるかを確かめる。
-  // 完全には防げない（iPhone の端からのスワイプや、戻るの連打は止められない。画面に一度も触れていないと、ブラウザが見張りを無視することもある）。
-  // 途中の状態は保存してあるので、離れてしまっても続きから遊べる
-  useEffect(() => {
-    if (!guardBack) return;
-    armBackGuard();
-    const onPop = () => setLeaving(true);
-    window.addEventListener('popstate', onPop);
-    window.addEventListener('pageshow', armBackGuard); // 離れたあと、進むで戻ってきたときに張り直す
-    return () => {
-      window.removeEventListener('popstate', onPop);
-      window.removeEventListener('pageshow', armBackGuard);
-    };
-  }, [guardBack]);
-  const stay = () => {
-    armBackGuard();
-    setLeaving(false);
-  };
-  const leave = () => {
-    setLeaving(false);
-    history.back();
-    // 戻る先がなくてページに残ったときは、見張りを張り直す
-    window.setTimeout(armBackGuard, BACK_GUARD_REARM_MS);
-  };
+  // ブラウザの「戻る」を一度受け止める（見張りの仕組みは backGuard.ts）
+  const { leaving, stay, leave } = useBackGuard(guardBack);
 
   // ダンジョンにいるあいだ、特性の環境音を流す（探索画面を離れたら止める）
   useEffect(() => {
@@ -616,7 +449,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     setState(fresh);
   };
 
-  const { stats } = state;
   const dungeon = dungeonOfState(state);
   const visibleEnemies = state.enemies.filter((e) => visible.has(e.pos.y * state.map.width + e.pos.x));
   const onStairs = state.map.stairs !== null && samePos(state.player, state.map.stairs);
@@ -718,193 +550,36 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
               {lastLog}
             </p>
           )}
-          {leaving && (
-            <div className="explore__ending explore__leave" role="alertdialog" aria-labelledby="explore-leave">
-              <p id="explore-leave">ページを離れますか？</p>
-              <p className="explore__leave-note">ここまでの探索は保存されています。次に開いたとき、続きから遊べます。</p>
-              <button type="button" className="primary" autoFocus onClick={stay}>
-                探索に戻る
-              </button>
-              <button type="button" onClick={leave}>
-                ページを離れる
-              </button>
-            </div>
-          )}
+          {leaving && <LeaveDialog onStay={stay} onLeave={leave} />}
           {retiring && !ended && !leaving && (
-            <div className="explore__ending explore__leave" role="alertdialog" aria-labelledby="explore-retire">
-              <p id="explore-retire">リタイアしますか？</p>
-              <p className="explore__leave-note">
-                探索をやめて、ダンジョンを出ます。踏破にはならず、手に入れた金貨は、力尽きたときと同じく半分だけ持ち帰ります。
-              </p>
-              <button type="button" className="primary" autoFocus onClick={() => setRetiring(false)}>
-                探索に戻る
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRetiring(false);
-                  request({ kind: 'retire' });
-                }}
-              >
-                リタイアする
-              </button>
-            </div>
+            <RetireDialog
+              onCancel={() => setRetiring(false)}
+              onRetire={() => {
+                setRetiring(false);
+                request({ kind: 'retire' });
+              }}
+            />
           )}
-          {ended && !leaving && (
-            <div className="explore__ending">
-              <p>{lastLog}</p>
-              {onFinish ? (
-                <button type="button" className="primary" onClick={() => onFinish(state)}>
-                  結果を見る
-                </button>
-              ) : (
-                <button type="button" className="primary" onClick={restart}>
-                  もう一度歩く
-                </button>
-              )}
-            </div>
-          )}
+          {ended && !leaving && <EndingPanel text={lastLog} onFinish={onFinish && (() => onFinish(state))} onRestart={restart} />}
         </div>
 
-        <aside className="explore__side">
-          <div className="explore__status">
-            {/* 体力・満腹度・魔力は、数字を出さずゲージだけにする。体力と満腹度は、残りが少ないと点滅する */}
-            <Meter label="HP" value={stats.hp} max={stats.maxHp} tone="hp" gaugeOnly warnBelow={0.25} pulse />
-            <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" gaugeOnly warnBelow={0.25} />
-            {state.maxMp > 0 && <Meter label="魔力" value={state.mp} max={state.maxMp} tone="mp" gaugeOnly pulse shakeKey={mpShake} />}
-            {/* レベルは、この挑戦のあいだだけ。いちばん上のレベルでは経験値の棒を出さない */}
-            {state.level < dungeon.growth.maxLevel ? (
-              <Meter label={`レベル${state.level}`} value={state.exp} max={expToNext(state.level, dungeon.growth)} tone="exp" unit="経験値" />
-            ) : (
-              <p className="meter__head">
-                <span>レベル{state.level}</span>
-                <span>最大</span>
-              </p>
-            )}
-          </div>
-
-          <div className="explore__controls">
-            {state.spells.length > 0 && (
-              <ul className="explore__items explore__spells" aria-label="呪文">
-                {state.spells.map((spell, i) => {
-                  const cost = dungeon.spells[spell].cost ?? 0;
-                  return (
-                    <li key={spell}>
-                      <button
-                        type="button"
-                        className="explore__use explore__spell"
-                        onClick={() => chooseSpell(spell)}
-                        disabled={ended || state.mp < cost}
-                        title={`${ITEMS[`book_${spell}` as ItemId].description}${SPELLS[spell].aim ? '（主人公が向いている方向に唱える）' : ''}`}
-                      >
-                        <span className="explore__key">{SPELL_KEYS[i]?.toUpperCase()}</span>
-                        <SpellIcon spell={spell} size={22} />
-                        {SPELLS[spell].name}
-                        <span className="explore__cost">魔力{cost}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {itemGroups.length === 0 ? (
-              <p className="muted explore__items">道具はない</p>
-            ) : (
-              <ul className="explore__items" aria-label="道具">
-                {itemGroups.map((g, i) => (
-                  <li key={g.id}>
-                    <button
-                      type="button"
-                      className="explore__use"
-                      onClick={() => request({ kind: 'use_item', item: g.id })}
-                      disabled={ended}
-                      // 読み上げでは、名前と個数をまとめて伝える
-                      aria-label={g.count > 1 ? `${ITEMS[g.id].name}（${g.count}個）` : ITEMS[g.id].name}
-                      title={`${ITEMS[g.id].name}：${ITEMS[g.id].description}`}
-                    >
-                      <span className="explore__key">{i + 1}</span>
-                      {/* アイコンと名前（名前は小さい字。スマホでは、アイコンの下に置く） */}
-                      <span className="explore__item-face">
-                        <ItemIcon id={g.id} size={26} />
-                        <span className="explore__item-name" aria-hidden="true">
-                          {ITEMS[g.id].name}
-                        </span>
-                      </span>
-                      {g.count > 1 && <span className="explore__count">×{g.count}</span>}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* スマホでは画面に収まらないので、ふだんは隠して「装備と敵」で重ねて開く */}
-          <div id="explore-more" className={`explore__more${infoOpen ? ' explore__more--open' : ''}`}>
-            <div className="explore__more-head">
-              <h2 className="panel__title">装備と敵</h2>
-              <button type="button" className="explore__wait" onClick={() => setInfoOpen(false)}>
-                閉じる
-              </button>
-            </div>
-            <section className="explore__info" aria-labelledby="explore-gear">
-              <h2 id="explore-gear" className="meter__head">
-                装備
-              </h2>
-              <p className="explore__gear">
-                武器：{stats.weapon ? <ItemLabel id={stats.weapon} name={ITEMS[stats.weapon].name} /> : 'なし'}
-                <br />
-                防具：{stats.armor ? <ItemLabel id={stats.armor} name={ITEMS[stats.armor].name} /> : 'なし'}
-                {stats.enchant && (
-                  <>
-                    <br />
-                    付与：{TRAITS[stats.enchant.element].name}（あと{stats.enchant.hits}回）
-                  </>
-                )}
-              </p>
-            </section>
-
-            <section className="explore__info" aria-labelledby="explore-enemies">
-              <h2 id="explore-enemies" className="meter__head">
-                見えている敵
-              </h2>
-              {visibleEnemies.length === 0 ? (
-                <p className="muted">いない</p>
-              ) : (
-                <ul className="explore__enemies">
-                  {visibleEnemies.map((e) => (
-                    <li key={e.uid}>
-                      <span className={`explore__mark explore__mark--${e.mode}`} aria-hidden="true">
-                        {ENEMY_MARK[e.mode].mark}
-                      </span>
-                      {enemyDef(e).name}（{TRAITS[enemyDef(e).element].name}・{BODY_NAMES[enemyDef(e).body]}、HP {e.hp}）：
-                      {ENEMY_MARK[e.mode].text}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <p className="muted explore__help">
-              マスをタップするとそこまで歩く（敵をタップすると攻撃しに行く。歩いている途中にタップすると止まる）。画面を指でなぞると、なぞった向きに歩き続ける。主人公をダブルタップするとその場で1ターン待つ。階段は踏むとそのまま降りる。キーボードでは矢印キー／WASDで移動、スペースで待つ、数字キーで道具を使う
-            </p>
-            <section className="explore__more-log" aria-label="記録">
-              <h3 className="meter__head">記録</h3>
-              <LogList lines={recentLog} total={state.log.length} />
-            </section>
-            {/* 押してすぐには終わらず、確かめてからリタイアする */}
-            <button
-              type="button"
-              className="explore__wait explore__retire"
-              disabled={ended}
-              onClick={() => {
-                setInfoOpen(false);
-                setRetiring(true);
-              }}
-            >
-              リタイアする
-            </button>
-          </div>
-        </aside>
+        <ExploreSide
+          state={state}
+          dungeon={dungeon}
+          ended={ended}
+          mpShake={mpShake}
+          itemGroups={itemGroups}
+          visibleEnemies={visibleEnemies}
+          recentLog={recentLog}
+          infoOpen={infoOpen}
+          onCast={chooseSpell}
+          onUseItem={(item) => request({ kind: 'use_item', item })}
+          onCloseInfo={() => setInfoOpen(false)}
+          onRetire={() => {
+            setInfoOpen(false);
+            setRetiring(true);
+          }}
+        />
       </div>
 
       <section className="explore__log-panel" aria-labelledby="explore-log">
@@ -914,76 +589,5 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
         <LogList lines={recentLog} total={state.log.length} />
       </section>
     </main>
-  );
-}
-
-/** 記録（新しい順）。key は記録の通し番号にして、新しい行が増えても古い行を作り直さない */
-function LogList({ lines, total }: { lines: string[]; total: number }) {
-  return (
-    <ol className="explore__log">
-      {lines.map((line, i) => (
-        <li key={total - i}>{line}</li>
-      ))}
-    </ol>
-  );
-}
-
-interface MeterProps {
-  label: string;
-  value: number;
-  max: number;
-  tone: 'hp' | 'satiety' | 'exp' | 'mp';
-  unit?: string;
-  gaugeOnly?: boolean; // 数字を出さず、ゲージだけにする（読み上げには数字を伝える）
-  warnBelow?: number; // 残りがこの割合より少ないと、ゲージを点滅させる
-  pulse?: boolean; // 増えたとき・減ったときに、ゲージを一瞬光らせる（唱えた魔力・回復した体力）
-  shakeKey?: number; // 変わるたびにゲージを震わせる（魔力が足りないとき）
-}
-
-function Meter({ label, value, max, tone, unit, gaugeOnly, warnBelow, pulse, shakeKey = 0 }: MeterProps) {
-  // 光らせる：値が変わったら、増えた・減ったを少しのあいだ覚える
-  const prev = useRef(value);
-  const [change, setChange] = useState<{ dir: 'up' | 'down'; n: number } | null>(null);
-  useEffect(() => {
-    if (!pulse || value === prev.current) return;
-    const dir = value > prev.current ? 'up' : 'down';
-    prev.current = value;
-    setChange((c) => ({ dir, n: (c?.n ?? 0) + 1 }));
-    const id = window.setTimeout(() => setChange(null), 600);
-    return () => window.clearTimeout(id);
-  }, [value, pulse]);
-  const low = warnBelow !== undefined && value / max < warnBelow;
-  const classes = [
-    'meter__track',
-    `meter__track--${tone}`,
-    low ? 'meter__track--low' : '',
-    change ? `meter__track--${change.dir}` : '',
-    shakeKey > 0 ? 'meter__track--shake' : '',
-  ].join(' ');
-  return (
-    <div className="meter">
-      <div className="meter__head">
-        <span>{label}</span>
-        {!gaugeOnly && (
-          <span>
-            {unit ? `${unit} ` : ''}
-            {value} / {max}
-          </span>
-        )}
-      </div>
-      <div
-        // 震わせる・光らせる動きを、起きるたびに始めからやり直す
-        key={`${shakeKey}-${change?.n ?? 0}`}
-        className={classes}
-        role="meter"
-        aria-label={unit ? `${label}の${unit}` : label}
-        aria-valuemin={0}
-        aria-valuemax={max}
-        aria-valuenow={value}
-        aria-valuetext={gaugeOnly ? `${Math.round((value / max) * 100)}%` : undefined}
-      >
-        <div className="meter__fill" style={{ width: `${(value / max) * 100}%` }} />
-      </div>
-    </div>
   );
 }

@@ -2,18 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { DEFAULT_DUNGEON, DEFAULT_DUNGEON_ID, DUNGEONS } from './dungeons';
 import { enemyDef } from './enemies';
 import { BOSS_ENEMY, FIELD_ENEMY } from './enemies.fixtures';
-import {
-  canSee,
-  dirBetween,
-  EXPLORE_CONFIG,
-  isBossFloor,
-  toResult,
-  startExplore,
-  step,
-  visibleTiles,
-  type ExploreAction,
-  type ExploreState,
-} from './explore';
+import { isBossFloor, toResult, startExplore, step } from './explore';
+import { EXPLORE_CONFIG, type ExploreAction, type ExploreState } from './exploreTypes';
+import { canSee, dirBetween, visibleTiles } from './exploreSight';
 import { LOADOUT_CONFIG, TREASURE_CONFIG } from './data';
 import { floorParams } from './floorParams';
 import type { DungeonFile } from './genMaster';

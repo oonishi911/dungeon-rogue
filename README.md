@@ -27,6 +27,9 @@ src/
     depart.ts      出発：特性と持ち物を決める
     map.ts         階層マップの生成（小部屋＋迷路、階段、宝箱・強敵の配置、ボス階）
     explore.ts     探索の進行：移動・霧・満腹度・道具・宝箱・敵の手番・戦闘・ボス
+    exploreTypes.ts 探索の状態・行動・出来事の型と、探索の数値
+    exploreSight.ts 視界の計算（見えるマス・見通し・向き）
+    magic.ts       魔法の計算（魔力・魔法の強さ・呪文のダメージ・属性の相性）
     enemies.ts     マップ上の敵：配置・追跡の経路・うろつき
     combat.ts      ダメージ計算：武器と体質、防具と属性、属性付与
     autoplay.ts    自動プレイAI（バランステスト用。npm run test:balance で動かす）
@@ -39,6 +42,10 @@ src/
     rng.ts         シード付き乱数
     data.ts        アイテム・敵・相性表・設定値
   ui/       画面（ロジックを呼び出して表示するだけ）
+    ExploreScreen.tsx  探索画面：操作と毎フレームの進行（右側の欄は ExploreSide、確かめる画面は ExploreDialogs、
+                       1手ごとの音・振動・演出は exploreFeedback、キーの割り当ては exploreKeys、歩く判断は exploreWalk）
+    explore3d.ts       3D表示の本体（数値は explore3dConfig、床・壁の貼り方と霧は explore3dKit）
+    spellFx.ts         呪文の演出（道具とテクスチャは spellFxKit）
   sprites/  32×32のドット絵（文字列データ）と、SVG・Canvasで描く部品
 scripts/
   sprite-shapes.ts  ドット絵の形を図形の組み合わせで定義

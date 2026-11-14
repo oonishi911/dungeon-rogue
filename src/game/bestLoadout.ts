@@ -10,7 +10,7 @@
 import { buildPlayer, enemyHitDamage, itemSlot, playerHitDamage } from './combat';
 import { ITEMS, LOADOUT_CONFIG } from './data';
 import { enemyDef } from './enemies';
-import { spellDamage } from './explore';
+import { spellDamage } from './magic';
 import type { DungeonFile } from './genMaster';
 import type { EnemyDef, ItemId, PlayerStats, SpellId, TraitId } from './types';
 
