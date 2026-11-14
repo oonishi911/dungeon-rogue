@@ -1,5 +1,5 @@
 // 探索画面の3D表示（Three.js）。斜め上から見下ろすカメラで、主人公を滑らかに追う。
-// 2D表示（exploreRender.ts）と同じ Frame を受け取って描くので、操作やゲームのルールは共通。
+// 探索画面（ExploreScreen.tsx）から、1コマの情報（exploreRender.ts の Frame）を受け取って描く。
 //
 // - 床と壁は、同じ形をまとめて描く InstancedMesh で描く。主人公の周りの画面に映る範囲だけを描くので、
 //   マップがどれだけ広くても描く量は変わらない
@@ -17,7 +17,7 @@ import type { EnemyId, ItemId, TraitId, WeaponType } from '../game/types';
 import { drawSprite } from '../sprites/canvas';
 import type { SpriteId } from '../sprites/data';
 import { cloakOf, lookOf } from '../sprites/looks';
-import { floorVariant } from './autotile';
+import { floorVariant } from './floorVariant';
 import { ENEMY_MARK, lerp, type Frame } from './exploreRender';
 import { Hero3D } from './hero3d';
 import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
@@ -693,7 +693,7 @@ export class DungeonView3D {
         } else if (map.stairs && map.stairs.x === x && map.stairs.y === z) {
           // 下り階段のマスは床に穴が開いているので、床を敷かない（穴と段は updateProps で描く）
         } else {
-          // テクスチャがないときは、マスの位置で明るさを少し変えて描き分ける（2D表示と同じ決め方）
+          // テクスチャがないときは、マスの位置で明るさを少し変えて描き分ける
           const k = floorVariant(x, z) % FLOOR_KINDS;
           const variety = atlas ? 1 : 0.9 + k * 0.05;
           this.floors[k]!.setMatrixAt(floorCounts[k]!, m.makeTranslation(x, 0, z));

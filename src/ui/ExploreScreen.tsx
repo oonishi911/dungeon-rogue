@@ -29,24 +29,10 @@ import { ItemIcon, ItemLabel, SpellIcon } from './ItemIcon';
 import { SoundButton } from './SoundButton';
 import { walkPath, walkToward } from '../game/path';
 import type { ItemId, SpellId, TraitId } from '../game/types';
-import {
-  CELL,
-  drawMinimap,
-  drawView,
-  ENEMY_MARK,
-  MINI_CELL,
-  motionOf,
-  readColors,
-  viewOrigin,
-  VIEW_H,
-  VIEW_W,
-  type Frame,
-  type Motion,
-} from './exploreRender';
+import { drawMinimap, ENEMY_MARK, MINI_CELL, motionOf, readColors, type Frame, type Motion } from './exploreRender';
 import { DungeonView3D, weaponOf } from './explore3d';
 import { HAPTICS, vibrate } from './haptics';
 import { chooseDirection, knobOffset, STICK, stickDirections } from './stick';
-import { tilesetFor } from './tileset';
 
 // ミニマップの元の大きさ（px）がこれ以下なら、拡大してもぼかさずドットのまま見せる。
 // これより大きい（広いマップ）と縮めて表示するので、ドットのままだと細い通路が消えてしまう
@@ -90,10 +76,6 @@ const urlTrait = TRAIT_IDS.find((t) => t === traitParam);
 // ?dungeon=standard で、遊ぶダンジョン（src/game/dungeons/ の設定ファイルの名前）を指定できる
 const dungeonParam = new URLSearchParams(location.search).get('dungeon') ?? DEFAULT_DUNGEON_ID;
 const urlDungeon = hasDungeon(dungeonParam) ? dungeonParam : DEFAULT_DUNGEON_ID;
-// ?render=2d で、以前の2D表示に切り替えられる（3D表示との見比べ用）
-const urlRender: RenderMode = new URLSearchParams(location.search).get('render') === '2d' ? '2d' : '3d';
-
-export type RenderMode = '2d' | '3d';
 
 /** タップ・クリックで向かっている先 */
 interface WalkGoal {
@@ -118,13 +100,12 @@ function visibleEnemyIds(state: ExploreState): Set<number> {
 const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fire_whetstone', 'ice_whetstone', 'book_shockwave', 'book_fire_bolt', 'book_heal'];
 
 /**
- * 開発用：準備フェーズを通さずに探索だけを試す。?seed=・?trait=・?dungeon=・?render= で条件を指定できる。
+ * 開発用：準備フェーズを通さずに探索だけを試す。?seed=・?trait=・?dungeon= で条件を指定できる。
  * ?best=1 なら、そのダンジョンの特性に合わせて、いちばん強い装備・道具・呪文書で始める（bestLoadout.ts）
  */
 export function ExploreDevScreen() {
   return (
     <ExploreScreen
-      renderMode={urlRender}
       devBest={urlBest}
       start={() => {
         const seed = Number.isInteger(urlSeed) && urlSeed > 0 ? urlSeed : newSeed();
@@ -153,7 +134,6 @@ interface ExploreScreenProps {
   onFinish?: (state: ExploreState) => void; // 省略すると、終わったあと同じ条件でやり直せる
   onProgress?: (state: ExploreState) => void; // 始まったときと、行動するたびに呼ぶ（途中の状態を保存するため）
   guardBack?: boolean; // ブラウザの「戻る」を一度受け止めて、ページを離れるかを確かめる
-  renderMode?: RenderMode; // 省略すると3D表示（WebGL2 が使えない環境では2D表示）
   devBest?: boolean; // 開発用画面で、いちばん強い装備で試しているか（切り替えのリンクを出す）
 }
 
@@ -175,9 +155,9 @@ function webglAvailable(): boolean {
   }
 }
 
-export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, guardBack = false, renderMode = '3d', devBest }: ExploreScreenProps) {
-  // 3D表示ができない環境（WebGL2 が使えない、準備に失敗した）では2D表示に切り替える
-  const [mode, setMode] = useState<RenderMode>(() => (renderMode === '3d' && webglAvailable() ? '3d' : '2d'));
+export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, guardBack = false, devBest }: ExploreScreenProps) {
+  // 3D表示ができない環境（WebGL2 が使えない、3D表示を作れなかった）では、遊べないことを伝える
+  const [no3d, setNo3d] = useState(() => !webglAvailable());
   const [state, setState] = useState<ExploreState>(start);
   // スマホで、装備・敵・記録をまとめた画面を開いているか（PCでは常に横に出ている）
   const [infoOpen, setInfoOpen] = useState(false);
@@ -203,7 +183,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const walkRef = useRef<WalkGoal | null>(null); // タップ・クリックで向かっている先
   // 仮想スティックで進みたい向きの候補（斜めなら上下・左右の2つ）。1歩ごとに、進める向きを選び直す
   const stickRef = useRef<Dir[] | null>(null);
-  const originRef = useRef<Pos>({ x: 0, y: 0 }); // 2D表示で今描いている画面の左上の座標（タップ位置の計算に使う）
   const view3dRef = useRef<DungeonView3D | null>(null);
 
   const visible = useMemo(
@@ -367,28 +346,21 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
 
   // 毎フレーム：前の動きが終わっていれば次の行動を1つ行い、画面を描く
   useEffect(() => {
-    const colors = readColors();
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let view3d: DungeonView3D | null = null;
-    if (mode === '3d' && viewRef.current) {
-      try {
-        view3d = new DungeonView3D(viewRef.current);
-      } catch {
-        setMode('2d');
-        return;
-      }
+    const canvas = viewRef.current;
+    if (no3d || !canvas) return;
+    let view3d: DungeonView3D;
+    try {
+      view3d = new DungeonView3D(canvas);
+    } catch {
+      setNo3d(true);
+      return;
     }
     view3dRef.current = view3d;
     // 3D表示は、Canvas の画面上の大きさに合わせて描く（スマホの縦長の画面でも引き伸ばさない）
-    const canvas = viewRef.current;
-    const observer =
-      view3d && canvas
-        ? new ResizeObserver(() => view3d!.resize(canvas.clientWidth, canvas.clientHeight))
-        : null;
-    if (observer && canvas) {
-      observer.observe(canvas);
-      view3d!.resize(canvas.clientWidth, canvas.clientHeight);
-    }
+    const observer = new ResizeObserver(() => view3d.resize(canvas.clientWidth, canvas.clientHeight));
+    observer.observe(canvas);
+    view3d.resize(canvas.clientWidth, canvas.clientHeight);
     // 視界の計算は、状態が変わったときだけやり直す
     let sight = { state: stateRef.current, visible: visibleTiles(stateRef.current.map, stateRef.current.player, EXPLORE_CONFIG.sightRadius) };
     // 歩く道筋は、状態か行き先が変わったときだけ探し直す
@@ -433,24 +405,18 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
         progress: reduceMotion ? 1 : Math.min(1, (now - motionRef.current.start) / STEP_MS),
         walkTarget: walkRef.current?.pos ?? null,
         walkPath: routeFor(current, walkRef.current?.pos ?? null),
-        tileset: tilesetFor(current.trait),
       };
-      if (view3d) {
-        view3d.render(frame);
-      } else if (viewRef.current) {
-        originRef.current = viewOrigin(frame);
-        drawView(viewRef.current, frame, colors);
-      }
+      view3d.render(frame);
       frameId = requestAnimationFrame(tick);
     };
     frameId = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(frameId);
-      observer?.disconnect();
-      view3d?.dispose();
+      observer.disconnect();
+      view3d.dispose();
       view3dRef.current = null;
     };
-  }, [perform, walkStep, mode]);
+  }, [perform, walkStep, no3d]);
 
   // このダンジョンの足音を、最初の一歩から鳴るように読み込んでおく
   useEffect(() => preloadSounds(state.trait), [state.trait]);
@@ -555,10 +521,10 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       walkRef.current = null;
       return;
     }
-    const target = mode === '3d' ? view3dRef.current?.pickTile(e.clientX, e.clientY) : pickTile2d(e);
+    const target = view3dRef.current?.pickTile(e.clientX, e.clientY);
     // 主人公をダブルタップ（DOUBLE_TAP_MS 以内に2回タップ）すると、その場で1ターン待つ。
     // 1回だけのタップでは待たない（うっかり触れて、ターンが進まないように）
-    const onHero = mode === '3d' ? view3dRef.current?.hitsPlayer(e.clientX, e.clientY) : target && samePos(target, s.player);
+    const onHero = view3dRef.current?.hitsPlayer(e.clientX, e.clientY);
     if (onHero) {
       const now = performance.now();
       if (now - heroTapRef.current <= DOUBLE_TAP_MS) {
@@ -638,18 +604,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     if (touchRef.current && e.pointerId === touchRef.current.id) endTouch();
   };
 
-  /** 2D表示で、画面上の位置からマスを求める */
-  const pickTile2d = (e: { clientX: number; clientY: number }): Pos | null => {
-    const canvas = viewRef.current;
-    if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    const scale = canvas.width / rect.width; // 画面が狭いと Canvas は縮んで表示される
-    return {
-      x: Math.floor(originRef.current.x + ((e.clientX - rect.left) * scale) / CELL),
-      y: Math.floor(originRef.current.y + ((e.clientY - rect.top) * scale) / CELL),
-    };
-  };
-
   const restart = () => {
     const fresh = start();
     stateRef.current = fresh;
@@ -714,13 +668,12 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
           onLostPointerCapture={onStagePointerCancel}
           onContextMenu={(e) => e.preventDefault()}
         >
+          {/* 3D表示ができない環境では、遊べないことを伝える（以前は2D表示に切り替えていたが、なくした） */}
+          {no3d && <p className="explore__no3d">この端末（ブラウザ）では3D表示ができないため、遊べません。新しいブラウザで開いてください。</p>}
           <canvas
-            // 2Dと3Dでは Canvas の描き方（コンテキスト）が違うので、切り替えたら作り直す
-            key={mode}
             ref={viewRef}
-            className={mode === '3d' ? 'explore__view explore__view--3d' : 'explore__view'}
-            width={VIEW_W * CELL}
-            height={VIEW_H * CELL}
+            className="explore__view"
+            hidden={no3d}
             role="img"
             aria-label={`${floorName}の周囲。マスをタップするとそこまで歩き、指でなぞるとその向きに歩き続ける。主人公をダブルタップするとその場で1ターン待つ。階段は踏むと降りる。${onStairs ? '足元に階段がある' : ''}`}
           />

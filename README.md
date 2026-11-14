@@ -44,7 +44,6 @@ src/
 scripts/
   sprite-shapes.ts  ドット絵の形を図形の組み合わせで定義
   build-sprites.ts  src/sprites/data.ts を生成する
-  build-tiles.ts    2D表示の仮のタイル素材（public/tiles/*.png）を生成する（仕様は docs/tiles.md）
   build-textures.ts 3D表示の仮のテクスチャ（public/textures/{特性}/*.png、128px・なめらかな質感）を生成する（仕様は docs/textures.md）
   build-photo-textures.py 端でつながる画像1枚（assets/texture-sources/）から、3D表示のテクスチャ3枚（床・壁の上面・壁の側面）を作る（Python・Pillow）
   build-chest-textures.py 宝箱の写真（assets/texture-sources/chest.jpg）から、宝箱のテクスチャ3枚（正面・横・ふた）を作る（Python・Pillow）
@@ -71,4 +70,4 @@ npm run test:balance  # バランスのテスト（自動プレイで標準の�
 npm run build   # 型チェック＋ビルド
 ```
 
-開発用の確認画面：`?view=admin`（敵のマスターデータとダンジョンの設定の管理画面。変えて公開もできる。`docs/enemy-master.md`）、`?view=map`（マップ生成）、`?view=explore`（探索だけを試す。`&seed=1` で階層、`&trait=fire` で特性、`&render=2d` で2D表示、`&best=1` でダンジョンに合わせたいちばん強い装備・道具・呪文書を指定。画面上の「いちばん強い装備で試す」でも切り替えられる）
+開発用の確認画面：`?view=admin`（敵のマスターデータとダンジョンの設定の管理画面。変えて公開もできる。`docs/enemy-master.md`）、`?view=map`（マップ生成）、`?view=explore`（探索だけを試す。`&seed=1` で階層、`&trait=fire` で特性、`&best=1` でダンジョンに合わせたいちばん強い装備・道具・呪文書を指定。画面上の「いちばん強い装備で試す」でも切り替えられる）

@@ -599,24 +599,26 @@ button.card:disabled {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 3D表示は Canvas の画面上の大きさに合わせて描くので、縦横比は CSS で決める */
-.explore__view.explore__view--3d {
-  aspect-ratio: 7 / 5;
-  image-rendering: auto;
-}
-
 /* いちばん新しい記録。スマホでだけ画面の上に重ねて出す（PCでは下の記録の欄で読める） */
 .explore__toast {
   display: none;
 }
 
+/* 3D表示は Canvas の画面上の大きさに合わせて描くので、縦横比は CSS で決める */
 .explore__view {
   display: block;
   width: 100%;
-  height: auto;
-  image-rendering: pixelated;
+  aspect-ratio: 7 / 5;
   border: 1px solid var(--pine-line);
   border-radius: 4px;
+}
+
+/* 3D表示ができない環境での案内 */
+.explore__no3d {
+  margin: 0;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--bone-dim);
 }
 
 /* マウスで操作するときだけ、クリックで歩けることを指の形のカーソルで示す（スマホでは強調表示の目印になるため付けない） */
@@ -1088,12 +1090,10 @@ button.card:disabled {
     margin-inline: -0.75rem;
   }
 
-  .explore__view,
-  .explore__view.explore__view--3d {
+  .explore__view {
     width: 100%;
     height: 100%;
     aspect-ratio: auto;
-    object-fit: contain; /* 2D表示のときに縦横比を保つ */
     border-radius: 0;
     border-inline: none;
   }
