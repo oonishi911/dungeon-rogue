@@ -44,6 +44,7 @@ import {
   type Motion,
 } from './exploreRender';
 import { DungeonView3D, weaponOf } from './explore3d';
+import { HAPTICS, vibrate } from './haptics';
 import { chooseDirection, knobOffset, STICK, stickDirections } from './stick';
 import { tilesetFor } from './tileset';
 
@@ -268,6 +269,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       const show = () => {
         view3dRef.current?.hitPulse(hit.kind === 'dealt' ? 'attack' : 'hurt');
         view3dRef.current?.popDamage(hit.at, hit.amount, hit.kind);
+        // スマホを震わせる（振動に対応したスマホだけ）。踏破したとき・力尽きたときは、長く震わせる
+        if (hit.kind === 'dealt') vibrate(next.outcome === 'cleared' ? HAPTICS.cleared : HAPTICS.attack);
+        else vibrate(next.outcome === 'defeated' ? HAPTICS.defeated : HAPTICS.hurt);
       };
       // 呪文の矢のあとに敵が攻撃してきたときは、矢が当たってから見せる
       const delay = impactMs > 0 ? impactMs + (hit.kind === 'taken' ? CAST_THEN_HURT_MS : 0) : 0;
