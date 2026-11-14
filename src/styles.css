@@ -1860,3 +1860,125 @@ button {
     align-items: center;
   }
 }
+
+/* ===== 情報屋との会話 ===== */
+.talk__log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+
+.talk__line {
+  display: grid;
+  gap: 0.125rem;
+  max-width: 88%;
+}
+
+.talk__line--hero {
+  justify-self: end;
+  text-align: right;
+}
+
+.talk__who {
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.talk__text {
+  margin: 0;
+  padding: 0.625rem 0.875rem;
+  border-radius: 10px;
+  line-height: 1.7;
+}
+
+.talk__line--informant .talk__text {
+  background: var(--pine-deep);
+  border: 1px solid var(--pine-line);
+  border-top-left-radius: 2px;
+}
+
+.talk__line--hero .talk__text {
+  background: var(--bone);
+  color: var(--ink);
+  border-top-right-radius: 2px;
+  text-align: left;
+}
+
+.talk__error:empty {
+  display: none;
+}
+
+.talk__ask {
+  padding: 0.75rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 8px;
+  background: var(--pine-deep);
+  display: grid;
+  gap: 0.625rem;
+}
+
+.talk__questions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.talk__question {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.talk__q {
+  font-weight: 700;
+}
+
+.talk__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.375rem;
+}
+
+.talk__btn {
+  min-height: 2.25rem;
+  padding: 0.25rem 0.75rem;
+  font-size: var(--step--1);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.talk__btn:not(.primary) {
+  border: 1px solid var(--pine-line);
+  background: var(--pine);
+}
+
+.talk__btn--off {
+  color: var(--bone-dim);
+  background: transparent;
+  cursor: default;
+}
+
+@media (max-width: 40rem) {
+  .talk__question {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 店の画面の、情報屋から聞いたことのメモ */
+.shop__memo {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--procure);
+  background: var(--pine-deep);
+  list-style: none;
+  font-size: var(--step--1);
+  display: grid;
+  gap: 0.125rem;
+}

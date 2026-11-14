@@ -6,6 +6,8 @@ import {
   ARMOR_BASES,
   ARMOR_INFO,
   gearId,
+  INFO_LABELS,
+  INFO_TOPICS,
   ITEM_LIMITS,
   SPELLBOOK_IDS,
   SUPPLY_IDS,
@@ -20,13 +22,14 @@ import type { ItemId } from '../game/types';
 import { AdminTabs, NumberField, TextField } from './adminParts';
 import { ItemIcon } from './ItemIcon';
 
-type Group = WeaponBaseId | ArmorBaseId | 'supplies' | 'spellbooks';
+type Group = WeaponBaseId | ArmorBaseId | 'supplies' | 'spellbooks' | 'information';
 
 const GROUPS: { id: Group; label: string }[] = [
   ...WEAPON_BASES.map((b) => ({ id: b as Group, label: WEAPON_INFO[b].label })),
   ...ARMOR_BASES.map((b) => ({ id: b as Group, label: ARMOR_INFO[b].label })),
   { id: 'supplies', label: '道具' },
   { id: 'spellbooks', label: '呪文書' },
+  { id: 'information', label: '情報料' },
 ];
 
 interface ItemPanelProps {
@@ -66,7 +69,7 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
 
   const changedGroup = (g: Group): boolean => {
     const pick = (m: ItemMaster) =>
-      g === 'supplies' ? m.supplies : g === 'spellbooks' ? m.spellbooks : (WEAPON_BASES as readonly string[]).includes(g) ? m.weapons[g as WeaponBaseId] : m.armors[g as ArmorBaseId];
+      g === 'information' ? m.information : g === 'supplies' ? m.supplies : g === 'spellbooks' ? m.spellbooks : (WEAPON_BASES as readonly string[]).includes(g) ? m.weapons[g as WeaponBaseId] : m.armors[g as ArmorBaseId];
     return JSON.stringify(pick(base)) !== JSON.stringify(pick(draft));
   };
 
@@ -77,6 +80,7 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
         店で売る品物の名前と値段です。武器と防具は種類ごとに10段階あり、段階ごとに性能も決めます（武器：攻撃力。防具：守り＝受けるダメージから引く数と、効く属性のダメージを何%に減らすか）。
         店には、プレイヤーが持っているいちばん上の段階の2つ上までが並びます。上の段階ほど高く、強くしてください。
         武器と体質の相性、防具の効く属性、道具の働き（回復量など）は変えられません。
+        「情報料」は、情報屋で「はっきり聞く」ときの値段です（1回目の「それとなく聞く」は無料）。
       </p>
 
       <AdminTabs
@@ -91,7 +95,7 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
         <table className="admin__table">
           <thead>
             <tr>
-              <th scope="col">{isWeapon || isArmor ? '段階と名前' : '名前'}</th>
+              <th scope="col">{isWeapon || isArmor ? '段階と名前' : group === 'information' ? '聞くこと' : '名前'}</th>
               {isWeapon && <th scope="col">攻撃力</th>}
               {isArmor && <th scope="col">守り</th>}
               {isArmor && <th scope="col">ダメージの割合（%）</th>}
@@ -163,6 +167,22 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
                   </tr>
                 );
               })}
+            {group === 'information' &&
+              INFO_TOPICS.map((t) => (
+                <tr key={t}>
+                  <th scope="row">{INFO_LABELS[t]}</th>
+                  <td>
+                    <NumberField
+                      value={draft.information[t]}
+                      min={ITEM_LIMITS.info.min}
+                      max={ITEM_LIMITS.info.max}
+                      changed={draft.information[t] !== base.information[t]}
+                      label={`${INFO_LABELS[t]}の情報料`}
+                      onChange={(v) => setDraft((d) => ({ ...d, information: { ...d.information, [t]: v } }))}
+                    />
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>

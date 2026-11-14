@@ -1,24 +1,26 @@
 // 出発の準備：ダンジョンを選んだあと、貯めた金貨で品物を買い、持っていくものを選んで出発する画面。
 // ルールはすべて src/game/shop.ts にあり、ここでは呼び出して表示するだけ。
+// ダンジョンの属性は出さず、情報屋から聞いたことだけを、上にメモとして出す。
 // 売り場は「武器・防具・道具・呪文書」のタブで切り替える。下の「持ち物」の欄は、たたんでおける（スマホで品物を多く見るため）。
 
 import { useState } from 'react';
-import { ITEMS, LOADOUT_CONFIG, TRAITS } from '../game/data';
+import { ITEMS, LOADOUT_CONFIG } from '../game/data';
+import type { Intel } from '../game/informant';
 import type { SaveData } from '../game/save';
 import { buy, count, equip, kitLoadout, shelfItems, SHELVES, takeSupply, toggleBook, type Shelf } from '../game/shop';
-import type { ItemId, Result, TraitId } from '../game/types';
+import type { ItemId, Result } from '../game/types';
 import { ItemIcon } from './ItemIcon';
 
 interface ShopScreenProps {
   run: number;
   dungeonName: string;
-  trait: TraitId;
+  intel: readonly Intel[]; // 情報屋から聞いたこと（ダンジョンの属性は、聞かなければわからない）
   save: SaveData;
   onChange: (save: SaveData) => void; // 買った・選んだたびに呼ぶ（すぐ保存する）
   onDepart: () => void;
 }
 
-export function ShopScreen({ run, dungeonName, trait, save, onChange, onDepart }: ShopScreenProps) {
+export function ShopScreen({ run, dungeonName, intel, save, onChange, onDepart }: ShopScreenProps) {
   const [shelf, setShelf] = useState<Shelf>('weapon');
   const [bagOpen, setBagOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +37,7 @@ export function ShopScreen({ run, dungeonName, trait, save, onChange, onDepart }
       <header className="top">
         <div>
           <p className="top__run">
-            {run}回目の挑戦 ・ {dungeonName} ・ 属性：{TRAITS[trait].name}
+            {run}回目の挑戦 ・ {dungeonName}
           </p>
           <h1 className="top__title">出発の準備</h1>
         </div>
@@ -44,6 +46,10 @@ export function ShopScreen({ run, dungeonName, trait, save, onChange, onDepart }
           {save.gold}G
         </p>
       </header>
+
+      <ul className="shop__memo" aria-label="情報屋から聞いたこと">
+        {intel.length === 0 ? <li className="muted">情報屋からは、何も聞いていない（ダンジョンの属性はわからない）</li> : intel.map((h) => <li key={h.topic}>{h.memo}</li>)}
+      </ul>
 
       <div className="shop__tabs" role="tablist" aria-label="売り場">
         {SHELVES.map((s) => (

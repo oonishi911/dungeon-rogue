@@ -1,6 +1,6 @@
 // 画面の切り替えと、ゲームロジック（純粋関数）の呼び出しだけを担当する。
 // ルールはすべて src/game 側にあり、ここには書かない。
-// 流れは「ダンジョンを選ぶ → 出発の準備（店。shop.ts）→ ダンジョン → 結果 → 次のダンジョンを選ぶ」。
+// 流れは「ダンジョンを選ぶ → 情報屋（informant.ts）→ 出発の準備（店。shop.ts）→ ダンジョン → 結果 → 次のダンジョンを選ぶ」。
 // 金貨・買った持ち物・道具の倉庫はセーブデータに残り、店で買うたびに保存する。
 
 import { useState } from 'react';
@@ -10,17 +10,20 @@ import { startExplore, toResult, traitForSeed } from './game/explore';
 import { type ExploreResult, type ExploreState } from './game/exploreTypes';
 import { packRun } from './game/runSave';
 import { newSave, type SaveData } from './game/save';
+import { startInformant, type InformantState, type Intel } from './game/informant';
 import { departWith, fitKit, kitLoadout, returnWith } from './game/shop';
 import type { Departure } from './game/types';
 import { clearRun, loadRun, loadSave, writeRun, writeSave } from './storage';
 import { DungeonSelectScreen } from './ui/DungeonSelectScreen';
 import { ExploreScreen } from './ui/ExploreScreen';
 import { ResultScreen } from './ui/ResultScreen';
+import { InformantScreen } from './ui/InformantScreen';
 import { ShopScreen } from './ui/ShopScreen';
 
 type Stage =
   | { kind: 'choose' } // 挑むダンジョンを選ぶ（挑戦の始まり）
-  | { kind: 'shop'; dungeon: string; seed: number } // 出発の準備（ダンジョンの特性は、もう決まっている）
+  | { kind: 'informant'; talk: InformantState } // 情報屋との会話（ダンジョンの特性は、もう決まっている）
+  | { kind: 'shop'; dungeon: string; seed: number; intel: readonly Intel[] } // 出発の準備。intel：情報屋から聞いたこと
   | { kind: 'dungeon'; outcome: Departure; seed: number; resume?: ExploreState } // resume：前に中断した探索の続き
   | { kind: 'result'; outcome: Departure; expedition: ExploreResult; next: SaveData };
 
@@ -50,16 +53,34 @@ export function App() {
           run={save.run}
           onChoose={(dungeon) => {
             setSave(fitKit(save)); // 前の持ち物の選び方を、倉庫にある数に合わせる
-            setStage({ kind: 'shop', dungeon, seed: newSeed() });
+            const seed = newSeed();
+            setStage({ kind: 'informant', talk: startInformant(dungeon, seed, traitForSeed(seed)) });
           }}
         />
       );
+    case 'informant': {
+      const { talk } = stage;
+      return (
+        <InformantScreen
+          run={save.run}
+          dungeonName={dungeonOf(talk.dungeon).name}
+          state={talk}
+          save={save}
+          onChange={(next, paid) => {
+            setSave(paid);
+            writeSave(paid); // 払った情報料は、すぐ保存する
+            setStage({ kind: 'informant', talk: next });
+          }}
+          onLeave={() => setStage({ kind: 'shop', dungeon: talk.dungeon, seed: talk.seed, intel: talk.heard })}
+        />
+      );
+    }
     case 'shop':
       return (
         <ShopScreen
           run={save.run}
           dungeonName={dungeonOf(stage.dungeon).name}
-          trait={traitForSeed(stage.seed)}
+          intel={stage.intel}
           save={save}
           onChange={(next) => {
             setSave(next);

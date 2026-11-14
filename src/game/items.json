@@ -528,5 +528,10 @@
       "name": "再生の呪文書",
       "price": 35
     }
+  },
+  "information": {
+    "trait": 30,
+    "body": 20,
+    "boss": 20
   }
 }
