@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ENEMIES, ITEM_MASTER, TRAITS, TRAIT_IDS } from './data';
+import { ENEMIES, TRAITS, TRAIT_IDS } from './data';
 import { DEFAULT_DUNGEON_ID } from './dungeons';
-import { ask, bossOf, commonBody, INFORMANT_CONFIG, questionsLeft, startInformant, type InformantState } from './informant';
+import { ask, bossOf, priceOf, commonBody, INFORMANT_CONFIG, questionsLeft, startInformant, type InformantState } from './informant';
 import { newSave, type SaveData } from './save';
 
 const save = (gold: number): SaveData => ({ ...newSave(), gold });
@@ -30,19 +30,19 @@ describe('情報屋', () => {
   });
 
   it('はっきり聞くと、情報料を払って、正しい答えが聞ける', () => {
-    const r = ask(start('ice'), save(100), 'trait', true);
+    const r = ask(start('ice'), save(100 + priceOf('trait')), 'trait', true);
     if (!r.ok) throw new Error(r.error);
-    expect(r.value.save.gold).toBe(100 - ITEM_MASTER.information.trait);
+    expect(r.value.save.gold).toBe(100);
     expect(r.value.state.heard[0]!.memo).toBe(`属性：${TRAITS.ice.name}`);
   });
 
   it('金貨が足りなければ、はっきりは聞けない', () => {
-    expect(ask(start(), save(ITEM_MASTER.information.trait - 1), 'trait', true).ok).toBe(false);
+    expect(ask(start(), save(priceOf('trait') - 1), 'trait', true).ok).toBe(false);
   });
 
   it('無料で聞けるのは1回目だけ。聞けるのは決まった回数まで。同じことは2度聞けない', () => {
     let s = start('dark');
-    let money = save(1000);
+    let money = save(priceOf('trait') + priceOf('body') + priceOf('boss'));
     const go = (topic: 'trait' | 'body' | 'boss', clear: boolean) => {
       const r = ask(s, money, topic, clear);
       if (!r.ok) return r.error;
@@ -60,10 +60,10 @@ describe('情報屋', () => {
 
   it('魔物の体とボスは、そのダンジョンの設定から答える', () => {
     for (const trait of TRAIT_IDS) {
-      const r = ask(start(trait), save(1000), 'boss', true);
+      const r = ask(start(trait), save(priceOf('boss')), 'boss', true);
       if (!r.ok) throw new Error(r.error);
       expect(r.value.state.heard[0]!.memo).toContain(ENEMIES[bossOf(DEFAULT_DUNGEON_ID, trait)]!.name);
-      const b = ask(start(trait), save(1000), 'body', true);
+      const b = ask(start(trait), save(priceOf('body')), 'body', true);
       if (!b.ok) throw new Error(b.error);
       expect(b.value.state.heard[0]!.memo.length).toBeGreaterThan(0);
       expect(['normal', 'soft', 'hard', 'spirit']).toContain(commonBody(DEFAULT_DUNGEON_ID, trait));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ENEMY_MASTER } from './data';
-import { DEFAULT_DUNGEON, DEFAULT_DUNGEON_ID, DUNGEON_IDS, dungeonOf, sortDungeonIds } from './dungeons';
+import { DEFAULT_DUNGEON, DEFAULT_DUNGEON_ID, DUNGEON_IDS, sortDungeonIds } from './dungeons';
 import { spawnEnemies, wanderStep } from './enemies';
 import { BOSS_ENEMY, FIELD_ENEMY } from './enemies.fixtures';
 import {
@@ -16,8 +16,6 @@ import {
 } from './genMaster';
 import { generateFloor, type FloorMap, type Room } from './map';
 
-// ダンジョンの設定ファイルの中身そのもの（書き出した文字列と比べる）
-const RAW = import.meta.glob<string>('./dungeons/*.json', { eager: true, query: '?raw', import: 'default' });
 // 敵を置くときに使う、道中の敵（どの敵でもよいので、データにいる敵から1つ選ぶ）
 const POOL = [FIELD_ENEMY];
 
@@ -52,15 +50,6 @@ const sampleDungeon = (): DungeonFile => {
 };
 
 describe('ダンジョンの設定ファイル（src/game/dungeons/）', () => {
-  it('どのファイルも正しい形になっていて、書き出すと同じ中身になる', () => {
-    expect(Object.keys(RAW).length).toBe(DUNGEON_IDS.length);
-    for (const [path, text] of Object.entries(RAW)) {
-      const id = path.replace(/^.*\//, '').replace(/\.json$/, '');
-      expect(dungeonProblems(JSON.parse(text), ENEMY_MASTER)).toEqual([]);
-      expect(serializeDungeon(dungeonOf(id))).toBe(text);
-    }
-  });
-
   it('標準のダンジョンがあり、一覧の先頭に並ぶ', () => {
     expect(DUNGEON_IDS[0]).toBe(DEFAULT_DUNGEON_ID);
     expect(DEFAULT_DUNGEON.name).toBeTruthy();

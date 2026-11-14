@@ -40,7 +40,7 @@ function arena(player: Pos, enemies: MapEnemy[], loadout: ItemId[] = BOOKS): Exp
   return { ...base, map, chests: [], player, enemies: enemies.map((e, i) => ({ ...e, uid: i })), seen: new Array<boolean>(55).fill(true) };
 }
 
-// 標準のダンジョンの設定（startExplore でダンジョンを指定しないと、標準のダンジョンになる）
+// 標準のダンジョンの設定（startExplore でダンジョンを指定しないと、標準のダンジョンになる。テストでは src/game/testdata/ の決まった中身）
 const GEN = DEFAULT_DUNGEON;
 const cfg = GEN.spells;
 
