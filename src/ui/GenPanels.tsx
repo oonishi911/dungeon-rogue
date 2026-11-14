@@ -233,7 +233,7 @@ export function MagicPanel({ base, draft, setDraft }: GenPanelProps) {
     <section className="admin__section" role="tabpanel" id="admin-magic-panel" aria-labelledby="admin-magic-tab">
       <h2 className="admin__heading">魔法</h2>
       <p className="admin__note">
-        呪文書（準備の魔法屋で買う）を持っていくと、魔力を使ってその呪文を何度でも唱えられます。呪文書を持っていなければ、魔力の棒も出ません。
+        呪文書を持っていくと（出発するとき、そのダンジョンで有利な2冊を持たせる）、魔力を使ってその呪文を何度でも唱えられます。呪文書を持っていなければ、魔力の棒も出ません。
       </p>
       <div className="gen__fields">
         {MAGIC_FIELDS.map((f) => (

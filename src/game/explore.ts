@@ -4,7 +4,7 @@
 // 階の数・広さ・満腹度・小部屋・敵の置き方と出る敵・レベルの上がり方・魔法は、遊んでいるダンジョンの設定（state.dungeon。dungeons.ts）で決まる。
 
 import { buildPlayer, enemyHitDamage, playerHitDamage } from './combat';
-import { COMBAT_CONFIG, ENCHANT_VS_ELEMENT, enemyReward, expToNext, ITEMS, PREP_CONFIG, REWARD_CONFIG, SPELLS, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
+import { COMBAT_CONFIG, ENCHANT_VS_ELEMENT, enemyReward, expToNext, ITEMS, LOADOUT_CONFIG, REWARD_CONFIG, SPELLS, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
 import { DEFAULT_DUNGEON_ID, dungeonOf } from './dungeons';
 import type { DungeonFile, GenSettings, MagicSettings, RoomSettings } from './genMaster';
 import {
@@ -385,7 +385,7 @@ function openChest(state: ExploreState): ExploreState {
     log.push(`宝箱から金貨${chest.gold}Gを手に入れた`);
   }
   if (item) {
-    if (stats.items.length < PREP_CONFIG.maxItems) {
+    if (stats.items.length < LOADOUT_CONFIG.maxItems) {
       stats = { ...stats, items: [...stats.items, item] };
       log.push(`宝箱から${ITEMS[item].name}を手に入れた`);
       item = null;
@@ -647,7 +647,7 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
     s = pick.state;
     if (enemy.elite || roll.value * 100 < reward.drop) item = items[pick.value]!;
   }
-  if (item && !enemy.elite && stats.items.length < PREP_CONFIG.maxItems) {
+  if (item && !enemy.elite && stats.items.length < LOADOUT_CONFIG.maxItems) {
     stats = { ...stats, items: [...stats.items, item] };
     log.push(`${ITEMS[item].name}を手に入れた`);
     item = null;

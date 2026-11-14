@@ -25,14 +25,6 @@ export function writeSave(data: SaveData): void {
   }
 }
 
-export function clearSave(): void {
-  try {
-    localStorage.removeItem(KEY);
-  } catch {
-    // 消せなくても次の読み込みで形を確かめるので問題ない
-  }
-}
-
 /** 探索の途中の状態（中断データ）。なければ、または続きから遊べなければ null */
 export function loadRun(): ResumedRun | null {
   try {

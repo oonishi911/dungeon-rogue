@@ -1,4 +1,4 @@
-// 開発用：ダンジョンの特性に合わせて、いちばん強い装備・道具・呪文書を選ぶ（準備を通さずに探索を試すときに使う）。
+// 開発用：ダンジョンの特性に合わせて、いちばん強い装備・道具・呪文書を選ぶ（ダンジョンを選ばずに探索を試すときに使う）。
 // 敵のデータ（enemies.json）と、ダンジョンの設定（出る敵・魔法）と、相性の表から計算するので、管理画面で変えても、それに合わせて選び直される。
 // 「強い」は、そのダンジョンのその属性の、道中の敵（出やすさの分だけ数える）とボス（BOSS_WEIGHT 体分として数える）に対して：
 // - 武器：与えるダメージの合計がいちばん多いもの
@@ -8,7 +8,7 @@
 // - そのほかの道具：回復薬3つ、食料3つ（道具は全部で8つ）
 
 import { buildPlayer, enemyHitDamage, itemSlot, playerHitDamage } from './combat';
-import { ITEMS, PREP_CONFIG } from './data';
+import { ITEMS, LOADOUT_CONFIG } from './data';
 import { enemyDef } from './enemies';
 import { spellDamage } from './explore';
 import type { DungeonFile } from './genMaster';
@@ -20,7 +20,7 @@ const BOLTS: SpellId[] = ['fire_bolt', 'ice_bolt', 'light_lance', 'dark_bolt'];
 const ATTACK_SPELLS: SpellId[] = [...BOLTS, 'sweep', 'shockwave'];
 
 /**
- * そのダンジョンのその属性で有利に働く呪文書を count 冊選ぶ（準備を飛ばして出発するときの持ち物）。
+ * そのダンジョンのその属性で有利に働く呪文書を count 冊選ぶ（出発するときの持ち物。depart.ts）。
  * 道中の敵（出やすさの分だけ数える）とボス（BOSS_WEIGHT 体分）に与えるダメージの合計が多い順。
  * 属性の相性（弱点なら2倍など）が効くので、ふつうはその属性の敵の弱点を突く矢が選ばれる。gear は持っていく装備（杖なら魔法が強くなる）
  */
@@ -30,7 +30,7 @@ export function favorableSpellbooks(trait: TraitId, dungeon: DungeonFile, gear: 
   const score = (spell: SpellId) => foes.reduce((sum, { def, weight }) => sum + spellDamage(stats, spell, def, dungeon) * weight, 0);
   return ATTACK_SPELLS.map((spell, i) => ({ spell, i, score: score(spell) }))
     .sort((a, b) => b.score - a.score || a.i - b.i)
-    .slice(0, Math.min(count, PREP_CONFIG.maxSpellbooks))
+    .slice(0, Math.min(count, LOADOUT_CONFIG.maxSpellbooks))
     .map(({ spell }) => `book_${spell}` as ItemId);
 }
 
@@ -61,7 +61,7 @@ export function bestLoadout(trait: TraitId, dungeon: DungeonFile): ItemId[] {
   });
   const bolt = best(BOLTS, (spell) => total((stats, enemy) => spellDamage(stats, spell, enemy, dungeon), buildPlayer([weapon])));
 
-  const consumables: ItemId[] = [enchant, enchant, 'potion', 'potion', 'potion', 'food', 'food', 'food'].slice(0, PREP_CONFIG.maxItems) as ItemId[];
-  const books = [`book_${bolt}`, 'book_sweep', 'book_heal'].slice(0, PREP_CONFIG.maxSpellbooks) as ItemId[];
+  const consumables: ItemId[] = [enchant, enchant, 'potion', 'potion', 'potion', 'food', 'food', 'food'].slice(0, LOADOUT_CONFIG.maxItems) as ItemId[];
+  const books = [`book_${bolt}`, 'book_sweep', 'book_heal'].slice(0, LOADOUT_CONFIG.maxSpellbooks) as ItemId[];
   return [weapon, armor, ...consumables, ...books];
 }
