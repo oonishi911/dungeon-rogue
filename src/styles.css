@@ -650,6 +650,18 @@ button.card:disabled {
   padding: 1rem;
 }
 
+/* リタイアのボタン（「装備と敵」の欄のいちばん下。押すと、確かめる画面が出る） */
+.explore__retire {
+  justify-self: start;
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  color: var(--alert);
+}
+
+.explore__retire:disabled {
+  opacity: 0.4;
+}
+
 .explore__leave-note {
   max-width: 22em;
   font-family: var(--sans);

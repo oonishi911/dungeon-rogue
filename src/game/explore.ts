@@ -46,9 +46,10 @@ export type ExploreAction =
   | { kind: 'descend' }
   | { kind: 'ascend' } // 上り階段（2階目からの入口）から、1つ上の階へ戻る
   | { kind: 'use_item'; item: ItemId }
-  | { kind: 'cast'; spell: SpellId; dir?: Dir }; // 呪文を唱える。向きを選ぶ呪文（なぎ払い・矢）は dir が要る
+  | { kind: 'cast'; spell: SpellId; dir?: Dir } // 呪文を唱える。向きを選ぶ呪文（なぎ払い・矢）は dir が要る
+  | { kind: 'retire' }; // リタイア：探索をやめてダンジョンを出る（踏破しなかった扱い。金貨は力尽きたときと同じだけ持ち帰る）
 
-export type ExploreOutcome = 'ongoing' | 'cleared' | 'defeated';
+export type ExploreOutcome = 'ongoing' | 'cleared' | 'defeated' | 'retired';
 
 /** 宝箱。持ち物がいっぱいで道具を取れなかったときは、道具だけ残る */
 export interface Chest {
@@ -240,6 +241,10 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
       if (memory) return ok(spendAction(returnToFloor(left, floor, memory, memory.map.start, `地下${floor + 1}階に降りた`)));
       const map = mapOfFloor(state.seed, state.floors, state.mapSize, floor, dungeonOfState(state).rooms);
       return ok(spendAction(enterFloor(left, floor, map)));
+    }
+    case 'retire': {
+      // 1ターンも使わず、敵も動かないうちに出る
+      return ok({ ...state, outcome: 'retired', log: [...state.log, 'リタイアして、ダンジョンを出た'] });
     }
     case 'ascend': {
       const up = upStairs(state);
@@ -835,18 +840,18 @@ function applyPoison(state: ExploreState): ExploreState {
 // ===== 結果 =====
 
 export interface ExploreResult {
-  outcome: 'cleared' | 'defeated';
+  outcome: 'cleared' | 'defeated' | 'retired';
   floorReached: number; // 1始まり
   bossFloor: boolean; // ボス階までたどり着いたか
   defeated: number;
   gold: number; // 手に入れた金貨
-  goldBrought: number; // 持ち帰った金貨。踏破すれば全額、力尽きたら一部
+  goldBrought: number; // 持ち帰った金貨。踏破すれば全額、力尽きたときとリタイアしたときは一部
 }
 
 export function toResult(state: ExploreState): ExploreResult {
   const cleared = state.outcome === 'cleared';
   return {
-    outcome: cleared ? 'cleared' : 'defeated',
+    outcome: cleared ? 'cleared' : state.outcome === 'retired' ? 'retired' : 'defeated',
     floorReached: state.floor + 1,
     bossFloor: isBossFloor(state),
     defeated: state.defeated,
