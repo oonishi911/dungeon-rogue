@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { baseItemOf } from '../game/itemMaster';
 import { ENEMIES, ITEMS } from '../game/data';
 import { CLOAKS, PALETTE, SPRITES } from './data';
 import { cloakOf, ENEMY_LOOKS } from './looks';
@@ -27,9 +28,9 @@ describe('ドット絵のデータ', () => {
     }
   });
 
-  it('すべての防具にマントの色がある', () => {
+  it('すべての防具にマントの色がある（段階が違っても、同じ種類なら同じ色）', () => {
     for (const item of Object.values(ITEMS)) {
-      if (item.effect.kind === 'armor') expect(cloakOf(item.id)).toBe(item.id);
+      if (item.effect.kind === 'armor') expect(cloakOf(item.id)).toBe(baseItemOf(item.id));
     }
     expect(cloakOf(null)).toBe('none');
   });
