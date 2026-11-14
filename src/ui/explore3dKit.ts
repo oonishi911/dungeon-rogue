@@ -242,6 +242,10 @@ export function applyFog<T extends THREE.Material>(material: T, fog: Fog, mode: 
               float along = abs( normal.x ) > 0.5 ? -world.z * sign( normal.x ) : world.x * sign( normal.z );
               vMapUv = vec2( along / TEXTURE_SPAN, world.y / WALL_HEIGHT_F );
             #endif
+            // 凹凸（bumpMap）も、色と同じ貼り方で読む
+            #if defined( USE_BUMPMAP ) && ( defined( MAPPED_FLOOR ) || defined( MAPPED_TOP ) || defined( MAPPED_SIDE ) )
+              vBumpMapUv = vMapUv;
+            #endif
           #endif
         }`,
       );

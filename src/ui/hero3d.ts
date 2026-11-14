@@ -63,6 +63,12 @@ const SWING_WINDUP_END = 0.055; // 振りかぶり切る時間（秒）。そこ
 
 const TURN_SPEED = 14; // 体を回す速さ（大きいほど速く向きが変わる）
 const BOB = { height: 0.05, sway: 0.08 }; // 歩くときの上下の揺れ（マス）と、左右の傾き（ラジアン）
+// 歩き方：脚（腰が軸）と、武器を持たない右腕（肩が軸）を前後に振る角度（ラジアン）。1歩ごとに出す脚を入れ替える
+const STRIDE = { leg: 0.7, arm: 0.55, weaponArm: 0.2 };
+// マント：歩くと裾が後ろへひるがえり（flare、マス）、裾が波打つ（wave、マス）。follow は歩き始め・止まりに追いつく速さ
+const CLOAK_FLOW = { flare: 0.14, wave: 0.02, waveSpeed: 9, follow: 6, top: 0.55 };
+// 待っているあいだの息づかい：体がわずかに上下する（マス）。speed は1秒あたりの角度
+const BREATH = { height: 0.007, speed: 2.4 };
 
 /** 2点のあいだをつなぐ円柱（腕など）。a の太さが ra、b の太さが rb */
 function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number): THREE.BufferGeometry {
@@ -110,6 +116,13 @@ export class Hero3D {
   private readonly leftArm = new THREE.Group(); // 左腕（肩が軸）。攻撃のときに、これを回して武器を振る
   private swingAt: number | null = null; // 振り始めてからの秒数（振っていなければ null）
   private facing = 0;
+  private readonly rightArm = new THREE.Group(); // 右腕（肩が軸）。歩くときに前後へ振る
+  private readonly legs: THREE.Group[] = []; // 右脚・左脚（腰が軸）
+  private readonly cloakParts: { geo: THREE.BufferGeometry; base: Float32Array; y: number }[] = []; // マントの形（動かす前の頂点）
+  private stepSide = 1; // 今の1歩で前へ出す脚（1か-1）。1歩ごとに入れ替える
+  private lastProgress = 1;
+  private moving = 0; // 歩いている度合い（0〜1。歩き始め・止まりになめらかに変える）
+  private time = 0;
 
   constructor() {
     const mats = {
@@ -141,33 +154,49 @@ export class Hero3D {
     // 足元の影
     add(new THREE.CircleGeometry(0.28, 16).rotateX(-Math.PI / 2), mats.shadow, 0, 0.01, 0, this.root).renderOrder = 1;
 
-    // 靴
-    add(new THREE.BoxGeometry(0.1, 0.08, 0.14), mats.boots, -0.07, 0.04, 0.02);
-    add(new THREE.BoxGeometry(0.1, 0.08, 0.14), mats.boots, 0.07, 0.04, 0.02);
+    // 脚：腰を軸にした入れ物に、ズボン（ベルトの色）と靴を入れる。歩くときに前後へ振る
+    for (const side of [-1, 1]) {
+      const hip = new THREE.Group();
+      hip.position.set(side * 0.07, 0.22, 0);
+      add(limb(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -0.15, 0.005), 0.045, 0.038), mats.belt, 0, 0, 0, hip);
+      add(new THREE.BoxGeometry(0.1, 0.08, 0.14), mats.boots, 0, -0.18, 0.02, hip);
+      this.body.add(hip);
+      this.legs.push(hip);
+    }
 
     // 服（マントの内側）とベルト
-    add(new THREE.CylinderGeometry(0.13, 0.17, 0.42, 16), mats.tunic, 0, 0.29, 0);
+    add(new THREE.CylinderGeometry(0.13, 0.16, 0.3, 16), mats.tunic, 0, 0.36, 0); // 服は腰の下まで（その下に脚が見える）
     add(new THREE.CylinderGeometry(0.155, 0.16, 0.04, 16), mats.belt, 0, 0.3, 0);
 
     // マント：前（+z）を開けて、中の服が見えるようにする。裾は濃い色。
     // three.js の円柱は、角度0が +z の向き（x = sin、z = cos）なので、角度0を中心に開ける
     const gap = 0.9; // 前の開きの角度（ラジアン）
-    const cloakGeo = new THREE.CylinderGeometry(0.17, 0.27, 0.5, 20, 1, true, gap / 2, Math.PI * 2 - gap);
-    add(cloakGeo, this.cloakMats.C, 0, 0.3, 0);
-    add(new THREE.CylinderGeometry(0.27, 0.275, 0.05, 20, 1, true, gap / 2, Math.PI * 2 - gap), this.cloakMats.c, 0, 0.075, 0);
+    // 裾がひるがえるよう、縦にも分けておき、毎フレーム頂点を動かす（flowCloak）
+    // 裾は膝の上まで（脚と靴の動きが見えるように）
+    const cloakGeo = new THREE.CylinderGeometry(0.17, 0.25, 0.34, 20, 5, true, gap / 2, Math.PI * 2 - gap);
+    add(cloakGeo, this.cloakMats.C, 0, 0.38, 0);
+    const hemGeo = new THREE.CylinderGeometry(0.25, 0.255, 0.05, 20, 1, true, gap / 2, Math.PI * 2 - gap);
+    add(hemGeo, this.cloakMats.c, 0, 0.235, 0);
+    for (const [geo, y] of [[cloakGeo, 0.38], [hemGeo, 0.235]] as const) {
+      const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+      this.cloakParts.push({ geo, base: Float32Array.from(pos.array as Float32Array), y });
+    }
 
     // 腕：肩からマントの前の開きを通って、体の前に手を出す（服の袖と、肌色の手）
     // 左腕（武器を持つ方）は肩を軸にした入れ物に入れ、攻撃のときに肩から回して振る
     for (const side of [-1, 1]) {
       const shoulder = new THREE.Vector3(side * 0.12, 0.5, 0.02);
       const hand = new THREE.Vector3(side * 0.14, 0.31, 0.19);
-      const parent = side === 1 ? this.leftArm : this.body;
-      const origin = side === 1 ? shoulder : new THREE.Vector3();
+      const parent = side === 1 ? this.leftArm : this.rightArm;
+      const origin = shoulder;
       add(limb(shoulder.clone().sub(origin), hand.clone().sub(origin), 0.04, 0.035), mats.tunic, 0, 0, 0, parent);
       add(new THREE.SphereGeometry(0.048, 10, 8), mats.skin, hand.x - origin.x, hand.y - origin.y, hand.z - origin.z, parent);
       if (side === 1) {
         this.leftArm.position.copy(shoulder);
         this.leftHand.position.copy(hand).sub(shoulder);
+      } else {
+        this.rightArm.position.copy(shoulder);
+        this.body.add(this.rightArm);
       }
     }
     this.leftHand.rotation.set(-WEAPON_GRIP.back, 0, -WEAPON_GRIP.outward);
@@ -248,8 +277,19 @@ export class Hero3D {
 
     const walking = progress < 1 && !reduceMotion;
     const phase = Math.sin(progress * Math.PI);
-    this.body.position.y = walking ? phase * BOB.height : 0;
+    if (progress < this.lastProgress) this.stepSide = -this.stepSide; // 次の1歩が始まった
+    this.lastProgress = progress;
+    if (!reduceMotion) this.time += dt;
+    this.moving += ((walking ? 1 : 0) - this.moving) * Math.min(1, dt * CLOAK_FLOW.follow);
+    const breath = reduceMotion ? 0 : (Math.sin(this.time * BREATH.speed) + 1) * BREATH.height * (1 - this.moving);
+    this.body.position.y = (walking ? phase * BOB.height : 0) + breath;
     this.body.rotation.z = walking ? Math.sin(progress * Math.PI * 2) * BOB.sway : 0;
+    // 脚と腕：前へ出した脚と反対の腕を前へ振る
+    const stride = walking ? phase * this.stepSide : 0;
+    this.legs[0]!.rotation.x = -stride * STRIDE.leg;
+    this.legs[1]!.rotation.x = stride * STRIDE.leg;
+    this.rightArm.rotation.x = stride * STRIDE.arm;
+    if (!reduceMotion) this.flowCloak();
 
     // 武器を振る動き（動きを減らす設定では振らない）
     let pose = REST_POSE;
@@ -258,10 +298,30 @@ export class Hero3D {
       if (reduceMotion || this.swingAt >= SWING.end) this.swingAt = null;
       else pose = swingPose(SWINGS[this.weapon?.type ?? 'fist'], this.swingAt);
     }
-    this.leftArm.rotation.set(pose.armX, 0, -pose.armZ); // 左腕は +x の側なので、z まわりのマイナスが体の内へ
+    this.leftArm.rotation.set(pose.armX - (this.swingAt === null ? stride * STRIDE.weaponArm : 0), 0, -pose.armZ); // 左腕は +x の側なので、z まわりのマイナスが体の内へ
     this.leftHand.rotation.x = -WEAPON_GRIP.back + pose.gripX;
     this.body.rotation.x = pose.lean;
     this.body.position.z = pose.lunge;
+  }
+
+  /** マントの裾を動かす：歩くと後ろへひるがえり、裾が波打つ（上の方ほど動かない） */
+  private flowCloak() {
+    for (const { geo, base, y } of this.cloakParts) {
+      const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i++) {
+        const bx = base[i * 3]!;
+        const by = base[i * 3 + 1]!;
+        const bz = base[i * 3 + 2]!;
+        const w = Math.max(0, (CLOAK_FLOW.top - (by + y)) / CLOAK_FLOW.top) ** 1.5; // 裾ほど大きく動く
+        const angle = Math.atan2(bx, bz);
+        const back = Math.max(0, -Math.cos(angle)); // 背中側ほど、後ろへひるがえる
+        const wave = Math.sin(angle * 3 - this.time * CLOAK_FLOW.waveSpeed) * CLOAK_FLOW.wave * w * (0.35 + this.moving);
+        const r = Math.hypot(bx, bz) || 1;
+        pos.setXYZ(i, bx + (bx / r) * wave, by + back * w * this.moving * CLOAK_FLOW.flare * 0.4, bz + (bz / r) * wave - w * this.moving * CLOAK_FLOW.flare * (0.4 + 0.6 * back));
+      }
+      pos.needsUpdate = true;
+      geo.computeVertexNormals();
+    }
   }
 
   dispose() {

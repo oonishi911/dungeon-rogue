@@ -12,7 +12,7 @@ export const WALL_ROUND = 0.16;
 // ずらし方はダンジョンの中の位置で決めるので、となり合う壁の面はつながったまま波打つ
 export const WALL_ROUGH = { amount: 0.045, scale: 2.6, top: 0.5 } as const;
 export const WALL_SHAPES = 16; // 4つの側面のどれが床に面しているかの組み合わせ（softWall.ts の exposureIndex）
-export const CAMERA = { height: 15, back: 7.5 }; // 主人公の真上15・手前7.5から見下ろす（約63度）
+export const CAMERA = { height: 15, back: 11.7 }; // 主人公の真上15・手前11.7から見下ろす（約52度。主人公の脚やマントの動きが横から見える角度）
 // 画面の大きさによらず、主人公のいるあたりの1マスが画面上でこの大きさ（CSSピクセル）に映るよう、視野の広さを決める。
 // スマホの縦画面（幅約390px）で横に約8マス、PCの探索画面（幅約670px）で横に約14マス映る
 export const TILE_PX = 48;
@@ -104,8 +104,8 @@ export const TORCH = {
   intensity: 10,
   distance: 9, // 光が届く距離（マス）。視界の半径6より少し遠くまで
   decay: 1,
-  height: 0.85, // 手に持った高さ（壁の上面1より低い）
-  forward: 0.3, // 主人公より少し手前（カメラ側）に掲げる。主人公の体の中に光があると、体が照らされず暗くなるため
+  height: 1.25, // 掲げた高さ（主人公の頭より上。体の正面が光りすぎず、脚やマントの動きが見えるように）
+  forward: 0.45, // 主人公より少し手前（カメラ側）に掲げる。主人公の体の中に光があると、体が照らされず暗くなるため
   shadowMapSize: 512,
 };
 export const AMBIENT = 0.3; // 全体を均等に照らす弱い光。光の届かない場所や、一度見ただけのマスがかろうじて見える明るさ
@@ -138,4 +138,16 @@ export const TRAIT_COLORS: Record<TraitId, { floor: number; wall: number }> = {
   neutral: { floor: 0x2e3a36, wall: 0x66766f },
   light: { floor: 0x4a4430, wall: 0xc9bb8a },
   dark: { floor: 0x241d32, wall: 0x52466e },
+};
+
+// 床と壁の凹凸：テクスチャの明るさを高さとみなし、石の継ぎ目やひびに光と陰を付ける（bumpMap）。大きいほど凹凸が強い
+export const SURFACE_BUMP = { floor: 9, top: 7, side: 9 };
+// 床の小石とがれき：マスごとに決まった乱数で、小石を散らし、壁の根元には崩れた石を寄せる（色は壁の色を暗くしたもの）
+export const DEBRIS = {
+  pebbleChance: 0.45, // 壁に接していない床のマスに、小石が1つある確率
+  rubbleChance: 0.6, // 壁に接した床のマスに、崩れた石がある確率（あれば1〜3個）
+  pebbleSize: [0.04, 0.09] as const, // 小石の大きさ（マス）
+  rubbleSize: [0.05, 0.13] as const, // 崩れた石の大きさ（マス）
+  darken: 0.6, // 壁の色に掛ける明るさ
+  perTile: 4, // 1マスに置ける数の上限（入れ物の大きさを決める）
 };

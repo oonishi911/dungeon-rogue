@@ -26,7 +26,7 @@ import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
-import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, RESOLUTION, SHADOW_SIDES, SPELL_KNOCK, SUN, TEXTURE_FILES, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, type HitPulse } from './explore3dConfig';
+import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEBRIS, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, RESOLUTION, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, type HitPulse } from './explore3dConfig';
 import { applyFog, createFog, createGroundMist, litBillboard, worldMapped } from './explore3dKit';
 
 
@@ -144,6 +144,7 @@ export class DungeonView3D {
   };
   private readonly target: THREE.Mesh;
   private readonly pathDots: THREE.InstancedMesh; // 歩く道筋の点
+  private readonly debris: THREE.InstancedMesh; // 床の小石と、壁の根元の崩れた石
   private shownPath: Pos[] | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -216,7 +217,17 @@ export class DungeonView3D {
     for (const mat of [chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat]) applyFog(mat, this.fog);
     this.stairs = new Stairs3D((mat) => applyFog(mat, this.fog));
     this.loadChestTextures();
-    for (const mesh of [...this.floors, ...this.walls, this.wallShadows]) {
+    // 床の小石と、壁の根元の崩れた石（角ばった形。霧も床と同じくかける）
+    const stoneGeo = new THREE.IcosahedronGeometry(1, 1).scale(1, 0.6, 1);
+    // 頂点を少しずつずらして、角の欠けたごつごつした石にする（決まった乱数なので、いつも同じ形）
+    const stonePos = stoneGeo.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < stonePos.count; i++) {
+      // 同じ位置の頂点（となりの面と共有する角）は同じだけずらし、すき間が開かないようにする
+      const k = 0.78 + tileRandom(Math.round(stonePos.getX(i) * 100), Math.round(stonePos.getY(i) * 100), Math.round(stonePos.getZ(i) * 100)) * 0.4;
+      stonePos.setXYZ(i, stonePos.getX(i) * k, stonePos.getY(i) * k, stonePos.getZ(i) * k);
+    }
+    this.debris = new THREE.InstancedMesh(stoneGeo, applyFog(new THREE.MeshPhongMaterial({ flatShading: true, ...NO_GLOSS }), this.fog), DRAW_CAPACITY * DEBRIS.perTile);
+    for (const mesh of [...this.floors, ...this.walls, this.wallShadows, this.debris]) {
       // 中身を毎回入れ替えるので、最初の中身で計算された範囲で画面外と判定されないようにする
       mesh.frustumCulled = false;
       this.scene.add(mesh);
@@ -579,6 +590,10 @@ export class DungeonView3D {
     const floorCounts = this.floors.map(() => 0);
     const wallCounts = this.walls.map(() => 0);
     let shadows = 0;
+    let stones = 0;
+    const stoneColor = new THREE.Color(colors.wall).multiplyScalar(DEBRIS.darken);
+    const e = new THREE.Euler();
+    const size = new THREE.Vector3();
     this.fog.setTargets(frame.state, frame.visible);
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
@@ -607,6 +622,23 @@ export class DungeonView3D {
           const variety = atlas ? 1 : 0.9 + k * 0.05;
           this.floors[k]!.setMatrixAt(floorCounts[k]!, m.makeTranslation(x, 0, z));
           this.floors[k]!.setColorAt(floorCounts[k]!++, c.copy(floorBase).multiplyScalar(variety));
+          // 小石と崩れた石：マスの位置で決まる乱数で置く（歩いても変わらない）
+          const walls = SHADOW_SIDES.filter((side) => seenWall(x + side.dx, z + side.dz));
+          const r = (n: number) => tileRandom(x, z, n);
+          const pieces = walls.length > 0 ? (r(0) < DEBRIS.rubbleChance ? 1 + Math.floor(r(1) * 3) : 0) : r(0) < DEBRIS.pebbleChance ? 1 : 0;
+          for (let n = 0; n < pieces && stones < DRAW_CAPACITY * DEBRIS.perTile; n++) {
+            const wall = walls.length > 0 ? walls[Math.floor(r(10 + n) * walls.length)]! : null;
+            const [lo, hi] = wall ? DEBRIS.rubbleSize : DEBRIS.pebbleSize;
+            const s = lo + (hi - lo) * r(20 + n);
+            const along = (r(30 + n) - 0.5) * 0.85;
+            // 崩れた石は壁際へ寄せ、小石はマスの中のどこかに置く
+            const px = wall ? x + wall.dx * (0.44 - s * 0.5) + (wall.dx === 0 ? along : 0) : x + (r(40 + n) - 0.5) * 0.8;
+            const pz = wall ? z + wall.dz * (0.44 - s * 0.5) + (wall.dz === 0 ? along : 0) : z + (r(50 + n) - 0.5) * 0.8;
+            at.set(px, s * 0.25, pz);
+            q.setFromEuler(e.set(r(60 + n) * 0.6, r(70 + n) * Math.PI * 2, r(80 + n) * 0.6));
+            this.debris.setMatrixAt(stones, m.compose(at, q, size.set(s * (0.8 + r(90 + n) * 0.5), s, s * (0.8 + r(95 + n) * 0.5))));
+            this.debris.setColorAt(stones++, c.copy(stoneColor).multiplyScalar(0.8 + r(99 + n) * 0.4));
+          }
           // 壁に接する辺に、影の帯を壁側へ寄せて敷く
           for (const side of SHADOW_SIDES) {
             if (!seenWall(x + side.dx, z + side.dz)) continue;
@@ -621,6 +653,7 @@ export class DungeonView3D {
       ...this.floors.map((mesh, k) => [mesh, floorCounts[k]!] as const),
       ...this.walls.map((mesh, k) => [mesh, wallCounts[k]!] as const),
       [this.wallShadows, shadows] as const,
+      [this.debris, stones] as const,
     ];
     for (const [mesh, count] of counts) {
       mesh.count = count;
@@ -704,11 +737,18 @@ export class DungeonView3D {
     this.floors.forEach((mesh) => {
       const mat = mesh.material as THREE.MeshPhongMaterial;
       mat.map = atlas?.floor ?? null;
+      // テクスチャの明るさを高さとみなして、石の継ぎ目やひびに陰を付ける
+      mat.bumpMap = mat.map;
+      mat.bumpScale = SURFACE_BUMP.floor;
       mat.needsUpdate = true;
     });
     for (const { top, side } of this.wallMaterials) {
       top.map = atlas?.top ?? null;
       side.map = atlas?.side ?? null;
+      top.bumpMap = top.map;
+      side.bumpMap = side.map;
+      top.bumpScale = SURFACE_BUMP.top;
+      side.bumpScale = SURFACE_BUMP.side;
       top.needsUpdate = true;
       side.needsUpdate = true;
     }
@@ -947,4 +987,11 @@ export function webglAvailable(): boolean {
   } catch {
     return false;
   }
+}
+
+/** マスの位置と番号 n で決まる、0〜1 の乱数（小石の置き方。同じマスなら、いつも同じ） */
+function tileRandom(x: number, z: number, n: number): number {
+  let h = Math.imul(x * 374761393 + z * 668265263 + n * 2246822519, 1274126177);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
