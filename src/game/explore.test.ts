@@ -360,6 +360,27 @@ describe('ランク', () => {
   });
 });
 
+describe('リタイア', () => {
+  it('リタイアすると、ターンを使わず、敵も動かないまま探索が終わる', () => {
+    const s0 = startExplore(3);
+    const s = act(s0, { kind: 'retire' });
+    expect(s.outcome).toBe('retired');
+    expect(s.turn).toBe(s0.turn);
+    expect(s.enemies).toEqual(s0.enemies);
+    expect(s.log.at(-1)).toBe('リタイアして、ダンジョンを出た');
+    // 終わったあとは、もう動けない
+    expect(step(s, { kind: 'wait' }).ok).toBe(false);
+  });
+
+  it('結果は踏破しなかった扱いで、金貨は力尽きたときと同じだけ持ち帰る', () => {
+    const s = act({ ...startExplore(3), gold: 101 }, { kind: 'retire' });
+    const r = toResult(s);
+    expect(r.outcome).toBe('retired');
+    expect(r.gold).toBe(101);
+    expect(r.goldBrought).toBe(Math.floor(101 * TREASURE_CONFIG.keepOnDefeat));
+  });
+});
+
 describe('遊ぶダンジョン', () => {
   // テストのためだけのダンジョンを、一覧に一時的に足す（ファイルは作らない。管理画面でダンジョンを足したり消したりしても、テストは変わらない）
   const TEST_ID = 'test_only';

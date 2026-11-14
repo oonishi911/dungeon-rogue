@@ -185,6 +185,10 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const [error, setError] = useState<string | null>(null);
   // ブラウザの「戻る」が押されて、ページを離れるかを確かめているところ
   const [leaving, setLeaving] = useState(false);
+  // リタイアするかを確かめているところ
+  const [retiring, setRetiring] = useState(false);
+  const retiringRef = useRef(retiring);
+  retiringRef.current = retiring;
   const onProgressRef = useRef(onProgress);
   onProgressRef.current = onProgress;
   const viewRef = useRef<HTMLCanvasElement>(null);
@@ -480,6 +484,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
+      // リタイアを確かめているあいだは、キーで動かない（Esc で探索に戻る）
+      if (retiringRef.current) {
+        if (e.key === 'Escape') setRetiring(false);
+        return;
+      }
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       const dir = KEY_DIRS[key];
       // 呪文の向きを選んでいるときは、方向キーで唱える（Esc でやめる）
@@ -744,6 +753,26 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
               </button>
             </div>
           )}
+          {retiring && !ended && !leaving && (
+            <div className="explore__ending explore__leave" role="alertdialog" aria-labelledby="explore-retire">
+              <p id="explore-retire">リタイアしますか？</p>
+              <p className="explore__leave-note">
+                探索をやめて、ダンジョンを出ます。踏破した経験は得られず、手に入れた金貨は、力尽きたときと同じく半分だけ持ち帰ります。
+              </p>
+              <button type="button" className="primary" autoFocus onClick={() => setRetiring(false)}>
+                探索に戻る
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRetiring(false);
+                  request({ kind: 'retire' });
+                }}
+              >
+                リタイアする
+              </button>
+            </div>
+          )}
           {ended && !leaving && (
             <div className="explore__ending">
               <p>{lastLog}</p>
@@ -902,6 +931,18 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
               <h3 className="meter__head">記録</h3>
               <LogList lines={recentLog} total={state.log.length} />
             </section>
+            {/* 押してすぐには終わらず、確かめてからリタイアする */}
+            <button
+              type="button"
+              className="explore__wait explore__retire"
+              disabled={ended}
+              onClick={() => {
+                setInfoOpen(false);
+                setRetiring(true);
+              }}
+            >
+              リタイアする
+            </button>
           </div>
         </aside>
       </div>
