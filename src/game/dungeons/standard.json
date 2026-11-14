@@ -3,21 +3,21 @@
   "description": "",
   "floors": {
     "count": 1,
-    "size": 20,
-    "satiety": 350
+    "size": 100,
+    "satiety": 100
   },
   "rooms": {
-    "attemptRate": 0.3,
+    "attemptRate": 0,
     "minSize": 3,
     "maxSize": 5
   },
   "enemies": {
-    "amount": 2,
+    "amount": 3,
     "placement": "rooms",
     "roomWeight": 1,
-    "nestChance": 0.5,
+    "nestChance": 1,
     "nestMin": 1,
-    "nestMax": 3,
+    "nestMax": 12,
     "stayInRoom": true,
     "bossMinions": 0
   },
@@ -26,11 +26,11 @@
     "expStep": 5,
     "hpPerLevel": 2,
     "atkPerLevel": 1,
-    "maxLevel": 99,
+    "maxLevel": 1,
     "eliteRate": 3
   },
   "magic": {
-    "maxMp": 20,
+    "maxMp": 0,
     "regenEvery": 6,
     "power": 8,
     "staffPower": 1.5,
@@ -50,7 +50,7 @@
       "range": 3
     },
     "fire_bolt": {
-      "cost": 4,
+      "cost": 99,
       "power": 1,
       "range": 6
     },

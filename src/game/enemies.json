@@ -1,9 +1,9 @@
 {
   "enemies": {
     "goblin": {
-      "name": "ゴブリン",
-      "hp": 14,
-      "atk": 8,
+      "name": "小鬼",
+      "hp": 42,
+      "atk": 16,
       "def": 1,
       "element": "neutral",
       "body": "normal",
@@ -13,13 +13,13 @@
       "reward": {
         "gold": 4,
         "exp": 4,
-        "drop": 10
+        "drop": 0
       }
     },
     "giant_rat": {
       "name": "大ネズミ",
-      "hp": 10,
-      "atk": 6,
+      "hp": 30,
+      "atk": 12,
       "def": 0,
       "element": "neutral",
       "body": "soft",
@@ -35,13 +35,13 @@
       "reward": {
         "gold": 3,
         "exp": 3,
-        "drop": 10
+        "drop": 0
       }
     },
     "stone_golem": {
       "name": "石ゴーレム",
-      "hp": 22,
-      "atk": 10,
+      "hp": 66,
+      "atk": 20,
       "def": 3,
       "element": "neutral",
       "body": "hard",
@@ -57,13 +57,13 @@
       "reward": {
         "gold": 7,
         "exp": 6,
-        "drop": 10
+        "drop": 0
       }
     },
     "fire_imp": {
       "name": "火の小鬼",
-      "hp": 12,
-      "atk": 13,
+      "hp": 36,
+      "atk": 26,
       "def": 0,
       "element": "fire",
       "body": "normal",
@@ -73,13 +73,13 @@
       "reward": {
         "gold": 5,
         "exp": 5,
-        "drop": 10
+        "drop": 0
       }
     },
     "flame_hound": {
       "name": "炎の猟犬",
-      "hp": 16,
-      "atk": 14,
+      "hp": 48,
+      "atk": 28,
       "def": 1,
       "element": "fire",
       "body": "soft",
@@ -89,13 +89,13 @@
       "reward": {
         "gold": 7,
         "exp": 6,
-        "drop": 10
+        "drop": 0
       }
     },
     "lava_lizard": {
       "name": "溶岩トカゲ",
-      "hp": 22,
-      "atk": 14,
+      "hp": 66,
+      "atk": 28,
       "def": 3,
       "element": "fire",
       "body": "hard",
@@ -105,13 +105,13 @@
       "reward": {
         "gold": 9,
         "exp": 7,
-        "drop": 10
+        "drop": 0
       }
     },
     "ice_imp": {
       "name": "氷の小鬼",
-      "hp": 12,
-      "atk": 13,
+      "hp": 36,
+      "atk": 26,
       "def": 0,
       "element": "ice",
       "body": "normal",
@@ -127,13 +127,13 @@
       "reward": {
         "gold": 5,
         "exp": 5,
-        "drop": 10
+        "drop": 0
       }
     },
     "ice_slime": {
       "name": "氷のスライム",
-      "hp": 16,
-      "atk": 11,
+      "hp": 48,
+      "atk": 22,
       "def": 0,
       "element": "ice",
       "body": "soft",
@@ -148,13 +148,13 @@
       "reward": {
         "gold": 5,
         "exp": 5,
-        "drop": 10
+        "drop": 0
       }
     },
     "ice_beetle": {
       "name": "氷の甲虫",
-      "hp": 20,
-      "atk": 13,
+      "hp": 60,
+      "atk": 26,
       "def": 3,
       "element": "ice",
       "body": "hard",
@@ -172,13 +172,13 @@
       "reward": {
         "gold": 7,
         "exp": 7,
-        "drop": 10
+        "drop": 0
       }
     },
     "light_bird": {
       "name": "光の鳥",
-      "hp": 12,
-      "atk": 13,
+      "hp": 36,
+      "atk": 26,
       "def": 0,
       "element": "light",
       "body": "soft",
@@ -194,13 +194,13 @@
       "reward": {
         "gold": 5,
         "exp": 5,
-        "drop": 10
+        "drop": 0
       }
     },
     "holy_armor": {
       "name": "聖なる甲冑",
-      "hp": 24,
-      "atk": 14,
+      "hp": 72,
+      "atk": 28,
       "def": 3,
       "element": "light",
       "body": "hard",
@@ -218,13 +218,13 @@
       "reward": {
         "gold": 9,
         "exp": 8,
-        "drop": 10
+        "drop": 0
       }
     },
     "light_wisp": {
       "name": "光の精",
-      "hp": 14,
-      "atk": 13,
+      "hp": 42,
+      "atk": 26,
       "def": 0,
       "element": "light",
       "body": "spirit",
@@ -239,13 +239,13 @@
       "reward": {
         "gold": 6,
         "exp": 5,
-        "drop": 10
+        "drop": 0
       }
     },
     "dark_bat": {
       "name": "闇コウモリ",
-      "hp": 10,
-      "atk": 13,
+      "hp": 30,
+      "atk": 26,
       "def": 0,
       "element": "dark",
       "body": "soft",
@@ -262,13 +262,13 @@
       "reward": {
         "gold": 4,
         "exp": 5,
-        "drop": 10
+        "drop": 0
       }
     },
     "shadow": {
       "name": "影",
-      "hp": 16,
-      "atk": 14,
+      "hp": 48,
+      "atk": 28,
       "def": 1,
       "element": "dark",
       "body": "spirit",
@@ -283,13 +283,13 @@
       "reward": {
         "gold": 7,
         "exp": 6,
-        "drop": 10
+        "drop": 0
       }
     },
     "phantom": {
       "name": "亡霊",
-      "hp": 18,
-      "atk": 14,
+      "hp": 54,
+      "atk": 28,
       "def": 1,
       "element": "dark",
       "body": "spirit",
@@ -305,13 +305,13 @@
       "reward": {
         "gold": 7,
         "exp": 6,
-        "drop": 10
+        "drop": 0
       }
     },
     "flame_beast": {
       "name": "炎の魔獣",
-      "hp": 60,
-      "atk": 18,
+      "hp": 180,
+      "atk": 36,
       "def": 2,
       "element": "fire",
       "body": "soft",
@@ -333,8 +333,8 @@
     },
     "ice_colossus": {
       "name": "氷の巨像",
-      "hp": 60,
-      "atk": 18,
+      "hp": 180,
+      "atk": 36,
       "def": 2,
       "element": "ice",
       "body": "hard",
@@ -356,8 +356,8 @@
     },
     "ogre_chief": {
       "name": "鬼の首領",
-      "hp": 60,
-      "atk": 9,
+      "hp": 180,
+      "atk": 18,
       "def": 1,
       "element": "neutral",
       "body": "normal",
@@ -377,8 +377,8 @@
     },
     "light_guardian": {
       "name": "光の守護者",
-      "hp": 50,
-      "atk": 14,
+      "hp": 150,
+      "atk": 28,
       "def": 2,
       "element": "light",
       "body": "hard",
@@ -402,8 +402,8 @@
     },
     "dark_lord": {
       "name": "闇の王",
-      "hp": 60,
-      "atk": 18,
+      "hp": 180,
+      "atk": 36,
       "def": 2,
       "element": "dark",
       "body": "spirit",
@@ -426,8 +426,8 @@
     },
     "lava_slime": {
       "name": "溶岩スライム",
-      "hp": 18,
-      "atk": 13,
+      "hp": 54,
+      "atk": 26,
       "def": 0,
       "element": "fire",
       "body": "soft",
@@ -442,13 +442,13 @@
       "reward": {
         "gold": 7,
         "exp": 6,
-        "drop": 10
+        "drop": 0
       }
     },
     "iwao": {
       "name": "岩鬼イワオ",
-      "hp": 26,
-      "atk": 11,
+      "hp": 78,
+      "atk": 22,
       "def": 3,
       "element": "neutral",
       "body": "hard",
@@ -464,13 +464,13 @@
       "reward": {
         "gold": 8,
         "exp": 7,
-        "drop": 10
+        "drop": 0
       }
     },
     "wraith": {
       "name": "レイス",
-      "hp": 18,
-      "atk": 15,
+      "hp": 54,
+      "atk": 30,
       "def": 1,
       "element": "dark",
       "body": "spirit",
@@ -486,13 +486,13 @@
       "reward": {
         "gold": 8,
         "exp": 7,
-        "drop": 10
+        "drop": 0
       }
     },
     "troll": {
       "name": "トロル",
-      "hp": 20,
-      "atk": 9,
+      "hp": 60,
+      "atk": 18,
       "def": 1,
       "element": "neutral",
       "body": "normal",
@@ -506,13 +506,13 @@
       "reward": {
         "gold": 5,
         "exp": 6,
-        "drop": 10
+        "drop": 0
       }
     },
     "yeti": {
       "name": "イエティ",
-      "hp": 20,
-      "atk": 14,
+      "hp": 60,
+      "atk": 28,
       "def": 1,
       "element": "ice",
       "body": "normal",
@@ -526,13 +526,13 @@
       "reward": {
         "gold": 8,
         "exp": 7,
-        "drop": 10
+        "drop": 0
       }
     },
     "dark_knight": {
       "name": "暗黒騎士",
-      "hp": 22,
-      "atk": 15,
+      "hp": 66,
+      "atk": 30,
       "def": 3,
       "element": "dark",
       "body": "hard",
@@ -550,13 +550,13 @@
       "reward": {
         "gold": 9,
         "exp": 7,
-        "drop": 10
+        "drop": 0
       }
     },
     "holy_knight": {
       "name": "聖騎士",
-      "hp": 24,
-      "atk": 14,
+      "hp": 72,
+      "atk": 28,
       "def": 3,
       "element": "light",
       "body": "hard",
@@ -574,7 +574,7 @@
       "reward": {
         "gold": 9,
         "exp": 8,
-        "drop": 10
+        "drop": 0
       }
     }
   }
