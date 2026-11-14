@@ -48,10 +48,12 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
   }
   // 同じ階で1歩進んだら足音を鳴らす（階を移ったとき・その場で戦ったときは鳴らさない）
   if (next.map === prev.map && !samePos(prev.player, next.player)) playFootstep(next.trait);
-  // 宝箱から金貨か道具を取ったら、宝箱の音を鳴らす（持ち物がいっぱいで何も取れなかったときは鳴らさない）
-  // （敵を倒して宝箱が落ちたときや、倒して金貨を得たときは鳴らさない。主人公のいるマスの宝箱を開けたときだけ）
-  const openedHere = next.chests.some((c) => c.opened && samePos(c.pos, next.player) && !prev.chests.some((p) => p.opened && samePos(p.pos, c.pos)));
-  if (next.map === prev.map && openedHere && (next.gold > prev.gold || next.stats.items.length > prev.stats.items.length)) {
+  // 主人公のいるマスの宝箱から金貨か道具を取ったら、宝箱の音を鳴らす（持ち物がいっぱいで何も取れなかったときは鳴らさない。
+  // 道具が残って宝箱が閉じたままでも、金貨を取れば鳴らす。敵を倒して宝箱が落ちたときや、倒して金貨を得たときは鳴らさない）
+  const before = prev.chests.find((c) => samePos(c.pos, next.player));
+  const after = next.chests.find((c) => samePos(c.pos, next.player));
+  const tookFromChest = before && after && (after.gold < before.gold || (before.item !== null && after.item === null));
+  if (next.map === prev.map && tookFromChest && (next.gold > prev.gold || next.stats.items.length > prev.stats.items.length)) {
     playChestOpen();
   }
   return impactMs;

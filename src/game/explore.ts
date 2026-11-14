@@ -277,7 +277,10 @@ function fillChests(map: FloorMap, rngState: number): { chests: Chest[]; rngStat
   return { chests, rngState: s };
 }
 
-/** 宝箱の上に乗ったら開ける。持ち物がいっぱいなら道具は残す。空になった宝箱は、開いたままその場に残す */
+/**
+ * 宝箱の上に乗ったら開ける。金貨は必ず取る。持ち物がいっぱいなら道具は残し、宝箱は閉じたままにする（道具を取るまで開いた形にしない）。
+ * 空になった宝箱は、開いたままその場に残す
+ */
 function openChest(state: ExploreState): ExploreState {
   const chest = state.chests.find((c) => samePos(c.pos, state.player));
   if (!chest || isEmptyChest(chest)) return state;
@@ -297,11 +300,12 @@ function openChest(state: ExploreState): ExploreState {
       log.push(`宝箱に${ITEMS[item].name}が入っているが、持ち物がいっぱいだ`);
     }
   }
-  const chests = state.chests.map((c) => (c === chest ? { ...c, gold: 0, item, opened: true } : c));
+  // 道具が残っているあいだは閉じたまま（次に乗ったとき、また取ろうとする）
+  const chests = state.chests.map((c) => (c === chest ? { ...c, gold: 0, item, opened: item === null } : c));
   return { ...state, gold, stats, chests, log: [...state.log, ...log] };
 }
 
-/** 開けて、中身がもう何もない宝箱 */
+/** 開けて、中身がもう何もない宝箱（道具を取るまでは開いた形にしないので、開いていれば空） */
 export function isEmptyChest(chest: Chest): boolean {
   return chest.opened && chest.gold === 0 && chest.item === null;
 }
