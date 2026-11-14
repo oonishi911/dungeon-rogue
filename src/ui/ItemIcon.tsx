@@ -180,6 +180,16 @@ const SHAPES: Partial<Record<ItemId, () => ReactElement>> = {
   ice_whetstone: () => whetstone(snowflake()),
   holy_water: () => flask(C.light, sparkle('#fff')),
   dark_oil: () => flask(C.dark, moon('#e3d6fb')),
+  lantern: () => (
+    <>
+      <path d="M9 4.5a3 3 0 0 1 6 0" stroke={C.steelDark} strokeWidth="1.6" fill="none" />
+      <rect x="7" y="6" width="10" height="2.4" rx="1" fill={C.steelDark} />
+      <rect x="7.8" y="8.4" width="8.4" height="10" rx="1.6" fill={C.light} />
+      <path d="M12 10.2c1.6 1.6 1.8 3.4 0 5.4-1.8-2-1.6-3.8 0-5.4z" fill={C.lightDeep} />
+      <path d="M9.6 8.4v10M14.4 8.4v10" stroke={C.steelDark} strokeWidth="1" />
+      <rect x="7" y="18.4" width="10" height="2.4" rx="1" fill={C.steelDark} />
+    </>
+  ),
   book_shockwave: () => book('#4f6f8a', SPELL_MARKS.shockwave()),
   book_sweep: () => book('#5b6b5e', SPELL_MARKS.sweep()),
   book_fire_bolt: () => book('#8a3a28', SPELL_MARKS.fire_bolt()),

@@ -82,6 +82,7 @@ export interface Fog {
     fogMap: { value: THREE.DataTexture };
     fogSize: { value: THREE.Vector2 };
     fogPlayer: { value: THREE.Vector2 };
+    fogRadius: { value: number }; // 視界の半径（マス。持っていった道具で変わる）に半マス足したもの
   };
   /** 状態が変わったときに、目標の見え方を入れる（階が変わったら地図を作り直し、今の見え方にすぐ合わせる） */
   setTargets(state: ExploreState, visible: Set<number>): void;
@@ -104,6 +105,7 @@ export function createFog(): Fog {
     fogMap: { value: texture },
     fogSize: { value: new THREE.Vector2(1, 1) },
     fogPlayer: { value: new THREE.Vector2() },
+    fogRadius: { value: EXPLORE_CONFIG.sightRadius + 0.5 },
   };
   const write = () => {
     const data = texture.image.data as Uint8Array;
@@ -133,6 +135,7 @@ export function createFog(): Fog {
         uniforms.fogMap.value = texture;
         uniforms.fogSize.value.set(width, height);
       }
+      uniforms.fogRadius.value = state.sightRadius + 0.5;
       for (let i = 0; i < width * height; i++) {
         visibleTarget[i] = visibleTiles.has(i) ? 1 : 0;
         seenTarget[i] = state.seen[i] ? 1 : 0;
@@ -213,13 +216,14 @@ export function applyFog<T extends THREE.Material>(material: T, fog: Fog, mode: 
       uniform sampler2D fogMap;
       uniform vec2 fogSize;
       uniform vec2 fogPlayer;
+      uniform float fogRadius;
       ` +
       shader.fragmentShader
         .replace(
           '#include <opaque_fragment>',
           `// マスの中心が整数の座標なので、半マスずらして霧の地図のドットの中心に合わせる
           vec2 fogTexel = texture2D( fogMap, ( vFogWorld.xz + 0.5 ) / fogSize ).rg;
-          float fogD = clamp( length( vFogWorld.xz - fogPlayer ) / ${(EXPLORE_CONFIG.sightRadius + 0.5).toFixed(2)}, 0.0, 1.0 );
+          float fogD = clamp( length( vFogWorld.xz - fogPlayer ) / fogRadius, 0.0, 1.0 );
           float fogNear = 1.0 - ${(1 - SIGHT_LIGHT.edge).toFixed(2)} * fogD * fogD * ( 3.0 - 2.0 * fogD );
           float fogSeen = smoothstep( 0.5, 1.0, fogTexel.g ); // マスの境目（0.5）で、ちょうど背景に溶け込む
           ${mode === 'darken' ? `outgoingLight *= mix( ${REMEMBERED.toFixed(2)}, fogNear, smoothstep( 0.0, 1.0, fogTexel.r ) );` : ''}

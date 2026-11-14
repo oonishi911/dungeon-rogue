@@ -2,7 +2,7 @@
 
 import { key } from '../game/enemies';
 import { upStairs } from '../game/explore';
-import { EXPLORE_CONFIG, type ExploreState } from '../game/exploreTypes';
+import type { ExploreState } from '../game/exploreTypes';
 import { visibleTiles } from '../game/exploreSight';
 import type { Pos } from '../game/map';
 
@@ -20,6 +20,6 @@ export function avoidOnWalk(state: ExploreState): Set<string> {
 
 /** 今見えている敵の番号 */
 export function visibleEnemyIds(state: ExploreState): Set<number> {
-  const visible = visibleTiles(state.map, state.player, EXPLORE_CONFIG.sightRadius);
+  const visible = visibleTiles(state.map, state.player, state.sightRadius);
   return new Set(state.enemies.filter((e) => visible.has(e.pos.y * state.map.width + e.pos.x)).map((e) => e.uid));
 }

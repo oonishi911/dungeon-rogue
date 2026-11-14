@@ -112,6 +112,16 @@ describe('出発と帰り', () => {
     expect(back.kit.take).toEqual(['potion']);
   });
 
+  it('遠見のランタンは道具として買い、持っていくと（使っても使わなくても）倉庫に戻らない', () => {
+    let s = buyAll(rich(priceOfAll(['lantern', 'lantern'])), ['lantern', 'lantern']);
+    expect(s.stock).toEqual(['lantern', 'lantern']);
+    s = must(takeSupply(s, 'lantern', -1));
+    const out = departWith(s);
+    // 探索から持ち帰る道具（使わなかったもの）に、ランタンは入らない（探索の持ち物に入らないため）
+    const back = returnWith(out, 0, []);
+    expect(back.stock).toEqual(['lantern']);
+  });
+
   it('保存して読み込むと、金貨・持ち物・倉庫・選び方が戻る', () => {
     const s = departWith(buyAll(rich(), ['sword_2', 'plate', 'book_heal', 'potion', 'potion']));
     expect(parseSave(JSON.stringify(s))).toEqual(s);

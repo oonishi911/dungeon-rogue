@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } 
 import { preloadSounds, setAmbient } from '../audio/sound';
 import { SPELLS } from '../game/data';
 import { dungeonOfState, isBossFloor, step, upStairs } from '../game/explore';
-import { DIR_DELTA, EXPLORE_CONFIG, type Dir, type ExploreAction, type ExploreState } from '../game/exploreTypes';
+import { DIR_DELTA, type Dir, type ExploreAction, type ExploreState } from '../game/exploreTypes';
 import { samePos, visibleTiles } from '../game/exploreSight';
 import { tileAt, type Pos } from '../game/map';
 import { SoundButton } from './SoundButton';
@@ -77,7 +77,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const view3dRef = useRef<DungeonView3D | null>(null);
 
   const visible = useMemo(
-    () => visibleTiles(state.map, state.player, EXPLORE_CONFIG.sightRadius),
+    () => visibleTiles(state.map, state.player, state.sightRadius),
     [state.map, state.player],
   );
 
@@ -208,7 +208,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     observer.observe(canvas);
     view3d.resize(canvas.clientWidth, canvas.clientHeight);
     // 視界の計算は、状態が変わったときだけやり直す
-    let sight = { state: stateRef.current, visible: visibleTiles(stateRef.current.map, stateRef.current.player, EXPLORE_CONFIG.sightRadius) };
+    let sight = { state: stateRef.current, visible: visibleTiles(stateRef.current.map, stateRef.current.player, stateRef.current.sightRadius) };
     // 歩く道筋は、状態か行き先が変わったときだけ探し直す
     let route: { state: ExploreState | null; goal: Pos | null; path: Pos[] } = { state: null, goal: null, path: [] };
     const routeFor = (st: ExploreState, goal: Pos | null): Pos[] => {
@@ -242,7 +242,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       }
       const current = stateRef.current;
       if (sight.state !== current) {
-        sight = { state: current, visible: visibleTiles(current.map, current.player, EXPLORE_CONFIG.sightRadius) };
+        sight = { state: current, visible: visibleTiles(current.map, current.player, current.sightRadius) };
       }
       const frame: Frame = {
         state: current,

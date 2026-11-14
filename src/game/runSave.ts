@@ -14,7 +14,7 @@ import { ENEMIES, ITEMS, SPELLS, TRAIT_IDS } from './data';
 import { dungeonOf, hasDungeon } from './dungeons';
 import type { MapEnemy } from './enemies';
 import { mapOfFloor } from './explore';
-import { type Chest, type ExploreState, type FloorMemory } from './exploreTypes';
+import { EXPLORE_CONFIG, type Chest, type ExploreState, type FloorMemory } from './exploreTypes';
 import type { FloorMap, Pos } from './map';
 import { parseSave, type SaveData } from './save';
 import type { Departure, ItemId, SpellId, TraitId } from './types';
@@ -234,6 +234,8 @@ export function parseRun(text: string | null): ResumedRun | null {
     level: s.level,
     exp: s.exp,
     seen: current.seen,
+    // 視界の半径を持たない前の版の途中保存は、ふつうの半径で続ける
+    sightRadius: isCount(s.sightRadius, 1) ? s.sightRadius : EXPLORE_CONFIG.sightRadius,
     turn: s.turn,
     rngState: s.rngState,
     outcome: 'ongoing',

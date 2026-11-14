@@ -14,6 +14,7 @@ export function itemSlot(item: ItemDef): ItemSlot {
     case 'heal':
     case 'food':
     case 'enchant':
+    case 'sight': // 店では道具として買い、倉庫から持っていく
       return 'consumable';
     case 'spellbook':
       return 'spellbook';
@@ -39,7 +40,8 @@ export function buildPlayer(loadout: readonly ItemId[]): PlayerStats {
     poisonTurns: 0,
     weapon,
     armor,
-    items: loadout.filter((id) => itemSlot(ITEMS[id]) === 'consumable'),
+    // 視界を広げる道具（ランタン）は、ダンジョンでは使わないので持ち物に入れない（持ち帰らず、なくなる）
+    items: loadout.filter((id) => itemSlot(ITEMS[id]) === 'consumable' && ITEMS[id].effect.kind !== 'sight'),
     enchant: null,
   };
 }

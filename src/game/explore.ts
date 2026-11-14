@@ -90,6 +90,7 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     level: 1,
     exp: 0,
     seen: [],
+    sightRadius: sightRadiusOf(options.loadout ?? []),
     turn: 0,
     rngState: traitRoll.state,
     outcome: 'ongoing',
@@ -98,6 +99,14 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     hits: [],
   };
   return enterFloor(state, 0, state.map);
+}
+
+/** 持っていくものから決まる、視界の半径（視界を広げる道具がなければ EXPLORE_CONFIG.sightRadius） */
+export function sightRadiusOf(loadout: readonly ItemId[]): number {
+  return loadout.reduce<number>((r, id) => {
+    const e = ITEMS[id].effect;
+    return e.kind === 'sight' ? Math.max(r, e.radius) : r;
+  }, EXPLORE_CONFIG.sightRadius);
 }
 
 /** 1行動進める。壁への移動など行動にならない操作はエラーを返し、ターンも満腹度も消費しない */
@@ -350,6 +359,8 @@ function useItem(state: ExploreState, itemId: ItemId): Result<ExploreState> {
       return err('装備品は道具として使えません');
     case 'spellbook':
       return err('呪文書は道具として使えません（呪文として唱える）');
+    case 'sight':
+      return err('持っていくだけで効く道具です');
     default: {
       const unreachable: never = effect;
       return unreachable;
@@ -740,7 +751,7 @@ export function toResult(state: ExploreState): ExploreResult {
 /** 今の位置から見えるマスを、この階の記憶に加える */
 function reveal(state: ExploreState): ExploreState {
   const seen = [...state.seen];
-  for (const i of visibleTiles(state.map, state.player, EXPLORE_CONFIG.sightRadius)) seen[i] = true;
+  for (const i of visibleTiles(state.map, state.player, state.sightRadius)) seen[i] = true;
   return { ...state, seen };
 }
 
