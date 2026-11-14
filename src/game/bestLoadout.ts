@@ -16,6 +16,23 @@ import type { EnemyDef, ItemId, PlayerStats, SpellId, TraitId } from './types';
 
 const BOSS_WEIGHT = 3; // ボスは道中の敵の何体分として数えるか（最後に必ず戦うので重く見る）
 const BOLTS: SpellId[] = ['fire_bolt', 'ice_bolt', 'light_lance', 'dark_bolt'];
+// 敵にダメージを与える呪文（有利な呪文書を選ぶ候補）。同じ点数なら、先にあるものを選ぶ
+const ATTACK_SPELLS: SpellId[] = [...BOLTS, 'sweep', 'shockwave'];
+
+/**
+ * そのダンジョンのその属性で有利に働く呪文書を count 冊選ぶ（準備を飛ばして出発するときの持ち物）。
+ * 道中の敵（出やすさの分だけ数える）とボス（BOSS_WEIGHT 体分）に与えるダメージの合計が多い順。
+ * 属性の相性（弱点なら2倍など）が効くので、ふつうはその属性の敵の弱点を突く矢が選ばれる。gear は持っていく装備（杖なら魔法が強くなる）
+ */
+export function favorableSpellbooks(trait: TraitId, dungeon: DungeonFile, gear: readonly ItemId[], count = 2): ItemId[] {
+  const foes = opponents(trait, dungeon);
+  const stats = buildPlayer([...gear]);
+  const score = (spell: SpellId) => foes.reduce((sum, { def, weight }) => sum + spellDamage(stats, spell, def, dungeon) * weight, 0);
+  return ATTACK_SPELLS.map((spell, i) => ({ spell, i, score: score(spell) }))
+    .sort((a, b) => b.score - a.score || a.i - b.i)
+    .slice(0, Math.min(count, PREP_CONFIG.maxSpellbooks))
+    .map(({ spell }) => `book_${spell}` as ItemId);
+}
 
 /** ダンジョンで出会う敵と、その重み */
 function opponents(trait: TraitId, dungeon: DungeonFile): { def: EnemyDef; weight: number }[] {

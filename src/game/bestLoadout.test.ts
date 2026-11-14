@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { bestLoadout } from './bestLoadout';
+import { bestLoadout, favorableSpellbooks } from './bestLoadout';
 import { buildPlayer, enemyHitDamage, itemSlot, playerHitDamage } from './combat';
-import { ITEMS, PREP_CONFIG, TRAIT_IDS } from './data';
+import { FAVORABLE_GEAR, ITEMS, PREP_CONFIG, START_SPELLBOOKS, TRAIT_IDS } from './data';
 import { DEFAULT_DUNGEON } from './dungeons';
 import { enemyDef } from './enemies';
 import type { ItemId, TraitId } from './types';
@@ -43,5 +43,35 @@ describe('開発用：いちばん強い装備', () => {
     for (const a of all.filter((id) => itemSlot(ITEMS[id]) === 'armor')) {
       expect(sums(trait, [weapon!, a]).taken).toBeGreaterThanOrEqual(chosen.taken * 0.8);
     }
+  });
+});
+
+describe('出発時に持たせる、有利な呪文書', () => {
+  const books = (trait: TraitId, count = 2) => favorableSpellbooks(trait, DEFAULT_DUNGEON, FAVORABLE_GEAR[trait], count);
+
+  it('属性ごとに、ちがう呪文書を2冊選ぶ（ダメージを与える呪文だけ）', () => {
+    for (const trait of TRAIT_IDS) {
+      const list = books(trait);
+      expect(list).toHaveLength(START_SPELLBOOKS);
+      expect(new Set(list).size).toBe(list.length);
+      const attacks: ItemId[] = ['book_fire_bolt', 'book_ice_bolt', 'book_light_lance', 'book_dark_bolt', 'book_sweep', 'book_shockwave'];
+      for (const id of list) expect(attacks).toContain(id);
+    }
+  });
+
+  it('いちばん先に選ぶのは、その属性の敵の弱点を突く矢', () => {
+    expect(books('fire')[0]).toBe('book_ice_bolt');
+    expect(books('ice')[0]).toBe('book_fire_bolt');
+    expect(books('light')[0]).toBe('book_dark_bolt');
+    expect(books('dark')[0]).toBe('book_light_lance');
+  });
+
+  it('2冊目は、残りのうち与えるダメージが多いもの（光なら、光に1.5倍効く氷の矢）', () => {
+    expect(books('light')[1]).toBe('book_ice_bolt');
+    expect(books('dark')[1]).toBe('book_fire_bolt');
+  });
+
+  it('持っていける呪文書の数より多くは選ばない', () => {
+    expect(books('fire', 10)).toHaveLength(PREP_CONFIG.maxSpellbooks);
   });
 });

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { PREP_CONFIG } from './data';
-import { buyItem, createPrep, endDay, finishPrep, playCard, toPlayerView } from './prep';
+import { favorableSpellbooks } from './bestLoadout';
+import { FAVORABLE_GEAR, PREP_CONFIG, START_SPELLBOOKS, START_SUPPLIES } from './data';
+import { DEFAULT_DUNGEON } from './dungeons';
+import { buyItem, createPrep, departWithoutPrep, endDay, finishPrep, playCard, toPlayerView } from './prep';
 import type { CardId, PrepState, Result } from './types';
 
 // テスト用：手札を指定した状態を作る
@@ -166,5 +168,16 @@ describe('toPlayerView', () => {
     expect(view).not.toHaveProperty('trait');
     expect(view).not.toHaveProperty('rngState');
     expect(view).not.toHaveProperty('seed');
+  });
+});
+
+describe('departWithoutPrep（準備を飛ばして出発）', () => {
+  it('有利な装備と回復薬2つに、そのダンジョンで有利な呪文書2冊を足して持っていく', () => {
+    for (let i = 0; i < 10; i++) {
+      const r = departWithoutPrep(i * 977, { carried: [] });
+      const books = favorableSpellbooks(r.trait, DEFAULT_DUNGEON, FAVORABLE_GEAR[r.trait], START_SPELLBOOKS);
+      expect(r.loadout).toEqual([...FAVORABLE_GEAR[r.trait], ...START_SUPPLIES, ...books]);
+      expect(books).toHaveLength(2);
+    }
   });
 });
