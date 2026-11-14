@@ -39,6 +39,7 @@ src/
     autoplay.ts    自動プレイAI（バランステスト用。npm run test:balance で動かす）
     dungeons.ts    プレイヤーが選べるダンジョンの一覧（dungeons/ の設定ファイルをすべて読み込む）
     dungeons/      ダンジョンの設定ファイル（1つが1つのダンジョン。管理画面 ?view=admin で作る・直す・消す）
+    testdata/      ふつうのテストが使う、決まった中身の品物・敵・ダンジョンの設定（管理画面で変えても、テストは落ちない）
     enemies.json   敵のマスターデータ（すべての敵。どのダンジョンに出るかは、ダンジョンの設定ファイルで選ぶ）
     floorParams.ts 階の広さ・満腹度・敵の密度・HPの回復の速さ（ダンジョンの設定から決める）
     save.ts        セーブデータの形と読み込み（何回目か・金貨・買った持ち物・道具の倉庫）
@@ -76,7 +77,7 @@ scripts/
 ```bash
 npm install
 npm run dev     # 開発サーバー
-npm test        # テスト（バランスのテストは時間がかかるので、今は外している）
+npm test        # テスト（バランスのテストは時間がかかるので、今は外している。品物・敵・ダンジョンの設定は src/game/testdata/ に差し替えて動く）
 npm run test:balance  # バランスのテスト（自動プレイで標準のダンジョンを何百回も遊ばせる）
 npm run build   # 型チェック＋ビルド
 ```

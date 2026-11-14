@@ -12,7 +12,7 @@ import { tileAt, type FloorMap } from './map';
 import type { ItemId } from './types';
 import type { Result } from './types';
 
-// 標準のダンジョンの設定（startExplore でダンジョンを指定しないと、標準のダンジョンになる）
+// 標準のダンジョンの設定（startExplore でダンジョンを指定しないと、標準のダンジョンになる。テストでは src/game/testdata/ の決まった中身）
 const GEN = DEFAULT_DUNGEON;
 
 function unwrap<T>(result: Result<T>): T {

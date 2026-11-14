@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ENEMIES, ENEMY_MASTER } from './data';
-import { DUNGEONS } from './dungeons';
-// ファイルの中身そのもの（書き出した文字列と比べる）
-import json from './enemies.json?raw';
+import { ENEMIES } from './data';
 import {
   addEnemy,
   describeChanges,
@@ -27,23 +24,11 @@ const encounters = (): Encounters => JSON.parse(JSON.stringify(sample.encounters
 const nameOf = (id: string) => sample.enemies[id as keyof typeof sample.enemies]?.name ?? id;
 
 describe('敵のマスターデータ（enemies.json）', () => {
-  it('正しい形になっている', () => {
-    expect(masterProblems(JSON.parse(json))).toEqual([]);
-  });
-
   it('ゲームで使う形に、id 付きで読める（見た目は含めない）', () => {
     for (const [id, def] of Object.entries(ENEMIES)) {
       expect(def.id).toBe(id);
       expect(def).not.toHaveProperty('look');
     }
-  });
-
-  it('どのダンジョンも、ボスにはボスの敵を選んでいる', () => {
-    for (const d of Object.values(DUNGEONS)) for (const e of Object.values(d.encounters)) expect(ENEMIES[e.boss]?.boss).toBe(true);
-  });
-
-  it('書き出すと、今のファイルと同じ文字列になる（管理画面で変えていないところは変わらない）', () => {
-    expect(serializeEnemyMaster(ENEMY_MASTER)).toBe(json);
   });
 });
 

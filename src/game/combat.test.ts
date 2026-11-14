@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildPlayer, enemyHitDamage, playerHitDamage } from './combat';
-import { COMBAT_CONFIG } from './data';
+import { COMBAT_CONFIG, ITEMS } from './data';
 import { ARMORED_ENEMY } from './enemies.fixtures';
 import type { Element, EnemyDef, ItemId, PlayerStats } from './types';
 
@@ -26,7 +26,8 @@ describe('buildPlayer', () => {
   });
 
   it('武器を持つと攻撃力が上がる', () => {
-    expect(buildPlayer(['sword']).atk).toBe(COMBAT_CONFIG.playerAtk + 3);
+    const sword = ITEMS.sword.effect;
+    expect(buildPlayer(['sword']).atk).toBe(COMBAT_CONFIG.playerAtk + (sword.kind === 'weapon' ? sword.atk : NaN));
     // 段階が上がるほど、攻撃力・守りが上がる
     expect(buildPlayer(['sword_5']).atk).toBeGreaterThan(buildPlayer(['sword']).atk);
     expect(buildPlayer(['plate_5']).def).toBeGreaterThan(buildPlayer(['plate']).def);

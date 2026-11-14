@@ -1,0 +1,581 @@
+{
+  "enemies": {
+    "goblin": {
+      "name": "ゴブリン",
+      "hp": 14,
+      "atk": 8,
+      "def": 1,
+      "element": "neutral",
+      "body": "normal",
+      "look": {
+        "sprite": "goblin"
+      },
+      "reward": {
+        "gold": 4,
+        "exp": 4,
+        "drop": 10
+      }
+    },
+    "giant_rat": {
+      "name": "大ネズミ",
+      "hp": 10,
+      "atk": 6,
+      "def": 0,
+      "element": "neutral",
+      "body": "soft",
+      "look": {
+        "sprite": "flame_hound",
+        "recolor": {
+          "F": "#b9b29f",
+          "O": "#8f8977",
+          "R": "#6a5038",
+          "r": "#3a2e24"
+        }
+      },
+      "reward": {
+        "gold": 3,
+        "exp": 3,
+        "drop": 10
+      }
+    },
+    "stone_golem": {
+      "name": "石ゴーレム",
+      "hp": 22,
+      "atk": 10,
+      "def": 3,
+      "element": "neutral",
+      "body": "hard",
+      "look": {
+        "sprite": "fire_drake",
+        "recolor": {
+          "F": "#c9c3b3",
+          "O": "#a39d8d",
+          "R": "#7d786b",
+          "r": "#55514a"
+        }
+      },
+      "reward": {
+        "gold": 7,
+        "exp": 6,
+        "drop": 10
+      }
+    },
+    "fire_imp": {
+      "name": "火の小鬼",
+      "hp": 12,
+      "atk": 13,
+      "def": 0,
+      "element": "fire",
+      "body": "normal",
+      "look": {
+        "sprite": "fire_imp"
+      },
+      "reward": {
+        "gold": 5,
+        "exp": 5,
+        "drop": 10
+      }
+    },
+    "flame_hound": {
+      "name": "炎の猟犬",
+      "hp": 16,
+      "atk": 14,
+      "def": 1,
+      "element": "fire",
+      "body": "soft",
+      "look": {
+        "sprite": "flame_hound"
+      },
+      "reward": {
+        "gold": 7,
+        "exp": 6,
+        "drop": 10
+      }
+    },
+    "lava_lizard": {
+      "name": "溶岩トカゲ",
+      "hp": 22,
+      "atk": 14,
+      "def": 3,
+      "element": "fire",
+      "body": "hard",
+      "look": {
+        "sprite": "fire_drake"
+      },
+      "reward": {
+        "gold": 9,
+        "exp": 7,
+        "drop": 10
+      }
+    },
+    "ice_imp": {
+      "name": "氷の小鬼",
+      "hp": 12,
+      "atk": 13,
+      "def": 0,
+      "element": "ice",
+      "body": "normal",
+      "look": {
+        "sprite": "fire_imp",
+        "recolor": {
+          "F": "#cfeefa",
+          "O": "#9fd6ef",
+          "R": "#5aa7d6",
+          "r": "#2f6f9e"
+        }
+      },
+      "reward": {
+        "gold": 5,
+        "exp": 5,
+        "drop": 10
+      }
+    },
+    "ice_slime": {
+      "name": "氷のスライム",
+      "hp": 16,
+      "atk": 11,
+      "def": 0,
+      "element": "ice",
+      "body": "soft",
+      "look": {
+        "sprite": "poison_slime",
+        "recolor": {
+          "L": "#d6f1fb",
+          "U": "#8fd0ee",
+          "u": "#4f97c4"
+        }
+      },
+      "reward": {
+        "gold": 5,
+        "exp": 5,
+        "drop": 10
+      }
+    },
+    "ice_beetle": {
+      "name": "氷の甲虫",
+      "hp": 20,
+      "atk": 13,
+      "def": 3,
+      "element": "ice",
+      "body": "hard",
+      "look": {
+        "sprite": "venom_spider",
+        "recolor": {
+          "U": "#8fd0ee",
+          "u": "#4f97c4",
+          "V": "#2f5d80",
+          "v": "#1e3d57",
+          "E": "#ffffff",
+          "Z": "#d6f1fb"
+        }
+      },
+      "reward": {
+        "gold": 7,
+        "exp": 7,
+        "drop": 10
+      }
+    },
+    "light_bird": {
+      "name": "光の鳥",
+      "hp": 12,
+      "atk": 13,
+      "def": 0,
+      "element": "light",
+      "body": "soft",
+      "look": {
+        "sprite": "fire_imp",
+        "recolor": {
+          "F": "#fff6c8",
+          "O": "#f7e27a",
+          "R": "#e9c04a",
+          "r": "#b48d35"
+        }
+      },
+      "reward": {
+        "gold": 5,
+        "exp": 5,
+        "drop": 10
+      }
+    },
+    "holy_armor": {
+      "name": "聖なる甲冑",
+      "hp": 24,
+      "atk": 14,
+      "def": 3,
+      "element": "light",
+      "body": "hard",
+      "look": {
+        "sprite": "venom_queen",
+        "recolor": {
+          "U": "#f2ead0",
+          "u": "#cdbf8f",
+          "V": "#a38f55",
+          "v": "#6e5d2e",
+          "E": "#f7e27a",
+          "Z": "#fff6c8"
+        }
+      },
+      "reward": {
+        "gold": 9,
+        "exp": 8,
+        "drop": 10
+      }
+    },
+    "light_wisp": {
+      "name": "光の精",
+      "hp": 14,
+      "atk": 13,
+      "def": 0,
+      "element": "light",
+      "body": "spirit",
+      "look": {
+        "sprite": "poison_slime",
+        "recolor": {
+          "L": "#fffbe6",
+          "U": "#f7e27a",
+          "u": "#d9b94a"
+        }
+      },
+      "reward": {
+        "gold": 6,
+        "exp": 5,
+        "drop": 10
+      }
+    },
+    "dark_bat": {
+      "name": "闇コウモリ",
+      "hp": 10,
+      "atk": 13,
+      "def": 0,
+      "element": "dark",
+      "body": "soft",
+      "look": {
+        "sprite": "venom_spider",
+        "recolor": {
+          "U": "#5a4a7a",
+          "u": "#3a2e54",
+          "V": "#2a2140",
+          "v": "#1a1428",
+          "Z": "#9a7cc4"
+        }
+      },
+      "reward": {
+        "gold": 4,
+        "exp": 5,
+        "drop": 10
+      }
+    },
+    "shadow": {
+      "name": "影",
+      "hp": 16,
+      "atk": 14,
+      "def": 1,
+      "element": "dark",
+      "body": "spirit",
+      "look": {
+        "sprite": "poison_slime",
+        "recolor": {
+          "L": "#6a5a8a",
+          "U": "#3e3358",
+          "u": "#241d36"
+        }
+      },
+      "reward": {
+        "gold": 7,
+        "exp": 6,
+        "drop": 10
+      }
+    },
+    "phantom": {
+      "name": "亡霊",
+      "hp": 18,
+      "atk": 14,
+      "def": 1,
+      "element": "dark",
+      "body": "spirit",
+      "look": {
+        "sprite": "fire_imp",
+        "recolor": {
+          "F": "#e8e4f0",
+          "O": "#b9b2cc",
+          "R": "#8a80a6",
+          "r": "#5a5276"
+        }
+      },
+      "reward": {
+        "gold": 7,
+        "exp": 6,
+        "drop": 10
+      }
+    },
+    "flame_beast": {
+      "name": "炎の魔獣",
+      "hp": 60,
+      "atk": 18,
+      "def": 2,
+      "element": "fire",
+      "body": "soft",
+      "boss": true,
+      "look": {
+        "sprite": "flame_hound",
+        "recolor": {
+          "F": "#ff9a5a",
+          "O": "#e0562e",
+          "R": "#b8321c",
+          "r": "#7a1e12"
+        }
+      },
+      "reward": {
+        "gold": 0,
+        "exp": 0,
+        "drop": 0
+      }
+    },
+    "ice_colossus": {
+      "name": "氷の巨像",
+      "hp": 60,
+      "atk": 18,
+      "def": 2,
+      "element": "ice",
+      "body": "hard",
+      "boss": true,
+      "look": {
+        "sprite": "fire_drake",
+        "recolor": {
+          "F": "#cfeefa",
+          "O": "#8fd0ee",
+          "R": "#4f97c4",
+          "r": "#2f5d80"
+        }
+      },
+      "reward": {
+        "gold": 0,
+        "exp": 0,
+        "drop": 0
+      }
+    },
+    "ogre_chief": {
+      "name": "鬼の首領",
+      "hp": 60,
+      "atk": 9,
+      "def": 1,
+      "element": "neutral",
+      "body": "normal",
+      "boss": true,
+      "look": {
+        "sprite": "goblin",
+        "recolor": {
+          "g": "#c0563a",
+          "G": "#8a3424"
+        }
+      },
+      "reward": {
+        "gold": 0,
+        "exp": 0,
+        "drop": 0
+      }
+    },
+    "light_guardian": {
+      "name": "光の守護者",
+      "hp": 50,
+      "atk": 14,
+      "def": 2,
+      "element": "light",
+      "body": "hard",
+      "boss": true,
+      "look": {
+        "sprite": "venom_queen",
+        "recolor": {
+          "U": "#fff3b0",
+          "u": "#f2d36a",
+          "V": "#c9a23a",
+          "v": "#8a6b1e",
+          "E": "#ffffff",
+          "Z": "#fff9dc"
+        }
+      },
+      "reward": {
+        "gold": 0,
+        "exp": 0,
+        "drop": 0
+      }
+    },
+    "dark_lord": {
+      "name": "闇の王",
+      "hp": 60,
+      "atk": 18,
+      "def": 2,
+      "element": "dark",
+      "body": "spirit",
+      "boss": true,
+      "look": {
+        "sprite": "fire_drake",
+        "recolor": {
+          "F": "#9a7cc4",
+          "O": "#6f5596",
+          "R": "#4b3a63",
+          "r": "#2a2140",
+          "t": "#36294a"
+        }
+      },
+      "reward": {
+        "gold": 0,
+        "exp": 0,
+        "drop": 0
+      }
+    },
+    "lava_slime": {
+      "name": "溶岩スライム",
+      "hp": 18,
+      "atk": 13,
+      "def": 0,
+      "element": "fire",
+      "body": "soft",
+      "look": {
+        "sprite": "poison_slime",
+        "recolor": {
+          "L": "#ffb36a",
+          "U": "#e0562e",
+          "u": "#7a1e12"
+        }
+      },
+      "reward": {
+        "gold": 7,
+        "exp": 6,
+        "drop": 10
+      }
+    },
+    "iwao": {
+      "name": "岩鬼イワオ",
+      "hp": 26,
+      "atk": 11,
+      "def": 3,
+      "element": "neutral",
+      "body": "hard",
+      "look": {
+        "sprite": "fire_drake",
+        "recolor": {
+          "F": "#8a8780",
+          "O": "#5f5c56",
+          "R": "#3f3d3a",
+          "r": "#e0662e"
+        }
+      },
+      "reward": {
+        "gold": 8,
+        "exp": 7,
+        "drop": 10
+      }
+    },
+    "wraith": {
+      "name": "レイス",
+      "hp": 18,
+      "atk": 15,
+      "def": 1,
+      "element": "dark",
+      "body": "spirit",
+      "look": {
+        "sprite": "fire_imp",
+        "recolor": {
+          "F": "#9fb4d8",
+          "O": "#5a5f86",
+          "R": "#3a3c5e",
+          "r": "#24263e"
+        }
+      },
+      "reward": {
+        "gold": 8,
+        "exp": 7,
+        "drop": 10
+      }
+    },
+    "troll": {
+      "name": "トロル",
+      "hp": 20,
+      "atk": 9,
+      "def": 1,
+      "element": "neutral",
+      "body": "normal",
+      "look": {
+        "sprite": "goblin",
+        "recolor": {
+          "g": "#6f8a4a",
+          "G": "#465a2e"
+        }
+      },
+      "reward": {
+        "gold": 5,
+        "exp": 6,
+        "drop": 10
+      }
+    },
+    "yeti": {
+      "name": "イエティ",
+      "hp": 20,
+      "atk": 14,
+      "def": 1,
+      "element": "ice",
+      "body": "normal",
+      "look": {
+        "sprite": "goblin",
+        "recolor": {
+          "g": "#d8e2ea",
+          "G": "#8fa3b4"
+        }
+      },
+      "reward": {
+        "gold": 8,
+        "exp": 7,
+        "drop": 10
+      }
+    },
+    "dark_knight": {
+      "name": "暗黒騎士",
+      "hp": 22,
+      "atk": 15,
+      "def": 3,
+      "element": "dark",
+      "body": "hard",
+      "look": {
+        "sprite": "venom_queen",
+        "recolor": {
+          "U": "#4a4a52",
+          "u": "#2e2e34",
+          "V": "#1e1e24",
+          "v": "#121216",
+          "E": "#e03a3a",
+          "Z": "#6a6a74"
+        }
+      },
+      "reward": {
+        "gold": 9,
+        "exp": 7,
+        "drop": 10
+      }
+    },
+    "holy_knight": {
+      "name": "聖騎士",
+      "hp": 24,
+      "atk": 14,
+      "def": 3,
+      "element": "light",
+      "body": "hard",
+      "look": {
+        "sprite": "venom_queen",
+        "recolor": {
+          "U": "#d8dde4",
+          "u": "#a9b2bf",
+          "V": "#7c8696",
+          "v": "#4c5462",
+          "E": "#f7e27a",
+          "Z": "#fff6c8"
+        }
+      },
+      "reward": {
+        "gold": 9,
+        "exp": 8,
+        "drop": 10
+      }
+    }
+  }
+}

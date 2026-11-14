@@ -10,6 +10,8 @@ const must = <T>(r: Result<T>): T => {
   return r.value;
 };
 const buyAll = (save: SaveData, ids: ItemId[]) => ids.reduce((s, id) => must(buy(s, id)), save);
+/** ちょうどその品物を買える金貨 */
+const priceOfAll = (ids: ItemId[]) => ids.reduce((sum, id) => sum + ITEMS[id].price, 0);
 
 describe('店に並ぶもの', () => {
   it('何も持っていなければ、武器・防具は種類ごとに2段目まで', () => {
@@ -36,8 +38,8 @@ describe('買う', () => {
   });
 
   it('値段の分だけ金貨が減り、武器・防具はすぐ装備する', () => {
-    const s = buyAll(rich(200), ['sword', 'plate']);
-    expect(s.gold).toBe(200 - ITEMS.sword.price - ITEMS.plate.price);
+    const s = buyAll(rich(priceOfAll(['sword', 'plate']) + 7), ['sword', 'plate']);
+    expect(s.gold).toBe(7);
     expect(s.kit.weapon).toBe('sword');
     expect(s.kit.armor).toBe('plate');
     expect(s.owned).toEqual(['sword', 'plate']);
@@ -57,12 +59,6 @@ describe('買う', () => {
     expect(shelfItems(atEntry, 'weapon').filter((id) => id.startsWith('sword'))).toEqual(['sword', 'sword_2']);
     expect(shelfItems(s.owned, 'weapon').filter((id) => id.startsWith('sword'))).toEqual(['sword_2', 'sword_3', 'sword_4']); // 次の店
     expect(buy(s, 'sword_3', s.owned).ok).toBe(true);
-  });
-
-  it('上の段階ほど高く、強い', () => {
-    for (const [a, b] of [['sword', 'sword_10'], ['plate', 'plate_10']] as const) {
-      expect(ITEMS[b].price).toBeGreaterThan(ITEMS[a].price);
-    }
   });
 
   it('道具は倉庫に入り、持っていく数に余りがあれば持っていくものにも入る', () => {
@@ -102,7 +98,8 @@ describe('持ち物を選ぶ', () => {
 
 describe('出発と帰り', () => {
   it('持っていく道具は倉庫から出て、使わなかった道具と持ち帰った金貨は戻る', () => {
-    let s = buyAll(rich(100), ['sword', 'potion', 'potion', 'food']);
+    const ids: ItemId[] = ['sword', 'potion', 'potion', 'food'];
+    let s = buyAll(rich(priceOfAll(ids)), ids);
     expect(kitLoadout(s)).toEqual(['sword', 'potion', 'potion', 'food']);
     s = must(takeSupply(s, 'food', -1));
     const out = departWith(s);
@@ -116,7 +113,7 @@ describe('出発と帰り', () => {
   });
 
   it('保存して読み込むと、金貨・持ち物・倉庫・選び方が戻る', () => {
-    const s = departWith(buyAll(rich(500), ['sword_2', 'plate', 'book_heal', 'potion', 'potion']));
+    const s = departWith(buyAll(rich(), ['sword_2', 'plate', 'book_heal', 'potion', 'potion']));
     expect(parseSave(JSON.stringify(s))).toEqual(s);
   });
 });

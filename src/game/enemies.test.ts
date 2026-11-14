@@ -18,7 +18,7 @@ function act(state: ExploreState, ...actions: ExploreAction[]): ExploreState {
   return actions.reduce((s, a) => unwrap(step(s, a)), state);
 }
 
-// 標準のダンジョンの設定（startExplore でダンジョンを指定しないと、標準のダンジョンになる）
+// 標準のダンジョンの設定（startExplore でダンジョンを指定しないと、標準のダンジョンになる。テストでは src/game/testdata/ の決まった中身）
 const GEN = DEFAULT_DUNGEON;
 
 const WAIT: ExploreAction = { kind: 'wait' };
