@@ -68,12 +68,16 @@ export interface HitEvent {
   by?: EnemyId; // taken のとき、攻撃してきた敵（毒など、敵の攻撃でないときはない）
 }
 
+/** 属性の矢と、当たった敵の相性。weak：弱点（ダメージが増える）、resist：効きにくい（減る） */
+export type Affinity = 'weak' | 'normal' | 'resist';
+
 /** この行動で唱えた呪文。画面の演出と効果音のために使う（ルールには使わない） */
 export interface CastEvent {
   spell: SpellId;
   dir: Dir | null;
   path: Pos[]; // 矢・なぎ払いが通ったマス（演出で使う）
   moves: { from: Pos; to: Pos }[]; // 衝撃波で吹き飛んだ敵の、動く前と後
+  affinity: Affinity | null; // 属性の矢が当たった敵との相性（演出の強さを変える）。矢でないとき・何にも当たらなかったときは null
 }
 
 /** 一度離れた階の様子。戻ってきたら、倒した敵・開けた宝箱・晴れた霧はそのまま */
@@ -467,10 +471,20 @@ function isStaff(id: ItemId): boolean {
 
 /** 呪文のダメージ（settings はダンジョンの設定の魔法と呪文。敵の防御は無視する。属性の矢は、属性の相性で増減する） */
 export function spellDamage(stats: PlayerStats, spell: SpellId, enemy: EnemyDef, settings: Pick<GenSettings, 'magic' | 'spells'>): number {
-  const def = SPELLS[spell];
   const rate = settings.spells[spell].power ?? 1;
-  const element = def.effect.kind === 'bolt' ? (ENCHANT_VS_ELEMENT[def.effect.element][enemy.element] ?? 1) : 1;
-  return Math.max(1, Math.round(magicPower(stats, settings.magic) * rate * element));
+  return Math.max(1, Math.round(magicPower(stats, settings.magic) * rate * spellElementRate(spell, enemy)));
+}
+
+/** 属性の矢の、敵への相性の倍率（矢でなければ1） */
+function spellElementRate(spell: SpellId, enemy: EnemyDef): number {
+  const effect = SPELLS[spell].effect;
+  return effect.kind === 'bolt' ? (ENCHANT_VS_ELEMENT[effect.element][enemy.element] ?? 1) : 1;
+}
+
+/** 属性の矢と敵の相性（演出用） */
+export function spellAffinity(spell: SpellId, enemy: EnemyDef): Affinity {
+  const rate = spellElementRate(spell, enemy);
+  return rate > 1 ? 'weak' : rate < 1 ? 'resist' : 'normal';
 }
 
 /** 1行動ごとの、魔力の回復と再生の呪文の回復 */
@@ -492,7 +506,7 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
   const cost = cfg.cost ?? 0;
   if (state.mp < cost) return err('魔力が足りない');
   if (def.aim && !dir) return err('向きを選んでください');
-  const event: CastEvent = { spell, dir: def.aim ? dir : null, path: [], moves: [] };
+  const event: CastEvent = { spell, dir: def.aim ? dir : null, path: [], moves: [], affinity: null };
   let s: ExploreState = { ...state, mp: state.mp - cost, cast: event, log: [...state.log, `${def.name}を唱えた`] };
   const { stats } = s;
 
@@ -524,6 +538,7 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
         }
       }
       if (targets.length === 0) s = { ...s, log: [...s.log, '何にも当たらなかった'] };
+      if (def.effect.kind === 'bolt' && targets[0]) event.affinity = spellAffinity(spell, enemyDef(targets[0]));
       for (const t of targets) s = hurtEnemy(s, t.uid, spellDamage(s.stats, spell, enemyDef(t), settings));
       break;
     }

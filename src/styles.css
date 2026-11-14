@@ -805,6 +805,133 @@ button.card:disabled {
   background: #8f86e0;
 }
 
+/* 体力・満腹度・魔力は数字を出さないので、ゲージを少し太くして読みやすくする */
+.meter__track--hp,
+.meter__track--satiety,
+.meter__track--mp {
+  height: 0.75rem;
+}
+
+/* 残りが少ないとき：ゲージが点滅する */
+.meter__track--low .meter__fill {
+  animation: meter-low 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes meter-low {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.35;
+  }
+}
+
+/* 増えた・減った瞬間に、ゲージが一瞬光る（唱えた魔力・回復した体力） */
+.meter__track--up,
+.meter__track--down {
+  animation: meter-glow 0.6s ease-out;
+}
+
+.meter__track--up {
+  --glow: rgb(141 255 180 / 0.85);
+}
+
+.meter__track--down {
+  --glow: rgb(220 210 255 / 0.85);
+}
+
+@keyframes meter-glow {
+  from {
+    box-shadow: 0 0 0.75rem 0.15rem var(--glow);
+  }
+  to {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* 魔力が足りずに唱えられなかったとき：ゲージが小さく震える */
+.meter__track--shake {
+  animation: meter-shake 0.35s ease-in-out;
+}
+
+@keyframes meter-shake {
+  20%,
+  60% {
+    transform: translateX(-4px);
+  }
+  40%,
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meter__track--low .meter__fill,
+  .meter__track--up,
+  .meter__track--down,
+  .meter__track--shake {
+    animation: none;
+  }
+}
+
+/* その場で1ターン待つボタン。3D画面の右下に重ねる */
+.explore__rest {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.1rem;
+  width: 4.25rem;
+  height: 4.25rem;
+  padding: 0;
+  border-radius: 50%;
+  background: rgb(11 20 19 / 0.72);
+  border: 1px solid var(--pine-line);
+  color: var(--bone);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.explore__rest:hover {
+  border-color: var(--bone-dim);
+}
+
+.explore__rest:active {
+  transform: scale(0.95);
+}
+
+.explore__rest svg {
+  display: block;
+}
+
+.explore__rest-key {
+  font-size: 0.65rem;
+  font-weight: 400;
+  color: var(--bone-dim);
+}
+
+/* 指で操作する画面では、キーの案内を出さない */
+@media (hover: none) {
+  .explore__rest-key {
+    display: none;
+  }
+}
+
+/* スマホでは、下に重ねて出す記録の行と重ならないよう、少し上に置く */
+@media (max-width: 48rem) {
+  .explore__rest {
+    right: 0.75rem;
+    bottom: 2.9rem;
+    width: 3.75rem;
+    height: 3.75rem;
+  }
+}
+
 /* 呪文のボタン：使う魔力を右に小さく出す。向きを選んでいる呪文は枠を光らせる */
 .explore__cost {
   margin-left: auto;

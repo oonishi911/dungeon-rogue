@@ -49,6 +49,10 @@ export type HitPulse = keyof typeof HIT_PULSE;
 // 戦闘中は、主人公を中心に画面を寄せる。戦闘中とは、追ってきた敵が主人公の隣（上下左右）にいるか、攻撃が起きてから
 // holdMs 以内のこと（敵を倒した直後や、敵が1歩離れてまた来たときに、寄ったり引いたりをくり返さないように）。
 // zoom は寄せたときの倍率。inSec・outSec は寄せる・戻すときのなめらかさで、その3倍ほどの時間でほぼ着く（寄せるのは約0.4秒、戻すのは約0.75秒）
+// 呪文が当たった敵ののけぞり：当たった向きへ amount マス押されて、ms で元に戻る（相性の強さを掛ける）
+const SPELL_KNOCK = { amount: 0.3, ms: 280 } as const;
+// 呪文で倒した敵は、矢が当たるまで（と少しのあいだ）消さずに残す
+const DYING_EXTRA_MS = 160;
 const COMBAT_ZOOM = { zoom: 1.35, inSec: 0.12, outSec: 0.25, holdMs: 900 } as const;
 // ダメージの数字：受けた側の頭の上に小さく出て、なめらかに大きくなりながら少し浮かび、透けて消える
 const DAMAGE_POP = {
@@ -189,6 +193,10 @@ export class DungeonView3D {
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private readonly spellFx = new SpellEffects(this.scene, this.reduceMotion); // 呪文の演出
   private pulse: { kind: HitPulse; start: number } | null = null;
+  // 呪文が当たった敵ののけぞり（base は、もう倒れている敵の、その場の位置）
+  private knock: { uid: number; start: number; amount: number; dx: number; dz: number; base: THREE.Vector3 | null } | null = null;
+  private spellDir: { dx: number; dz: number } = { dx: 0, dz: 1 }; // 最後に唱えた呪文の向き
+  private readonly dying = new Map<number, number>(); // 呪文の矢が当たるまで残す、倒れた敵（uid → 消す時刻）
   private combatZoom = 1; // 戦闘中に寄せている倍率（なめらかに変わる）
   private lastCombatAt = -Infinity; // 最後に戦闘中だった時刻
   private readonly damagePops: { sprite: THREE.Sprite; start: number }[] = [];
@@ -324,6 +332,8 @@ export class DungeonView3D {
     this.pathDots.frustumCulled = false;
     this.pathDots.count = 0;
     this.scene.add(this.hero.root, this.target, this.pathDots);
+    // 呪文が敵に当たったら、その敵をのけぞらせる
+    this.spellFx.onImpact = (at, strength) => this.knockEnemy(at, strength);
   }
 
   /**
@@ -380,8 +390,10 @@ export class DungeonView3D {
       this.torchAt.copy(this.torch.position);
       this.renderer.shadowMap.needsUpdate = true;
     }
-    this.camera.position.set(p.x, CAMERA.height, p.y + CAMERA.back);
-    this.camera.lookAt(p.x, 0, p.y);
+    // 呪文の揺れ（spellFx.shake）は、カメラの位置と見る先の両方に足す
+    const shake = this.spellFx.shake;
+    this.camera.position.set(p.x + shake.x, CAMERA.height, p.y + CAMERA.back + shake.z);
+    this.camera.lookAt(p.x + shake.x, 0, p.y + shake.z);
     for (const e of s.enemies) {
       const view = this.enemies.get(e.uid);
       if (!view || !view.body.visible) continue; // 見えていない敵は動かさない
@@ -399,6 +411,8 @@ export class DungeonView3D {
       view.hp.position.set(at.x, 0.06, at.y);
       view.ring?.position.set(at.x, 0.02, at.y);
     }
+    this.updateKnock(now);
+    this.updateDying(now);
     this.updateWalkTarget(frame.walkTarget);
     this.updateWalkPath(frame.walkPath);
     this.renderer.render(this.scene, this.camera);
@@ -413,10 +427,67 @@ export class DungeonView3D {
     this.renderer.setPixelRatio(this.pixelRatio);
   }
 
-  /** 呪文を唱えたとき：向きを選ぶ呪文ならその向きを向き、呪文の演出を出す。from は唱えたマス */
-  castSpell(cast: CastEvent, from: Pos) {
+  /**
+   * 呪文を唱えたとき：向きを選ぶ呪文ならその向きを向き、呪文の演出を出す。from は唱えたマス。
+   * 返す値は、唱えてから矢が当たるまでのミリ秒（当たったときにダメージの数字を出すため）。
+   * 矢で敵を倒しても、矢が当たるまでは敵を消さずに残す
+   */
+  castSpell(cast: CastEvent, from: Pos): number {
     if (cast.dir) this.heroDir = cast.dir;
-    this.spellFx.start(cast, from);
+    const impactMs = this.spellFx.start(cast, from);
+    const last = cast.path.at(-1);
+    if (last) {
+      const len = Math.hypot(last.x - from.x, last.y - from.y) || 1;
+      this.spellDir = { dx: (last.x - from.x) / len, dz: (last.y - from.y) / len };
+    }
+    const target = last && this.shownState?.enemies.find((e) => e.pos.x === last.x && e.pos.y === last.y);
+    if (target && impactMs > 0) this.dying.set(target.uid, performance.now() + impactMs + DYING_EXTRA_MS);
+    return impactMs;
+  }
+
+  /** 呪文が当たった敵（at のマス）を、当たった向きへのけぞらせる */
+  private knockEnemy(at: Pos, strength: number) {
+    if (this.reduceMotion) return;
+    const uid =
+      [...this.dying.keys()].find((id) => {
+        const v = this.enemies.get(id);
+        return v && Math.round(v.body.position.x) === at.x && Math.round(v.body.position.z) === at.y;
+      }) ?? this.shownState?.enemies.find((e) => e.pos.x === at.x && e.pos.y === at.y)?.uid;
+    if (uid === undefined) return;
+    const view = this.enemies.get(uid);
+    const alive = this.shownState?.enemies.some((e) => e.uid === uid) ?? false;
+    this.knock = {
+      uid,
+      start: performance.now(),
+      amount: SPELL_KNOCK.amount * strength,
+      ...this.spellDir,
+      base: !alive && view ? view.body.position.clone() : null,
+    };
+  }
+
+  /** のけぞりの動き（押されて、なめらかに戻る） */
+  private updateKnock(now: number) {
+    const k = this.knock;
+    if (!k) return;
+    const t = (now - k.start) / SPELL_KNOCK.ms;
+    const view = this.enemies.get(k.uid);
+    if (t >= 1 || !view) {
+      if (view && k.base) view.body.position.copy(k.base);
+      this.knock = null;
+      return;
+    }
+    const off = k.amount * (t < 0.2 ? t / 0.2 : (1 - (t - 0.2) / 0.8) ** 2);
+    if (k.base) view.body.position.set(k.base.x + k.dx * off, k.base.y, k.base.z + k.dz * off);
+    else view.body.position.set(view.body.position.x + k.dx * off, view.body.position.y, view.body.position.z + k.dz * off);
+  }
+
+  /** 矢が当たるまで残していた、倒れた敵を消す */
+  private updateDying(now: number) {
+    for (const [uid, until] of this.dying) {
+      if (now < until) continue;
+      this.dying.delete(uid);
+      if (!this.shownState?.enemies.some((e) => e.uid === uid)) this.removeEnemyView(uid);
+    }
   }
 
   /** 主人公が at のマスの敵を攻撃したとき：敵の方を向いて、武器を振る */
@@ -851,7 +922,11 @@ export class DungeonView3D {
     const alive = new Set(state.enemies.map((e) => e.uid));
     for (const [uid, view] of [...this.enemies]) {
       if (shown.has(uid)) continue;
-      if (!alive.has(uid)) this.removeEnemyView(uid);
+      if (!alive.has(uid)) {
+        // 呪文の矢で倒した敵は、矢が当たるまで残す（頭上のマークと体力の棒は消す）
+        if ((this.dying.get(uid) ?? 0) > performance.now()) view.mark.visible = view.hp.visible = false;
+        else this.removeEnemyView(uid);
+      }
       else {
         view.body.visible = view.mark.visible = view.hp.visible = false;
         if (view.ring) view.ring.visible = false;
