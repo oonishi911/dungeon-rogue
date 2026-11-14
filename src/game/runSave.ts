@@ -8,11 +8,10 @@
 // - 霧の晴れたマス（seen）は、4マスを1文字（16進数）にまとめる
 // - 記録（log）は、新しい方から LOG_KEEP 行だけ残す
 // 読み込んだデータは壊れていたり古い形式だったりするので、形を確かめてから使う。合わなければ null（新しい挑戦を始める）
-// 遊んでいるダンジョンは ID で持つ。ダンジョンを選べるようになる前の中断データ（ID がない）は、標準のダンジョンとして読む。
-// そのダンジョンの設定ファイルが消されていたら、続きはあきらめる
+// 遊んでいるダンジョンは ID で持つ。ID がない・そのダンジョンの設定ファイルが消されているときは、続きはあきらめる
 
 import { ENEMIES, ITEMS, SPELLS, TRAIT_IDS } from './data';
-import { DEFAULT_DUNGEON_ID, dungeonOf, hasDungeon } from './dungeons';
+import { dungeonOf, hasDungeon } from './dungeons';
 import type { MapEnemy } from './enemies';
 import { mapOfFloor } from './explore';
 import { type Chest, type ExploreState, type FloorMemory } from './exploreTypes';
@@ -152,10 +151,9 @@ function isStats(v: unknown): v is ExploreState['stats'] {
   return e === null || (isObject(e) && TRAIT_IDS.includes(e.element as TraitId) && isCount(e.hits));
 }
 
-/** 中断データのダンジョンの ID（ない古いデータは標準のダンジョン）。そのダンジョンがもうなければ null */
+/** 中断データのダンジョンの ID。ない・そのダンジョンがもうなければ null */
 function dungeonIdOf(v: unknown): string | null {
-  const id = v === undefined ? DEFAULT_DUNGEON_ID : v;
-  return typeof id === 'string' && hasDungeon(id) ? id : null;
+  return typeof v === 'string' && hasDungeon(v) ? v : null;
 }
 
 /** 出発したときに決まったこと。昔の中断データにあった knowledge・hasMap・carried（準備フェーズの結果）は、読み飛ばす */
