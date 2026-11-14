@@ -136,10 +136,25 @@ export const START_SPELLBOOKS = 2;
 // （炎：柔らかい、氷：硬い、無属性：混在、光：硬い、闇：霊体）。
 
 // ===== 宝箱と金貨（仮） =====
+/**
+ * 宝箱に入る道具の出やすさ（マップの宝箱と、強敵が落とす宝箱で共通）。同じ道具を何度も並べると出やすくなり、
+ * 「並べた数 ÷ ぜんぶの数」が、道具が入っているときにその道具が選ばれる割合。
+ * 2026-11-14：食料を以前（6種類を同じ割合、各1/6）の3倍の1/2に、回復薬を3分の1の1/18にした。ほかの4つは残りを等分して各1/9
+ */
+const CHEST_ITEM_WEIGHTS: readonly [ItemId, number][] = [
+  ['potion', 1],
+  ['food', 9],
+  ['fire_whetstone', 2],
+  ['ice_whetstone', 2],
+  ['holy_water', 2],
+  ['dark_oil', 2],
+];
+export const CHEST_ITEMS: readonly ItemId[] = CHEST_ITEM_WEIGHTS.flatMap(([id, n]) => Array.from({ length: n }, () => id));
+
 export const TREASURE_CONFIG = {
   goldPerDepth: 5, // 宝箱の金貨＝本道からの距離×これ
   itemChance: 0.5, // 宝箱に道具が入っている確率
-  items: ['potion', 'food', 'fire_whetstone', 'ice_whetstone', 'holy_water', 'dark_oil'] as readonly ItemId[],
+  items: CHEST_ITEMS, // 宝箱に入る道具（出やすさは CHEST_ITEM_WEIGHTS）
   eliteGold: 30, // 強敵を倒すと落とす宝箱に入っている金貨（敵ごとの金貨とは別）
   bossGold: 50, // ボスを倒したときの報酬
   keepOnDefeat: 0.5, // 力尽きたときに持ち帰れる金貨の割合
@@ -157,7 +172,7 @@ export const TREASURE_CONFIG = {
 // 標準のダンジョンでは、無属性のダンジョンの外れた準備は、報酬なしで77.5%、今の値で87.5%（バランスのテストの上限90%）
 export const REWARD_CONFIG = {
   dropItems: ['potion', 'food'] as readonly ItemId[],
-  eliteItems: ['potion', 'food', 'fire_whetstone', 'ice_whetstone', 'holy_water', 'dark_oil'] as readonly ItemId[],
+  eliteItems: CHEST_ITEMS, // 強敵が落とす宝箱の道具（マップの宝箱と同じ出やすさ）
 };
 
 /** レベル level から次のレベルに上がるのに必要な経験値（growth はダンジョンの設定） */
