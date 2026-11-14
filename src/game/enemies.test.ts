@@ -143,7 +143,8 @@ describe('敵の動き', () => {
   it('プレイヤーに気付いたターンは動かず、次のターンから追ってくる', () => {
     let s = act(arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 6, y: 2 })]), WAIT);
     expect(s.enemies[0]).toMatchObject({ mode: 'chase', justNoticed: true, pos: { x: 6, y: 2 } });
-    expect(s.log.at(-1)).toContain('気付いた');
+    // 気付いたことは記録に書かない（頭上の「！」で見せる）
+    expect(s.log.some((l) => l.includes('気付いた'))).toBe(false);
     s = act(s, WAIT);
     expect(s.enemies[0]).toMatchObject({ mode: 'chase', justNoticed: false, pos: { x: 5, y: 2 } });
   });
@@ -168,7 +169,8 @@ describe('敵の動き', () => {
     expect(s.enemies[0]!.mode).toBe('search');
     for (let i = 0; i < ENEMY_CONFIG.loseTurns; i++) s = act(s, WAIT);
     expect(s.enemies[0]!.mode).toBe('wander');
-    expect(s.log.some((l) => l.includes('見失った'))).toBe(true);
+    // 見失ったことも記録に書かない
+    expect(s.log.some((l) => l.includes('見失った'))).toBe(false);
   });
 
   it('強敵は動かない', () => {

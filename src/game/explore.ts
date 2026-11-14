@@ -638,8 +638,8 @@ function enemiesTurn(state: ExploreState): ExploreState {
     if (sees) {
       if (e.mode !== 'chase') {
         // 気付いたターンは身構えるだけで動かない。プレイヤーに対応する猶予を与える
+        // 記録には書かない（気付いたことは、頭上の「！」で見せる）
         enemies[i] = { ...e, mode: 'chase', justNoticed: true, lastSeen: s.player };
-        s = { ...s, log: [...s.log, `${def.name}がこちらに気付いた`] };
         continue;
       }
       e = { ...e, lastSeen: s.player };
@@ -648,8 +648,8 @@ function enemiesTurn(state: ExploreState): ExploreState {
     } else if (e.mode === 'search') {
       e = { ...e, searchTurns: e.searchTurns - 1 };
       if (e.searchTurns <= 0) {
+        // 見失ったことも、記録には書かない
         e = { ...e, mode: 'wander', lastSeen: null, searchTurns: 0 };
-        s = { ...s, log: [...s.log, `${def.name}はこちらを見失ったようだ`] };
       }
     }
 
