@@ -64,9 +64,9 @@ const SWING_WINDUP_END = 0.055; // 振りかぶり切る時間（秒）。そこ
 const TURN_SPEED = 14; // 体を回す速さ（大きいほど速く向きが変わる）
 const BOB = { height: 0.05, sway: 0.08 }; // 歩くときの上下の揺れ（マス）と、左右の傾き（ラジアン）
 // 歩き方：脚（腰が軸）と、武器を持たない右腕（肩が軸）を前後に振る角度（ラジアン）。1歩ごとに出す脚を入れ替える
-const STRIDE = { leg: 0.55, arm: 0.45, weaponArm: 0.15 };
+const STRIDE = { leg: 0.7, arm: 0.55, weaponArm: 0.2 };
 // マント：歩くと裾が後ろへひるがえり（flare、マス）、裾が波打つ（wave、マス）。follow は歩き始め・止まりに追いつく速さ
-const CLOAK_FLOW = { flare: 0.09, wave: 0.014, waveSpeed: 9, follow: 6, top: 0.55 };
+const CLOAK_FLOW = { flare: 0.14, wave: 0.02, waveSpeed: 9, follow: 6, top: 0.55 };
 // 待っているあいだの息づかい：体がわずかに上下する（マス）。speed は1秒あたりの角度
 const BREATH = { height: 0.007, speed: 2.4 };
 
@@ -165,18 +165,19 @@ export class Hero3D {
     }
 
     // 服（マントの内側）とベルト
-    add(new THREE.CylinderGeometry(0.13, 0.17, 0.42, 16), mats.tunic, 0, 0.29, 0);
+    add(new THREE.CylinderGeometry(0.13, 0.16, 0.3, 16), mats.tunic, 0, 0.36, 0); // 服は腰の下まで（その下に脚が見える）
     add(new THREE.CylinderGeometry(0.155, 0.16, 0.04, 16), mats.belt, 0, 0.3, 0);
 
     // マント：前（+z）を開けて、中の服が見えるようにする。裾は濃い色。
     // three.js の円柱は、角度0が +z の向き（x = sin、z = cos）なので、角度0を中心に開ける
     const gap = 0.9; // 前の開きの角度（ラジアン）
     // 裾がひるがえるよう、縦にも分けておき、毎フレーム頂点を動かす（flowCloak）
-    const cloakGeo = new THREE.CylinderGeometry(0.17, 0.27, 0.5, 20, 5, true, gap / 2, Math.PI * 2 - gap);
-    add(cloakGeo, this.cloakMats.C, 0, 0.3, 0);
-    const hemGeo = new THREE.CylinderGeometry(0.27, 0.275, 0.05, 20, 1, true, gap / 2, Math.PI * 2 - gap);
-    add(hemGeo, this.cloakMats.c, 0, 0.075, 0);
-    for (const [geo, y] of [[cloakGeo, 0.3], [hemGeo, 0.075]] as const) {
+    // 裾は膝の上まで（脚と靴の動きが見えるように）
+    const cloakGeo = new THREE.CylinderGeometry(0.17, 0.25, 0.34, 20, 5, true, gap / 2, Math.PI * 2 - gap);
+    add(cloakGeo, this.cloakMats.C, 0, 0.38, 0);
+    const hemGeo = new THREE.CylinderGeometry(0.25, 0.255, 0.05, 20, 1, true, gap / 2, Math.PI * 2 - gap);
+    add(hemGeo, this.cloakMats.c, 0, 0.235, 0);
+    for (const [geo, y] of [[cloakGeo, 0.38], [hemGeo, 0.235]] as const) {
       const pos = geo.getAttribute('position') as THREE.BufferAttribute;
       this.cloakParts.push({ geo, base: Float32Array.from(pos.array as Float32Array), y });
     }

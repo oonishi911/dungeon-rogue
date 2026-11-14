@@ -12,7 +12,7 @@ export const WALL_ROUND = 0.16;
 // ずらし方はダンジョンの中の位置で決めるので、となり合う壁の面はつながったまま波打つ
 export const WALL_ROUGH = { amount: 0.045, scale: 2.6, top: 0.5 } as const;
 export const WALL_SHAPES = 16; // 4つの側面のどれが床に面しているかの組み合わせ（softWall.ts の exposureIndex）
-export const CAMERA = { height: 15, back: 7.5 }; // 主人公の真上15・手前7.5から見下ろす（約63度）
+export const CAMERA = { height: 15, back: 11.7 }; // 主人公の真上15・手前11.7から見下ろす（約52度。主人公の脚やマントの動きが横から見える角度）
 // 画面の大きさによらず、主人公のいるあたりの1マスが画面上でこの大きさ（CSSピクセル）に映るよう、視野の広さを決める。
 // スマホの縦画面（幅約390px）で横に約8マス、PCの探索画面（幅約670px）で横に約14マス映る
 export const TILE_PX = 48;
@@ -104,8 +104,8 @@ export const TORCH = {
   intensity: 10,
   distance: 9, // 光が届く距離（マス）。視界の半径6より少し遠くまで
   decay: 1,
-  height: 0.85, // 手に持った高さ（壁の上面1より低い）
-  forward: 0.3, // 主人公より少し手前（カメラ側）に掲げる。主人公の体の中に光があると、体が照らされず暗くなるため
+  height: 1.25, // 掲げた高さ（主人公の頭より上。体の正面が光りすぎず、脚やマントの動きが見えるように）
+  forward: 0.45, // 主人公より少し手前（カメラ側）に掲げる。主人公の体の中に光があると、体が照らされず暗くなるため
   shadowMapSize: 512,
 };
 export const AMBIENT = 0.3; // 全体を均等に照らす弱い光。光の届かない場所や、一度見ただけのマスがかろうじて見える明るさ
