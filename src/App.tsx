@@ -12,7 +12,7 @@ import { packRun } from './game/runSave';
 import { newSave, type SaveData } from './game/save';
 import { startInformant, type InformantState, type Intel } from './game/informant';
 import { departWith, fitKit, kitLoadout, returnWith } from './game/shop';
-import type { Departure } from './game/types';
+import type { Departure, ItemId } from './game/types';
 import { clearRun, loadRun, loadSave, writeRun, writeSave } from './storage';
 import { DungeonSelectScreen } from './ui/DungeonSelectScreen';
 import { ExploreScreen } from './ui/ExploreScreen';
@@ -23,7 +23,7 @@ import { ShopScreen } from './ui/ShopScreen';
 type Stage =
   | { kind: 'choose' } // 挑むダンジョンを選ぶ（挑戦の始まり）
   | { kind: 'informant'; talk: InformantState } // 情報屋との会話（ダンジョンの特性は、もう決まっている）
-  | { kind: 'shop'; dungeon: string; seed: number; intel: readonly Intel[] } // 出発の準備。intel：情報屋から聞いたこと
+  | { kind: 'shop'; dungeon: string; seed: number; intel: readonly Intel[]; atEntry: readonly ItemId[] } // 出発の準備。intel：情報屋から聞いたこと、atEntry：店に入ったときに持っていたもの（店の並びを決める）
   | { kind: 'dungeon'; outcome: Departure; seed: number; resume?: ExploreState } // resume：前に中断した探索の続き
   | { kind: 'result'; outcome: Departure; expedition: ExploreResult; next: SaveData };
 
@@ -71,7 +71,7 @@ export function App() {
             writeSave(paid); // 払った情報料は、すぐ保存する
             setStage({ kind: 'informant', talk: next });
           }}
-          onLeave={() => setStage({ kind: 'shop', dungeon: talk.dungeon, seed: talk.seed, intel: talk.heard })}
+          onLeave={() => setStage({ kind: 'shop', dungeon: talk.dungeon, seed: talk.seed, intel: talk.heard, atEntry: save.owned })}
         />
       );
     }
@@ -81,6 +81,7 @@ export function App() {
           run={save.run}
           dungeonName={dungeonOf(stage.dungeon).name}
           intel={stage.intel}
+          atEntry={stage.atEntry}
           save={save}
           onChange={(next) => {
             setSave(next);

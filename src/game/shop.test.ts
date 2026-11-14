@@ -50,6 +50,15 @@ describe('買う', () => {
     expect(buy(s, 'sword_3').ok).toBe(true);
   });
 
+  it('店で上の段階を買っても、その場では並びは広がらず、次に店に入ったときに広がる', () => {
+    const atEntry: ItemId[] = [];
+    const s = must(buy(rich(), 'sword_2', atEntry));
+    expect(buy(s, 'sword_3', atEntry).ok).toBe(false); // 同じ店では、まだ並んでいない
+    expect(shelfItems(atEntry, 'weapon').filter((id) => id.startsWith('sword'))).toEqual(['sword', 'sword_2']);
+    expect(shelfItems(s.owned, 'weapon').filter((id) => id.startsWith('sword'))).toEqual(['sword_2', 'sword_3', 'sword_4']); // 次の店
+    expect(buy(s, 'sword_3', s.owned).ok).toBe(true);
+  });
+
   it('上の段階ほど高く、強い', () => {
     for (const [a, b] of [['sword', 'sword_10'], ['plate', 'plate_10']] as const) {
       expect(ITEMS[b].price).toBeGreaterThan(ITEMS[a].price);
