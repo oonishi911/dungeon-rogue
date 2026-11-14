@@ -8,10 +8,11 @@ interface ResultScreenProps {
   run: number;
   outcome: Departure;
   expedition: ExploreResult;
+  gold: number; // 持ち帰った分を足した、貯めた金貨（次の店で使える）
   onNextRun: () => void;
 }
 
-export function ResultScreen({ run, outcome, expedition, onNextRun }: ResultScreenProps) {
+export function ResultScreen({ run, outcome, expedition, gold, onNextRun }: ResultScreenProps) {
   const cleared = expedition.outcome === 'cleared';
   const where = expedition.bossFloor ? '最深部' : `地下${expedition.floorReached}階`;
   const dungeonName = hasDungeon(outcome.dungeon) ? dungeonOf(outcome.dungeon).name : '';
@@ -46,6 +47,10 @@ export function ResultScreen({ run, outcome, expedition, onNextRun }: ResultScre
               {expedition.goldBrought}G
               {expedition.goldBrought < expedition.gold && `（手に入れた${expedition.gold}Gのうち）`}
             </dd>
+          </div>
+          <div>
+            <dt>貯めた金貨</dt>
+            <dd>{gold}G（次の店で使える。使わなかった道具は倉庫に戻った）</dd>
           </div>
         </dl>
       </section>

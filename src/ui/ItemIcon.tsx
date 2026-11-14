@@ -4,6 +4,7 @@
 
 import type { ReactElement } from 'react';
 import { ITEMS } from '../game/data';
+import { baseItemOf } from '../game/itemMaster';
 import type { ItemId, SpellId } from '../game/types';
 
 const C = {
@@ -128,7 +129,8 @@ const book = (cover: string, mark: ReactElement) => (
   </>
 );
 
-const SHAPES: Record<ItemId, () => ReactElement> = {
+// 武器と防具は種類ごとに1つ（段階が違っても同じ絵）
+const SHAPES: Partial<Record<ItemId, () => ReactElement>> = {
   sword: () => (
     <>
       <path d="M19.5 3.5 20.5 4.5 10 15 9 14z" fill={C.steel} />
@@ -190,7 +192,7 @@ const SHAPES: Record<ItemId, () => ReactElement> = {
 
 /** アイテムのアイコン。size は表示の大きさ（px） */
 export function ItemIcon({ id, size = 24, className }: { id: ItemId; size?: number; className?: string }) {
-  const shape = SHAPES[id];
+  const shape = SHAPES[baseItemOf(id)];
   return (
     <svg className={className ? `item-icon ${className}` : 'item-icon'} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       {shape ? shape() : <circle cx="12" cy="12" r="8" fill={C.stone} />}

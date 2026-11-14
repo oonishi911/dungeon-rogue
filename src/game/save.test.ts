@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { newSave, parseSave, type SaveData } from './save';
 
-const valid: SaveData = { version: 1, run: 4 };
+const valid: SaveData = { ...newSave(), run: 4 };
 
 describe('parseSave', () => {
   it('保存したものをそのまま読める', () => {
@@ -27,5 +27,22 @@ describe('parseSave', () => {
     expect(parseSave(JSON.stringify(old))).toEqual(valid);
     // 壊れた値が残っていても、使わないので気にしない
     expect(parseSave(JSON.stringify({ ...valid, rank: 'x', exp: -1, carried: 'x', bonusGold: -1 }))).toEqual(valid);
+  });
+
+  it('金貨・持ち物・倉庫のない昔の記録は、どれも空から始める', () => {
+    expect(parseSave(JSON.stringify({ version: 1, run: 4 }))).toEqual(valid);
+  });
+
+  it('読めない品物や、もう持っていないものを選んだ記録は、その分だけ捨てる', () => {
+    const save = parseSave(
+      JSON.stringify({
+        ...valid,
+        gold: 120,
+        owned: ['sword', 'no_such_item', 'potion'],
+        stock: ['potion', 'sword'],
+        kit: { weapon: 'hammer', armor: null, books: ['book_heal'], take: ['potion', 'potion'] },
+      }),
+    );
+    expect(save).toEqual({ ...valid, gold: 120, owned: ['sword'], stock: ['potion'], kit: { weapon: null, armor: null, books: [], take: ['potion', 'potion'] } });
   });
 });

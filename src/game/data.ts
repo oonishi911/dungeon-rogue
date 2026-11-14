@@ -13,6 +13,8 @@ import type {
   WeaponType,
 } from './types';
 import enemyMasterJson from './enemies.json';
+import itemsJson from './items.json';
+import { itemDefs, parseItemMaster, type ItemMaster } from './itemMaster';
 import { enemyDefs, enemyRewards, parseEnemyMaster, type EnemyReward } from './enemyMaster';
 import type { GrowthSettings } from './genMaster';
 
@@ -61,121 +63,16 @@ export const SPELLS: Record<SpellId, SpellDef> = {
 };
 
 // 数値はすべて仮。遊んでみてバランス調整する
-export const ITEMS: Record<ItemId, ItemDef> = {
-  sword: {
-    id: 'sword',
-    name: '剣',
-    description: '柔らかい敵によく効く。硬い敵・霊体には効きにくい',
-    effect: { kind: 'weapon', weapon: 'sword' },
-  },
-  hammer: {
-    id: 'hammer',
-    name: '槌',
-    description: '硬い敵によく効く。霊体には効きにくい',
-    effect: { kind: 'weapon', weapon: 'hammer' },
-  },
-  staff: {
-    id: 'staff',
-    name: '杖',
-    description: '霊体によく効く。柔らかい敵には効きにくい',
-    effect: { kind: 'weapon', weapon: 'staff' },
-  },
-  fire_cloak: {
-    id: 'fire_cloak',
-    name: '耐火のマント',
-    description: '炎のダメージを大きく減らす（光の攻撃は半分だけ）',
-    effect: { kind: 'armor', guard: { kind: 'component', component: 'fire', rate: 0.3 } },
-  },
-  ice_cloak: {
-    id: 'ice_cloak',
-    name: '耐氷のマント',
-    description: '氷のダメージを大きく減らす（闇の攻撃は半分だけ）',
-    effect: { kind: 'armor', guard: { kind: 'component', component: 'ice', rate: 0.3 } },
-  },
-  plate: {
-    id: 'plate',
-    name: '鎧',
-    description: '無属性のダメージを少し減らす（光・闇の攻撃は半分だけ）',
-    effect: { kind: 'armor', guard: { kind: 'component', component: 'neutral', rate: 0.6 } },
-  },
-  light_robe: {
-    id: 'light_robe',
-    name: '光の衣',
-    description: '光の攻撃を大きく減らす。ほかの属性には効かない',
-    effect: { kind: 'armor', guard: { kind: 'whole', element: 'light', rate: 0.3 } },
-  },
-  dark_robe: {
-    id: 'dark_robe',
-    name: '闇の衣',
-    description: '闇の攻撃を大きく減らす。ほかの属性には効かない',
-    effect: { kind: 'armor', guard: { kind: 'whole', element: 'dark', rate: 0.3 } },
-  },
-  potion: {
-    id: 'potion',
-    name: '回復薬',
-    description: 'HPを15回復する',
-    effect: { kind: 'heal', hp: 15 },
-  },
-  food: {
-    id: 'food',
-    name: '食料',
-    description: '満腹度を200回復する',
-    effect: { kind: 'food', satiety: 200 },
-  },
-  fire_whetstone: {
-    id: 'fire_whetstone',
-    name: '炎の砥石',
-    description: '武器に炎の力を宿す（攻撃5回）。氷の敵によく効く',
-    effect: { kind: 'enchant', element: 'fire', hits: 5 },
-  },
-  ice_whetstone: {
-    id: 'ice_whetstone',
-    name: '氷の砥石',
-    description: '武器に氷の力を宿す（攻撃5回）。炎の敵によく効く',
-    effect: { kind: 'enchant', element: 'ice', hits: 5 },
-  },
-  holy_water: {
-    id: 'holy_water',
-    name: '光の聖水',
-    description: '武器に光の力を宿す（攻撃5回）。闇の敵によく効く',
-    effect: { kind: 'enchant', element: 'light', hits: 5 },
-  },
-  dark_oil: {
-    id: 'dark_oil',
-    name: '闇の香油',
-    description: '武器に闇の力を宿す（攻撃5回）。光の敵によく効く',
-    effect: { kind: 'enchant', element: 'dark', hits: 5 },
-  },
-  ...spellbooks(),
-};
-
-/** 呪文書。持っていくと、探索で魔力を使ってその呪文を何度でも唱えられる */
-function spellbooks(): Record<Extract<ItemId, `book_${string}`>, ItemDef> {
-  const book = (spell: SpellId, description: string): ItemDef => ({
-    id: `book_${spell}` as ItemId,
-    name: `${SPELLS[spell].name}の呪文書`,
-    description,
-    effect: { kind: 'spellbook', spell },
-  });
-  return {
-    book_shockwave: book('shockwave', 'まわりの敵を吹き飛ばす。ダメージは控えめだが、壁や敵にぶつけると追加ダメージ'),
-    book_sweep: book('sweep', '向いた方向の数マスを貫き、並んだ敵すべてに当たる'),
-    book_fire_bolt: book('fire_bolt', '炎の矢を放つ。氷と闇の敵によく効く'),
-    book_ice_bolt: book('ice_bolt', '氷の矢を放つ。炎と光の敵によく効く'),
-    book_light_lance: book('light_lance', '光の槍を放つ。闇の敵によく効く'),
-    book_dark_bolt: book('dark_bolt', '闇の矢を放つ。光の敵によく効く'),
-    book_heal: book('heal', 'すぐにHPを回復する'),
-    book_regen: book('regen', '数ターンかけて、少しずつHPを回復する'),
-  };
-}
-
+// 品物（名前・値段・武器と防具の段階ごとの性能）は、品物の設定ファイル（src/game/items.json。管理画面の「品物」タブ）にある。
+// 品物の働き（回復薬の回復量など）と説明は itemMaster.ts
+export const ITEM_MASTER: ItemMaster = parseItemMaster(itemsJson);
+export const ITEMS: Record<ItemId, ItemDef> = itemDefs(ITEM_MASTER);
 
 // ===== 戦闘の設定値（仮） =====
 export const COMBAT_CONFIG = {
   playerHp: 60,
   playerAtk: 6,
   playerDef: 1,
-  weaponAtk: 3, // 武器を持っているときの攻撃力ボーナス
   poisonDamage: 7, // 毒の1ターンあたりのダメージ（今は毒を与える敵はいない）
 } as const;
 
@@ -218,7 +115,7 @@ export function enemyBase(id: EnemyId): EnemyDef {
 
 /**
  * ダンジョンごとの有利な装備：その属性に効く防具と、出やすい体質の敵に効く武器。
- * 出発するときは、これに回復薬2つと呪文書2冊を足した持ち物で始める（depart.ts）。バランステストの「正しい準備」もこれを使う
+ * バランステストの「正しい準備」と、開発用画面の ?best=1 で使う（ゲームでは、持ち物は店で買って選ぶ）
  */
 export const FAVORABLE_GEAR: Record<TraitId, readonly ItemId[]> = {
   fire: ['sword', 'fire_cloak'],
@@ -228,10 +125,10 @@ export const FAVORABLE_GEAR: Record<TraitId, readonly ItemId[]> = {
   dark: ['staff', 'dark_robe'],
 };
 
-/** 出発するとき、有利な装備に足して持たせる道具 */
+/** バランステストの「正しい準備」で、有利な装備に足して持たせる道具 */
 export const START_SUPPLIES: readonly ItemId[] = ['potion', 'potion'];
 
-/** 出発するとき、そのダンジョンで有利に働く呪文書を何冊持たせるか（bestLoadout.ts の favorableSpellbooks で選ぶ） */
+/** 有利に働く呪文書を何冊選ぶか（bestLoadout.ts の favorableSpellbooks。開発用・テスト用） */
 export const START_SPELLBOOKS = 2;
 
 // ダンジョン特性ごとに出る敵は、ダンジョンの設定ファイル（src/game/dungeons/*.json の encounters）にある。

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { ITEM_MASTER } from './data';
+import { serializeItemMaster } from './itemMaster';
 import {
   ADMIN_TABS,
   adminDungeonFromUrl,
@@ -9,6 +11,7 @@ import {
   dungeonStatus,
   duplicateDungeon,
   ENEMY_FILE,
+  ITEM_FILE,
   isDungeonTab,
   planPublish,
   removeDungeon,
@@ -45,6 +48,7 @@ const dungeon = (name: string): DungeonFile => ({ name, description: `${name}の
 // 標準のダンジョンと、もう1つ（ほら穴）がある状態
 const BASE: AdminData = {
   enemies: { enemies: copyJson(sample.enemies) } as EnemyMaster,
+  items: copyJson(ITEM_MASTER),
   dungeons: { standard: dungeon('標準'), cave: dungeon('ほら穴') },
 };
 const edited = (change: (d: AdminData) => void): AdminData => {
@@ -160,8 +164,8 @@ describe('管理画面の公開（敵のデータと、いくつものダンジ�
 });
 
 describe('管理画面のタブ', () => {
-  it('敵のデータの1つと、ダンジョンの設定の7つがある', () => {
-    expect(ADMIN_TABS.map((t) => t.id)).toEqual(['enemies', 'about', 'pool', 'floors', 'rooms', 'placement', 'growth', 'magic']);
+  it('敵のデータと品物の設定の2つと、ダンジョンの設定の7つがある', () => {
+    expect(ADMIN_TABS.map((t) => t.id)).toEqual(['enemies', 'items', 'about', 'pool', 'floors', 'rooms', 'placement', 'growth', 'magic']);
     expect(ADMIN_TABS.filter((t) => isDungeonTab(t.id)).map((t) => t.id)).toEqual(['about', 'pool', 'floors', 'rooms', 'placement', 'growth', 'magic']);
   });
 
@@ -233,5 +237,29 @@ describe('管理画面のタブ', () => {
     });
     expect(ADMIN_TABS.filter((t) => tabChanged(t.id, BASE, draft))).toEqual([]);
     expect(planPublish(BASE, draft).changes).toEqual([]);
+  });
+});
+
+describe('品物の設定の公開', () => {
+  it('名前・値段・性能を変えると、品物の設定ファイルを保存する', () => {
+    const draft = edited((d) => {
+      d.items.weapons.sword[1]!.price = 55;
+      d.items.supplies.potion.name = '傷薬';
+    });
+    const plan = planPublish(BASE, draft);
+    expect(plan.files).toEqual([{ path: ITEM_FILE, text: serializeItemMaster(draft.items), base: serializeItemMaster(BASE.items) }]);
+    expect(plan.changes).toEqual(['品物：剣+1（2段目）：値段 40 → 55', '品物：回復薬：名前 回復薬 → 傷薬']);
+    expect(plan.problems).toEqual([]);
+    expect(tabChanged('items', BASE, draft)).toBe(true);
+  });
+
+  it('上の段階より高い・強い段は、直すところに出る', () => {
+    const draft = edited((d) => {
+      d.items.weapons.sword[2]!.price = 10;
+      d.items.armors.plate[3]!.def = 0;
+    });
+    const problems = planPublish(BASE, draft).problems;
+    expect(problems.some((p) => p.includes('剣の3段目') && p.includes('値段'))).toBe(true);
+    expect(problems.some((p) => p.includes('鎧の4段目') && p.includes('守り'))).toBe(true);
   });
 });
