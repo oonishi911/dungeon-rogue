@@ -1,7 +1,8 @@
-import { CARDS, ITEMS, TRAITS } from '../game/data';
+import { CARDS, TRAITS } from '../game/data';
 import { hasDungeon, dungeonOf } from '../game/dungeons';
 import type { ExploreResult } from '../game/explore';
 import type { PrepResult } from '../game/types';
+import { ItemList } from './ItemIcon';
 import { knowledgeText } from './PrepScreen';
 
 interface ResultScreenProps {
@@ -38,7 +39,7 @@ export function ResultScreen({ run, outcome, expedition, onNextRun }: ResultScre
           </div>
           <div>
             <dt>持っていったもの</dt>
-            <dd>{outcome.loadout.length ? outcome.loadout.map((id) => ITEMS[id].name).join('、') : 'なし'}</dd>
+            <dd>{outcome.loadout.length ? <ItemList ids={outcome.loadout} /> : 'なし'}</dd>
           </div>
           <div>
             <dt>倒した敵</dt>

@@ -1057,6 +1057,16 @@ button.card:disabled {
     white-space: nowrap;
   }
 
+  /* スマホでは、道具は名前を出さずアイコンだけにして、たくさん並べる（名前は読み上げで伝える） */
+  .explore__items .explore__item-name {
+    display: none;
+  }
+
+  .explore__items .explore__use:not(.explore__spell) {
+    gap: 0.3rem;
+    padding-inline: 0.5rem;
+  }
+
   .explore__log-panel,
   .explore__help {
     display: none;
@@ -1155,6 +1165,34 @@ button.card:disabled {
 .explore__use:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ===== アイテムのアイコン（src/ui/ItemIcon.tsx） ===== */
+.item-icon {
+  flex: none;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* アイコンと名前を並べたもの（装備・持ち物の一覧） */
+.item-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  vertical-align: middle;
+}
+
+.item-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.875rem;
+  vertical-align: middle;
+}
+
+/* 道具のボタン：同じ道具の数 */
+.explore__count {
+  color: var(--bone-dim);
+  font-size: 0.9em;
 }
 
 .explore__key {
