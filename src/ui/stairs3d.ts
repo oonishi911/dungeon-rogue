@@ -118,6 +118,7 @@ export class Stairs3D {
       this.mesh(g, new THREE.BoxGeometry(width, height, tread), this.mat(darken(st.stone, shade)), (wobble(k, 3) - 0.5) * 0.02 * st.rough, top - height / 2, zFront - tread / 2);
       // 段の角
       this.mesh(g, new THREE.BoxGeometry(width + 0.005, 0.022, 0.03), nosingMat, 0, top - 0.008, zFront - 0.015);
+      this.wear(g, st, k, top, zFront, width, Math.min(tread, DOWN.tread), shade);
     }
     // 穴の縁：床より少し高い石の枠（4辺）
     const rim = this.mat(st.rim);
@@ -133,6 +134,24 @@ export class Stairs3D {
     return g;
   }
 
+  /**
+   * すり減った段（2026-11-15）：踏まれ続けた真ん中が浅くへこんで色が変わり、段の角のところどころが欠けている。
+   * k は段ごとにずらす番号、top・zFront は段の上面の高さと手前の縁、tread は踏み面の奥行き、shade は段の明るさ
+   */
+  private wear(g: THREE.Group, st: Style, k: number, top: number, zFront: number, width: number, tread: number, shade: number) {
+    // 真ん中のすり減ったところ：段の色を少し暗く、つやのない平らなしみ
+    const worn = new THREE.CircleGeometry(0.5, 16).rotateX(-Math.PI / 2).scale(width * 0.55, 1, tread * 0.7);
+    this.mesh(g, worn, this.mat(darken(st.stone, shade * 0.82)), (wobble(k, 21) - 0.5) * 0.06, top + 0.002, zFront - tread * 0.5);
+    // 角の欠け：角の上に、暗い小さなくぼみを1〜2個
+    const chips = 1 + Math.round(wobble(k, 22));
+    const chip = this.mat(darken(st.stone, shade * 0.5));
+    for (let i = 0; i < chips; i++) {
+      const x = (wobble(k, 23 + i) - 0.5) * (width - 0.1);
+      const len = 0.04 + wobble(k, 25 + i) * 0.05;
+      this.mesh(g, new THREE.BoxGeometry(len, 0.012, 0.03), chip, x, top + 0.004, zFront - 0.02);
+    }
+  }
+
   private up(st: Style): THREE.Group {
     const g = new THREE.Group();
     const nosingMat = st.nosingGlow !== undefined ? this.mat(st.nosing, st.nosingGlow, 0.9) : this.mat(st.nosing);
@@ -144,6 +163,7 @@ export class Stairs3D {
       const width = UP.width - wobble(k, 5) * 0.04 * st.rough;
       this.mesh(g, new THREE.BoxGeometry(width, top, UP.tread), this.mat(darken(st.stone, 0.95 - k * 0.1)), 0, top / 2, zFront - UP.tread / 2);
       this.mesh(g, new THREE.BoxGeometry(width + 0.005, 0.022, 0.03), nosingMat, 0, top - 0.008, zFront - 0.015);
+      this.wear(g, st, k + 10, top, zFront, width, UP.tread, 0.95 - k * 0.1);
     }
     // 両脇の壁：段の上へ斜めに上がる石の壁（手前は低く、奥は入口の柱につながる）
     const run = UP.steps * UP.tread;
