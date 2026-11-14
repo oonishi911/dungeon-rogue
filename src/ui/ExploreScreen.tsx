@@ -25,6 +25,7 @@ import {
   type ExploreState,
 } from '../game/explore';
 import { tileAt, type Pos } from '../game/map';
+import { ItemIcon, ItemLabel, SpellIcon } from './ItemIcon';
 import { SoundButton } from './SoundButton';
 import { walkPath, walkToward } from '../game/path';
 import type { ItemId, SpellId, TraitId } from '../game/types';
@@ -791,6 +792,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
                         title={ITEMS[`book_${spell}` as ItemId].description}
                       >
                         <span className="explore__key">{SPELL_KEYS[i]?.toUpperCase()}</span>
+                        <SpellIcon spell={spell} size={22} />
                         {SPELLS[spell].name}
                         <span className="explore__cost">魔力{cost}</span>
                       </button>
@@ -832,11 +834,14 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
                       className="explore__use"
                       onClick={() => request({ kind: 'use_item', item: g.id })}
                       disabled={ended}
-                      title={ITEMS[g.id].description}
+                      // スマホでは名前を出さずアイコンだけにするので、読み上げとマウスを重ねたときに、名前を伝える
+                      aria-label={g.count > 1 ? `${ITEMS[g.id].name}（${g.count}個）` : ITEMS[g.id].name}
+                      title={`${ITEMS[g.id].name}：${ITEMS[g.id].description}`}
                     >
                       <span className="explore__key">{i + 1}</span>
-                      {ITEMS[g.id].name}
-                      {g.count > 1 && ` ×${g.count}`}
+                      <ItemIcon id={g.id} size={26} />
+                      <span className="explore__item-name">{ITEMS[g.id].name}</span>
+                      {g.count > 1 && <span className="explore__count">×{g.count}</span>}
                     </button>
                   </li>
                 ))}
@@ -857,9 +862,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
                 装備
               </h2>
               <p className="explore__gear">
-                武器：{stats.weapon ? ITEMS[stats.weapon].name : 'なし'}
+                武器：{stats.weapon ? <ItemLabel id={stats.weapon} name={ITEMS[stats.weapon].name} /> : 'なし'}
                 <br />
-                防具：{stats.armor ? ITEMS[stats.armor].name : 'なし'}
+                防具：{stats.armor ? <ItemLabel id={stats.armor} name={ITEMS[stats.armor].name} /> : 'なし'}
                 {stats.enchant && (
                   <>
                     <br />

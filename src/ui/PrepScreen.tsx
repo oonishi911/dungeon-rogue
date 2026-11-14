@@ -6,6 +6,7 @@ import { toPlayerView } from '../game/prep';
 import { RANK_CONFIG, rankParams, upgradeCost } from '../game/rank';
 import type { ItemId, Knowledge, PrepState, ShopId } from '../game/types';
 import { Card } from './Card';
+import { ItemLabel, ItemList } from './ItemIcon';
 
 const SHOP_NAME: Record<ShopId, string> = { smithy: '鍛冶屋', item: '道具屋', magic: '魔法屋' };
 
@@ -94,7 +95,9 @@ export function PrepScreen({ run, state, error, onPlay, onBuy, onUpgrade, onEndD
                     onClick={() => onBuy(item.id)}
                     disabled={view.gold < item.price}
                   >
-                    <span className="buy__name">{item.name}</span>
+                    <span className="buy__name">
+                      <ItemLabel id={item.id} name={item.name} />
+                    </span>
                     <span className="buy__desc">{item.description}</span>
                     <span className="buy__price">{item.price}G</span>
                   </button>
@@ -106,7 +109,7 @@ export function PrepScreen({ run, state, error, onPlay, onBuy, onUpgrade, onEndD
           )}
           {view.inventory.length > 0 && (
             <p className="shop__bag">
-              持ち物：{view.inventory.map((id) => ITEMS[id].name).join('、')}
+              持ち物：<ItemList ids={view.inventory} />
             </p>
           )}
         </section>

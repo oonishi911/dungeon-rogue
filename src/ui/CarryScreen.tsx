@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { CARDS, ITEMS, PREP_CONFIG } from '../game/data';
+import { CARDS, PREP_CONFIG } from '../game/data';
 import type { PrepState } from '../game/types';
 import { Card } from './Card';
+import { ItemList } from './ItemIcon';
 
 interface CarryScreenProps {
   state: PrepState;
@@ -56,7 +57,7 @@ export function CarryScreen({ state, error, onDepart }: CarryScreenProps) {
 
       <section className="panel" aria-labelledby="bag-heading">
         <h2 id="bag-heading" className="panel__title">ダンジョンに持っていくもの</h2>
-        <p>{state.inventory.length ? state.inventory.map((id) => ITEMS[id].name).join('、') : '何も持っていない'}</p>
+        <p>{state.inventory.length ? <ItemList ids={state.inventory} /> : '何も持っていない'}</p>
       </section>
 
       <p className="error" role="alert">
