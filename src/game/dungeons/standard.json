@@ -1,6 +1,6 @@
 {
   "name": "標準",
-  "description": "いちばん基本のダンジョン。ここで遊び方を覚える。",
+  "description": "",
   "floors": {
     "count": 1,
     "size": 20,
