@@ -167,7 +167,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     heldRef.current = heldRef.current.filter((d) => d !== dir);
   }, []);
 
-  /** タップ・クリックで向かっている先へ1歩進む。着いた・進めない・攻撃した・新しく敵が見えたら止まる */
+  /** タップ・クリックで向かっている先へ1歩進む。着いた・進めない・攻撃したら止まる（敵が見えても立ち止まらない） */
   const walkStep = useCallback(
     (goal: WalkGoal) => {
       const s = stateRef.current;
@@ -185,16 +185,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       // 着いた・進めない・敵を攻撃した（その場から動かなかった）ときは止まる
       if (!action || !perform(action) || samePos(before, stateRef.current.player)) {
         walkRef.current = null;
-        return;
       }
-      // 勝手に敵に近づかないよう、新しく敵が見えたら立ち止まる（敵を目指して歩いているときは除く）
-      const now = visibleEnemyIds(stateRef.current);
-      if (goal.enemy === null && [...now].some((uid) => !goal.seenEnemies.has(uid))) {
-        walkRef.current = null;
-        setError('敵が見えたので立ち止まった');
-        return;
-      }
-      goal.seenEnemies = now;
     },
     [perform],
   );
@@ -376,11 +367,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       setError('まだ見ていない場所や壁へは移動できない');
       return;
     }
-    const seenEnemies = visibleEnemyIds(s);
-    const foe = s.enemies.find((en) => samePos(en.pos, target) && seenEnemies.has(en.uid));
+    const seen = visibleEnemyIds(s);
+    const foe = s.enemies.find((en) => samePos(en.pos, target) && seen.has(en.uid));
     heldRef.current = [];
     queueRef.current = [];
-    walkRef.current = { pos: target, enemy: foe ? foe.uid : null, seenEnemies };
+    walkRef.current = { pos: target, enemy: foe ? foe.uid : null };
     setError(null);
   };
 
