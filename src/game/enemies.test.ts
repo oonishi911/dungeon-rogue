@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { enemyHitDamage, playerHitDamage } from './combat';
-import { enemyBase, enemyReward, expToNext, LOADOUT_CONFIG, REWARD_CONFIG, TREASURE_CONFIG } from './data';
+import { CHEST_ITEMS, enemyBase, enemyReward, expToNext, LOADOUT_CONFIG, REWARD_CONFIG, TREASURE_CONFIG } from './data';
 import { DEFAULT_DUNGEON } from './dungeons';
 import { BOSS_ENEMY, FIELD_ENEMY } from './enemies.fixtures';
 import { ENEMY_CONFIG, enemyDef, key, spawnBoss, type MapEnemy } from './enemies';
@@ -326,5 +326,16 @@ describe('敵の強さ', () => {
 
   it('ボスは data.ts の能力のまま', () => {
     expect(enemyDef({ id: BOSS_ENEMY, elite: true })).toEqual(enemyBase(BOSS_ENEMY));
+  });
+});
+
+describe('宝箱の道具の出やすさ', () => {
+  const share = (id: string) => CHEST_ITEMS.filter((x) => x === id).length / CHEST_ITEMS.length;
+  it('食料は1/2、回復薬は1/18、ほかの4つは各1/9（マップの宝箱と強敵の宝箱で同じ）', () => {
+    expect(share('food')).toBeCloseTo(1 / 2);
+    expect(share('potion')).toBeCloseTo(1 / 18);
+    for (const id of ['fire_whetstone', 'ice_whetstone', 'holy_water', 'dark_oil']) expect(share(id)).toBeCloseTo(1 / 9);
+    expect(TREASURE_CONFIG.items).toBe(CHEST_ITEMS);
+    expect(REWARD_CONFIG.eliteItems).toBe(CHEST_ITEMS);
   });
 });
