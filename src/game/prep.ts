@@ -1,9 +1,10 @@
 // 準備フェーズのロジック。
 // すべて「状態を受け取り、新しい状態を返す」純粋関数。UI（React）からは独立している。
 
+import { favorableSpellbooks } from './bestLoadout';
 import { itemSlot } from './combat';
-import { CARDS, DECK, FAVORABLE_GEAR, ITEMS, PREP_CONFIG, START_SUPPLIES, TRAITS, TRAIT_IDS } from './data';
-import { DEFAULT_DUNGEON_ID } from './dungeons';
+import { CARDS, DECK, FAVORABLE_GEAR, ITEMS, PREP_CONFIG, START_SPELLBOOKS, START_SUPPLIES, TRAITS, TRAIT_IDS } from './data';
+import { DEFAULT_DUNGEON_ID, dungeonOf } from './dungeons';
 import { nextInt, nextRandom, shuffle } from './rng';
 import type { CardInstance, ItemId, PrepResult, PrepState, Result } from './types';
 
@@ -199,7 +200,7 @@ function withLog(state: PrepState, message: string): PrepState {
 
 /**
  * 準備フェーズを飛ばして、選んだダンジョン（dungeon は ID）にそのまま出発する。特性は準備フェーズと同じくシードから決め、
- * 持ち物はその特性に有利な装備と回復薬2つ。情報は集めていないので「まだ何もわからない」のまま
+ * 持ち物はその特性に有利な装備と回復薬2つと、そのダンジョンで有利に働く呪文書2冊（favorableSpellbooks）。情報は集めていないので「まだ何もわからない」のまま
  */
 export function departWithoutPrep(
   seed: number,
@@ -207,12 +208,13 @@ export function departWithoutPrep(
   dungeon: string = DEFAULT_DUNGEON_ID,
 ): PrepResult {
   const trait = TRAIT_IDS[nextInt(seed, TRAIT_IDS.length).value]!;
+  const gear = FAVORABLE_GEAR[trait];
   return {
     dungeon,
     trait,
     knowledge: { status: 'unknown' },
     hasMap: false,
-    loadout: [...FAVORABLE_GEAR[trait], ...START_SUPPLIES],
+    loadout: [...gear, ...START_SUPPLIES, ...favorableSpellbooks(trait, dungeonOf(dungeon), gear, START_SPELLBOOKS)],
     carried: save.carried,
   };
 }

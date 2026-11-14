@@ -342,6 +342,9 @@ export const FAVORABLE_GEAR: Record<TraitId, readonly ItemId[]> = {
 /** 準備フェーズを飛ばしているあいだ、有利な装備に足して持たせる道具 */
 export const START_SUPPLIES: readonly ItemId[] = ['potion', 'potion'];
 
+/** 準備フェーズを飛ばしているあいだ、そのダンジョンで有利に働く呪文書を何冊持たせるか（bestLoadout.ts の favorableSpellbooks で選ぶ） */
+export const START_SPELLBOOKS = 2;
+
 // ダンジョン特性ごとに出る敵は、ダンジョンの設定ファイル（src/game/dungeons/*.json の encounters）にある。
 // 標準のダンジョンでは、その属性の敵が中心で、成分の属性の敵も混ざる。体質にも傾向がある
 // （炎：柔らかい、氷：硬い、無属性：混在、光：硬い、闇：霊体）。
