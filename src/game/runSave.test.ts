@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { autoAction } from './autoplay';
+import { DEFAULT_DUNGEON_ID } from './dungeons';
 import { startExplore, step, type ExploreState } from './explore';
 import { packRun, packSeen, parseRun, unpackSeen, type RunSave } from './runSave';
 import { newSave } from './save';
 import type { PrepResult } from './types';
 
-const outcome: PrepResult = { trait: 'fire', knowledge: { status: 'unknown' }, hasMap: false, rank: 1, exp: 0, loadout: ['potion'], carried: [] };
+const outcome: PrepResult = { dungeon: DEFAULT_DUNGEON_ID, trait: 'fire', knowledge: { status: 'unknown' }, hasMap: false, rank: 1, exp: 0, loadout: ['potion'], carried: [] };
 const SEED = 7;
 
 /** 自動プレイで turns 手まで進める（探索が終わったら、その手前で止める） */
@@ -28,7 +29,7 @@ function playToSecondFloor(state: ExploreState): ExploreState {
   return state;
 }
 
-const start = () => startExplore(SEED, { trait: outcome.trait, loadout: outcome.loadout, hasMap: outcome.hasMap, rank: outcome.rank });
+const start = () => startExplore(SEED, { dungeon: outcome.dungeon, trait: outcome.trait, loadout: outcome.loadout, hasMap: outcome.hasMap, rank: outcome.rank });
 const saved = (state: ExploreState) => JSON.stringify(packRun(newSave(), outcome, SEED, state));
 /** 保存した文字列の中身を書き換える */
 const edited = (state: ExploreState, edit: (run: RunSave) => void) => {
@@ -122,6 +123,25 @@ describe('packRun / parseRun', () => {
     const pos = { x: wall % state.map.width, y: Math.floor(wall / state.map.width) };
     expect(parseRun(edited(state, (r) => void (r.state.player = pos)))).toBeNull();
     expect(parseRun(edited(state, (r) => void (r.state.current.enemies[0]!.pos = pos)))).toBeNull();
+  });
+
+  it('ダンジョンを選べるようになる前の中断データ（ダンジョンの ID がない）は、標準のダンジョンとして読む', () => {
+    const state = play(start(), 40);
+    const old = edited(state, (r) => {
+      delete (r.outcome as Partial<PrepResult>).dungeon;
+      delete (r.state as { dungeon?: string }).dungeon;
+    });
+    const run = parseRun(old);
+    expect(run).not.toBeNull();
+    expect(run!.outcome.dungeon).toBe(DEFAULT_DUNGEON_ID);
+    expect(run!.state.dungeon).toBe(DEFAULT_DUNGEON_ID);
+  });
+
+  it('遊んでいたダンジョンの設定ファイルがもうない、または結果と食い違うときは null', () => {
+    const state = play(start(), 40);
+    expect(parseRun(edited(state, (r) => void (r.outcome.dungeon = 'no_such_dungeon')))).toBeNull();
+    expect(parseRun(edited(state, (r) => void (r.state.dungeon = 'no_such_dungeon')))).toBeNull();
+    expect(parseRun(edited(state, (r) => void (r.state.dungeon = 42 as never)))).toBeNull();
   });
 
   it('マップの作り方が変わっていたら（作り直した形が違えば）null', () => {

@@ -35,7 +35,8 @@ function fakeGithub(files: Record<string, string>, fail: { path?: string; status
 }
 
 const ENEMIES = { path: 'src/game/enemies.json', base: '{ "敵": 1 }\n', text: '{ "敵": 2 }\n' };
-const GEN = { path: 'src/game/dungeonGen.json', base: '{ "階": 3 }\n', text: '{ "階": 4 }\n' };
+const GEN = { path: 'src/game/dungeons/standard.json', base: '{ "階": 3 }\n', text: '{ "階": 4 }\n' };
+const NEW = { path: 'src/game/dungeons/deep_cave.json', base: null, text: '{ "階": 7 }\n' };
 const FILES = { [ENEMIES.path]: ENEMIES.base, [GEN.path]: GEN.base };
 
 afterEach(() => vi.unstubAllGlobals());
@@ -92,6 +93,31 @@ describe('管理画面からの公開（複数のファイルを1回のコミッ
     fakeGithub(FILES, { path: '/git/ref/', status: 401 });
     const error = await publishFiles('token', [ENEMIES], 'm').catch((e: unknown) => e);
     expect((error as Error).message).toContain('トークン');
+  });
+
+  it('まだないファイルを新しく作り、いらないファイルを消すことも、1つのコミットでできる', async () => {
+    const gh = fakeGithub(FILES);
+    await publishFiles('token', [NEW, { path: GEN.path, text: null, base: GEN.base }], 'ダンジョンを作り、消す');
+    const tree = gh.writes()[0]!.body as { tree: unknown[] };
+    expect(tree.tree).toEqual([
+      { path: NEW.path, mode: '100644', type: 'blob', content: NEW.text },
+      // 消すファイルは sha を null にする（GitHub の決まり）
+      { path: GEN.path, mode: '100644', type: 'blob', sha: null },
+    ]);
+  });
+
+  it('作るはずのファイルが、もうリポジトリにあれば、何も保存しないで止める', async () => {
+    const gh = fakeGithub({ ...FILES, [NEW.path]: '{}\n' });
+    const error = await publishFiles('token', [NEW], 'm').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(PublishError);
+    expect(gh.writes()).toEqual([]);
+  });
+
+  it('消すはずのファイルが、もうないとき（ほかの人が先に消した）も、止める', async () => {
+    const gh = fakeGithub({ [ENEMIES.path]: ENEMIES.base });
+    const error = await publishFiles('token', [{ path: GEN.path, text: null, base: GEN.base }], 'm').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(PublishError);
+    expect(gh.writes()).toEqual([]);
   });
 
   it('保存するファイルがないときは、何もしない', async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { enemyHitDamage, playerHitDamage } from './combat';
-import { enemyBase, enemyReward, expToNext, PREP_CONFIG, REWARD_CONFIG, TRAIT_ENEMIES, TREASURE_CONFIG } from './data';
+import { enemyBase, enemyReward, expToNext, PREP_CONFIG, REWARD_CONFIG, TREASURE_CONFIG } from './data';
+import { DEFAULT_DUNGEON } from './dungeons';
 import { rankParams } from './rank';
 import { BOSS_ENEMY, FIELD_ENEMY } from './enemies.fixtures';
 import { ENEMY_CONFIG, enemyDef, key, spawnBoss, type MapEnemy } from './enemies';
@@ -16,6 +17,9 @@ function unwrap<T>(result: Result<T>): T {
 function act(state: ExploreState, ...actions: ExploreAction[]): ExploreState {
   return actions.reduce((s, a) => unwrap(step(s, a)), state);
 }
+
+// 標準のダンジョンの設定（startExplore でダンジョンを指定しないと、標準のダンジョンになる）
+const GEN = DEFAULT_DUNGEON;
 
 const WAIT: ExploreAction = { kind: 'wait' };
 
@@ -221,19 +225,19 @@ describe('報酬とボス', () => {
   it('通常の敵を倒すと、敵ごとの金貨と経験値が入る', () => {
     const s = act(arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { hp: 1 })]), { kind: 'move', dir: 'right' });
     const reward = enemyReward(FIELD_ENEMY);
-    expect(s.gold).toBe(Math.round(reward.gold * rankParams(1).chestGoldRate));
+    expect(s.gold).toBe(Math.round(reward.gold * rankParams(1, GEN.floors).chestGoldRate));
     expect(s.exp).toBe(reward.exp);
     expect(s.level).toBe(1);
   });
 
   it('経験値がたまるとレベルが上がり、最大HPと攻撃力が上がる（上がった分だけHPも回復する）', () => {
     const s0 = arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { hp: 1 })]);
-    const before = { ...s0, exp: expToNext(1) - 1, stats: { ...s0.stats, hp: 10 } };
+    const before = { ...s0, exp: expToNext(1, GEN.growth) - 1, stats: { ...s0.stats, hp: 10 } };
     const s = act(before, { kind: 'move', dir: 'right' });
     expect(s.level).toBe(2);
-    expect(s.stats.maxHp).toBe(s0.stats.maxHp + REWARD_CONFIG.hpPerLevel);
-    expect(s.stats.atk).toBe(s0.stats.atk + REWARD_CONFIG.atkPerLevel);
-    expect(s.stats.hp).toBe(10 + REWARD_CONFIG.hpPerLevel);
+    expect(s.stats.maxHp).toBe(s0.stats.maxHp + GEN.growth.hpPerLevel);
+    expect(s.stats.atk).toBe(s0.stats.atk + GEN.growth.atkPerLevel);
+    expect(s.stats.hp).toBe(10 + GEN.growth.hpPerLevel);
     expect(s.log.some((l) => l.includes('レベル2に上がった'))).toBe(true);
   });
 
@@ -263,7 +267,7 @@ describe('報酬とボス', () => {
       dir: 'right',
     });
     const reward = enemyReward(FIELD_ENEMY);
-    expect(s.gold).toBe(Math.round(reward.gold * REWARD_CONFIG.elite * rankParams(1).chestGoldRate));
+    expect(s.gold).toBe(Math.round(reward.gold * GEN.growth.eliteRate * rankParams(1, GEN.floors).chestGoldRate));
     const chest = s.chests.find((c) => c.pos.x === 2 && c.pos.y === 2);
     expect(chest).toMatchObject({ gold: TREASURE_CONFIG.eliteGold, opened: false });
     expect(REWARD_CONFIG.eliteItems).toContain(chest!.item);
@@ -274,21 +278,21 @@ describe('報酬とボス', () => {
   });
 
   it('ボスを倒すと報酬が出て、ダンジョンを踏破する', () => {
-    const boss = { ...spawnBoss({ x: 2, y: 2 }, 'fire', 0), hp: 1 };
+    const boss = { ...spawnBoss({ x: 2, y: 2 }, GEN.encounters.fire.boss, 0), hp: 1 };
     const s = act(arena(ROOM, { x: 1, y: 2 }, [boss]), { kind: 'move', dir: 'right' });
     expect(s.outcome).toBe('cleared');
     expect(s.gold).toBe(TREASURE_CONFIG.bossGold);
   });
 
   it('ボスの報酬はランクに比例する', () => {
-    const boss = { ...spawnBoss({ x: 2, y: 2 }, 'fire', 0), hp: 1 };
+    const boss = { ...spawnBoss({ x: 2, y: 2 }, GEN.encounters.fire.boss, 0), hp: 1 };
     const s = act({ ...arena(ROOM, { x: 1, y: 2 }, [boss]), rank: 3 }, { kind: 'move', dir: 'right' });
     expect(s.gold).toBe(TREASURE_CONFIG.bossGold * 3);
     expect(step(s, WAIT).ok).toBe(false);
   });
 
   it('ボスは動かず、離れようとすると必ず背後から攻撃してくる', () => {
-    const boss = { ...spawnBoss({ x: 2, y: 2 }, 'ice', 0), mode: 'chase' as const };
+    const boss = { ...spawnBoss({ x: 2, y: 2 }, GEN.encounters.ice.boss, 0), mode: 'chase' as const };
     const s0 = arena(ROOM, { x: 1, y: 2 }, [boss]);
     const s = act(s0, { kind: 'move', dir: 'up' });
     expect(s.enemies[0]!.pos).toEqual({ x: 2, y: 2 });
@@ -296,8 +300,8 @@ describe('報酬とボス', () => {
   });
 
   it('ボスの能力は強敵の倍率で上がらない', () => {
-    const boss = spawnBoss({ x: 0, y: 0 }, 'dark', 0);
-    expect(enemyDef(boss)).toEqual(enemyBase(TRAIT_ENEMIES.dark.boss));
+    const boss = spawnBoss({ x: 0, y: 0 }, GEN.encounters.dark.boss, 0);
+    expect(enemyDef(boss)).toEqual(enemyBase(GEN.encounters.dark.boss));
   });
 });
 

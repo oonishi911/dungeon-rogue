@@ -1,5 +1,7 @@
 // 敵のマスターデータ（src/game/enemies.json）を読み、正しい形かを確かめる。
-// enemies.json は、開発用の管理画面（?view=admin の「敵」「ダンジョンに出る敵」タブ。src/ui/Admin.tsx、src/ui/EnemyPanels.tsx）から書き換えて公開できる。
+// enemies.json は、すべての敵の強さ・見た目・報酬の一覧（マスター）。どのダンジョンにどの敵が出るかは、ここではなく、
+// ダンジョンの設定ファイル（src/game/dungeons/*.json の encounters）で、このマスターの中から選ぶ。
+// enemies.json は、開発用の管理画面（?view=admin の「敵」タブ。src/ui/Admin.tsx、src/ui/EnemyPanels.tsx）から書き換えて公開できる。
 // 敵を足す・消すこともできる（敵の種類はプログラムに決め打ちせず、このデータにある敵がすべて）。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
 
@@ -24,12 +26,17 @@ export type EnemyReward = { gold: number; exp: number; drop: number };
 /** 敵1体分（id は enemies.json のキー） */
 export type EnemyRecord = Omit<EnemyDef, 'id'> & { look: EnemyLook; reward: EnemyReward };
 
-/** ダンジョンごとに出る敵。pool は同じ敵を何度も並べると出やすくなる（並び順も乱数の結果に関わる） */
+/**
+ * ダンジョンの属性ごとに出る敵（ダンジョンの設定ファイルの encounters に、属性ごとに1つずつ書く）。
+ * pool は道中に出る敵で、同じ敵を何度も並べると出やすくなる（並び順も乱数の結果に関わる）。boss はボスの階に出る敵
+ */
 export type DungeonEnemies = { pool: EnemyId[]; boss: EnemyId };
+
+/** 属性ごとに出る敵（5つの属性すべて） */
+export type Encounters = Record<TraitId, DungeonEnemies>;
 
 export type EnemyMaster = {
   enemies: Record<EnemyId, EnemyRecord>;
-  dungeons: Record<TraitId, DungeonEnemies>;
 };
 
 /** 値の範囲（管理画面の入力欄も、この範囲にする） */
@@ -55,9 +62,8 @@ export function enemyIds(master: Pick<EnemyMaster, 'enemies'>): EnemyId[] {
 /** 形のおかしいところを、すべて日本語の文で返す（なければ空） */
 export function masterProblems(data: unknown): string[] {
   const problems: string[] = [];
-  if (!isObject(data) || !isObject(data.enemies) || !isObject(data.dungeons)) return ['enemies と dungeons がない'];
+  if (!isObject(data) || !isObject(data.enemies)) return ['enemies がない'];
   const enemies = data.enemies;
-  const dungeons = data.dungeons;
   const ids = Object.keys(enemies);
   if (ids.length === 0) problems.push('敵が1体もいない');
   const names = new Map<string, string>();
@@ -93,12 +99,23 @@ export function masterProblems(data: unknown): string[] {
       }
     }
   }
-  const isBoss = (id: unknown) => typeof id === 'string' && isObject(enemies[id]) && (enemies[id] as Record<string, unknown>).boss === true;
+  return problems;
+}
+
+/**
+ * ダンジョンの設定ファイルの encounters（属性ごとに出る敵）の、おかしいところ。
+ * 敵は、マスター（enemies.json）にいる敵から選ぶ。道中にはボスを出せず、ボスにはボスにした敵だけを選べる
+ */
+export function encounterProblems(data: unknown, master: Pick<EnemyMaster, 'enemies'>): string[] {
+  if (!isObject(data)) return ['属性ごとに出る敵（encounters）がない'];
+  const problems: string[] = [];
+  const enemies = master.enemies as Record<string, EnemyRecord | undefined>;
+  const isBoss = (id: unknown) => typeof id === 'string' && enemies[id]?.boss === true;
   for (const trait of MASTER_TRAITS) {
-    const d = dungeons[trait];
-    const where = `${TRAIT_LABELS[trait]}のダンジョン`;
+    const d = data[trait];
+    const where = `${TRAIT_LABELS[trait]}の属性`;
     if (!isObject(d)) {
-      problems.push(`${where}がない`);
+      problems.push(`${where}の敵がない`);
       continue;
     }
     if (!Array.isArray(d.pool) || d.pool.length === 0) problems.push(`${where}：道中に出る敵が1体もいない`);
@@ -107,15 +124,15 @@ export function masterProblems(data: unknown): string[] {
       for (const id of d.pool) {
         counts.set(id, (counts.get(id) ?? 0) + 1);
         if (counts.get(id) !== 1) continue;
-        if (typeof id !== 'string' || !(id in enemies)) problems.push(`${where}：いない敵が入っている（${String(id)}）`);
+        if (typeof id !== 'string' || !enemies[id]) problems.push(`${where}：敵のデータにいない敵が入っている（${String(id)}）`);
         else if (isBoss(id)) problems.push(`${where}：ボスは道中に出せない（${String(id)}）`);
       }
       for (const [id, c] of counts) if (c > LIMITS.weight.max) problems.push(`${where}：同じ敵（${String(id)}）は${LIMITS.weight.max}まで`);
     }
-    if (typeof d.boss !== 'string' || !(d.boss in enemies)) problems.push(`${where}：ボスがいない`);
+    if (typeof d.boss !== 'string' || !enemies[d.boss]) problems.push(`${where}：ボスがいない`);
     else if (!isBoss(d.boss)) problems.push(`${where}：ボスに選んだ敵が、ボスになっていない（${d.boss}）`);
   }
-  for (const key of Object.keys(dungeons)) if (!(MASTER_TRAITS as readonly string[]).includes(key)) problems.push(`知らないダンジョンがある：${key}`);
+  for (const key of Object.keys(data)) if (!(MASTER_TRAITS as readonly string[]).includes(key)) problems.push(`知らない属性がある：${key}`);
   return problems;
 }
 
@@ -161,30 +178,37 @@ export function serializeEnemyMaster(master: EnemyMaster): string {
       return [id, { name, hp, atk, def, element, body, ...(boss ? { boss: true } : {}), look: cleanLook, reward: cleanReward }];
     }),
   );
-  const dungeons = Object.fromEntries(
-    (['fire', 'ice', 'neutral', 'light', 'dark'] as const).map((t) => [t, { pool: master.dungeons[t].pool, boss: master.dungeons[t].boss }]),
-  );
-  return `${JSON.stringify({ enemies, dungeons }, null, 2)}\n`;
+  return `${JSON.stringify({ enemies }, null, 2)}\n`;
 }
+
+/** ファイルに書く encounters（属性の並び順と、項目の並び順をそろえる） */
+export function cleanEncounters(encounters: Encounters): Encounters {
+  return Object.fromEntries(ENCOUNTER_ORDER.map((t) => [t, { pool: [...encounters[t].pool], boss: encounters[t].boss }])) as Encounters;
+}
+
+/** ファイルに書くときの、属性の並び順 */
+const ENCOUNTER_ORDER = ['fire', 'ice', 'neutral', 'light', 'dark'] as const satisfies readonly TraitId[];
 
 /** 敵を足す（データの最後に入る。どのダンジョンにもまだ出ない） */
 export function addEnemy(master: EnemyMaster, id: EnemyId, record: EnemyRecord): EnemyMaster {
   return { ...master, enemies: { ...master.enemies, [id]: record } };
 }
 
-/** 敵を消す。道中の敵からも外す（ボスに選ばれているダンジョンがあるときは、消すとボスがいなくなる） */
+/** 敵をマスターから消す（ダンジョンの道中から外すのは、encountersWithout で、ダンジョンの設定ごとに行う） */
 export function removeEnemy(master: EnemyMaster, id: EnemyId): EnemyMaster {
   const enemies = { ...master.enemies };
   delete enemies[id];
-  const dungeons = Object.fromEntries(
-    MASTER_TRAITS.map((t) => [t, { ...master.dungeons[t], pool: master.dungeons[t].pool.filter((p) => p !== id) }]),
-  ) as Record<TraitId, DungeonEnemies>;
-  return { enemies, dungeons };
+  return { ...master, enemies };
 }
 
-/** その敵をボスにしているダンジョン */
-export function dungeonsWithBoss(master: EnemyMaster, id: EnemyId): TraitId[] {
-  return MASTER_TRAITS.filter((t) => master.dungeons[t].boss === id);
+/** その敵を、道中から外した encounters（ボスに選ばれているときは、そのまま。ボスは先に変える） */
+export function encountersWithout(encounters: Encounters, id: EnemyId): Encounters {
+  return Object.fromEntries(MASTER_TRAITS.map((t) => [t, { ...encounters[t], pool: encounters[t].pool.filter((p) => p !== id) }])) as Encounters;
+}
+
+/** その敵をボスにしている属性 */
+export function traitsWithBoss(encounters: Encounters, id: EnemyId): TraitId[] {
+  return MASTER_TRAITS.filter((t) => encounters[t].boss === id);
 }
 
 /** ダンジョンの道中に、その敵がいくつ並んでいるか（出やすさ） */
@@ -215,7 +239,6 @@ export function setWeight(pool: readonly EnemyId[], id: EnemyId, weight: number)
 /** 2つのデータの違いを、日本語の文で並べる（管理画面で、公開する前に確かめる） */
 export function describeChanges(before: EnemyMaster, after: EnemyMaster): string[] {
   const out: string[] = [];
-  const name = (id: EnemyId) => after.enemies[id]?.name || before.enemies[id]?.name || id;
   for (const id of enemyIds(before)) if (!(id in after.enemies)) out.push(`${before.enemies[id]!.name}（${id}）を消す`);
   for (const id of enemyIds(after)) if (!(id in before.enemies)) out.push(`${after.enemies[id]!.name}（${id}）を足す`);
   for (const id of enemyIds(after)) {
@@ -232,17 +255,25 @@ export function describeChanges(before: EnemyMaster, after: EnemyMaster): string
       if (a.reward[key] !== b.reward[key]) out.push(`${b.name}：${REWARD_LABELS[key]} ${a.reward[key]} → ${b.reward[key]}`);
     }
   }
+  return out;
+}
+
+/**
+ * 属性ごとに出る敵の違いを、日本語の文で並べる。names は敵の名前（消した敵の名前も引けるように、公開版と変えたあとの両方）。
+ * alive は、今も敵のデータにいる敵か（消した敵が道中から外れるのは、敵を「消す」に含めるので書かない）
+ */
+export function describeEncounterChanges(before: Encounters, after: Encounters, names: (id: EnemyId) => string, alive: (id: EnemyId) => boolean): string[] {
+  const out: string[] = [];
   for (const trait of MASTER_TRAITS) {
-    const a = before.dungeons[trait];
-    const b = after.dungeons[trait];
-    const where = `${TRAIT_LABELS[trait]}のダンジョン`;
-    if (a.boss !== b.boss) out.push(`${where}：ボス ${name(a.boss)} → ${name(b.boss)}`);
+    const a = before[trait];
+    const b = after[trait];
+    const where = `${TRAIT_LABELS[trait]}の属性`;
+    if (a.boss !== b.boss) out.push(`${where}：ボス ${names(a.boss)} → ${names(b.boss)}`);
     const all = [...new Set([...a.pool, ...b.pool])];
     for (const id of all) {
       const wa = weightOf(a.pool, id);
       const wb = weightOf(b.pool, id);
-      // 消した敵が道中から外れるのは「消す」に含める
-      if (wa !== wb && id in after.enemies) out.push(`${where}：${name(id)}の出やすさ ${wa} → ${wb}`);
+      if (wa !== wb && alive(id)) out.push(`${where}：${names(id)}の出やすさ ${wa} → ${wb}`);
     }
     if (a.pool.join() !== b.pool.join() && all.every((id) => weightOf(a.pool, id) === weightOf(b.pool, id))) {
       out.push(`${where}：道中の敵の並び順`);

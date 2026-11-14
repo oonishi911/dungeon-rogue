@@ -1,10 +1,12 @@
 // マップ上の探索。プレイヤーの移動・霧（視界と記憶）・満腹度・階段・宝箱・敵との戦闘・ボス階を扱う。
 // 1ターン = プレイヤーの行動 → 満腹度の消費 → 敵の手番。
 // ほかのロジックと同じく、状態を受け取り新しい状態を返す純粋関数でできている。
+// 階の数・広さ・満腹度・小部屋・敵の置き方と出る敵・レベルの上がり方・魔法は、遊んでいるダンジョンの設定（state.dungeon。dungeons.ts）で決まる。
 
 import { buildPlayer, enemyHitDamage, playerHitDamage } from './combat';
 import { COMBAT_CONFIG, ENCHANT_VS_ELEMENT, enemyReward, expToNext, ITEMS, PREP_CONFIG, REWARD_CONFIG, SPELLS, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
-import { GEN_SETTINGS } from './genMaster';
+import { DEFAULT_DUNGEON_ID, dungeonOf } from './dungeons';
+import type { DungeonFile, GenSettings, MagicSettings, RoomSettings } from './genMaster';
 import {
   ENEMY_CONFIG,
   enemyDef,
@@ -23,7 +25,6 @@ import type { EnemyDef, EnemyId, ItemId, PlayerStats, Result, SpellId, TraitId }
 
 // 数値はすべて仮。バランス調整で見直す
 export const EXPLORE_CONFIG = {
-  floors: GEN_SETTINGS.floors.count, // 通常の階の数。その下にボス階がある（ダンジョンの設定で決める）
   sightRadius: 6, // 視界の半径（マス）
   satietyPerAction: 1,
   starveDamage: 1, // 満腹度0のとき、1行動ごとに減るHP
@@ -84,10 +85,11 @@ export interface FloorMemory {
 
 export interface ExploreState {
   seed: number;
+  dungeon: string; // 遊んでいるダンジョンの ID（設定は dungeonOf で引く）
   trait: TraitId;
   rank: number; // 広さ・満腹度（設定）・敵の数・報酬が決まる
   floor: number; // 0始まり。floors と同じならボス階
-  floors: number; // 通常の階の数
+  floors: number; // 通常の階の数（ダンジョンの設定で決まる）。その下にボス階がある
   mapSize: number;
   enemyDensity: number;
   map: FloorMap;
@@ -107,7 +109,7 @@ export interface ExploreState {
   nextUid: number;
   defeated: number; // 倒した敵の数
   level: number; // この挑戦のあいだのレベル（1から。敵を倒して経験値がたまると上がる）
-  exp: number; // 今のレベルになってからためた経験値（expToNext(level) で次のレベル）
+  exp: number; // 今のレベルになってからためた経験値（expToNext(level, growth) で次のレベル）
   seen: boolean[]; // この階で一度でも見えたマス（霧が晴れた場所）
   turn: number; // 行動した回数
   rngState: number;
@@ -118,6 +120,7 @@ export interface ExploreState {
 }
 
 export interface ExploreOptions {
+  dungeon?: string; // 遊ぶダンジョンの ID。省略時は標準のダンジョン
   floors?: number;
   rank?: number; // 省略時は1。広さ・満腹度・敵の密度は、個別に指定するとそちらが優先される
   mapSize?: number;
@@ -141,25 +144,33 @@ export function traitForSeed(seed: number): TraitId {
   return TRAIT_IDS[nextInt(seed, TRAIT_IDS.length).value]!;
 }
 
+/** 遊んでいるダンジョンの設定 */
+export function dungeonOfState(state: Pick<ExploreState, 'dungeon'>): DungeonFile {
+  return dungeonOf(state.dungeon);
+}
+
 export function startExplore(seed: number, options: ExploreOptions = {}): ExploreState {
-  const params = rankParams(options.rank ?? 1);
+  const dungeon = options.dungeon ?? DEFAULT_DUNGEON_ID;
+  const settings = dungeonOf(dungeon);
+  const params = rankParams(options.rank ?? 1, settings.floors);
   const mapSize = options.mapSize ?? params.mapSize;
   const maxSatiety = options.maxSatiety ?? params.maxSatiety;
   const traitRoll = nextInt(seed, TRAIT_IDS.length);
   const state: ExploreState = {
     seed,
+    dungeon,
     trait: options.trait ?? TRAIT_IDS[traitRoll.value]!,
     rank: params.rank,
     floor: 0,
-    floors: options.floors ?? EXPLORE_CONFIG.floors,
+    floors: options.floors ?? settings.floors.count,
     mapSize,
     enemyDensity: options.enemyDensity ?? params.enemyDensity,
-    map: floorMap(seed, 0, mapSize),
+    map: floorMap(seed, 0, mapSize, settings.rooms),
     player: { x: 0, y: 0 },
     stats: buildPlayer(options.loadout ?? []),
     satiety: maxSatiety,
     maxSatiety,
-    ...startMagic(options.loadout ?? []),
+    ...startMagic(options.loadout ?? [], settings.magic),
     regen: null,
     cast: null,
     enemies: [],
@@ -227,7 +238,7 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
       const left = leaveFloor(state);
       const memory = state.visited[floor];
       if (memory) return ok(spendAction(returnToFloor(left, floor, memory, memory.map.start, `地下${floor + 1}階に降りた`)));
-      const map = mapOfFloor(state.seed, state.floors, state.mapSize, floor);
+      const map = mapOfFloor(state.seed, state.floors, state.mapSize, floor, dungeonOfState(state).rooms);
       return ok(spendAction(enterFloor(left, floor, map)));
     }
     case 'ascend': {
@@ -251,13 +262,13 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
 
 // ===== 階の移動 =====
 
-function floorMap(seed: number, floor: number, mapSize: number): FloorMap {
-  return generateFloor(floorSeed(seed, floor), { width: mapSize, height: mapSize });
+function floorMap(seed: number, floor: number, mapSize: number, rooms: RoomSettings): FloorMap {
+  return generateFloor(floorSeed(seed, floor), { width: mapSize, height: mapSize, rooms });
 }
 
-/** その階のマップ。通常の階（0 から floors - 1）はシードから作り、その次はボス階。同じ値からは、いつも同じ形になる */
-export function mapOfFloor(seed: number, floors: number, mapSize: number, floor: number): FloorMap {
-  return floor >= floors ? generateBossFloor() : floorMap(seed, floor, mapSize);
+/** その階のマップ。通常の階（0 から floors - 1）はシードから作り、その次はボス階。同じ値からは、いつも同じ形になる（rooms はダンジョンの設定の小部屋） */
+export function mapOfFloor(seed: number, floors: number, mapSize: number, floor: number, rooms: RoomSettings): FloorMap {
+  return floor >= floors ? generateBossFloor() : floorMap(seed, floor, mapSize, rooms);
 }
 
 /** 上り階段の場所。2階目からは、降りてきた入口が上り階段になる（1階目の入口はダンジョンの外への出口なので上れない） */
@@ -291,11 +302,13 @@ function returnToFloor(state: ExploreState, floor: number, memory: FloorMemory, 
 
 /** 新しい階に入る：入口に立ち、敵と宝箱を配置し、霧をリセットする。地図があれば本道は最初から見える */
 function enterFloor(state: ExploreState, floor: number, map: FloorMap): ExploreState {
+  const settings = dungeonOfState(state);
+  const encounter = settings.encounters[state.trait];
   const seen = new Array<boolean>(map.tiles.length).fill(false);
   if (state.hasMap) for (const p of map.mainPath) seen[p.y * map.width + p.x] = true;
 
   if (map.boss) {
-    const boss = spawnBoss(map.boss, state.trait, state.nextUid);
+    const boss = spawnBoss(map.boss, encounter.boss, state.nextUid);
     return reveal({
       ...state,
       floor,
@@ -309,8 +322,8 @@ function enterFloor(state: ExploreState, floor: number, map: FloorMap): ExploreS
     });
   }
 
-  const spawned = spawnEnemies(map, state.trait, state.rngState, state.nextUid, state.enemyDensity);
-  const filled = fillChests(map, spawned.rngState, rankParams(state.rank).chestGoldRate);
+  const spawned = spawnEnemies(map, encounter.pool, state.rngState, state.nextUid, state.enemyDensity, settings.enemies);
+  const filled = fillChests(map, spawned.rngState, rankParams(state.rank, settings.floors).chestGoldRate);
   return reveal({
     ...state,
     floor,
@@ -429,21 +442,19 @@ function useItem(state: ExploreState, itemId: ItemId): Result<ExploreState> {
 // ===== 魔法 =====
 
 /** 持ってきた呪文書から、唱えられる呪文と魔力を決める。呪文書がなければ魔力も0（魔力の棒も出さない） */
-function startMagic(loadout: readonly ItemId[]): { spells: SpellId[]; mp: number; maxMp: number } {
+function startMagic(loadout: readonly ItemId[], M: MagicSettings): { spells: SpellId[]; mp: number; maxMp: number } {
   const spells = loadout.flatMap((id) => {
     const effect = ITEMS[id].effect;
     return effect.kind === 'spellbook' ? [effect.spell] : [];
   });
   if (spells.length === 0) return { spells: [], mp: 0, maxMp: 0 };
-  const M = GEN_SETTINGS.magic;
   const staff = loadout.some(isStaff);
   const maxMp = M.maxMp + (staff ? M.staffMp : 0);
   return { spells: [...new Set(spells)], mp: maxMp, maxMp };
 }
 
-/** 魔法の強さ。杖を持っていると強くなる */
-export function magicPower(stats: PlayerStats): number {
-  const M = GEN_SETTINGS.magic;
+/** 魔法の強さ（M はダンジョンの設定の魔法）。杖を持っていると強くなる */
+export function magicPower(stats: PlayerStats, M: MagicSettings): number {
   return M.power * (stats.weapon && isStaff(stats.weapon) ? M.staffPower : 1);
 }
 
@@ -452,18 +463,18 @@ function isStaff(id: ItemId): boolean {
   return effect.kind === 'weapon' && effect.weapon === 'staff';
 }
 
-/** 呪文のダメージ（敵の防御は無視する。属性の矢は、属性の相性で増減する） */
-export function spellDamage(stats: PlayerStats, spell: SpellId, enemy: EnemyDef): number {
+/** 呪文のダメージ（settings はダンジョンの設定の魔法と呪文。敵の防御は無視する。属性の矢は、属性の相性で増減する） */
+export function spellDamage(stats: PlayerStats, spell: SpellId, enemy: EnemyDef, settings: Pick<GenSettings, 'magic' | 'spells'>): number {
   const def = SPELLS[spell];
-  const rate = GEN_SETTINGS.spells[spell].power ?? 1;
+  const rate = settings.spells[spell].power ?? 1;
   const element = def.effect.kind === 'bolt' ? (ENCHANT_VS_ELEMENT[def.effect.element][enemy.element] ?? 1) : 1;
-  return Math.max(1, Math.round(magicPower(stats) * rate * element));
+  return Math.max(1, Math.round(magicPower(stats, settings.magic) * rate * element));
 }
 
 /** 1行動ごとの、魔力の回復と再生の呪文の回復 */
 function recoverMagic(state: ExploreState, turn: number): ExploreState {
   let { mp, regen, stats } = state;
-  if (state.maxMp > 0 && mp < state.maxMp && turn % GEN_SETTINGS.magic.regenEvery === 0) mp++;
+  if (state.maxMp > 0 && mp < state.maxMp && turn % dungeonOfState(state).magic.regenEvery === 0) mp++;
   if (regen) {
     stats = { ...stats, hp: Math.min(stats.maxHp, stats.hp + regen.amount) };
     regen = regen.turns > 1 ? { ...regen, turns: regen.turns - 1 } : null;
@@ -474,7 +485,8 @@ function recoverMagic(state: ExploreState, turn: number): ExploreState {
 function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result<ExploreState> {
   if (!state.spells.includes(spell)) return err('その呪文書は持っていません');
   const def = SPELLS[spell];
-  const cfg = GEN_SETTINGS.spells[spell];
+  const settings = dungeonOfState(state);
+  const cfg = settings.spells[spell];
   const cost = cfg.cost ?? 0;
   if (state.mp < cost) return err('魔力が足りない');
   if (def.aim && !dir) return err('向きを選んでください');
@@ -510,7 +522,7 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
         }
       }
       if (targets.length === 0) s = { ...s, log: [...s.log, '何にも当たらなかった'] };
-      for (const t of targets) s = hurtEnemy(s, t.uid, spellDamage(s.stats, spell, enemyDef(t)));
+      for (const t of targets) s = hurtEnemy(s, t.uid, spellDamage(s.stats, spell, enemyDef(t), settings));
       break;
     }
     case 'shockwave': {
@@ -518,7 +530,7 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
       const around = s.enemies.filter((e) => Math.max(Math.abs(e.pos.x - s.player.x), Math.abs(e.pos.y - s.player.y)) === 1);
       if (around.length === 0) s = { ...s, log: [...s.log, 'まわりに敵はいなかった'] };
       for (const t of around) {
-        s = hurtEnemy(s, t.uid, spellDamage(s.stats, spell, enemyDef(t)));
+        s = hurtEnemy(s, t.uid, spellDamage(s.stats, spell, enemyDef(t), settings));
         const target = s.enemies.find((e) => e.uid === t.uid);
         if (!target || s.outcome !== 'ongoing' || enemyDef(target).boss) continue;
         const d = { x: Math.sign(target.pos.x - s.player.x), y: Math.sign(target.pos.y - s.player.y) };
@@ -550,7 +562,7 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
   }
 
   // 唱える声で、近くのうろついている敵が気付く
-  const radius = GEN_SETTINGS.magic.noiseRadius;
+  const radius = dungeonOfState(state).magic.noiseRadius;
   if (radius > 0 && s.outcome === 'ongoing') {
     s = {
       ...s,
@@ -576,7 +588,7 @@ function hurtEnemy(state: ExploreState, uid: number, dmg: number): ExploreState 
     log.push(`${def.name}を倒した`);
     const defeated = { ...state, enemies: state.enemies.filter((e) => e.uid !== uid), defeated: state.defeated + 1 };
     if (def.boss) {
-      const reward = rankParams(state.rank).bossGold;
+      const reward = rankParams(state.rank, dungeonOfState(state).floors).bossGold;
       log.push(`報酬として金貨${reward}Gを手に入れた`, 'ダンジョンを踏破した');
       return { ...defeated, gold: state.gold + reward, outcome: 'cleared', log };
     }
@@ -593,14 +605,16 @@ function hurtEnemy(state: ExploreState, uid: number, dmg: number): ExploreState 
  * 道具は持ち物に入れ、いっぱいなら倒した場所に宝箱で残す。強敵は必ず宝箱を落とす（金貨と良い道具が入っている）
  */
 function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
+  const settings = dungeonOfState(state);
+  const growth = settings.growth;
   const reward = enemyReward(enemy.id);
-  const rate = enemy.elite ? REWARD_CONFIG.elite : 1;
+  const rate = enemy.elite ? growth.eliteRate : 1;
   const log = [...state.log];
   let s = state.rngState;
   let { stats } = state;
   let chests = state.chests;
 
-  const gold = Math.round(reward.gold * rate * rankParams(state.rank).chestGoldRate);
+  const gold = Math.round(reward.gold * rate * rankParams(state.rank, settings.floors).chestGoldRate);
   if (gold > 0) log.push(`金貨${gold}Gを手に入れた`);
 
   // 道具：強敵は必ず宝箱で、通常の敵は確率で落とす
@@ -632,18 +646,18 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
   // 経験値とレベルアップ
   let { level, exp } = state;
   exp += Math.round(reward.exp * rate);
-  while (level < REWARD_CONFIG.maxLevel && exp >= expToNext(level)) {
-    exp -= expToNext(level);
+  while (level < growth.maxLevel && exp >= expToNext(level, growth)) {
+    exp -= expToNext(level, growth);
     level++;
     stats = {
       ...stats,
-      maxHp: stats.maxHp + REWARD_CONFIG.hpPerLevel,
-      hp: stats.hp + REWARD_CONFIG.hpPerLevel,
-      atk: stats.atk + REWARD_CONFIG.atkPerLevel,
+      maxHp: stats.maxHp + growth.hpPerLevel,
+      hp: stats.hp + growth.hpPerLevel,
+      atk: stats.atk + growth.atkPerLevel,
     };
-    log.push(`レベル${level}に上がった（最大HP+${REWARD_CONFIG.hpPerLevel}、攻撃+${REWARD_CONFIG.atkPerLevel}）`);
+    log.push(`レベル${level}に上がった（最大HP+${growth.hpPerLevel}、攻撃+${growth.atkPerLevel}）`);
   }
-  if (level >= REWARD_CONFIG.maxLevel) exp = 0;
+  if (level >= growth.maxLevel) exp = 0;
 
   return { ...state, gold: state.gold + gold, stats, chests, level, exp, rngState: s, log };
 }
@@ -671,7 +685,7 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
     log.push(`${def.name}を倒した`);
     const defeated = { ...state, stats, enemies: state.enemies.filter((e) => e.uid !== target.uid), defeated: state.defeated + 1 };
     if (def.boss) {
-      const reward = rankParams(state.rank).bossGold;
+      const reward = rankParams(state.rank, dungeonOfState(state).floors).bossGold;
       log.push(`報酬として金貨${reward}Gを手に入れた`, 'ダンジョンを踏破した');
       return { ...defeated, gold: state.gold + reward, outcome: 'cleared', log };
     }

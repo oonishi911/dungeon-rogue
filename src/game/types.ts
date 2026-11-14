@@ -85,7 +85,7 @@ export type ItemEffect =
   | { kind: 'spellbook'; spell: SpellId }; // 呪文書。持っていくと、探索で魔力を使ってその呪文を何度でも唱えられる
 
 // ===== 魔法 =====
-// 呪文は呪文書を持っていくと使える。強さと魔力の量は src/game/dungeonGen.json の magic と spells（管理画面で変えられる）
+// 呪文は呪文書を持っていくと使える。強さと魔力の量は、ダンジョンごとの設定（src/game/dungeons/*.json の magic と spells。管理画面で変えられる）
 export type SpellId = 'shockwave' | 'sweep' | 'fire_bolt' | 'ice_bolt' | 'light_lance' | 'dark_bolt' | 'heal' | 'regen';
 
 // 呪文の働き。aim は唱えるときに向きを選ぶかどうか
@@ -121,6 +121,7 @@ export type PrepPhase = 'prep' | 'ready';
 
 export interface PrepState {
   seed: number;
+  dungeon: string; // 挑むダンジョンの ID（準備の前に、プレイヤーが選ぶ。src/game/dungeons/ の設定ファイル）
   trait: TraitId; // 正解。UIには toPlayerView で隠して渡す
   phase: PrepPhase;
   day: number; // 1始まり
@@ -141,6 +142,7 @@ export interface PrepState {
 
 // 準備フェーズの成果。探索フェーズと次の周回に渡す。
 export interface PrepResult {
+  dungeon: string; // 挑むダンジョンの ID
   trait: TraitId;
   knowledge: Knowledge;
   hasMap: boolean;

@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { DEFAULT_DUNGEON, DEFAULT_DUNGEON_ID, DUNGEONS } from './dungeons';
 import { enemyDef } from './enemies';
+import { BOSS_ENEMY, FIELD_ENEMY } from './enemies.fixtures';
 import {
   canSee,
   dirBetween,
@@ -12,11 +14,15 @@ import {
   type ExploreAction,
   type ExploreState,
 } from './explore';
-import { PREP_CONFIG, TRAIT_ENEMIES, TREASURE_CONFIG } from './data';
+import { PREP_CONFIG, TREASURE_CONFIG } from './data';
+import type { DungeonFile } from './genMaster';
 import { tileAt, type FloorMap } from './map';
 import { RANK_CONFIG, rankParams } from './rank';
 import type { ItemId } from './types';
 import type { Result } from './types';
+
+// 標準のダンジョンの設定（startExplore でダンジョンを指定しないと、標準のダンジョンになる）
+const GEN = DEFAULT_DUNGEON;
 
 function unwrap<T>(result: Result<T>): T {
   if (!result.ok) throw new Error(result.error);
@@ -71,7 +77,7 @@ describe('startExplore', () => {
     const s = startExplore(1);
     expect(s.floor).toBe(0);
     expect(s.player).toEqual(s.map.start);
-    expect(s.satiety).toBe(rankParams(1).maxSatiety);
+    expect(s.satiety).toBe(rankParams(1, GEN.floors).maxSatiety);
     expect(s.stats.hp).toBe(s.stats.maxHp);
     expect(s.seen[s.player.y * s.map.width + s.player.x]).toBe(true);
   });
@@ -107,7 +113,7 @@ describe('step', () => {
   it('足踏みも1行動', () => {
     const s = act(startExplore(3), { kind: 'wait' });
     expect(s.turn).toBe(1);
-    expect(s.satiety).toBe(rankParams(1).maxSatiety - 1);
+    expect(s.satiety).toBe(rankParams(1, GEN.floors).maxSatiety - 1);
   });
 
   it('階段の上でなければ降りられない', () => {
@@ -162,13 +168,14 @@ describe('step', () => {
 
   it('最後の階の階段を降りるとボス階に出る。ボス階に階段はなく、ボスが1体だけいる', () => {
     let s = startExplore(6, { enemyDensity: 0 });
-    for (let f = 0; f < EXPLORE_CONFIG.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
+    expect(s.floors).toBe(GEN.floors.count);
+    for (let f = 0; f < s.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
     expect(isBossFloor(s)).toBe(true);
     expect(s.outcome).toBe('ongoing');
     expect(s.map.stairs).toBeNull();
     expect(s.enemies).toHaveLength(1);
     expect(enemyDef(s.enemies[0]!).boss).toBe(true);
-    expect(s.enemies[0]!.id).toBe(TRAIT_ENEMIES[s.trait].boss);
+    expect(s.enemies[0]!.id).toBe(GEN.encounters[s.trait].boss);
     expect(s.chests).toEqual([]);
   });
 
@@ -184,23 +191,15 @@ describe('step', () => {
     expect(s.stats.hp).toBe(0);
   });
 
-  it('どのランクでも、本道だけを歩けば満腹度が0にならずにボス階まで着ける', { timeout: 30_000 }, () => {
-    for (let rank = 2; rank <= RANK_CONFIG.maxRank; rank++) {
-      for (let i = 0; i < 10; i++) {
-        let s = startExplore(i * 2654435761, { enemyDensity: 0, rank });
-        for (let f = 0; f < EXPLORE_CONFIG.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
+  // 満腹度が足りるか（バランス）は、balance.test.ts で確かめる。ここでは、本道をたどれば必ず次の階に降りられることだけを確かめる
+  it('どのランクでも、本道だけを歩けばボス階まで着ける', { timeout: 30_000 }, () => {
+    for (let rank = 1; rank <= RANK_CONFIG.maxRank; rank++) {
+      for (let i = 0; i < 3; i++) {
+        let s = startExplore(i * 2654435761, { enemyDensity: 0, rank, maxSatiety: 100000 });
+        for (let f = 0; f < s.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
         expect(isBossFloor(s)).toBe(true);
-        expect(s.satiety).toBeGreaterThan(0);
+        expect(s.outcome).toBe('ongoing');
       }
-    }
-  });
-
-  it('強化していなくても、本道だけを歩けば満腹度が0にならずにボス階まで着ける', { timeout: 30_000 }, () => {
-    for (let i = 0; i < 100; i++) {
-      let s = startExplore(i * 2654435761, { enemyDensity: 0 });
-      for (let f = 0; f < EXPLORE_CONFIG.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
-      expect(isBossFloor(s)).toBe(true);
-      expect(s.satiety).toBeGreaterThan(0);
     }
   });
 });
@@ -348,8 +347,8 @@ describe('ランク', () => {
   it('ランクで広さと満腹度の上限が決まる', () => {
     const s = startExplore(3, { rank: 3 });
     expect(s.rank).toBe(3);
-    expect(s.map.width).toBe(rankParams(3).mapSize);
-    expect(s.maxSatiety).toBe(rankParams(3).maxSatiety);
+    expect(s.map.width).toBe(rankParams(3, GEN.floors).mapSize);
+    expect(s.maxSatiety).toBe(rankParams(3, GEN.floors).maxSatiety);
   });
 
   it('ランクが高いほど宝箱の金貨が多い', () => {
@@ -357,6 +356,46 @@ describe('ランク', () => {
     const low = startExplore(5, { rank: 1, mapSize: 50 });
     const high = startExplore(5, { rank: 3, mapSize: 50 });
     expect(high.chests.map((c) => c.pos)).toEqual(low.chests.map((c) => c.pos));
-    high.chests.forEach((c, i) => expect(c.gold).toBe(Math.round(low.chests[i]!.gold * rankParams(3).chestGoldRate)));
+    high.chests.forEach((c, i) => expect(c.gold).toBe(Math.round(low.chests[i]!.gold * rankParams(3, GEN.floors).chestGoldRate)));
+  });
+});
+
+describe('遊ぶダンジョン', () => {
+  // テストのためだけのダンジョンを、一覧に一時的に足す（ファイルは作らない。管理画面でダンジョンを足したり消したりしても、テストは変わらない）
+  const TEST_ID = 'test_only';
+  const registry = DUNGEONS as Record<string, DungeonFile>;
+  const one = { pool: [FIELD_ENEMY], boss: BOSS_ENEMY };
+  const testDungeon: DungeonFile = {
+    ...(JSON.parse(JSON.stringify(GEN)) as DungeonFile),
+    name: 'テスト用',
+    floors: { count: 2, sizes: GEN.floors.sizes.map(() => 30), satiety: GEN.floors.satiety.map(() => 777) },
+    encounters: { fire: one, ice: one, neutral: one, light: one, dark: one },
+  };
+  afterEach(() => {
+    delete registry[TEST_ID];
+  });
+
+  it('指定しなければ、標準のダンジョンで遊ぶ', () => {
+    const s = startExplore(1);
+    expect(s.dungeon).toBe(DEFAULT_DUNGEON_ID);
+    expect(s.floors).toBe(GEN.floors.count);
+  });
+
+  it('選んだダンジョンの設定（階の数・広さ・満腹度・出る敵・ボス）で遊ぶ', () => {
+    registry[TEST_ID] = testDungeon;
+    let s = startExplore(4, { dungeon: TEST_ID, rank: 2 });
+    expect(s.dungeon).toBe(TEST_ID);
+    expect(s.floors).toBe(2);
+    expect(s.mapSize).toBe(30);
+    expect(s.maxSatiety).toBe(777);
+    expect(s.enemies.length).toBeGreaterThan(0);
+    expect(s.enemies.every((e) => e.id === FIELD_ENEMY)).toBe(true);
+    for (let f = 0; f < s.floors; f++) s = act(walkMainPath(s), { kind: 'descend' });
+    expect(isBossFloor(s)).toBe(true);
+    expect(s.enemies.map((e) => e.id)).toEqual([BOSS_ENEMY]);
+  });
+
+  it('ないダンジョンを指定すると、エラーになる', () => {
+    expect(() => startExplore(1, { dungeon: 'nothing_here' })).toThrow();
   });
 });

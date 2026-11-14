@@ -16,7 +16,7 @@ import type {
 } from './types';
 import enemyMasterJson from './enemies.json';
 import { enemyDefs, enemyRewards, parseEnemyMaster, type EnemyReward } from './enemyMaster';
-import { GEN_SETTINGS } from './genMaster';
+import type { GrowthSettings } from './genMaster';
 
 // ===== MVPの設定値 =====
 // 数値は仮。遊んでみてバランス調整する。
@@ -129,7 +129,7 @@ export const DECK: readonly CardId[] = [
   'work',
 ];
 
-/** 呪文。強さと使う魔力は dungeonGen.json の spells（管理画面で変えられる） */
+/** 呪文。強さと使う魔力は、ダンジョンごとの設定（src/game/dungeons/*.json の spells。管理画面で変えられる） */
 export const SPELLS: Record<SpellId, SpellDef> = {
   shockwave: { id: 'shockwave', name: '衝撃波', aim: false, effect: { kind: 'shockwave' } },
   sweep: { id: 'sweep', name: 'なぎ払い', aim: true, effect: { kind: 'sweep' } },
@@ -342,13 +342,9 @@ export const FAVORABLE_GEAR: Record<TraitId, readonly ItemId[]> = {
 /** 準備フェーズを飛ばしているあいだ、有利な装備に足して持たせる道具 */
 export const START_SUPPLIES: readonly ItemId[] = ['potion', 'potion'];
 
-/**
- * ダンジョン特性ごとに出る敵。同じ敵を複数並べると出やすくなる。
- * その属性の敵が中心で、成分の属性の敵も混ざる。体質にも傾向がある
- * （炎：柔らかい、氷：硬い、無属性：混在、光：硬い、闇：霊体）。
- * データは src/game/enemies.json の dungeons。
- */
-export const TRAIT_ENEMIES: Record<TraitId, { pool: readonly EnemyId[]; boss: EnemyId }> = ENEMY_MASTER.dungeons;
+// ダンジョン特性ごとに出る敵は、ダンジョンの設定ファイル（src/game/dungeons/*.json の encounters）にある。
+// 標準のダンジョンでは、その属性の敵が中心で、成分の属性の敵も混ざる。体質にも傾向がある
+// （炎：柔らかい、氷：硬い、無属性：混在、光：硬い、闇：霊体）。
 
 // ===== 宝箱と金貨（仮） =====
 export const TREASURE_CONFIG = {
@@ -367,21 +363,15 @@ export const TREASURE_CONFIG = {
  * - 強敵：金貨と経験値は elite 倍。さらに必ず宝箱を落とし、eliteGold の金貨と eliteItems のどれかが入っている
  * - 経験値：たまるとレベルが上がり、最大HPと攻撃力が上がる（上がった分だけHPも回復する）。挑戦が終わると1に戻る
  */
-// レベルの上がり方と強敵の倍率は、管理画面（?view=admin の「レベルと強敵の報酬」タブ）で変えられる設定（dungeonGen.json の growth）にある。
-// 自動プレイのバランステスト（外れた準備でクリアできすぎない）を満たす範囲にする。満たさないと公開されない。
-// 無属性のダンジョンの外れた準備は、報酬なしで77.5%、今の値で87.5%（上限90%）
+// レベルの上がり方と強敵の倍率（金貨と経験値）は、ダンジョンごとの設定（src/game/dungeons/*.json の growth。
+// 管理画面 ?view=admin の「レベルと強敵の報酬」タブ）にある。
+// 標準のダンジョンでは、無属性のダンジョンの外れた準備は、報酬なしで77.5%、今の値で87.5%（バランスのテストの上限90%）
 export const REWARD_CONFIG = {
   dropItems: ['potion', 'food'] as readonly ItemId[],
-  elite: GEN_SETTINGS.growth.eliteRate,
   eliteItems: ['potion', 'food', 'fire_whetstone', 'ice_whetstone', 'holy_water', 'dark_oil'] as readonly ItemId[],
-  expBase: GEN_SETTINGS.growth.expBase, // レベル1→2に必要な経験値
-  expStep: GEN_SETTINGS.growth.expStep, // レベルが1上がるごとに、次に必要な経験値が増える量
-  hpPerLevel: GEN_SETTINGS.growth.hpPerLevel,
-  atkPerLevel: GEN_SETTINGS.growth.atkPerLevel,
-  maxLevel: GEN_SETTINGS.growth.maxLevel,
 };
 
-/** レベル level から次のレベルに上がるのに必要な経験値 */
-export function expToNext(level: number): number {
-  return REWARD_CONFIG.expBase + REWARD_CONFIG.expStep * (level - 1);
+/** レベル level から次のレベルに上がるのに必要な経験値（growth はダンジョンの設定） */
+export function expToNext(level: number, growth: Pick<GrowthSettings, 'expBase' | 'expStep'>): number {
+  return growth.expBase + growth.expStep * (level - 1);
 }

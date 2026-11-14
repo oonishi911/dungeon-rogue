@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react';
 import { ITEMS, TRAITS } from '../game/data';
+import { dungeonOf } from '../game/dungeons';
+import type { FloorSettings } from '../game/genMaster';
 import { toPlayerView } from '../game/prep';
 import { RANK_CONFIG, rankParams, upgradeCost } from '../game/rank';
 import type { ItemId, Knowledge, PrepState, ShopId } from '../game/types';
@@ -123,7 +125,7 @@ export function PrepScreen({ run, state, error, onPlay, onBuy, onUpgrade, onEndD
         </section>
       </div>
 
-      <RankPanel rank={view.rank} exp={view.exp} gold={view.gold} onUpgrade={onUpgrade} />
+      <RankPanel rank={view.rank} exp={view.exp} gold={view.gold} floors={dungeonOf(view.dungeon).floors} onUpgrade={onUpgrade} />
 
       <p className="error" role="alert">
         {error ?? ''}
@@ -162,10 +164,10 @@ export function PrepScreen({ run, state, error, onPlay, onBuy, onUpgrade, onEndD
 }
 
 /** ランクと強化。強化はカードも日数も使わず、経験と金貨を払う */
-function RankPanel({ rank, exp, gold, onUpgrade }: { rank: number; exp: number; gold: number; onUpgrade: () => void }) {
-  const now = rankParams(rank);
+function RankPanel({ rank, exp, gold, floors, onUpgrade }: { rank: number; exp: number; gold: number; floors: FloorSettings; onUpgrade: () => void }) {
+  const now = rankParams(rank, floors);
   const maxed = rank >= RANK_CONFIG.maxRank;
-  const next = rankParams(rank + 1);
+  const next = rankParams(rank + 1, floors);
   const cost = upgradeCost(rank);
   const reason =
     exp < RANK_CONFIG.expPerUpgrade

@@ -1,29 +1,13 @@
 // 開発用の管理画面（Admin.tsx）の、敵のマスターデータ（src/game/enemies.json）のタブ：
-// 「敵」（敵の値を変える・敵を足す・消す）と、「ダンジョンに出る敵」（ダンジョンごとの出やすさとボス）。
+// 「敵」（敵の値を変える・敵を足す・消す）。どのダンジョンにどの敵が出るかは、ダンジョンの設定の「ダンジョンに出る敵」タブ（DungeonPanels.tsx）で決める。
 // 変えた内容は、管理画面の「変更を公開」でリポジトリに保存され、自動チェックが通れば数分で公開版に反映される
 
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
-import { BODY_NAMES, REWARD_CONFIG } from '../game/data';
+import { BODY_NAMES } from '../game/data';
 import { ENEMY_CONFIG } from '../game/enemies';
-import {
-  addEnemy,
-  BODIES,
-  dungeonsWithBoss,
-  ELEMENTS,
-  enemyIds,
-  LIMITS,
-  MASTER_TRAITS,
-  removeEnemy,
-  REWARD_LABELS,
-  setWeight,
-  TRAIT_LABELS,
-  weightOf,
-  type EnemyLook,
-  type EnemyMaster,
-  type EnemyRecord,
-} from '../game/enemyMaster';
+import { addEnemy, BODIES, ELEMENTS, enemyIds, LIMITS, REWARD_LABELS, TRAIT_LABELS, type EnemyLook, type EnemyMaster, type EnemyRecord } from '../game/enemyMaster';
 import { Sprite } from '../sprites/Sprite';
-import type { Body, Element, EnemyId, TraitId } from '../game/types';
+import type { Body, Element, EnemyId } from '../game/types';
 import { textError } from '../game/fieldCheck';
 import { cls, NumberField, TextField } from './adminParts';
 
@@ -34,8 +18,18 @@ export interface EnemyPanelProps {
   setDraft: Dispatch<SetStateAction<EnemyMaster>>;
 }
 
-/** 「敵」のタブ：敵の一覧（値を変える・消す）と、敵を足すところ。busy は、公開しているあいだ（足す・消すを止める） */
-export function EnemiesPanel({ base, draft, setDraft, busy }: EnemyPanelProps & { busy: boolean }) {
+/**
+ * 「敵」のタブ：敵の一覧（値を変える・消す）と、敵を足すところ。busy は、公開しているあいだ（足す・消すを止める）。
+ * bossUsesOf は、その敵をボスにしているところ（「標準の炎」など。あれば消せない）。onRemove は、敵をすべてのダンジョンから外して消す
+ */
+export function EnemiesPanel({
+  base,
+  draft,
+  setDraft,
+  busy,
+  bossUsesOf,
+  onRemove,
+}: EnemyPanelProps & { busy: boolean; bossUsesOf: (id: EnemyId) => string[]; onRemove: (id: EnemyId) => void }) {
   const ids = enemyIds(draft);
   // 見た目の候補：今いる敵の見た目（同じ見た目はまとめる）
   const looks = useMemo(() => lookChoices(draft), [draft]);
@@ -48,7 +42,7 @@ export function EnemiesPanel({ base, draft, setDraft, busy }: EnemyPanelProps & 
       <h2 className="admin__heading">敵</h2>
       <p className="admin__note">
         ボス以外の敵は、ゲームの中ではHPと攻撃が{ENEMY_CONFIG.strengthRate === 0.5 ? '半分' : `${ENEMY_CONFIG.strengthRate}倍`}になります（「ゲーム内」の数字）。
-        金貨・経験値・落とす%は倒したときの報酬です（落とす%：回復薬か食料を落とす確率）。強敵は金貨と経験値が{REWARD_CONFIG.elite}倍になり、必ず宝箱を落とします。
+        金貨・経験値・落とす%は倒したときの報酬です（落とす%：回復薬か食料を落とす確率）。強敵は、金貨と経験値がダンジョンごとの倍率（「レベルと強敵の報酬」のタブ）で増え、必ず宝箱を落とします。
       </p>
       <div className="admin__scroll">
         <table className="admin__table">
@@ -85,7 +79,7 @@ export function EnemiesPanel({ base, draft, setDraft, busy }: EnemyPanelProps & 
               };
               const added = !(id in base.enemies);
               const weak = !e.boss;
-              const bossOf = dungeonsWithBoss(draft, id);
+              const bossOf = bossUsesOf(id);
               const lookKey = JSON.stringify(e.look);
               return (
                 <tr key={id} className={added ? 'admin__row--new' : undefined}>
@@ -190,9 +184,9 @@ export function EnemiesPanel({ base, draft, setDraft, busy }: EnemyPanelProps & 
                       type="button"
                       className="explore__wait admin__remove"
                       disabled={busy || bossOf.length > 0}
-                      title={bossOf.length ? `${bossOf.map((t) => TRAIT_LABELS[t]).join('・')}のダンジョンのボスなので消せません（先にボスを変えてください）` : undefined}
+                      title={bossOf.length ? `${bossOf.join('・')}のボスなので消せません（先に「ダンジョンに出る敵」のタブでボスを変えてください）` : undefined}
                       aria-label={`${e.name}を消す`}
-                      onClick={() => setDraft((d) => removeEnemy(d, id))}
+                      onClick={() => onRemove(id)}
                     >
                       消す
                     </button>
@@ -205,82 +199,8 @@ export function EnemiesPanel({ base, draft, setDraft, busy }: EnemyPanelProps & 
       </div>
       <AddEnemy master={draft} disabled={busy} onAdd={(id, record) => setDraft((d) => addEnemy(d, id, record))} />
       <p className="admin__note">
-        ボスにしているダンジョンがある敵は消せません。消すと、その敵はどのダンジョンにも出なくなります。足した敵は、「ダンジョンに出る敵」のタブで出やすさを決めるまで、どのダンジョンにも出ません。
+        ボスにしているダンジョンがある敵は消せません。消すと、その敵はどのダンジョンにも出なくなります。足した敵は、ダンジョンごとの「ダンジョンに出る敵」のタブで出やすさを決めるまで、どのダンジョンにも出ません。
       </p>
-    </section>
-  );
-}
-
-/** 「ダンジョンに出る敵」のタブ：ダンジョンごとの、道中の敵の出やすさと、ボス */
-export function PoolPanel({ base, draft, setDraft }: EnemyPanelProps) {
-  const ids = enemyIds(draft);
-  const bossIds = ids.filter((id) => draft.enemies[id]!.boss);
-  const fieldIds = ids.filter((id) => !draft.enemies[id]!.boss);
-  const setDungeon = (trait: TraitId, patch: Partial<EnemyMaster['dungeons'][TraitId]>) =>
-    setDraft((d) => ({ ...d, dungeons: { ...d.dungeons, [trait]: { ...d.dungeons[trait], ...patch } } }));
-
-  return (
-    <section className="admin__section" role="tabpanel" id="admin-pool-panel" aria-labelledby="admin-pool-tab">
-      <h2 className="admin__heading">ダンジョンに出る敵</h2>
-      <p className="admin__note">道中の数字は出やすさです（0：出ない。数が大きいほど出やすい）。ボスは、ボスにした敵から選びます。</p>
-      <div className="admin__scroll">
-        <table className="admin__table admin__table--grid">
-          <thead>
-            <tr>
-              <th scope="col">敵</th>
-              {MASTER_TRAITS.map((t) => (
-                <th key={t} scope="col">
-                  {TRAIT_LABELS[t]}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {fieldIds.map((id) => (
-              <tr key={id}>
-                <th scope="row">{draft.enemies[id]!.name}</th>
-                {MASTER_TRAITS.map((t) => {
-                  const w = weightOf(draft.dungeons[t].pool, id);
-                  const total = draft.dungeons[t].pool.length;
-                  return (
-                    <td key={t}>
-                      <NumberField
-                        value={w}
-                        min={0}
-                        max={LIMITS.weight.max}
-                        changed={w !== weightOf(base.dungeons[t].pool, id)}
-                        label={`${TRAIT_LABELS[t]}のダンジョンでの${draft.enemies[id]!.name}の出やすさ`}
-                        onChange={(v) => setDungeon(t, { pool: setWeight(draft.dungeons[t].pool, id, v) })}
-                      />
-                      {w > 0 && total > 0 && <span className="admin__ingame">{Math.round((w / total) * 100)}%</span>}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-            <tr className="admin__boss-row">
-              <th scope="row">ボス</th>
-              {MASTER_TRAITS.map((t) => (
-                <td key={t}>
-                  <select
-                    className={cls('admin__select', draft.dungeons[t].boss !== base.dungeons[t].boss)}
-                    value={draft.dungeons[t].boss}
-                    aria-label={`${TRAIT_LABELS[t]}のダンジョンのボス`}
-                    onChange={(ev) => setDungeon(t, { boss: ev.target.value as EnemyId })}
-                  >
-                    {!bossIds.includes(draft.dungeons[t].boss) && <option value={draft.dungeons[t].boss}>（ボスではない敵）</option>}
-                    {bossIds.map((id) => (
-                      <option key={id} value={id}>
-                        {draft.enemies[id]!.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-      </div>
     </section>
   );
 }

@@ -1,11 +1,14 @@
-// ダンジョンの設定（src/game/dungeonGen.json）を読み、正しい形かを確かめる。
-// dungeonGen.json は、開発用の管理画面（?view=admin の「階の数・広さ・満腹度」から「魔法」までのタブ。src/ui/Admin.tsx、src/ui/GenPanels.tsx）から書き換えて公開できる。
+// ダンジョンの設定ファイル（src/game/dungeons/<ID>.json。1つのファイルが、プレイヤーの選べるダンジョン1つ）の形を決め、正しいかを確かめる。
+// ファイルは、開発用の管理画面（?view=admin の「名前と説明」から「魔法」までのタブ。src/ui/Admin.tsx、src/ui/GenPanels.tsx）から、
+// 書き換える・複製して新しく作る・消すことができる。読み込むのは dungeons.ts。
+// name と description はダンジョンを選ぶ画面に出す名前と説明、
 // floors は階の数とランクごとの広さ・満腹度、rooms は小部屋の多さと大きさ、enemies は敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋など）、
-// growth は敵を倒したときのレベルの上がり方と強敵の報酬の倍率、magic は魔力と魔法の強さ、spells は呪文ごとの魔力と効き目。
+// growth は敵を倒したときのレベルの上がり方と強敵の報酬の倍率、magic は魔力と魔法の強さ、spells は呪文ごとの魔力と効き目、
+// encounters はダンジョンの属性ごとに出る敵（敵のマスター enemies.json から選ぶ）。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
 
-import raw from './dungeonGen.json';
-import type { SpellId } from './types';
+import { cleanEncounters, describeEncounterChanges, encounterProblems, type EnemyMaster, type Encounters } from './enemyMaster';
+import type { EnemyId, SpellId } from './types';
 
 /** ランクの数（広さをランクごとに決めるので、sizes はこの数だけ並ぶ） */
 export const RANK_COUNT = 9;
@@ -63,6 +66,7 @@ export interface MagicSettings {
 /** 呪文ごとの設定。どの呪文にも cost（使う魔力）があり、ほかの項目は呪文の働きごとに違う（SPELL_FIELDS） */
 export type SpellSettings = Record<SpellId, Record<string, number>>;
 
+/** マップと探索の設定（ダンジョンの設定ファイルのうち、名前・説明・出る敵を除いたもの） */
 export interface GenSettings {
   floors: FloorSettings;
   rooms: RoomSettings;
@@ -71,6 +75,20 @@ export interface GenSettings {
   magic: MagicSettings;
   spells: SpellSettings;
 }
+
+/** ダンジョンの設定ファイル1つ（src/game/dungeons/<ID>.json）。ID はファイルの名前 */
+export interface DungeonFile extends GenSettings {
+  name: string; // ダンジョンを選ぶ画面に出す名前
+  description: string; // ダンジョンを選ぶ画面に出す説明（なくてもよい）
+  encounters: Encounters; // ダンジョンの属性ごとに、道中に出る敵とボス
+}
+
+/** ダンジョンの ID・名前・説明の決まり（ID はファイルの名前になる） */
+export const DUNGEON_LIMITS = {
+  id: { pattern: /^[a-z][a-z0-9_]{1,23}$/, max: 24 },
+  name: { max: 16 },
+  description: { max: 80 },
+} as const;
 
 /** 魔力と魔法の強さの項目（名前・範囲・整数か） */
 export const MAGIC_FIELDS: { key: keyof MagicSettings; label: string; min: number; max: number; step: number; hint: string }[] = [
@@ -246,15 +264,36 @@ export function genProblems(data: unknown): string[] {
   return problems;
 }
 
-export function parseGenSettings(data: unknown): GenSettings {
-  const problems = genProblems(data);
-  if (problems.length) throw new Error(`dungeonGen.json の形が正しくありません：${problems.join(' / ')}`);
-  return data as GenSettings;
+/** ダンジョンの設定ファイルの、おかしいところ（名前・説明、マップと探索の設定、出る敵）。敵は master にいる敵から選ぶ */
+export function dungeonProblems(data: unknown, master: Pick<EnemyMaster, 'enemies'>): string[] {
+  if (!isObject(data)) return ['中身がない'];
+  const problems: string[] = [];
+  if (typeof data.name !== 'string' || !data.name.trim()) problems.push('名前がない');
+  else if (data.name.length > DUNGEON_LIMITS.name.max) problems.push(`名前は${DUNGEON_LIMITS.name.max}文字まで`);
+  if (typeof data.description !== 'string') problems.push('説明がない（なければ空の文字にする）');
+  else if (data.description.length > DUNGEON_LIMITS.description.max) problems.push(`説明は${DUNGEON_LIMITS.description.max}文字まで`);
+  return [...problems, ...genProblems(data), ...encounterProblems(data.encounters, master)];
 }
 
-/** リポジトリに保存する形（2つ空けの JSON。最後に改行） */
-export function serializeGenSettings(settings: GenSettings): string {
-  return `${JSON.stringify(settings, null, 2)}\n`;
+/** ダンジョンの設定ファイルを読む。おかしいところがあれば、まとめてエラーにする */
+export function parseDungeon(id: string, data: unknown, master: Pick<EnemyMaster, 'enemies'>): DungeonFile {
+  const problems = [...(DUNGEON_LIMITS.id.pattern.test(id) ? [] : ['ファイルの名前（ID）は、英小文字で始まり、英小文字・数字・_ だけにする']), ...dungeonProblems(data, master)];
+  if (problems.length) throw new Error(`ダンジョンの設定（src/game/dungeons/${id}.json）が正しくありません：${problems.join(' / ')}`);
+  return data as DungeonFile;
+}
+
+/** リポジトリに保存する形（項目の並び順をそろえた、2つ空けの JSON。最後に改行） */
+export function serializeDungeon(d: DungeonFile): string {
+  const { name, description, floors, rooms, enemies, growth, magic, spells, encounters } = d;
+  return `${JSON.stringify({ name, description, floors, rooms, enemies, growth, magic, spells, encounters: cleanEncounters(encounters) }, null, 2)}\n`;
+}
+
+/** ダンジョンの設定ファイルの、変えたところ（名前・説明・マップと探索の設定・出る敵）。names と alive は、敵の名前と、今も敵のデータにいるか */
+export function describeDungeonChanges(before: DungeonFile, after: DungeonFile, names: (id: EnemyId) => string, alive: (id: EnemyId) => boolean): string[] {
+  const out: string[] = [];
+  if (before.name !== after.name) out.push(`名前：${before.name} → ${after.name}`);
+  if (before.description !== after.description) out.push('説明を変更');
+  return [...out, ...describeGenChanges(before, after), ...describeEncounterChanges(before.encounters, after.encounters, names, alive)];
 }
 
 /** 変えたところを、日本語の文で返す（公開するときのコミットの説明と、画面の一覧に使う） */
@@ -294,6 +333,3 @@ export function describeGenChanges(before: GenSettings, after: GenSettings): str
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
-
-/** ゲームで使う設定 */
-export const GEN_SETTINGS: GenSettings = parseGenSettings(raw);

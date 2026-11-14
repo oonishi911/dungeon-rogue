@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { bestLoadout } from './bestLoadout';
 import { buildPlayer, enemyHitDamage, itemSlot, playerHitDamage } from './combat';
-import { ITEMS, PREP_CONFIG, TRAIT_ENEMIES, TRAIT_IDS } from './data';
+import { ITEMS, PREP_CONFIG, TRAIT_IDS } from './data';
+import { DEFAULT_DUNGEON } from './dungeons';
 import { enemyDef } from './enemies';
 import type { ItemId, TraitId } from './types';
 
 const slotOf = (loadout: ItemId[], slot: string) => loadout.filter((id) => itemSlot(ITEMS[id]) === slot);
 
-/** ダンジョンの敵（道中とボス）すべてに対する、与えるダメージと受けるダメージの合計 */
+/** 標準のダンジョンの敵（道中とボス）すべてに対する、与えるダメージと受けるダメージの合計 */
 function sums(trait: TraitId, loadout: ItemId[]) {
-  const { pool, boss } = TRAIT_ENEMIES[trait];
+  const { pool, boss } = DEFAULT_DUNGEON.encounters[trait];
   const stats = buildPlayer(loadout);
   const foes = [...pool, boss].map((id) => enemyDef({ id, elite: false }));
   return {
@@ -20,7 +21,7 @@ function sums(trait: TraitId, loadout: ItemId[]) {
 
 describe('開発用：いちばん強い装備', () => {
   it.each(TRAIT_IDS)('%s：武器1つ・防具1つ・道具は上限まで・呪文書は上限まで', (trait) => {
-    const loadout = bestLoadout(trait);
+    const loadout = bestLoadout(trait, DEFAULT_DUNGEON);
     expect(slotOf(loadout, 'weapon')).toHaveLength(1);
     expect(slotOf(loadout, 'armor')).toHaveLength(1);
     expect(slotOf(loadout, 'consumable')).toHaveLength(PREP_CONFIG.maxItems);
@@ -30,7 +31,7 @@ describe('開発用：いちばん強い装備', () => {
   });
 
   it.each(TRAIT_IDS)('%s：ほかの武器や防具に替えても、強くならない（ボスも含めた合計で比べる）', (trait) => {
-    const loadout = bestLoadout(trait);
+    const loadout = bestLoadout(trait, DEFAULT_DUNGEON);
     const [weapon] = slotOf(loadout, 'weapon');
     const [armor] = slotOf(loadout, 'armor');
     const chosen = sums(trait, [weapon!, armor!]);

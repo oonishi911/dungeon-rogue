@@ -6,13 +6,14 @@
 // 5. 本道から外れた行き止まりに、宝箱か強敵を置く。
 // 乱数はシード付きなので、同じシード・同じ設定なら必ず同じマップになる。
 
-import { GEN_SETTINGS, type RoomSettings } from './genMaster';
+import { DEFAULT_DUNGEON } from './dungeons';
+import type { RoomSettings } from './genMaster';
 import { nextInt, nextRandom, shuffle } from './rng';
 
 export const MAP_CONFIG = {
   minSize: 20,
   maxSize: 100,
-  // 小部屋の多さと大きさは、管理画面で変えられる設定（dungeonGen.json の rooms）にある
+  // 小部屋の多さと大きさは、ダンジョンごとの設定（src/game/dungeons/*.json の rooms。管理画面で変えられる）にある
   loopChance: 0.04, // すでにつながっている場所どうしの壁を壊してループにする確率
   stairsMinRatio: 0.55, // 階段は、入口から最も遠い通路までの距離のこの範囲に置く
   stairsMaxRatio: 0.8,
@@ -59,7 +60,7 @@ export interface FloorOptions {
   height: number;
   loopChance?: number;
   featureRate?: number;
-  rooms?: RoomSettings; // 小部屋の置き方（ふつうは dungeonGen.json の設定。管理画面の見本では、変えている途中の値を使う）
+  rooms?: RoomSettings; // 小部屋の置き方（ふつうは遊んでいるダンジョンの設定。省略すると標準のダンジョン。管理画面の見本では、変えている途中の値を使う）
 }
 
 const DIRS: readonly Pos[] = [
@@ -79,7 +80,7 @@ export function generateFloor(seed: number, options: FloorOptions): FloorMap {
   }
   const loopChance = options.loopChance ?? MAP_CONFIG.loopChance;
   const featureRate = options.featureRate ?? MAP_CONFIG.featureRate;
-  const roomSettings = options.rooms ?? GEN_SETTINGS.rooms;
+  const roomSettings = options.rooms ?? DEFAULT_DUNGEON.rooms;
 
   const tiles: Tile[] = new Array<Tile>(width * height).fill('wall');
   // 掘ったマスがどの区画（部屋1つ、または迷路1つ）に属するか。壁は -1

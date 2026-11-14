@@ -10,11 +10,13 @@ import { newSave, type SaveData } from './game/save';
 import type { ItemId, PrepResult, PrepState, Result } from './game/types';
 import { clearRun, clearSave, loadRun, loadSave, writeRun, writeSave } from './storage';
 import { CarryScreen } from './ui/CarryScreen';
+import { DungeonSelectScreen } from './ui/DungeonSelectScreen';
 import { ExploreScreen } from './ui/ExploreScreen';
 import { PrepScreen } from './ui/PrepScreen';
 import { ResultScreen } from './ui/ResultScreen';
 
 type Stage =
+  | { kind: 'choose' } // 挑むダンジョンを選ぶ（挑戦の始まり）
   | { kind: 'prep'; prep: PrepState }
   | { kind: 'carry'; prep: PrepState }
   | { kind: 'dungeon'; outcome: PrepResult; seed: number; resume?: ExploreState } // resume：前に中断した探索の続き
@@ -22,16 +24,17 @@ type Stage =
 
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 
-// 準備フェーズを一旦飛ばす。true のあいだは、毎回そのダンジョンに有利な装備と回復薬2つで、すぐダンジョンから始まる。
-// 準備フェーズの画面とロジックは残してあるので、false に戻せば元の流れ（準備 → 出発の朝 → ダンジョン → 結果）になる
+// 準備フェーズを一旦飛ばす。true のあいだは、ダンジョンを選んだら、毎回そのダンジョンの特性に有利な装備と回復薬2つで、すぐダンジョンから始まる。
+// 準備フェーズの画面とロジックは残してあるので、false に戻せば元の流れ（ダンジョンを選ぶ → 準備 → 出発の朝 → ダンジョン → 結果）になる
 const SKIP_PREP = true;
 
-/** セーブデータ（持ち越したカード・持ち帰った金貨・ランク・経験）から準備フェーズを始める */
-function prepFrom(save: SaveData): PrepState {
+/** セーブデータ（持ち越したカード・持ち帰った金貨・ランク・経験）から、選んだダンジョンの準備フェーズを始める */
+function prepFrom(save: SaveData, dungeon: string): PrepState {
   return createPrep(newSeed(), save.carried, {
     startGold: PREP_CONFIG.startGold + save.bonusGold,
     rank: save.rank,
     exp: save.exp,
+    dungeon,
   });
 }
 
@@ -40,11 +43,16 @@ function nextSave(save: SaveData, outcome: PrepResult): SaveData {
   return { ...save, run: save.run + 1, rank: outcome.rank, exp: outcome.exp, carried: outcome.carried, bonusGold: 0 };
 }
 
-/** 挑戦の始まり。準備フェーズを飛ばしているときは、出発した時点で保存してダンジョンから始める */
-function firstStage(save: SaveData): Stage {
-  if (!SKIP_PREP) return { kind: 'prep', prep: prepFrom(save) };
+/** 挑戦の始まり。まず、挑むダンジョンを選ぶ */
+function firstStage(): Stage {
+  return { kind: 'choose' };
+}
+
+/** ダンジョンを選んだあと。準備フェーズを飛ばしているときは、出発した時点で保存してダンジョンから始める */
+function stageAfterChoosing(save: SaveData, dungeon: string): Stage {
+  if (!SKIP_PREP) return { kind: 'prep', prep: prepFrom(save, dungeon) };
   const seed = newSeed();
-  const outcome = departWithoutPrep(seed, save);
+  const outcome = departWithoutPrep(seed, save, dungeon);
   writeSave(nextSave(save, outcome));
   return { kind: 'dungeon', outcome, seed };
 }
@@ -54,7 +62,7 @@ function firstLoad(): { save: SaveData; stage: Stage } {
   const run = loadRun();
   if (run) return { save: run.base, stage: { kind: 'dungeon', outcome: run.outcome, seed: run.seed, resume: run.state } };
   const save = loadSave() ?? newSave();
-  return { save, stage: firstStage(save) };
+  return { save, stage: firstStage() };
 }
 
 /** 探索の結果を入れた、次の挑戦のセーブデータ */
@@ -86,10 +94,12 @@ export function App() {
   const begin = (next: SaveData) => {
     setSave(next);
     setError(null);
-    setStage(firstStage(next));
+    setStage(firstStage());
   };
 
   switch (stage.kind) {
+    case 'choose':
+      return <DungeonSelectScreen run={save.run} rank={save.rank} onChoose={(dungeon) => setStage(stageAfterChoosing(save, dungeon))} />;
     case 'prep':
       return (
         <PrepScreen
@@ -133,10 +143,11 @@ export function App() {
         <ExploreScreen
           key={`${save.run}-${seed}`}
           run={save.run}
-          // 準備で決まった特性・持ち物・ランクで探索を始める。階層の形は準備と同じシードから作る
+          // 選んだダンジョンと、準備で決まった特性・持ち物・ランクで探索を始める。階層の形は準備と同じシードから作る
           // 前に中断した探索があれば、その続きから
           start={() =>
-            resume ?? startExplore(seed, { trait: outcome.trait, loadout: outcome.loadout, hasMap: outcome.hasMap, rank: outcome.rank })
+            resume ??
+            startExplore(seed, { dungeon: outcome.dungeon, trait: outcome.trait, loadout: outcome.loadout, hasMap: outcome.hasMap, rank: outcome.rank })
           }
           // 1手ごとに途中の状態を保存する（戻る・再読み込み・ページが閉じられたときに、続きから遊べるように）。
           // 探索が終わったら、その時点で結果を記録して、途中の状態は消す（結果の画面へ進む前に閉じても、結果が残るように）

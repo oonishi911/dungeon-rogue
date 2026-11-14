@@ -1,4 +1,6 @@
 {
+  "name": "標準",
+  "description": "いちばん基本のダンジョン。ここで遊び方を覚える。",
   "floors": {
     "count": 5,
     "sizes": [
@@ -94,6 +96,73 @@
       "cost": 5,
       "amount": 3,
       "turns": 8
+    }
+  },
+  "encounters": {
+    "fire": {
+      "pool": [
+        "fire_imp",
+        "fire_imp",
+        "flame_hound",
+        "flame_hound",
+        "flame_hound",
+        "lava_lizard",
+        "goblin",
+        "lava_slime"
+      ],
+      "boss": "flame_beast"
+    },
+    "ice": {
+      "pool": [
+        "ice_imp",
+        "ice_slime",
+        "ice_beetle",
+        "ice_beetle",
+        "ice_beetle",
+        "goblin",
+        "yeti"
+      ],
+      "boss": "ice_colossus"
+    },
+    "neutral": {
+      "pool": [
+        "goblin",
+        "goblin",
+        "giant_rat",
+        "giant_rat",
+        "stone_golem",
+        "stone_golem",
+        "troll",
+        "iwao"
+      ],
+      "boss": "ogre_chief"
+    },
+    "light": {
+      "pool": [
+        "light_bird",
+        "holy_armor",
+        "holy_armor",
+        "holy_armor",
+        "light_wisp",
+        "fire_imp",
+        "stone_golem",
+        "holy_knight"
+      ],
+      "boss": "light_guardian"
+    },
+    "dark": {
+      "pool": [
+        "dark_bat",
+        "shadow",
+        "shadow",
+        "phantom",
+        "phantom",
+        "ice_imp",
+        "giant_rat",
+        "wraith",
+        "dark_knight"
+      ],
+      "boss": "dark_lord"
     }
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GEN_SETTINGS } from './genMaster';
+import { DEFAULT_DUNGEON } from './dungeons';
 import { bfs, findDeadEnds, generateBossFloor, generateFloor, MAP_CONFIG, tileAt, type FloorMap, type Pos } from './map';
 
 const SEEDS = Array.from({ length: 30 }, (_, i) => i * 2654435761);
@@ -93,8 +93,8 @@ describe('generateFloor', () => {
         expect(r.y).toBeGreaterThanOrEqual(1);
         expect(r.x + r.width).toBeLessThan(map.width);
         expect(r.y + r.height).toBeLessThan(map.height);
-        expect(r.width).toBeGreaterThanOrEqual(GEN_SETTINGS.rooms.minSize);
-        expect(r.width).toBeLessThanOrEqual(GEN_SETTINGS.rooms.maxSize);
+        expect(r.width).toBeGreaterThanOrEqual(DEFAULT_DUNGEON.rooms.minSize);
+        expect(r.width).toBeLessThanOrEqual(DEFAULT_DUNGEON.rooms.maxSize);
         for (let y = r.y; y < r.y + r.height; y++) {
           for (let x = r.x; x < r.x + r.width; x++) {
             if (tileAt(map, { x, y }) !== 'floor') walls++;
