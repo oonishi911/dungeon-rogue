@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Dir } from '../game/explore';
+import type { Dir } from '../game/exploreTypes';
 import { chooseDirection, knobOffset, stickDirections } from './stick';
 
 describe('stickDirections', () => {

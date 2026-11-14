@@ -1,13 +1,12 @@
-import { CARDS, TRAITS } from '../game/data';
+import { TRAITS } from '../game/data';
 import { hasDungeon, dungeonOf } from '../game/dungeons';
-import type { ExploreResult } from '../game/explore';
-import type { PrepResult } from '../game/types';
+import type { ExploreResult } from '../game/exploreTypes';
+import type { Departure } from '../game/types';
 import { ItemList } from './ItemIcon';
-import { knowledgeText } from './PrepScreen';
 
 interface ResultScreenProps {
   run: number;
-  outcome: PrepResult;
+  outcome: Departure;
   expedition: ExploreResult;
   onNextRun: () => void;
 }
@@ -34,10 +33,6 @@ export function ResultScreen({ run, outcome, expedition, onNextRun }: ResultScre
         <p className="reveal__trait">{TRAITS[outcome.trait].name}のダンジョンだった</p>
         <dl className="facts">
           <div>
-            <dt>出発前の情報</dt>
-            <dd>{knowledgeText(outcome.knowledge)}</dd>
-          </div>
-          <div>
             <dt>持っていったもの</dt>
             <dd>{outcome.loadout.length ? <ItemList ids={outcome.loadout} /> : 'なし'}</dd>
           </div>
@@ -52,14 +47,9 @@ export function ResultScreen({ run, outcome, expedition, onNextRun }: ResultScre
               {expedition.goldBrought < expedition.gold && `（手に入れた${expedition.gold}Gのうち）`}
             </dd>
           </div>
-          <div>
-            <dt>次に持ち越すカード</dt>
-            <dd>{outcome.carried.length ? outcome.carried.map((c) => CARDS[c.cardId].name).join('、') : 'なし'}</dd>
-          </div>
         </dl>
       </section>
 
-      <p className="muted">持ち帰った金貨は、次の準備の所持金に足される。</p>
       <button type="button" className="primary primary--wide" onClick={onNextRun}>
         次の挑戦を始める
       </button>

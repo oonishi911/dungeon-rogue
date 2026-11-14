@@ -1,6 +1,6 @@
 // 仮想スティックの向きの決め方。画面に依存しない計算だけをここに置き、テストできるようにする。
 
-import type { Dir } from '../game/explore';
+import type { Dir } from '../game/exploreTypes';
 
 export const STICK = {
   radius: 56, // スティックの土台の半径（px）。つまみはこれより外へは出ない

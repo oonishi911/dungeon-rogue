@@ -5,16 +5,9 @@
 import { enchantMultiplier, playerHitDamage } from './combat';
 import { ITEMS } from './data';
 import { enemyDef, isAdjacent, key, type MapEnemy } from './enemies';
-import {
-  dirBetween,
-  startExplore,
-  step,
-  toResult,
-  type ExploreAction,
-  type ExploreOptions,
-  type ExploreResult,
-  type ExploreState,
-} from './explore';
+import { startExplore, step, toResult } from './explore';
+import { type ExploreAction, type ExploreOptions, type ExploreResult, type ExploreState } from './exploreTypes';
+import { dirBetween } from './exploreSight';
 import type { Pos } from './map';
 import { DIRS, findPath } from './path';
 import type { ItemId, TraitId } from './types';

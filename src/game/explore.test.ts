@@ -2,19 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { DEFAULT_DUNGEON, DEFAULT_DUNGEON_ID, DUNGEONS } from './dungeons';
 import { enemyDef } from './enemies';
 import { BOSS_ENEMY, FIELD_ENEMY } from './enemies.fixtures';
-import {
-  canSee,
-  dirBetween,
-  EXPLORE_CONFIG,
-  isBossFloor,
-  toResult,
-  startExplore,
-  step,
-  visibleTiles,
-  type ExploreAction,
-  type ExploreState,
-} from './explore';
-import { PREP_CONFIG, TREASURE_CONFIG } from './data';
+import { isBossFloor, toResult, startExplore, step } from './explore';
+import { EXPLORE_CONFIG, type ExploreAction, type ExploreState } from './exploreTypes';
+import { canSee, dirBetween, visibleTiles } from './exploreSight';
+import { LOADOUT_CONFIG, TREASURE_CONFIG } from './data';
 import { floorParams } from './floorParams';
 import type { DungeonFile } from './genMaster';
 import { tileAt, type FloorMap } from './map';
@@ -341,11 +332,11 @@ describe('宝箱と金貨', () => {
     // 道具の入った宝箱があるシードを探す
     let seed = 1;
     while (!startExplore(seed, { enemyDensity: 0 }).chests[0]?.item) seed++;
-    const full: ItemId[] = Array.from({ length: PREP_CONFIG.maxItems }, () => 'potion');
+    const full: ItemId[] = Array.from({ length: LOADOUT_CONFIG.maxItems }, () => 'potion');
     const { state, chest, dir } = besideChest(seed, full);
     const s = act(state, { kind: 'move', dir });
     expect(s.gold).toBe(chest.gold);
-    expect(s.stats.items).toHaveLength(PREP_CONFIG.maxItems);
+    expect(s.stats.items).toHaveLength(LOADOUT_CONFIG.maxItems);
     expect(s.chests.find((c) => c.pos.x === chest.pos.x && c.pos.y === chest.pos.y)).toEqual({ ...chest, gold: 0, opened: true });
   });
 

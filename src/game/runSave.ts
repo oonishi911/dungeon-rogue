@@ -14,10 +14,11 @@
 import { ENEMIES, ITEMS, SPELLS, TRAIT_IDS } from './data';
 import { DEFAULT_DUNGEON_ID, dungeonOf, hasDungeon } from './dungeons';
 import type { MapEnemy } from './enemies';
-import { mapOfFloor, type Chest, type ExploreState, type FloorMemory } from './explore';
+import { mapOfFloor } from './explore';
+import { type Chest, type ExploreState, type FloorMemory } from './exploreTypes';
 import type { FloorMap, Pos } from './map';
 import { parseSave, type SaveData } from './save';
-import type { ItemId, PrepResult, SpellId, TraitId } from './types';
+import type { Departure, ItemId, SpellId, TraitId } from './types';
 
 export const RUN_SAVE_VERSION = 1;
 const LOG_KEEP = 200;
@@ -39,7 +40,7 @@ type PackedState = Omit<ExploreState, 'map' | 'seen' | 'visited' | 'hits' | 'cas
 export interface RunSave {
   version: typeof RUN_SAVE_VERSION;
   base: SaveData; // この挑戦を始めたときの記録（何回目か、など）
-  outcome: PrepResult; // 準備の結果（特性・持ち物など）
+  outcome: Departure; // 出発したときに決まったこと（ダンジョン・特性・持ち物）
   seed: number;
   state: PackedState;
 }
@@ -47,7 +48,7 @@ export interface RunSave {
 /** 読み込んだ中断データ（探索の状態を元の形に戻したもの） */
 export interface ResumedRun {
   base: SaveData;
-  outcome: PrepResult;
+  outcome: Departure;
   seed: number;
   state: ExploreState;
 }
@@ -93,7 +94,7 @@ function packFloor(floor: FloorMemory): PackedFloor {
 }
 
 /** 探索の途中の状態を、保存する形にする */
-export function packRun(base: SaveData, outcome: PrepResult, seed: number, state: ExploreState): RunSave {
+export function packRun(base: SaveData, outcome: Departure, seed: number, state: ExploreState): RunSave {
   const { map, seen, visited, hits: _hits, cast: _cast, enemies, chests, ...rest } = state;
   return {
     version: RUN_SAVE_VERSION,
@@ -157,22 +158,13 @@ function dungeonIdOf(v: unknown): string | null {
   return typeof id === 'string' && hasDungeon(id) ? id : null;
 }
 
-function parseOutcome(v: unknown, base: SaveData): PrepResult | null {
-  if (!isObject(v) || !TRAIT_IDS.includes(v.trait as TraitId) || typeof v.hasMap !== 'boolean' || !isObject(v.knowledge)) return null;
+/** 出発したときに決まったこと。昔の中断データにあった knowledge・hasMap・carried（準備フェーズの結果）は、読み飛ばす */
+function parseOutcome(v: unknown): Departure | null {
+  if (!isObject(v) || !TRAIT_IDS.includes(v.trait as TraitId)) return null;
   const dungeon = dungeonIdOf(v.dungeon);
   if (!dungeon) return null;
   if (!Array.isArray(v.loadout) || !v.loadout.every(isItem)) return null;
-  // 持ち越すカードは、周回の記録と同じ確かめ方をする
-  const checked = parseSave(JSON.stringify({ ...base, carried: v.carried }));
-  if (!checked) return null;
-  return {
-    dungeon,
-    trait: v.trait as TraitId,
-    knowledge: v.knowledge as PrepResult['knowledge'],
-    hasMap: v.hasMap,
-    loadout: v.loadout,
-    carried: checked.carried,
-  };
+  return { dungeon, trait: v.trait as TraitId, loadout: v.loadout };
 }
 
 /** 文字列から中断データを読む。形が合わない・続きから遊べないときは null */
@@ -187,7 +179,7 @@ export function parseRun(text: string | null): ResumedRun | null {
   if (!isObject(raw) || raw.version !== RUN_SAVE_VERSION || !isCount(raw.seed)) return null;
   const base = parseSave(JSON.stringify(raw.base));
   if (!base) return null;
-  const outcome = parseOutcome(raw.outcome, base);
+  const outcome = parseOutcome(raw.outcome);
   const s = raw.state;
   if (!outcome || !isObject(s)) return null;
 

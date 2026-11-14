@@ -6,8 +6,9 @@
 import { describe, expect, it } from 'vitest';
 import { autoPlay, clearRate } from './autoplay';
 import { BALANCE_TIMEOUT, PREPS, SUPPLIES, TRIALS, WRONG_LIMIT } from './balance.fixtures';
-import { ITEMS, PREP_CONFIG } from './data';
-import { dirBetween, isBossFloor, startExplore, step, type ExploreState } from './explore';
+import { isBossFloor, startExplore, step } from './explore';
+import { type ExploreState } from './exploreTypes';
+import { dirBetween } from './exploreSight';
 import type { TraitId } from './types';
 
 describe('自動プレイ', () => {
@@ -37,15 +38,6 @@ describe('バランス：準備で勝負が決まる', () => {
       expect(clearRate([], trait, TRIALS)).toBeLessThan(0.2);
     });
   }
-});
-
-describe('バランス：準備フェーズのお金', () => {
-  it('正しい準備は、初期の所持金で実際に買える（噂で特性を知り、鍛冶屋と道具屋に行く3日間）', () => {
-    for (const prep of Object.values(PREPS)) {
-      const cost = [...prep.right, ...SUPPLIES].reduce((sum, id) => sum + ITEMS[id].price, 0);
-      expect(cost).toBeLessThanOrEqual(PREP_CONFIG.startGold);
-    }
-  });
 });
 
 describe('バランス：地図', () => {

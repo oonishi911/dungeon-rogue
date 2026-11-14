@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { enemyDef, type MapEnemy } from './enemies';
 import { FIELD_ENEMY } from './enemies.fixtures';
-import { startExplore, type ExploreState } from './explore';
+import { startExplore } from './explore';
+import { type ExploreState } from './exploreTypes';
 import type { FloorMap, Pos } from './map';
 import { findPath, walkPath, walkToward } from './path';
 

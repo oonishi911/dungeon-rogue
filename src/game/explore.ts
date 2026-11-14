@@ -2,11 +2,28 @@
 // 1ターン = プレイヤーの行動 → 満腹度の消費 → 敵の手番。
 // ほかのロジックと同じく、状態を受け取り新しい状態を返す純粋関数でできている。
 // 階の数・広さ・満腹度・小部屋・敵の置き方と出る敵・レベルの上がり方・魔法は、遊んでいるダンジョンの設定（state.dungeon。dungeons.ts）で決まる。
+//
+// 型と数値は exploreTypes.ts、視界の計算は exploreSight.ts、魔法の計算（魔力・ダメージ・相性）は magic.ts にある。
 
 import { buildPlayer, enemyHitDamage, playerHitDamage } from './combat';
-import { COMBAT_CONFIG, ENCHANT_VS_ELEMENT, enemyReward, expToNext, ITEMS, PREP_CONFIG, REWARD_CONFIG, SPELLS, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
+import { COMBAT_CONFIG, enemyReward, expToNext, ITEMS, LOADOUT_CONFIG, REWARD_CONFIG, SPELLS, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
 import { DEFAULT_DUNGEON_ID, dungeonOf } from './dungeons';
-import type { DungeonFile, GenSettings, MagicSettings, RoomSettings } from './genMaster';
+import {
+  DIR_DELTA,
+  EXPLORE_CONFIG,
+  type CastEvent,
+  type Chest,
+  type Dir,
+  type ExploreAction,
+  type ExploreOptions,
+  type ExploreResult,
+  type ExploreState,
+  type FloorMemory,
+  type HitEvent,
+} from './exploreTypes';
+import { canSee, samePos, visibleTiles } from './exploreSight';
+import type { DungeonFile, RoomSettings } from './genMaster';
+import { spellAffinity, spellDamage, startMagic } from './magic';
 import {
   ENEMY_CONFIG,
   enemyDef,
@@ -22,118 +39,7 @@ import {
 import { generateBossFloor, generateFloor, tileAt, type FloorMap, type Pos } from './map';
 import { floorParams, regenIntervalFor } from './floorParams';
 import { nextInt, nextRandom } from './rng';
-import type { EnemyDef, EnemyId, ItemId, PlayerStats, Result, SpellId, TraitId } from './types';
-
-// 数値はすべて仮。バランス調整で見直す
-export const EXPLORE_CONFIG = {
-  sightRadius: 6, // 視界の半径（マス）
-  satietyPerAction: 1,
-  starveDamage: 1, // 満腹度0のとき、1行動ごとに減るHP
-} as const;
-
-export type Dir = 'up' | 'down' | 'left' | 'right';
-
-export const DIR_DELTA: Record<Dir, Pos> = {
-  up: { x: 0, y: -1 },
-  down: { x: 0, y: 1 },
-  left: { x: -1, y: 0 },
-  right: { x: 1, y: 0 },
-};
-
-/** 移動先に敵がいれば、移動ではなく攻撃になる（体当たり方式）。道具を使うのも1行動 */
-export type ExploreAction =
-  | { kind: 'move'; dir: Dir }
-  | { kind: 'wait' }
-  | { kind: 'descend' }
-  | { kind: 'ascend' } // 上り階段（2階目からの入口）から、1つ上の階へ戻る
-  | { kind: 'use_item'; item: ItemId }
-  | { kind: 'cast'; spell: SpellId; dir?: Dir } // 呪文を唱える。向きを選ぶ呪文（なぎ払い・矢）は dir が要る
-  | { kind: 'retire' }; // リタイア：探索をやめてダンジョンを出る（踏破しなかった扱い。金貨は力尽きたときと同じだけ持ち帰る）
-
-export type ExploreOutcome = 'ongoing' | 'cleared' | 'defeated' | 'retired';
-
-/** 宝箱。持ち物がいっぱいで道具を取れなかったときは、道具だけ残る */
-export interface Chest {
-  pos: Pos;
-  gold: number;
-  item: ItemId | null;
-  /** 開けたか。開けた宝箱は、空になってもその場に残す（開いた形で描く） */
-  opened: boolean;
-}
-
-/** この行動で入ったダメージ。画面に数字を出すために使う（ルールには使わない） */
-export interface HitEvent {
-  kind: 'dealt' | 'taken'; // dealt：プレイヤーが敵に与えた / taken：プレイヤーが受けた
-  at: Pos; // ダメージを受けた側がいたマス
-  amount: number;
-  by?: EnemyId; // taken のとき、攻撃してきた敵（毒など、敵の攻撃でないときはない）
-}
-
-/** 属性の矢と、当たった敵の相性。weak：弱点（ダメージが増える）、resist：効きにくい（減る） */
-export type Affinity = 'weak' | 'normal' | 'resist';
-
-/** この行動で唱えた呪文。画面の演出と効果音のために使う（ルールには使わない） */
-export interface CastEvent {
-  spell: SpellId;
-  dir: Dir | null;
-  path: Pos[]; // 矢・なぎ払いが通ったマス（演出で使う）
-  moves: { from: Pos; to: Pos }[]; // 衝撃波で吹き飛んだ敵の、動く前と後
-  affinity: Affinity | null; // 属性の矢が当たった敵との相性（演出の強さを変える）。矢でないとき・何にも当たらなかったときは null
-}
-
-/** 一度離れた階の様子。戻ってきたら、倒した敵・開けた宝箱・晴れた霧はそのまま */
-export interface FloorMemory {
-  map: FloorMap;
-  enemies: MapEnemy[];
-  chests: Chest[];
-  seen: boolean[];
-}
-
-export interface ExploreState {
-  seed: number;
-  dungeon: string; // 遊んでいるダンジョンの ID（設定は dungeonOf で引く）
-  trait: TraitId;
-  floor: number; // 0始まり。floors と同じならボス階
-  floors: number; // 通常の階の数（ダンジョンの設定で決まる）。その下にボス階がある
-  mapSize: number;
-  enemyDensity: number;
-  map: FloorMap;
-  player: Pos;
-  stats: PlayerStats; // HP・攻撃力・装備
-  satiety: number;
-  maxSatiety: number;
-  spells: SpellId[]; // 持ってきた呪文書の呪文
-  mp: number; // 魔力（呪文を唱えると減り、歩くと少しずつ戻る）
-  maxMp: number;
-  regen: { amount: number; turns: number } | null; // 再生の呪文：あと何ターン、1ターンにどれだけ回復するか
-  cast: CastEvent | null; // この行動で唱えた呪文（画面用）
-  enemies: MapEnemy[];
-  chests: Chest[]; // この階の宝箱（開けて空になったものも残す）
-  gold: number; // この挑戦で手に入れた金貨
-  hasMap: boolean; // 地図があれば、各階の入口から階段までの道筋が最初から見える
-  nextUid: number;
-  defeated: number; // 倒した敵の数
-  level: number; // この挑戦のあいだのレベル（1から。敵を倒して経験値がたまると上がる）
-  exp: number; // 今のレベルになってからためた経験値（expToNext(level, growth) で次のレベル）
-  seen: boolean[]; // この階で一度でも見えたマス（霧が晴れた場所）
-  turn: number; // 行動した回数
-  rngState: number;
-  outcome: ExploreOutcome;
-  log: string[];
-  visited: Record<number, FloorMemory>; // 一度離れた階（階の番号ごと）。今いる階は入らない
-  hits: HitEvent[]; // 直前の行動で入ったダメージ（行動のたびに空からやり直す）
-}
-
-export interface ExploreOptions {
-  dungeon?: string; // 遊ぶダンジョンの ID。省略時は標準のダンジョン
-  floors?: number;
-  mapSize?: number; // 広さ・満腹度・敵の密度は、ダンジョンの設定で決まる。個別に指定するとそちらが優先される
-  maxSatiety?: number;
-  trait?: TraitId; // 省略時はシードから決める
-  loadout?: readonly ItemId[];
-  enemyDensity?: number;
-  hasMap?: boolean;
-}
+import type { EnemyId, ItemId, Result, SpellId, TraitId } from './types';
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value });
 const err = <T>(error: string): Result<T> => ({ ok: false, error });
@@ -385,7 +291,7 @@ function openChest(state: ExploreState): ExploreState {
     log.push(`宝箱から金貨${chest.gold}Gを手に入れた`);
   }
   if (item) {
-    if (stats.items.length < PREP_CONFIG.maxItems) {
+    if (stats.items.length < LOADOUT_CONFIG.maxItems) {
       stats = { ...stats, items: [...stats.items, item] };
       log.push(`宝箱から${ITEMS[item].name}を手に入れた`);
       item = null;
@@ -450,46 +356,6 @@ function useItem(state: ExploreState, itemId: ItemId): Result<ExploreState> {
 }
 
 // ===== 魔法 =====
-
-/** 持ってきた呪文書から、唱えられる呪文と魔力を決める。呪文書がなければ魔力も0（魔力の棒も出さない） */
-function startMagic(loadout: readonly ItemId[], M: MagicSettings): { spells: SpellId[]; mp: number; maxMp: number } {
-  const spells = loadout.flatMap((id) => {
-    const effect = ITEMS[id].effect;
-    return effect.kind === 'spellbook' ? [effect.spell] : [];
-  });
-  if (spells.length === 0) return { spells: [], mp: 0, maxMp: 0 };
-  const staff = loadout.some(isStaff);
-  const maxMp = M.maxMp + (staff ? M.staffMp : 0);
-  return { spells: [...new Set(spells)], mp: maxMp, maxMp };
-}
-
-/** 魔法の強さ（M はダンジョンの設定の魔法）。杖を持っていると強くなる */
-export function magicPower(stats: PlayerStats, M: MagicSettings): number {
-  return M.power * (stats.weapon && isStaff(stats.weapon) ? M.staffPower : 1);
-}
-
-function isStaff(id: ItemId): boolean {
-  const effect = ITEMS[id].effect;
-  return effect.kind === 'weapon' && effect.weapon === 'staff';
-}
-
-/** 呪文のダメージ（settings はダンジョンの設定の魔法と呪文。敵の防御は無視する。属性の矢は、属性の相性で増減する） */
-export function spellDamage(stats: PlayerStats, spell: SpellId, enemy: EnemyDef, settings: Pick<GenSettings, 'magic' | 'spells'>): number {
-  const rate = settings.spells[spell].power ?? 1;
-  return Math.max(1, Math.round(magicPower(stats, settings.magic) * rate * spellElementRate(spell, enemy)));
-}
-
-/** 属性の矢の、敵への相性の倍率（矢でなければ1） */
-function spellElementRate(spell: SpellId, enemy: EnemyDef): number {
-  const effect = SPELLS[spell].effect;
-  return effect.kind === 'bolt' ? (ENCHANT_VS_ELEMENT[effect.element][enemy.element] ?? 1) : 1;
-}
-
-/** 属性の矢と敵の相性（演出用） */
-export function spellAffinity(spell: SpellId, enemy: EnemyDef): Affinity {
-  const rate = spellElementRate(spell, enemy);
-  return rate > 1 ? 'weak' : rate < 1 ? 'resist' : 'normal';
-}
 
 /** 1行動ごとの、魔力の回復と再生の呪文の回復 */
 function recoverMagic(state: ExploreState, turn: number): ExploreState {
@@ -647,7 +513,7 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
     s = pick.state;
     if (enemy.elite || roll.value * 100 < reward.drop) item = items[pick.value]!;
   }
-  if (item && !enemy.elite && stats.items.length < PREP_CONFIG.maxItems) {
+  if (item && !enemy.elite && stats.items.length < LOADOUT_CONFIG.maxItems) {
     stats = { ...stats, items: [...stats.items, item] };
     log.push(`${ITEMS[item].name}を手に入れた`);
     item = null;
@@ -855,15 +721,6 @@ function applyPoison(state: ExploreState): ExploreState {
 
 // ===== 結果 =====
 
-export interface ExploreResult {
-  outcome: 'cleared' | 'defeated' | 'retired';
-  floorReached: number; // 1始まり
-  bossFloor: boolean; // ボス階までたどり着いたか
-  defeated: number;
-  gold: number; // 手に入れた金貨
-  goldBrought: number; // 持ち帰った金貨。踏破すれば全額、力尽きたときとリタイアしたときは一部
-}
-
 export function toResult(state: ExploreState): ExploreResult {
   const cleared = state.outcome === 'cleared';
   return {
@@ -885,64 +742,3 @@ function reveal(state: ExploreState): ExploreState {
   return { ...state, seen };
 }
 
-/**
- * 主人公の視界：from から半径 radius 以内のマスの番号。壁にさえぎられず、壁の向こうや曲がり角の先も見える。
- * 敵の視界は canSee で、こちらは今までどおり壁にさえぎられる。
- */
-export function visibleTiles(map: FloorMap, from: Pos, radius: number): Set<number> {
-  const result = new Set<number>();
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      const x = from.x + dx;
-      const y = from.y + dy;
-      if (x < 0 || y < 0 || x >= map.width || y >= map.height) continue;
-      // 主人公の視界は壁にさえぎられない（壁の向こう・曲がり角の先も、半径以内ならすべて見える）
-      if (dx * dx + dy * dy <= radius * radius) result.add(y * map.width + x);
-    }
-  }
-  return result;
-}
-
-/** from から to が見えるか（半径以内で、間に壁がない） */
-export function canSee(map: FloorMap, from: Pos, to: Pos, radius: number): boolean {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  return dx * dx + dy * dy <= radius * radius && lineIsClear(map, from, to);
-}
-
-function lineIsClear(map: FloorMap, from: Pos, to: Pos): boolean {
-  const dx = Math.abs(to.x - from.x);
-  const dy = -Math.abs(to.y - from.y);
-  const sx = from.x < to.x ? 1 : -1;
-  const sy = from.y < to.y ? 1 : -1;
-  let error = dx + dy;
-  let x = from.x;
-  let y = from.y;
-  while (x !== to.x || y !== to.y) {
-    // 始点は自分の位置なので調べない。終点は壁でも見える
-    if ((x !== from.x || y !== from.y) && tileAt(map, { x, y }) === 'wall') return false;
-    const e2 = 2 * error;
-    if (e2 >= dy) {
-      error += dy;
-      x += sx;
-    }
-    if (e2 <= dx) {
-      error += dx;
-      y += sy;
-    }
-  }
-  return true;
-}
-
-export function samePos(a: Pos, b: Pos): boolean {
-  return a.x === b.x && a.y === b.y;
-}
-
-/** 隣り合う2マスの向き */
-export function dirBetween(from: Pos, to: Pos): Dir {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const dir = (Object.keys(DIR_DELTA) as Dir[]).find((d) => DIR_DELTA[d].x === dx && DIR_DELTA[d].y === dy);
-  if (!dir) throw new Error('隣り合っていないマスです');
-  return dir;
-}

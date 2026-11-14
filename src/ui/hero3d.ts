@@ -7,7 +7,7 @@
 // 攻撃のときは、左腕を肩から回して武器を振る（武器ごとに振り方が違う。SWINGS）。
 
 import * as THREE from 'three';
-import type { Dir } from '../game/explore';
+import type { Dir } from '../game/exploreTypes';
 import type { WeaponType } from '../game/types';
 import { CLOAKS, PALETTE } from '../sprites/data';
 import { Weapon3D } from './weapon3d';

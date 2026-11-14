@@ -1,5 +1,5 @@
 // 戦闘の計算：持ち物からプレイヤーの能力を作り、攻撃1回のダメージを求める。
-// 準備フェーズで揃えた装備（武器と体質の相性、防具と属性の相性）がダメージ計算に直接効く。
+// 持っていく装備（武器と体質の相性、防具と属性の相性）がダメージ計算に直接効く。
 // 戦闘の進行（誰がいつ攻撃するか）は explore.ts にある。
 
 import { COMBAT_CONFIG as C, ELEMENT_COMPONENTS, ENCHANT_VS_ELEMENT, ITEMS, WEAPON_VS_BODY } from './data';

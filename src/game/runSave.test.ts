@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { autoAction } from './autoplay';
 import { DEFAULT_DUNGEON_ID } from './dungeons';
-import { startExplore, step, type ExploreState } from './explore';
+import { startExplore, step } from './explore';
+import { type ExploreState } from './exploreTypes';
 import { packRun, packSeen, parseRun, unpackSeen, type RunSave } from './runSave';
 import { newSave } from './save';
-import type { PrepResult } from './types';
+import type { Departure } from './types';
 
-const outcome: PrepResult = { dungeon: DEFAULT_DUNGEON_ID, trait: 'fire', knowledge: { status: 'unknown' }, hasMap: false, loadout: ['potion'], carried: [] };
+const outcome: Departure = { dungeon: DEFAULT_DUNGEON_ID, trait: 'fire', loadout: ['potion'] };
 const SEED = 7;
 
 /** 自動プレイで turns 手まで進める（探索が終わったら、その手前で止める） */
@@ -29,7 +30,7 @@ function playToSecondFloor(state: ExploreState): ExploreState {
   return state;
 }
 
-const start = () => startExplore(SEED, { dungeon: outcome.dungeon, trait: outcome.trait, loadout: outcome.loadout, hasMap: outcome.hasMap });
+const start = () => startExplore(SEED, { dungeon: outcome.dungeon, trait: outcome.trait, loadout: outcome.loadout });
 const saved = (state: ExploreState) => JSON.stringify(packRun(newSave(), outcome, SEED, state));
 /** 保存した文字列の中身を書き換える */
 const edited = (state: ExploreState, edit: (run: RunSave) => void) => {
@@ -128,7 +129,7 @@ describe('packRun / parseRun', () => {
   it('ダンジョンを選べるようになる前の中断データ（ダンジョンの ID がない）は、標準のダンジョンとして読む', () => {
     const state = play(start(), 40);
     const old = edited(state, (r) => {
-      delete (r.outcome as Partial<PrepResult>).dungeon;
+      delete (r.outcome as Partial<Departure>).dungeon;
       delete (r.state as { dungeon?: string }).dungeon;
     });
     const run = parseRun(old);
