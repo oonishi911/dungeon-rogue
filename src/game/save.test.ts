@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { newSave, parseSave, type SaveData } from './save';
 
-const valid: SaveData = {
-  version: 1,
-  run: 4,
-  carried: [{ uid: 's1-c0', cardId: 'map' }],
-  bonusGold: 85,
-};
+const valid: SaveData = { version: 1, run: 4 };
 
 describe('parseSave', () => {
   it('保存したものをそのまま読める', () => {
@@ -24,14 +19,13 @@ describe('parseSave', () => {
     expect(parseSave('42')).toBeNull();
     expect(parseSave(JSON.stringify({ ...valid, version: 0 }))).toBeNull();
     expect(parseSave(JSON.stringify({ ...valid, run: 0 }))).toBeNull();
-    expect(parseSave(JSON.stringify({ ...valid, bonusGold: 1.5 }))).toBeNull();
-    expect(parseSave(JSON.stringify({ ...valid, carried: [{ uid: 'x', cardId: 'no_such_card' }] }))).toBeNull();
+    expect(parseSave(JSON.stringify({ ...valid, run: 1.5 }))).toBeNull();
   });
 
-  it('昔の記録にあったランクと経験は、読み飛ばす（読んだ結果には残らない）', () => {
-    const old = { ...valid, rank: 3, exp: 1 };
+  it('昔の記録にあったランク・経験・持ち越したカード・持ち帰った金貨は、読み飛ばす（読んだ結果には残らない）', () => {
+    const old = { ...valid, rank: 3, exp: 1, carried: [{ uid: 's1-c0', cardId: 'map' }], bonusGold: 85 };
     expect(parseSave(JSON.stringify(old))).toEqual(valid);
     // 壊れた値が残っていても、使わないので気にしない
-    expect(parseSave(JSON.stringify({ ...valid, rank: 'x', exp: -1 }))).toEqual(valid);
+    expect(parseSave(JSON.stringify({ ...valid, rank: 'x', exp: -1, carried: 'x', bonusGold: -1 }))).toEqual(valid);
   });
 });

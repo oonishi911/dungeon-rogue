@@ -1,5 +1,5 @@
 // ダンジョンの探索画面。マップを歩き、敵と戦い、道具を使う。
-// ゲーム本体では準備フェーズの持ち物で始まり、開発用には ?view=explore で単独でも開ける。
+// ゲーム本体では出発で決まった持ち物（depart.ts）で始まり、開発用には ?view=explore で単独でも開ける。
 //
 // 操作はすべて「意図」として記録し、毎フレームの処理で、前の1歩の動きが終わっていれば1つ実行する。
 // キーを押し続けたときの歩く速さが、OS のキーリピートの設定に左右されず一定になる。
@@ -100,7 +100,7 @@ function visibleEnemyIds(state: ExploreState): Set<number> {
 const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fire_whetstone', 'ice_whetstone', 'book_shockwave', 'book_fire_bolt', 'book_heal'];
 
 /**
- * 開発用：準備フェーズを通さずに探索だけを試す。?seed=・?trait=・?dungeon= で条件を指定できる。
+ * 開発用：ダンジョンを選ばずに探索だけを試す。?seed=・?trait=・?dungeon= で条件を指定できる。
  * ?best=1 なら、そのダンジョンの特性に合わせて、いちばん強い装備・道具・呪文書で始める（bestLoadout.ts）
  */
 export function ExploreDevScreen() {

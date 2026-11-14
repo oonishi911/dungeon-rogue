@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { enemyHitDamage, playerHitDamage } from './combat';
-import { enemyBase, enemyReward, expToNext, PREP_CONFIG, REWARD_CONFIG, TREASURE_CONFIG } from './data';
+import { enemyBase, enemyReward, expToNext, LOADOUT_CONFIG, REWARD_CONFIG, TREASURE_CONFIG } from './data';
 import { DEFAULT_DUNGEON } from './dungeons';
 import { BOSS_ENEMY, FIELD_ENEMY } from './enemies.fixtures';
 import { ENEMY_CONFIG, enemyDef, key, spawnBoss, type MapEnemy } from './enemies';
@@ -248,7 +248,7 @@ describe('報酬とボス', () => {
       const s0 = { ...arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { hp: 1 })]), rngState: seed };
       const s = act(s0, { kind: 'move', dir: 'right' });
       if (!dropped && s.stats.items.length > s0.stats.items.length) dropped = s;
-      const packed = { ...s0, stats: { ...s0.stats, items: new Array(PREP_CONFIG.maxItems).fill('potion') } };
+      const packed = { ...s0, stats: { ...s0.stats, items: new Array(LOADOUT_CONFIG.maxItems).fill('potion') } };
       const f = act(packed, { kind: 'move', dir: 'right' });
       if (!full && f.chests.some((c) => c.pos.x === 2 && c.pos.y === 2)) full = f;
     }

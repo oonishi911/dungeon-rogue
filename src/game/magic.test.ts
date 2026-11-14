@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { PREP_CONFIG } from './data';
 import { FIELD_ENEMY } from './enemies.fixtures';
 import { enemyDef, type MapEnemy } from './enemies';
 import { magicPower, spellAffinity, spellDamage, startExplore, step, type ExploreAction, type ExploreState } from './explore';
 import { DEFAULT_DUNGEON } from './dungeons';
 import type { FloorMap, Pos } from './map';
-import { buyItem, createPrep } from './prep';
-import type { ItemId, PrepState, Result } from './types';
+import type { ItemId, Result } from './types';
 
 function unwrap<T>(result: Result<T>): T {
   if (!result.ok) throw new Error(result.error);
@@ -75,15 +73,6 @@ describe('魔力と呪文書', () => {
     const s0 = { ...arena({ x: 1, y: 1 }, []), mp: 0 };
     const waits = Array.from({ length: GEN.magic.regenEvery * 2 }, () => ({ kind: 'wait' }) as const);
     expect(act(s0, ...waits).mp).toBe(2);
-  });
-
-  it('準備の魔法屋で呪文書を買える。同じ呪文書は1冊、全部で決まった冊数まで', () => {
-    let s: PrepState = { ...createPrep(1), gold: 999, openShop: 'magic' };
-    s = unwrap(buyItem(s, 'book_heal'));
-    expect(buyItem(s, 'book_heal').ok).toBe(false);
-    const more: ItemId[] = ['book_sweep', 'book_fire_bolt', 'book_ice_bolt', 'book_regen'];
-    for (const id of more.slice(0, PREP_CONFIG.maxSpellbooks - 1)) s = unwrap(buyItem(s, id));
-    expect(buyItem(s, more[PREP_CONFIG.maxSpellbooks - 1]!).ok).toBe(false);
   });
 });
 

@@ -27,5 +27,5 @@ export const PREPS: Record<TraitId, { right: ItemId[]; wrong: ItemId[] }> = {
  */
 //
 // 無属性は、通常の敵の強さを半分にしたことで、外れた準備（剣＋光の衣）でもクリア率が約80%になった。
-// 準備フェーズを飛ばしているあいだの一時的な値として上限を緩めている。準備フェーズを戻すときに、敵の強さとあわせて見直す
+// そのため上限を緩めている。敵の強さを見直すときに、あわせて見直す
 export const WRONG_LIMIT: Record<TraitId, number> = { fire: 0.2, ice: 0.2, neutral: 0.9, light: 0.2, dark: 0.2 };

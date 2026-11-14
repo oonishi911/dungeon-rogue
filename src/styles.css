@@ -93,160 +93,14 @@ button {
   letter-spacing: 0.02em;
 }
 
-.lead {
-  margin: 0.75rem 0 0;
-  max-width: 34em;
-  color: var(--bone-dim);
-}
-
-.status {
-  display: flex;
-  gap: 2rem;
-  margin: 0;
-}
-
-.status dt,
 .facts dt {
   font-size: var(--step--1);
   color: var(--bone-dim);
 }
 
-.status dd,
 .facts dd {
   margin: 0;
   font-weight: 700;
-}
-
-.status div:first-child dd {
-  font-family: var(--serif);
-  font-size: var(--step-2);
-  line-height: 1.2;
-}
-
-/* ===== 準備の日程（この画面の主役） ===== */
-.calendar {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(var(--days, 3), minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.day {
-  position: relative;
-  min-height: 9.5rem;
-  padding: 0.75rem;
-  border: 1px dashed var(--pine-line);
-  border-radius: 6px;
-  background: var(--pine-deep);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.day__label {
-  font-family: var(--serif);
-  font-weight: 600;
-  font-size: var(--step-1);
-}
-
-.day--today {
-  border: 2px solid var(--bone);
-}
-
-.day--past {
-  opacity: 0.72;
-}
-
-.day--future .day__label {
-  color: var(--bone-dim);
-}
-
-.day__empty {
-  margin: auto 0;
-  color: var(--bone-dim);
-  font-size: var(--step--1);
-}
-
-/* ===== カード ===== */
-.card {
-  --tone: var(--info);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  text-align: left;
-  background: var(--bone);
-  color: var(--ink);
-  border: none;
-  border-top: 6px solid var(--tone);
-  border-radius: 4px;
-  padding: 0.75rem 0.875rem 0.875rem;
-}
-
-.card--info {
-  --tone: var(--info);
-}
-.card--procure {
-  --tone: var(--procure);
-}
-.card--funds {
-  --tone: var(--funds);
-}
-
-.card--hand {
-  width: 11rem;
-  min-height: 9rem;
-}
-
-.card--slot {
-  width: 100%;
-}
-
-button.card {
-  cursor: pointer;
-  transition: transform 120ms ease;
-}
-
-button.card:hover:not(:disabled) {
-  transform: translateY(-4px);
-}
-
-button.card:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.card.is-selected {
-  outline: 3px solid var(--bone);
-  outline-offset: 3px;
-  transform: translateY(-4px);
-}
-
-.card__kind {
-  font-size: var(--step--1);
-  font-weight: 700;
-  color: var(--tone);
-}
-
-.card__name {
-  font-family: var(--serif);
-  font-weight: 900;
-  font-size: var(--step-1);
-  line-height: 1.35;
-}
-
-.card__desc {
-  font-size: var(--step--1);
-  line-height: 1.6;
-}
-
-/* ===== 店と記録 ===== */
-.middle {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: 1.75rem;
 }
 
 .panel__title {
@@ -260,94 +114,6 @@ button.card:disabled {
   margin: 0;
   color: var(--bone-dim);
   font-size: var(--step--1);
-}
-
-.shop__list,
-.log__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.buy {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  column-gap: 1rem;
-  text-align: left;
-  padding: 0.625rem 0;
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--pine-line);
-  cursor: pointer;
-}
-
-.buy:hover:not(:disabled) .buy__name {
-  text-decoration: underline;
-}
-
-.buy:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.buy__name {
-  font-weight: 700;
-}
-
-.buy__desc {
-  grid-column: 1;
-  font-size: var(--step--1);
-  color: var(--bone-dim);
-}
-
-.buy__price {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: center;
-  font-family: var(--serif);
-  font-size: var(--step-1);
-}
-
-.shop__bag {
-  margin: 0.75rem 0 0;
-  font-size: var(--step--1);
-}
-
-.log__list {
-  max-height: 11rem;
-  overflow-y: auto;
-  font-size: var(--step--1);
-}
-
-.log__list li {
-  padding: 0.25rem 0;
-  border-bottom: 1px solid var(--pine-line);
-}
-
-.log__list li:first-child {
-  color: var(--bone);
-  font-weight: 700;
-}
-
-/* ===== 手札 ===== */
-.hand__head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.25rem;
-}
-
-.hand__head .panel__title {
-  margin: 0;
-}
-
-.hand__cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.875rem;
-  padding: 0.5rem 0 0.75rem;
 }
 
 .primary {
@@ -462,41 +228,15 @@ button.card:disabled {
 }
 
 @media (max-width: 40rem) {
-  .middle {
-    grid-template-columns: 1fr;
-  }
   .top__title {
     font-size: var(--step-2);
   }
-  .card--hand {
-    width: calc(50% - 0.5rem);
-  }
-  .calendar {
-    gap: 0.375rem;
-  }
-  .day {
-    min-height: 7rem;
-    padding: 0.5rem;
-  }
-  .day__label {
-    font-size: var(--step-0);
-  }
-  .card--slot {
-    padding: 0.5rem;
-  }
-  .card--slot .card__name {
-    font-size: var(--step--1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  button.card {
-    transition: none;
-  }
-  button.card:hover:not(:disabled),
-  .card.is-selected {
-    transform: none;
-  }
+  
+  
+  
+  
+  
+  
 }
 
 /* ===== マップ生成の確認（開発用） ===== */
@@ -934,7 +674,7 @@ button.card:disabled {
   }
 }
 
-/* 呪文のボタン：使う魔力を右に小さく出す。向きを選んでいる呪文は枠を光らせる */
+/* 呪文のボタン：使う魔力を右に小さく出す */
 .explore__cost {
   margin-left: auto;
   padding-left: 0.5rem;
@@ -1337,21 +1077,6 @@ button.card:disabled {
   font-size: 0.75rem;
 }
 
-.prep-footer {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.reset {
-  padding: 0.25rem 0;
-  background: none;
-  border: none;
-  color: var(--bone-dim);
-  font-size: var(--step--1);
-  text-decoration: underline;
-  cursor: pointer;
-}
-
 /* ===== 開発用：管理画面（?view=admin。敵のマスターデータとダンジョンの設定） ===== */
 .admin {
   max-width: 64rem;
@@ -1582,7 +1307,6 @@ button.card:disabled {
 .admin__add + .admin__note {
   margin-top: 0.75rem;
 }
-
 
 /* 入力欄と、その下のエラー。エラーは入力した直後に出し、原因と正しい値の範囲を書く */
 .admin__field {

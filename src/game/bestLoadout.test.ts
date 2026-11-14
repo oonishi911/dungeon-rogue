@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { bestLoadout, favorableSpellbooks } from './bestLoadout';
 import { buildPlayer, enemyHitDamage, itemSlot, playerHitDamage } from './combat';
-import { FAVORABLE_GEAR, ITEMS, PREP_CONFIG, START_SPELLBOOKS, TRAIT_IDS } from './data';
+import { FAVORABLE_GEAR, ITEMS, LOADOUT_CONFIG, START_SPELLBOOKS, TRAIT_IDS } from './data';
 import { DEFAULT_DUNGEON } from './dungeons';
 import { enemyDef } from './enemies';
 import type { ItemId, TraitId } from './types';
@@ -24,9 +24,9 @@ describe('開発用：いちばん強い装備', () => {
     const loadout = bestLoadout(trait, DEFAULT_DUNGEON);
     expect(slotOf(loadout, 'weapon')).toHaveLength(1);
     expect(slotOf(loadout, 'armor')).toHaveLength(1);
-    expect(slotOf(loadout, 'consumable')).toHaveLength(PREP_CONFIG.maxItems);
+    expect(slotOf(loadout, 'consumable')).toHaveLength(LOADOUT_CONFIG.maxItems);
     const books = slotOf(loadout, 'spellbook');
-    expect(books).toHaveLength(PREP_CONFIG.maxSpellbooks);
+    expect(books).toHaveLength(LOADOUT_CONFIG.maxSpellbooks);
     expect(new Set(books).size).toBe(books.length);
   });
 
@@ -72,6 +72,6 @@ describe('出発時に持たせる、有利な呪文書', () => {
   });
 
   it('持っていける呪文書の数より多くは選ばない', () => {
-    expect(books('fire', 10)).toHaveLength(PREP_CONFIG.maxSpellbooks);
+    expect(books('fire', 10)).toHaveLength(LOADOUT_CONFIG.maxSpellbooks);
   });
 });
