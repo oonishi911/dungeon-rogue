@@ -1,11 +1,11 @@
 // ランク（強化）。踏破した経験と金貨を払って上げる。
 // ランクが上がると、ダンジョンが広くなり、報酬も良くなる。
-// ランクごとの階の広さ・満腹度と、階の数は、ダンジョンの設定（dungeonGen.json の floors。管理画面 ?view=admin の「階の数・広さ・満腹度」タブ）で決める。
+// ランクごとの階の広さ・満腹度と、階の数は、ダンジョンごとの設定（src/game/dungeons/*.json の floors。管理画面 ?view=admin の「階の数・広さ・満腹度」タブ）で決める。
 // 満腹度は、広さや階の数からは計算しない（設定した値をそのまま使う）。敵の密度と回復の速さは、広さから決まる。数値は自動プレイで測って決めた（docs/dungeon-design.md の「ランク」を参照）。
 
 import { ENEMY_CONFIG } from './enemies';
 import { TREASURE_CONFIG } from './data';
-import { GEN_SETTINGS, RANK_COUNT, type FloorSettings } from './genMaster';
+import { RANK_COUNT, type FloorSettings } from './genMaster';
 
 export const RANK_CONFIG = {
   maxRank: RANK_COUNT, // 最高のランク
@@ -27,12 +27,12 @@ export interface RankParams {
 }
 
 /**
- * ランクごとの探索の条件。floors は階の数とランクごとの広さ・満腹度（省略すると、ゲームの設定。管理画面の見本は、公開前の値を渡す）。
+ * ランクごとの探索の条件。floors は、遊ぶダンジョンの設定の、階の数とランクごとの広さ・満腹度（管理画面の見本は、公開前の値を渡す）。
  * - 満腹度：設定（floors.satiety）のランクの値そのまま。広さや階の数を変えても、自動では変わらない
  * - 敵の数：密度が一定だと面積に比例して増えすぎるので、広さに比例する程度に抑える
  * - HPの回復：狭いマップは探索が短く回復する時間が足りないので、広さに合わせて速くする（regenIntervalFor）
  */
-export function rankParams(rank: number, floors: FloorSettings = GEN_SETTINGS.floors): RankParams {
+export function rankParams(rank: number, floors: FloorSettings): RankParams {
   const r = Math.min(RANK_CONFIG.maxRank, Math.max(1, Math.floor(rank)));
   const mapSize = floors.sizes[r - 1]!;
   const ratio = mapSize / RANK_CONFIG.referenceSize;

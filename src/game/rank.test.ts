@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ENEMY_CONFIG } from './enemies';
-import { GEN_SETTINGS, type FloorSettings } from './genMaster';
+import type { FloorSettings } from './genMaster';
 import { RANK_CONFIG, rankParams, upgradeCost } from './rank';
 
 // 関数を確かめるための、決まった中身の設定（管理画面で階の数・広さ・満腹度を変えても、こちらは変わらない）
@@ -64,10 +64,9 @@ describe('rankParams', () => {
     }
   });
 
-  it('範囲外のランクは丸める。設定を渡さなければ、ゲームの設定（dungeonGen.json）を使う', () => {
+  it('範囲外のランクは丸める', () => {
     expect(rankParams(99, FLOORS)).toEqual(rankParams(RANK_CONFIG.maxRank, FLOORS));
     expect(rankParams(0, FLOORS)).toEqual(rankParams(1, FLOORS));
-    expect(rankParams(2)).toEqual(rankParams(2, GEN_SETTINGS.floors));
   });
 
   it('強化の費用はランクに比例する', () => {

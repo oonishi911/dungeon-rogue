@@ -377,6 +377,42 @@ button.card:disabled {
   font-weight: 700;
 }
 
+/* ===== ダンジョンを選ぶ ===== */
+.choose__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.choose__item {
+  padding: 1.25rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 8px;
+  background: var(--pine-deep);
+}
+
+.choose__name {
+  margin-bottom: 0.5rem;
+}
+
+.choose__text {
+  margin: 0 0 1rem;
+  color: var(--bone-dim);
+  line-height: 1.7;
+}
+
+/* .facts より後で決める（同じ強さの決まりは、後に書いたほうが勝つので、2つ重ねて強くする） */
+.facts.choose__facts {
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  margin-bottom: 1.25rem;
+}
+
+.choose__go {
+  min-height: 2.75rem;
+}
+
 /* ===== 結果 ===== */
 .reveal__trait {
   margin: 0 0 1.25rem;
@@ -1286,6 +1322,50 @@ button.card:disabled {
   background: #24392f;
 }
 
+/* 直すダンジョンを選ぶ欄（ダンジョンの設定のタブの上） */
+.admin__dungeon {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin: -0.5rem 0 1.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 8px;
+  background: var(--pine-deep);
+  font-size: var(--step--1);
+}
+
+.admin__dungeon label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.admin__dungeon .admin__id {
+  margin: 0;
+}
+
+.admin__text {
+  width: 28rem;
+  max-width: 100%;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.gen__field--wide {
+  grid-column: 1 / -1;
+}
+
+.admin__danger {
+  margin-top: 1.5rem;
+}
+
+.admin__danger .admin__note {
+  margin-top: 0.5rem;
+}
+
 .admin__add {
   display: flex;
   flex-wrap: wrap;
@@ -1607,6 +1687,16 @@ button.card:disabled {
 
   .gen__field .admin__error {
     grid-column: 1 / -1;
+  }
+
+  /* 説明の欄は、見出しの下に、画面の幅いっぱいで出す */
+  .gen__field--wide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gen__field--wide .admin__field,
+  .gen__field--wide .admin__text {
+    width: 100%;
   }
 }
 

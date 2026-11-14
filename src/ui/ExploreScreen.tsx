@@ -6,12 +6,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { playAttack, playChestOpen, playEnemyAttack, playSpell, playFootstep, preloadSounds, setAmbient } from '../audio/sound';
-import { BODY_NAMES, enemyBase, expToNext, ITEMS, REWARD_CONFIG, SPELLS, TRAIT_IDS, TRAITS } from '../game/data';
-import { GEN_SETTINGS } from '../game/genMaster';
+import { BODY_NAMES, enemyBase, expToNext, ITEMS, SPELLS, TRAIT_IDS, TRAITS } from '../game/data';
 import { bestLoadout } from '../game/bestLoadout';
+import { DEFAULT_DUNGEON_ID, dungeonOf, hasDungeon } from '../game/dungeons';
 import { enemyDef, key } from '../game/enemies';
 import {
   DIR_DELTA,
+  dungeonOfState,
   EXPLORE_CONFIG,
   isBossFloor,
   samePos,
@@ -86,6 +87,9 @@ const urlBest = new URLSearchParams(location.search).get('best') === '1';
 // ?trait=fire でダンジョン特性を指定できる（タイル素材の確認用）
 const traitParam = new URLSearchParams(location.search).get('trait');
 const urlTrait = TRAIT_IDS.find((t) => t === traitParam);
+// ?dungeon=standard で、遊ぶダンジョン（src/game/dungeons/ の設定ファイルの名前）を指定できる
+const dungeonParam = new URLSearchParams(location.search).get('dungeon') ?? DEFAULT_DUNGEON_ID;
+const urlDungeon = hasDungeon(dungeonParam) ? dungeonParam : DEFAULT_DUNGEON_ID;
 // ?render=2d で、以前の2D表示に切り替えられる（3D表示との見比べ用）
 const urlRender: RenderMode = new URLSearchParams(location.search).get('render') === '2d' ? '2d' : '3d';
 
@@ -114,7 +118,7 @@ function visibleEnemyIds(state: ExploreState): Set<number> {
 const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'potion', 'potion', 'food', 'fire_whetstone', 'ice_whetstone', 'book_shockwave', 'book_fire_bolt', 'book_heal'];
 
 /**
- * 開発用：準備フェーズを通さずに探索だけを試す。?seed=・?rank=・?trait=・?render= で条件を指定できる。
+ * 開発用：準備フェーズを通さずに探索だけを試す。?seed=・?rank=・?trait=・?dungeon=・?render= で条件を指定できる。
  * ?best=1 なら、そのダンジョンの特性に合わせて、いちばん強い装備・道具・呪文書で始める（bestLoadout.ts）
  */
 export function ExploreDevScreen() {
@@ -124,10 +128,11 @@ export function ExploreDevScreen() {
       devBest={urlBest}
       start={() => {
         const seed = Number.isInteger(urlSeed) && urlSeed > 0 ? urlSeed : newSeed();
-        if (!urlBest) return startExplore(seed, { loadout: DEV_LOADOUT, rank: urlRank, trait: urlTrait });
+        const dungeon = urlDungeon;
+        if (!urlBest) return startExplore(seed, { dungeon, loadout: DEV_LOADOUT, rank: urlRank, trait: urlTrait });
         // 特性を決めてから、その特性に合う装備で始め直す（同じシードなら同じダンジョン）
-        const trait = urlTrait ?? startExplore(seed, { rank: urlRank }).trait;
-        return startExplore(seed, { loadout: bestLoadout(trait), rank: urlRank, trait });
+        const trait = urlTrait ?? startExplore(seed, { dungeon, rank: urlRank }).trait;
+        return startExplore(seed, { dungeon, loadout: bestLoadout(trait, dungeonOf(dungeon)), rank: urlRank, trait });
       }}
     />
   );
@@ -640,6 +645,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   };
 
   const { stats } = state;
+  const dungeon = dungeonOfState(state);
   const visibleEnemies = state.enemies.filter((e) => visible.has(e.pos.y * state.map.width + e.pos.x));
   const onStairs = state.map.stairs !== null && samePos(state.player, state.map.stairs);
   const ended = state.outcome !== 'ongoing';
@@ -661,7 +667,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
                 <a href={devBestHref(!devBest, state.trait)}>{devBest ? 'ふつうの装備に戻す' : 'いちばん強い装備で試す'}</a>）
               </>
             )}{' '}
-            ・ ランク{state.rank} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体 ・ 金貨{' '}
+            ・ {dungeon.name} ・ ランク{state.rank} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体 ・ 金貨{' '}
             {state.gold}G
           </p>
           <h1 className="top__title">{floorName}</h1>
@@ -759,8 +765,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
             <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" />
             {state.maxMp > 0 && <Meter label="魔力" value={state.mp} max={state.maxMp} tone="mp" />}
             {/* レベルは、この挑戦のあいだだけ。いちばん上のレベルでは経験値の棒を出さない */}
-            {state.level < REWARD_CONFIG.maxLevel ? (
-              <Meter label={`レベル${state.level}`} value={state.exp} max={expToNext(state.level)} tone="exp" unit="経験値" />
+            {state.level < dungeon.growth.maxLevel ? (
+              <Meter label={`レベル${state.level}`} value={state.exp} max={expToNext(state.level, dungeon.growth)} tone="exp" unit="経験値" />
             ) : (
               <p className="meter__head">
                 <span>レベル{state.level}</span>
@@ -773,7 +779,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
             {state.spells.length > 0 && (
               <ul className="explore__items explore__spells" aria-label="呪文">
                 {state.spells.map((spell, i) => {
-                  const cost = GEN_SETTINGS.spells[spell].cost ?? 0;
+                  const cost = dungeon.spells[spell].cost ?? 0;
                   return (
                     <li key={spell}>
                       <button

@@ -3,6 +3,7 @@
 
 import { itemSlot } from './combat';
 import { CARDS, DECK, FAVORABLE_GEAR, ITEMS, PREP_CONFIG, START_SUPPLIES, TRAITS, TRAIT_IDS } from './data';
+import { DEFAULT_DUNGEON_ID, dungeonOf } from './dungeons';
 import { RANK_CONFIG, rankParams, upgradeCost } from './rank';
 import { nextInt, nextRandom, shuffle } from './rng';
 import type { CardInstance, ItemId, PrepResult, PrepState, Result } from './types';
@@ -16,6 +17,7 @@ export interface PrepOptions {
   startGold?: number;
   rank?: number;
   exp?: number;
+  dungeon?: string; // 挑むダンジョンの ID（省略時は標準のダンジョン）
 }
 
 /**
@@ -38,6 +40,7 @@ export function createPrep(seed: number, carried: CardInstance[] = [], options: 
 
   return {
     seed,
+    dungeon: options.dungeon ?? DEFAULT_DUNGEON_ID,
     trait,
     phase: 'prep',
     day: 1,
@@ -153,10 +156,11 @@ export function upgradeRank(state: PrepState): Result<PrepState> {
   const cost = upgradeCost(state.rank);
   if (state.gold < cost) return err(`お金が足りません（${cost}G必要）`);
   const rank = state.rank + 1;
+  const size = rankParams(rank, dungeonOf(state.dungeon).floors).mapSize;
   return ok(
     withLog(
       { ...state, rank, exp: state.exp - RANK_CONFIG.expPerUpgrade, gold: state.gold - cost },
-      `ランク${rank}に上がった。ダンジョンは${rankParams(rank).mapSize}×${rankParams(rank).mapSize}になる`,
+      `ランク${rank}に上がった。ダンジョンは${size}×${size}になる`,
     ),
   );
 }
@@ -187,6 +191,7 @@ export function finishPrep(state: PrepState, keepUids: string[]): Result<PrepRes
   if (carried.some((c) => c === undefined)) return err('手札にないカードは持ち越せません');
 
   return ok({
+    dungeon: state.dungeon,
     trait: state.trait,
     knowledge: state.knowledge,
     hasMap: state.hasMap,
@@ -220,15 +225,17 @@ function withLog(state: PrepState, message: string): PrepState {
 }
 
 /**
- * 準備フェーズを飛ばして、そのまま出発する。特性は準備フェーズと同じくシードから決め、
- * 持ち物はそのダンジョンに有利な装備と回復薬2つ。情報は集めていないので「まだ何もわからない」のまま
+ * 準備フェーズを飛ばして、選んだダンジョン（dungeon は ID）にそのまま出発する。特性は準備フェーズと同じくシードから決め、
+ * 持ち物はその特性に有利な装備と回復薬2つ。情報は集めていないので「まだ何もわからない」のまま
  */
 export function departWithoutPrep(
   seed: number,
   save: { rank: number; exp: number; carried: CardInstance[] },
+  dungeon: string = DEFAULT_DUNGEON_ID,
 ): PrepResult {
   const trait = TRAIT_IDS[nextInt(seed, TRAIT_IDS.length).value]!;
   return {
+    dungeon,
     trait,
     knowledge: { status: 'unknown' },
     hasMap: false,

@@ -425,7 +425,7 @@
       }
     }
   },
-  "dungeons": {
+  "encounters": {
     "fire": {
       "pool": [
         "fire_imp",

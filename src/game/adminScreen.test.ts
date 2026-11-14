@@ -1,21 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import {
   ADMIN_TABS,
+  adminDungeonFromUrl,
   adminTabFromUrl,
   adminTabUrl,
+  bossUses,
   copyJson,
+  dungeonStatus,
+  duplicateDungeon,
   ENEMY_FILE,
-  GEN_FILE,
+  isDungeonTab,
   planPublish,
+  removeDungeon,
+  removeEnemyEverywhere,
   showsPreview,
   tabChanged,
   type AdminData,
   type AdminTab,
 } from './adminScreen';
-import { addEnemy, removeEnemy, serializeEnemyMaster, setWeight, type EnemyMaster } from './enemyMaster';
-// 関数を確かめるための、決まった中身のデータ（管理画面で enemies.json や dungeonGen.json を変えても、こちらは変わらない）
+import { dungeonPath } from './dungeons';
+import { addEnemy, removeEnemy, serializeEnemyMaster, setWeight, type Encounters, type EnemyMaster } from './enemyMaster';
+// 関数を確かめるための、決まった中身のデータ（管理画面で enemies.json やダンジョンの設定を変えても、こちらは変わらない）
 import sample from './enemyMaster.sample.json';
-import { serializeGenSettings, type GenSettings } from './genMaster';
+import { serializeDungeon, type DungeonFile, type GenSettings } from './genMaster';
 
 const GEN: GenSettings = {
   floors: { count: 3, sizes: [20, 30, 40, 50, 60, 70, 80, 90, 100], satiety: [400, 900, 1600, 2500, 3600, 4900, 6400, 8100, 10000] },
@@ -34,16 +41,21 @@ const GEN: GenSettings = {
     regen: { cost: 5, amount: 3, turns: 8 },
   },
 };
-const BASE: AdminData = { enemies: sample as unknown as EnemyMaster, gen: GEN };
+const dungeon = (name: string): DungeonFile => ({ name, description: `${name}の説明`, ...copyJson(GEN), encounters: copyJson(sample.encounters) as Encounters });
+// 標準のダンジョンと、もう1つ（ほら穴）がある状態
+const BASE: AdminData = {
+  enemies: { enemies: copyJson(sample.enemies) } as EnemyMaster,
+  dungeons: { standard: dungeon('標準'), cave: dungeon('ほら穴') },
+};
 const edited = (change: (d: AdminData) => void): AdminData => {
   const d = copyJson(BASE);
   change(d);
   return d;
 };
 const goblinHp = (d: AdminData) => void (d.enemies.enemies.goblin!.hp += 1);
-const floorCount = (d: AdminData) => void (d.gen.floors.count += 1);
+const floorCount = (d: AdminData) => void (d.dungeons.standard!.floors.count += 1);
 
-describe('管理画面の公開（敵とダンジョンの設定をまとめて扱う）', () => {
+describe('管理画面の公開（敵のデータと、いくつものダンジョンの設定をまとめて扱う）', () => {
   it('何も変えていなければ、保存するものも直すところもない', () => {
     const plan = planPublish(BASE, copyJson(BASE));
     expect(plan.changes).toEqual([]);
@@ -59,61 +71,108 @@ describe('管理画面の公開（敵とダンジョンの設定をまとめて�
     expect(plan.changes).toEqual([`ゴブリン：HP 14 → 15`]);
   });
 
-  it('ダンジョンの設定だけ変えたら、dungeonGen.json だけを保存する', () => {
-    const draft = edited(floorCount);
+  it('1つのダンジョンだけ変えたら、そのダンジョンのファイルだけを保存する（変えたところの頭に、ダンジョンの名前を付ける）', () => {
+    const draft = edited((d) => void (d.dungeons.cave!.floors.satiety[1] = 1200));
     const plan = planPublish(BASE, draft);
-    expect(plan.files).toEqual([{ path: GEN_FILE, text: serializeGenSettings(draft.gen), base: serializeGenSettings(BASE.gen) }]);
+    expect(plan.files).toEqual([{ path: dungeonPath('cave'), text: serializeDungeon(draft.dungeons.cave!), base: serializeDungeon(BASE.dungeons.cave!) }]);
+    expect(plan.changes).toEqual(['ほら穴：ランク2の満腹度：900 → 1200']);
     expect(plan.message.split('\n')[0]).toBe('ダンジョンの設定を更新する（管理画面から）');
   });
 
-  it('満腹度だけ変えても、dungeonGen.json を保存する（説明にランクごとの満腹度が出る）', () => {
-    const draft = edited((d) => void (d.gen.floors.satiety[1] = 1200));
+  it('出る敵や名前を変えても、そのダンジョンのファイルを保存する', () => {
+    const draft = edited((d) => {
+      d.dungeons.standard!.encounters.fire.pool = setWeight(d.dungeons.standard!.encounters.fire.pool, 'goblin', 2);
+      d.dungeons.standard!.name = '始まりの迷宮';
+    });
     const plan = planPublish(BASE, draft);
-    expect(plan.files.map((f) => f.path)).toEqual([GEN_FILE]);
-    expect(plan.changes).toEqual(['ランク2の満腹度：900 → 1200']);
-    expect(JSON.parse(plan.files[0]!.text).floors.satiety[1]).toBe(1200);
+    expect(plan.files.map((f) => f.path)).toEqual([dungeonPath('standard')]);
+    expect(plan.changes).toEqual(['始まりの迷宮：名前：標準 → 始まりの迷宮', '始まりの迷宮：炎の属性：ゴブリンの出やすさ 1 → 2']);
   });
 
-  it('両方変えたら、2つのファイルを、1つの説明でまとめて保存する', () => {
+  it('敵とダンジョンの両方を変えたら、全部のファイルを、1つの説明でまとめて保存する', () => {
     const draft = edited((d) => {
       goblinHp(d);
       floorCount(d);
+      d.dungeons.cave!.rooms.maxSize = 11;
     });
     const plan = planPublish(BASE, draft);
-    expect(plan.files.map((f) => f.path)).toEqual([ENEMY_FILE, GEN_FILE]);
-    expect(plan.changes).toHaveLength(2);
+    expect(plan.files.map((f) => f.path)).toEqual([ENEMY_FILE, dungeonPath('standard'), dungeonPath('cave')]);
+    expect(plan.changes).toHaveLength(3);
     const [title, blank, ...lines] = plan.message.split('\n');
     expect(title).toBe('敵のデータとダンジョンの設定を更新する（管理画面から）');
     expect(blank).toBe('');
     expect(lines).toEqual(plan.changes.map((c) => `- ${c}`));
   });
 
-  it('どちらかに直すところがあれば、問題として出す（両方の分をまとめて）', () => {
+  it('複製して作ったダンジョンは、新しいファイルとして作る（もとの公開版はない）', () => {
+    const draft = duplicateDungeon(copyJson(BASE), 'cave', 'deep_cave', '深いほら穴');
+    expect(Object.keys(draft.dungeons)).toEqual(['standard', 'cave', 'deep_cave']);
+    expect(draft.dungeons.deep_cave).toEqual({ ...BASE.dungeons.cave, name: '深いほら穴' });
+    const plan = planPublish(BASE, draft);
+    expect(plan.files).toEqual([{ path: dungeonPath('deep_cave'), text: serializeDungeon(draft.dungeons.deep_cave!), base: null }]);
+    expect(plan.changes).toEqual(['ダンジョン「深いほら穴」（deep_cave）を作る']);
+    expect(plan.problems).toEqual([]);
+    // もとと切り離されている（複製したほうを変えても、もとは変わらない）
+    draft.dungeons.deep_cave!.floors.count = 9;
+    expect(draft.dungeons.cave!.floors.count).toBe(GEN.floors.count);
+    // 同じ ID があれば作らない
+    expect(duplicateDungeon(BASE, 'cave', 'standard', 'x')).toBe(BASE);
+  });
+
+  it('消したダンジョンは、ファイルを消す。標準のダンジョンは消せない', () => {
+    const draft = removeDungeon(copyJson(BASE), 'cave');
+    const plan = planPublish(BASE, draft);
+    expect(plan.files).toEqual([{ path: dungeonPath('cave'), text: null, base: serializeDungeon(BASE.dungeons.cave!) }]);
+    expect(plan.changes).toEqual(['ダンジョン「ほら穴」（cave）を消す']);
+    expect(removeDungeon(BASE, 'standard')).toBe(BASE);
+    // 手で消してしまったときも、公開できないようにする
+    expect(planPublish(BASE, edited((d) => void delete d.dungeons.standard)).problems).toContain('標準のダンジョン（standard）は消せません');
+  });
+
+  it('直すところは、どのダンジョンのことかを頭に付けて出す。名前の重なりや、使えない ID も問題にする', () => {
     const bad = edited((d) => {
       d.enemies.enemies.goblin!.hp = -5;
-      d.gen.floors.count = 0;
+      d.dungeons.cave!.floors.count = 0;
     });
     const { problems } = planPublish(BASE, bad);
-    expect(problems.length).toBeGreaterThanOrEqual(2);
-    expect(planPublish(BASE, edited((d) => void (d.enemies.enemies.goblin!.hp = -5))).problems.length).toBeGreaterThan(0);
-    expect(planPublish(BASE, edited((d) => void (d.gen.floors.count = 0))).problems.length).toBeGreaterThan(0);
+    expect(problems.some((p) => p.includes('HPは1〜999の整数'))).toBe(true);
+    expect(problems).toContain('ほら穴：階の数：1〜10の数にする');
+    expect(planPublish(BASE, edited((d) => void (d.dungeons.cave!.name = '標準'))).problems).toContain('標準（cave）：ほかのダンジョン（standard）と同じ名前になっている');
+    expect(planPublish(BASE, edited((d) => void (d.dungeons['Bad-Id'] = dungeon('変なID')))).problems.some((p) => p.startsWith('変なID：ID（Bad-Id）'))).toBe(true);
+  });
+
+  it('敵を消すと、すべてのダンジョンの道中からも外れる（ファイルも保存する）', () => {
+    const draft = removeEnemyEverywhere(copyJson(BASE), 'goblin');
+    expect(draft.enemies.enemies).not.toHaveProperty('goblin');
+    for (const d of Object.values(draft.dungeons)) for (const e of Object.values(d.encounters)) expect(e.pool).not.toContain('goblin');
+    const plan = planPublish(BASE, draft);
+    expect(plan.files.map((f) => f.path)).toEqual([ENEMY_FILE, dungeonPath('standard'), dungeonPath('cave')]);
+    expect(plan.changes).toEqual(['ゴブリン（goblin）を消す', '標準：消した敵を、道中に出る敵から外す', 'ほら穴：消した敵を、道中に出る敵から外す']);
+    expect(plan.problems).toEqual([]);
+  });
+
+  it('ボスにしているところを調べる（あれば、その敵は消せない）。マスターだけから消すと、問題になる', () => {
+    expect(bossUses(BASE, 'ogre_chief')).toEqual(['標準の無属性', 'ほら穴の無属性']);
+    expect(bossUses(BASE, 'goblin')).toEqual([]);
+    const draft = edited((d) => void (d.enemies = removeEnemy(d.enemies, 'ogre_chief')));
+    expect(planPublish(BASE, draft).problems).toContain('標準：無属性の属性：ボスがいない');
   });
 });
 
 describe('管理画面のタブ', () => {
-  it('敵のデータの2つと、ダンジョンの設定の5つがある', () => {
-    expect(ADMIN_TABS.map((t) => t.id)).toEqual(['enemies', 'pool', 'floors', 'rooms', 'placement', 'growth', 'magic']);
-    expect(ADMIN_TABS.filter((t) => t.part === 'enemies')).toHaveLength(2);
-    expect(ADMIN_TABS.filter((t) => t.part === 'gen')).toHaveLength(5);
+  it('敵のデータの1つと、ダンジョンの設定の7つがある', () => {
+    expect(ADMIN_TABS.map((t) => t.id)).toEqual(['enemies', 'about', 'pool', 'floors', 'rooms', 'placement', 'growth', 'magic']);
+    expect(ADMIN_TABS.filter((t) => isDungeonTab(t.id)).map((t) => t.id)).toEqual(['about', 'pool', 'floors', 'rooms', 'placement', 'growth', 'magic']);
   });
 
-  it('マップの見本は、ダンジョンの設定のタブでだけ出す', () => {
+  it('マップの見本は、マップと探索の設定のタブでだけ出す', () => {
     expect(ADMIN_TABS.filter((t) => showsPreview(t.id)).map((t) => t.id)).toEqual(['floors', 'rooms', 'placement', 'growth', 'magic']);
   });
 
   it('住所の tab= で、開くタブを決める', () => {
     expect(adminTabFromUrl('?view=admin')).toBe('enemies');
     expect(adminTabFromUrl('?view=admin&tab=magic')).toBe('magic');
+    expect(adminTabFromUrl('?view=admin&tab=about')).toBe('about');
     expect(adminTabFromUrl('?tab=pool')).toBe('pool');
     expect(adminTabFromUrl('?view=admin&tab=でたらめ')).toBe('enemies');
   });
@@ -127,23 +186,45 @@ describe('管理画面のタブ', () => {
     expect(adminTabFromUrl('?view=gen&tab=magic')).toBe('magic');
   });
 
-  it('選んだタブを、?view=admin の住所に入れる（ほかの指定は残す）', () => {
-    expect(adminTabUrl('https://example.com/dungeon-rogue/?view=gen&tab=rooms&x=1', 'magic').search).toBe('?view=admin&tab=magic&x=1');
-    expect(adminTabUrl('https://example.com/dungeon-rogue/?view=enemies', 'pool').search).toBe('?view=admin&tab=pool');
+  it('住所の dungeon= で、直すダンジョンを決める（ないダンジョンなら標準）', () => {
+    expect(adminDungeonFromUrl('?view=admin&dungeon=cave', ['standard', 'cave'])).toBe('cave');
+    expect(adminDungeonFromUrl('?view=admin&dungeon=nothing', ['standard', 'cave'])).toBe('standard');
+    expect(adminDungeonFromUrl('?view=admin', ['standard', 'cave'])).toBe('standard');
   });
 
-  it('変えたタブにだけ、変えた印が付く', () => {
-    const changedTabs = (draft: AdminData): AdminTab[] => ADMIN_TABS.filter((t) => tabChanged(t.id, BASE, draft)).map((t) => t.id);
+  it('選んだタブとダンジョンを、?view=admin の住所に入れる（標準のダンジョンなら dungeon= は付けない。ほかの指定は残す）', () => {
+    expect(adminTabUrl('https://example.com/dungeon-rogue/?view=gen&tab=rooms&x=1', 'magic').search).toBe('?view=admin&tab=magic&x=1');
+    expect(adminTabUrl('https://example.com/dungeon-rogue/?view=enemies', 'pool', 'cave').search).toBe('?view=admin&tab=pool&dungeon=cave');
+    expect(adminTabUrl('https://example.com/dungeon-rogue/?view=admin&tab=pool&dungeon=cave', 'pool', 'standard').search).toBe('?view=admin&tab=pool');
+  });
+
+  it('変えたタブにだけ、変えた印が付く（ダンジョンの設定のタブは、直しているダンジョンの分）', () => {
+    const changedTabs = (draft: AdminData, dungeonId = 'standard'): AdminTab[] => ADMIN_TABS.filter((t) => tabChanged(t.id, BASE, draft, dungeonId)).map((t) => t.id);
     expect(changedTabs(copyJson(BASE))).toEqual([]);
     expect(changedTabs(edited(goblinHp))).toEqual(['enemies']);
-    expect(changedTabs(edited((d) => void (d.enemies.dungeons.fire.pool = setWeight(d.enemies.dungeons.fire.pool, 'goblin', 3))))).toEqual(['pool']);
+    expect(changedTabs(edited((d) => void (d.dungeons.standard!.encounters.fire.pool = setWeight(d.dungeons.standard!.encounters.fire.pool, 'goblin', 3))))).toEqual(['pool']);
+    expect(changedTabs(edited((d) => void (d.dungeons.standard!.name = '別の名前')))).toEqual(['about']);
+    expect(changedTabs(edited((d) => void (d.dungeons.standard!.description = '')))).toEqual(['about']);
     expect(changedTabs(edited(floorCount))).toEqual(['floors']);
-    expect(changedTabs(edited((d) => void (d.gen.floors.satiety[0] = 500)))).toEqual(['floors']);
-    expect(changedTabs(edited((d) => void (d.gen.rooms.maxSize = 11)))).toEqual(['rooms']);
-    expect(changedTabs(edited((d) => void (d.gen.enemies.nestMax = 6)))).toEqual(['placement']);
-    expect(changedTabs(edited((d) => void (d.gen.growth.maxLevel = 12)))).toEqual(['growth']);
-    expect(changedTabs(edited((d) => void (d.gen.magic.maxMp = 30)))).toEqual(['magic']);
-    expect(changedTabs(edited((d) => void (d.gen.spells.heal.amount = 25)))).toEqual(['magic']);
+    expect(changedTabs(edited((d) => void (d.dungeons.standard!.floors.satiety[0] = 500)))).toEqual(['floors']);
+    expect(changedTabs(edited((d) => void (d.dungeons.standard!.rooms.maxSize = 11)))).toEqual(['rooms']);
+    expect(changedTabs(edited((d) => void (d.dungeons.standard!.enemies.nestMax = 6)))).toEqual(['placement']);
+    expect(changedTabs(edited((d) => void (d.dungeons.standard!.growth.maxLevel = 12)))).toEqual(['growth']);
+    expect(changedTabs(edited((d) => void (d.dungeons.standard!.magic.maxMp = 30)))).toEqual(['magic']);
+    expect(changedTabs(edited((d) => void (d.dungeons.standard!.spells.heal.amount = 25)))).toEqual(['magic']);
+    // ほかのダンジョンを変えても、標準のダンジョンを直しているあいだは印が付かない
+    expect(changedTabs(edited((d) => void (d.dungeons.cave!.magic.maxMp = 30)))).toEqual([]);
+    expect(changedTabs(edited((d) => void (d.dungeons.cave!.magic.maxMp = 30)), 'cave')).toEqual(['magic']);
+    // 新しく作るダンジョンは、どのタブも変えたことになる
+    const added = duplicateDungeon(copyJson(BASE), 'cave', 'deep_cave', '深いほら穴');
+    expect(changedTabs(added, 'deep_cave')).toEqual(['about', 'pool', 'floors', 'rooms', 'placement', 'growth', 'magic']);
+  });
+
+  it('ダンジョンを選ぶ欄に出す、ダンジョンの様子', () => {
+    const draft = duplicateDungeon(edited((d) => void (d.dungeons.cave!.rooms.maxSize = 11)), 'cave', 'deep_cave', '深いほら穴');
+    expect(dungeonStatus('standard', BASE, draft)).toBe('same');
+    expect(dungeonStatus('cave', BASE, draft)).toBe('changed');
+    expect(dungeonStatus('deep_cave', BASE, draft)).toBe('new');
   });
 
   it('敵を足してすぐ消したときは、何も変えていないことになる（項目の並び順が変わっても、変えた印は付かない）', () => {

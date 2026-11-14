@@ -1,11 +1,11 @@
 // マップ上の敵：配置・能力・移動の経路。
 // 敵の手番の進め方（気付く・追う・攻撃する）は explore.ts にある。
 
-import { enemyBase, TRAIT_ENEMIES } from './data';
-import { GEN_SETTINGS, type EnemySettings } from './genMaster';
+import { enemyBase } from './data';
+import type { EnemySettings } from './genMaster';
 import { tileAt, type FloorMap, type Pos, type Room } from './map';
 import { nextInt, nextRandom } from './rng';
-import type { EnemyDef, EnemyId, TraitId } from './types';
+import type { EnemyDef, EnemyId } from './types';
 
 // 数値はすべて仮。バランス調整で見直す
 export const ENEMY_CONFIG = {
@@ -59,27 +59,26 @@ export function enemyDef(enemy: Pick<MapEnemy, 'id' | 'elite'>): EnemyDef {
   };
 }
 
-/** 特性の敵のうち、いちばん強いもの。強敵の元にする */
-function strongestOf(trait: TraitId): EnemyId {
-  const pool = TRAIT_ENEMIES[trait].pool;
+/** 道中に出る敵のうち、いちばん強いもの。強敵の元にする */
+function strongestOf(pool: readonly EnemyId[]): EnemyId {
   return [...pool].sort((a, b) => enemyBase(b).hp * enemyBase(b).atk - enemyBase(a).hp * enemyBase(a).atk)[0]!;
 }
 
 /**
- * 階に敵を配置する。
+ * 階に敵を配置する。pool は道中に出る敵（ダンジョンの設定の encounters の、その属性の pool）。
  * 強敵はマップの「強敵」の行き止まりに置き、通常の敵は入口から離れた床にランダムに置く。
- * 数と置き方は設定（dungeonGen.json の enemies）で決める：数は amount 倍。置く場所は placement で、
+ * 数と置き方はダンジョンの設定（src/game/dungeons/*.json の enemies）で決める：数は amount 倍。置く場所は placement で、
  * 部屋にも通路にも（部屋の床は roomWeight 倍選ばれやすい）・部屋だけ・通路だけ。部屋が足りなければ置ける分だけ置く。
  * さらに、部屋ごとに nestChance の確率で「群れ部屋」にして、通常の敵とは別に nestMin〜nestMax 体をまとめて置く（通路だけのときは作らない）。
  * 入口から safeDistance マス以内には、どちらも置かない
  */
 export function spawnEnemies(
   map: FloorMap,
-  trait: TraitId,
+  pool: readonly EnemyId[],
   rngState: number,
   firstUid: number,
-  density: number = ENEMY_CONFIG.density,
-  settings: EnemySettings = GEN_SETTINGS.enemies,
+  density: number,
+  settings: EnemySettings,
 ): { enemies: MapEnemy[]; rngState: number } {
   let s = rngState;
   const enemies: MapEnemy[] = [];
@@ -113,7 +112,7 @@ export function spawnEnemies(
   const occupied = new Set<string>([key(map.start), ...(map.stairs ? [key(map.stairs)] : [])]);
   for (const f of map.features) {
     occupied.add(key(f.pos));
-    if (f.kind === 'elite') enemies.push(make(strongestOf(trait), f.pos, true));
+    if (f.kind === 'elite') enemies.push(make(strongestOf(pool), f.pos, true));
   }
 
   const candidates: Pos[] = [];
@@ -125,7 +124,6 @@ export function spawnEnemies(
   });
   const floorCount = map.tiles.filter((t) => t === 'floor').length;
   const count = Math.min(candidates.length, Math.round(floorCount * density * settings.amount));
-  const pool = TRAIT_ENEMIES[trait].pool;
   // 場所の選ばれやすさ（0 の場所には置かない）。部屋にも通路にも置くとき、部屋の床は roomWeight、通路の床は1
   const roomWeight = { mixed: settings.roomWeight, rooms: 1, corridors: 0 }[settings.placement];
   const corridorWeight = settings.placement === 'rooms' ? 0 : 1;
@@ -179,9 +177,8 @@ export function spawnEnemies(
   return { enemies, rngState: s };
 }
 
-/** ボス階のボス。動かない点は強敵と同じなので elite として扱う */
-export function spawnBoss(pos: Pos, trait: TraitId, uid: number): MapEnemy {
-  const id = TRAIT_ENEMIES[trait].boss;
+/** ボス階のボス（id はダンジョンの設定の encounters の、その属性の boss）。動かない点は強敵と同じなので elite として扱う */
+export function spawnBoss(pos: Pos, id: EnemyId, uid: number): MapEnemy {
   return {
     uid,
     id,

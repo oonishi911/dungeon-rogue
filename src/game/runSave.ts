@@ -8,8 +8,11 @@
 // - 霧の晴れたマス（seen）は、4マスを1文字（16進数）にまとめる
 // - 記録（log）は、新しい方から LOG_KEEP 行だけ残す
 // 読み込んだデータは壊れていたり古い形式だったりするので、形を確かめてから使う。合わなければ null（新しい挑戦を始める）
+// 遊んでいるダンジョンは ID で持つ。ダンジョンを選べるようになる前の中断データ（ID がない）は、標準のダンジョンとして読む。
+// そのダンジョンの設定ファイルが消されていたら、続きはあきらめる
 
 import { ENEMIES, ITEMS, SPELLS, TRAIT_IDS } from './data';
+import { DEFAULT_DUNGEON_ID, dungeonOf, hasDungeon } from './dungeons';
 import type { MapEnemy } from './enemies';
 import { mapOfFloor, type Chest, type ExploreState, type FloorMemory } from './explore';
 import type { FloorMap, Pos } from './map';
@@ -148,13 +151,22 @@ function isStats(v: unknown): v is ExploreState['stats'] {
   return e === null || (isObject(e) && TRAIT_IDS.includes(e.element as TraitId) && isCount(e.hits));
 }
 
+/** 中断データのダンジョンの ID（ない古いデータは標準のダンジョン）。そのダンジョンがもうなければ null */
+function dungeonIdOf(v: unknown): string | null {
+  const id = v === undefined ? DEFAULT_DUNGEON_ID : v;
+  return typeof id === 'string' && hasDungeon(id) ? id : null;
+}
+
 function parseOutcome(v: unknown, base: SaveData): PrepResult | null {
   if (!isObject(v) || !TRAIT_IDS.includes(v.trait as TraitId) || typeof v.hasMap !== 'boolean' || !isObject(v.knowledge)) return null;
+  const dungeon = dungeonIdOf(v.dungeon);
+  if (!dungeon) return null;
   if (!isCount(v.exp) || !Array.isArray(v.loadout) || !v.loadout.every(isItem)) return null;
   // ランク・経験・持ち越すカードは、周回の記録と同じ確かめ方をする
   const checked = parseSave(JSON.stringify({ ...base, rank: v.rank, exp: v.exp, carried: v.carried }));
   if (!checked) return null;
   return {
+    dungeon,
     trait: v.trait as TraitId,
     knowledge: v.knowledge as PrepResult['knowledge'],
     hasMap: v.hasMap,
@@ -183,6 +195,8 @@ export function parseRun(text: string | null): ResumedRun | null {
 
   // 数や決まった値
   if (s.outcome !== 'ongoing' || s.trait !== outcome.trait || typeof s.hasMap !== 'boolean') return null;
+  if (dungeonIdOf(s.dungeon) !== outcome.dungeon) return null;
+  const rooms = dungeonOf(outcome.dungeon).rooms;
   if (!isCount(s.seed) || !isCount(s.rank, 1) || !isCount(s.floor) || !isCount(s.floors, 1) || s.floor > s.floors) return null;
   if (!isCount(s.mapSize, 5) || s.mapSize > 200 || !isNumber(s.enemyDensity) || !isNumber(s.satiety) || !isNumber(s.maxSatiety)) return null;
   if (!isNumber(s.mp) || !isNumber(s.maxMp) || !isCount(s.gold) || !isCount(s.nextUid) || !isCount(s.defeated)) return null;
@@ -194,7 +208,7 @@ export function parseRun(text: string | null): ResumedRun | null {
   if (!(regen === null || (isObject(regen) && isNumber(regen.amount) && isCount(regen.turns)))) return null;
 
   // 階の様子：マップを作り直して、保存したときと同じ形かを確かめる
-  const floorOf = (floor: number) => mapOfFloor(s.seed as number, s.floors as number, s.mapSize as number, floor);
+  const floorOf = (floor: number) => mapOfFloor(s.seed as number, s.floors as number, s.mapSize as number, floor, rooms);
   const current = unpackFloor(floorOf(s.floor), s.current);
   if (!current || !isFloorPos(current.map, s.player) || !isObject(s.visited)) return null;
   const visited: Record<number, FloorMemory> = {};
@@ -208,6 +222,7 @@ export function parseRun(text: string | null): ResumedRun | null {
 
   const state: ExploreState = {
     seed: s.seed,
+    dungeon: outcome.dungeon,
     trait: outcome.trait,
     rank: s.rank,
     floor: s.floor,

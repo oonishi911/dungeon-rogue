@@ -3,7 +3,7 @@ import { PREP_CONFIG } from './data';
 import { FIELD_ENEMY } from './enemies.fixtures';
 import { enemyDef, type MapEnemy } from './enemies';
 import { magicPower, spellDamage, startExplore, step, type ExploreAction, type ExploreState } from './explore';
-import { GEN_SETTINGS } from './genMaster';
+import { DEFAULT_DUNGEON } from './dungeons';
 import type { FloorMap, Pos } from './map';
 import { buyItem, createPrep } from './prep';
 import type { ItemId, PrepState, Result } from './types';
@@ -40,14 +40,16 @@ function arena(player: Pos, enemies: MapEnemy[], loadout: ItemId[] = BOOKS): Exp
   return { ...base, map, chests: [], player, enemies: enemies.map((e, i) => ({ ...e, uid: i })), seen: new Array<boolean>(55).fill(true) };
 }
 
-const cfg = GEN_SETTINGS.spells;
+// 標準のダンジョンの設定（startExplore でダンジョンを指定しないと、標準のダンジョンになる）
+const GEN = DEFAULT_DUNGEON;
+const cfg = GEN.spells;
 
 describe('魔力と呪文書', () => {
   it('呪文書を持っていくと、その呪文を覚えて魔力がいっぱいで始まる。持っていなければ魔力はない', () => {
     const s = startExplore(1, { loadout: ['book_heal', 'potion'] });
     expect(s.spells).toEqual(['heal']);
-    expect(s.mp).toBe(GEN_SETTINGS.magic.maxMp);
-    expect(s.maxMp).toBe(GEN_SETTINGS.magic.maxMp);
+    expect(s.mp).toBe(GEN.magic.maxMp);
+    expect(s.maxMp).toBe(GEN.magic.maxMp);
     expect(s.stats.items).toEqual(['potion']); // 呪文書は道具の枠に入らない
     const none = startExplore(1, { loadout: ['potion'] });
     expect(none.spells).toEqual([]);
@@ -56,8 +58,8 @@ describe('魔力と呪文書', () => {
 
   it('杖を持っていると、魔力の最大と魔法の強さが上がる', () => {
     const staff = startExplore(1, { loadout: ['staff', 'book_heal'] });
-    expect(staff.maxMp).toBe(GEN_SETTINGS.magic.maxMp + GEN_SETTINGS.magic.staffMp);
-    expect(magicPower(staff.stats)).toBe(GEN_SETTINGS.magic.power * GEN_SETTINGS.magic.staffPower);
+    expect(staff.maxMp).toBe(GEN.magic.maxMp + GEN.magic.staffMp);
+    expect(magicPower(staff.stats, GEN.magic)).toBe(GEN.magic.power * GEN.magic.staffPower);
   });
 
   it('唱えると魔力が減り、足りないときや持っていない呪文は唱えられない', () => {
@@ -71,7 +73,7 @@ describe('魔力と呪文書', () => {
 
   it('魔力は、決まった行動数ごとに1ずつ戻る', () => {
     const s0 = { ...arena({ x: 1, y: 1 }, []), mp: 0 };
-    const waits = Array.from({ length: GEN_SETTINGS.magic.regenEvery * 2 }, () => ({ kind: 'wait' }) as const);
+    const waits = Array.from({ length: GEN.magic.regenEvery * 2 }, () => ({ kind: 'wait' }) as const);
     expect(act(s0, ...waits).mp).toBe(2);
   });
 
@@ -89,7 +91,7 @@ describe('呪文の働き', () => {
   it('衝撃波：まわりの敵を外へ吹き飛ばし、少しダメージを与える。壁にぶつかると止まって追加ダメージ', () => {
     const s0 = arena({ x: 3, y: 2 }, [enemy({ x: 4, y: 2 }), enemy({ x: 2, y: 2 })]);
     const s = act(s0, { kind: 'cast', spell: 'shockwave' });
-    const dmg = spellDamage(s0.stats, 'shockwave', enemyDef(s0.enemies[0]!));
+    const dmg = spellDamage(s0.stats, 'shockwave', enemyDef(s0.enemies[0]!), GEN);
     const push = cfg.shockwave!.push!;
     // 右の敵は push マス飛ぶ（部屋に余裕がある）。左の敵は1マスで壁にぶつかる
     expect(s.cast!.moves).toContainEqual({ from: { x: 4, y: 2 }, to: { x: 4 + push, y: 2 } });
@@ -104,7 +106,7 @@ describe('呪文の働き', () => {
     const s0 = arena({ x: 3, y: 2 }, [enemy({ x: 4, y: 2 }), enemy({ x: 6, y: 2 })]);
     const s = act(s0, { kind: 'cast', spell: 'shockwave' });
     expect(s.cast!.moves).toContainEqual({ from: { x: 4, y: 2 }, to: { x: 5, y: 2 } });
-    const dmg = spellDamage(s0.stats, 'shockwave', enemyDef(s0.enemies[0]!));
+    const dmg = spellDamage(s0.stats, 'shockwave', enemyDef(s0.enemies[0]!), GEN);
     expect(s.enemies.find((e) => e.uid === 0)!.hp).toBe(99 - dmg - cfg.shockwave!.crash!);
   });
 
@@ -112,14 +114,14 @@ describe('呪文の働き', () => {
     const range = cfg.sweep!.range!;
     const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 2, y: 2 }), enemy({ x: 3, y: 2 }), enemy({ x: 2 + range, y: 2 })]);
     const s = act(s0, { kind: 'cast', spell: 'sweep', dir: 'right' });
-    const dmg = spellDamage(s0.stats, 'sweep', enemyDef(s0.enemies[0]!));
+    const dmg = spellDamage(s0.stats, 'sweep', enemyDef(s0.enemies[0]!), GEN);
     expect(s.enemies.map((e) => e.hp)).toEqual([99 - dmg, 99 - dmg, 99]);
   });
 
   it('属性の矢：最初に当たった敵だけに、属性の相性で増減したダメージ', () => {
     const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 3, y: 2 }), enemy({ x: 4, y: 2 })]);
     const s = act(s0, { kind: 'cast', spell: 'fire_bolt', dir: 'right' });
-    expect(s.enemies.map((e) => e.hp)).toEqual([99 - spellDamage(s0.stats, 'fire_bolt', enemyDef(s0.enemies[0]!)), 99]);
+    expect(s.enemies.map((e) => e.hp)).toEqual([99 - spellDamage(s0.stats, 'fire_bolt', enemyDef(s0.enemies[0]!), GEN), 99]);
     expect(s.cast!.path).toEqual([
       { x: 2, y: 2 },
       { x: 3, y: 2 },

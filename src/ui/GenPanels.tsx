@@ -1,4 +1,5 @@
-// 開発用の管理画面（Admin.tsx）の、ダンジョンの設定（src/game/dungeonGen.json）のタブ：
+// 開発用の管理画面（Admin.tsx）の、ダンジョンの設定（src/game/dungeons/<ID>.json のうち、マップと探索の設定）のタブ。
+// 直すダンジョンは、タブの上の欄で選ぶ（DungeonPanels.tsx）：
 // 「階の数・広さ・満腹度」（階の数と、ランクごとの広さ・満腹度）、「小部屋」（多さと大きさ）、
 // 「敵の数と置き方」（部屋に集める・部屋には置かない・群れ部屋・部屋から出さない）、
 // 「レベルと強敵の報酬」（敵を倒したときのレベルの上がり方と強敵の報酬の倍率）、「魔法」（魔力と呪文の強さ）と、
@@ -6,6 +7,7 @@
 // 変えた内容は、管理画面の「変更を公開」でリポジトリに保存され、自動チェックが通れば数分で公開版に反映される
 
 import { useEffect, useMemo, useRef, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { ENEMIES } from '../game/data';
 import { spawnEnemies, type MapEnemy } from '../game/enemies';
 import {
   GEN_LABELS,
@@ -16,9 +18,9 @@ import {
   genProblems,
   PLACEMENT_LABELS,
   PLACEMENTS,
+  type DungeonFile,
   type EnemySettings,
   type FloorSettings,
-  type GenSettings,
   type GrowthSettings,
   type MagicSettings,
   type Placement,
@@ -32,11 +34,11 @@ import { cls, NumberField } from './adminParts';
 
 const CANVAS_PX = 640; // 見本の長い辺の描画解像度。表示サイズは CSS で合わせる
 
-/** タブの部品に渡すもの：公開版（base）、画面で変えている設定（draft）、それを変える関数 */
+/** タブの部品に渡すもの：選んでいるダンジョンの公開版（base。新しく作るダンジョンでは draft と同じ）、画面で変えている設定（draft）、それを変える関数 */
 export interface GenPanelProps {
-  base: GenSettings;
-  draft: GenSettings;
-  setDraft: Dispatch<SetStateAction<GenSettings>>;
+  base: DungeonFile;
+  draft: DungeonFile;
+  setDraft: Dispatch<SetStateAction<DungeonFile>>;
 }
 
 /** 「階の数・広さ・満腹度」のタブ */
@@ -52,7 +54,6 @@ export function FloorsPanel({ base, draft, setDraft }: GenPanelProps) {
       <p className="admin__note">
         広さと満腹度は、ランクごとに決めます（広さは、上のランクほど同じか広く）。満腹度は、探索のはじめの満腹度で、上限でもあります。
         広さや階の数を変えても、満腹度は自動では変わらないので、いっしょに見直してください。敵の数・HPの回復の速さは、広さから自動で決まります。
-        大きく変えると、自動チェックのバランステストに通らず、公開されないことがあります。
       </p>
       <div className="gen__fields">
         <Field label={GEN_LABELS.floorCount} hint="通常の階の数。その下に、ボスの階が1つある。階を増やしたら、満腹度も見直す">
@@ -216,7 +217,7 @@ export function GrowthPanel({ base, draft, setDraft }: GenPanelProps) {
       <h2 className="admin__heading">レベルと強敵の報酬</h2>
       <p className="admin__note">
         敵を倒して経験値がたまると、その挑戦のあいだだけレベルが上がります。敵ごとの金貨・経験値・道具を落とす確率は、「敵」のタブで変えます。
-        強くしすぎると、自動チェックのバランステスト（外れた準備でクリアできすぎないか）に通らず、公開されません。
+        強くしすぎると、外れた準備でもクリアできてしまうので気を付けてください（バランスのテストは、今は自動チェックから外しています）。
       </p>
       <div className="gen__fields">
         {(
@@ -293,7 +294,7 @@ export function MagicPanel({ base, draft, setDraft }: GenPanelProps) {
 }
 
 /** 変えた値で作ったマップの見本（ダンジョンの設定のタブの下に出す）。ランクと、見本の種（別のマップ）は、呼ぶ側で持つ */
-export function PreviewSection(props: { settings: GenSettings; rank: number; onRank: (rank: number) => void; onNewMap: () => void; seed: number }) {
+export function PreviewSection(props: { settings: DungeonFile; rank: number; onRank: (rank: number) => void; onNewMap: () => void; seed: number }) {
   const { settings, rank, seed } = props;
   const problems = useMemo(() => genProblems(settings), [settings]);
   const preview = useMemo(() => (problems.length ? null : makePreview(settings, rank, seed)), [settings, rank, seed, problems.length]);
@@ -372,12 +373,17 @@ interface PreviewData {
   nest: Set<number>; // 群れ部屋に置いた敵の uid
 }
 
-/** 見本のマップと敵。群れの敵を見分けるため、群れ部屋なしでも置いてみて、増えた分を群れの敵とする */
-function makePreview(settings: GenSettings, rank: number, seed: number): PreviewData {
+/**
+ * 見本のマップと敵。群れの敵を見分けるため、群れ部屋なしでも置いてみて、増えた分を群れの敵とする。
+ * 敵は、無属性のときに出る敵で置く（まだ敵を選んでいないときは、ボスでない敵のどれか）
+ */
+function makePreview(settings: DungeonFile, rank: number, seed: number): PreviewData {
   const params = rankParams(rank, settings.floors);
   const map = generateFloor(seed, { width: params.mapSize, height: params.mapSize, rooms: settings.rooms });
-  const { enemies } = spawnEnemies(map, 'neutral', seed, 0, params.enemyDensity, settings.enemies);
-  const plain = spawnEnemies(map, 'neutral', seed, 0, params.enemyDensity, { ...settings.enemies, nestChance: 0 }).enemies.length;
+  const chosen = settings.encounters.neutral.pool.filter((id) => ENEMIES[id] && !ENEMIES[id].boss);
+  const pool = chosen.length ? chosen : Object.values(ENEMIES).filter((e) => !e.boss).map((e) => e.id).slice(0, 1);
+  const { enemies } = spawnEnemies(map, pool, seed, 0, params.enemyDensity, settings.enemies);
+  const plain = spawnEnemies(map, pool, seed, 0, params.enemyDensity, { ...settings.enemies, nestChance: 0 }).enemies.length;
   return { map, enemies, nest: new Set(enemies.slice(plain).map((en) => en.uid)) };
 }
 
