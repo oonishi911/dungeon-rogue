@@ -25,7 +25,7 @@
     "expBase": 30,
     "expStep": 20,
     "hpPerLevel": 5,
-    "atkPerLevel": 1,
+    "atkPerLevel": 3,
     "maxLevel": 99,
     "eliteRate": 3
   },
