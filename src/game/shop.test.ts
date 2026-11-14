@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ITEMS, LOADOUT_CONFIG } from './data';
 import { newSave, parseSave, type SaveData } from './save';
-import { buy, departWith, equip, kitLoadout, returnWith, shelfItems, takeSupply, toggleBook } from './shop';
+import { recommended, buy, departWith, equip, kitLoadout, returnWith, shelfItems, takeSupply, toggleBook } from './shop';
 import type { ItemId, Result } from './types';
 
 const rich = (gold = 100000): SaveData => ({ ...newSave(), gold });
@@ -118,5 +118,34 @@ describe('出発と帰り', () => {
   it('保存して読み込むと、金貨・持ち物・倉庫・選び方が戻る', () => {
     const s = departWith(buyAll(rich(500), ['sword_2', 'plate', 'book_heal', 'potion', 'potion']));
     expect(parseSave(JSON.stringify(s))).toEqual(s);
+  });
+});
+
+describe('おすすめの印', () => {
+  const clear = (topic: 'trait' | 'body' | 'boss', facts: { element?: 'fire' | 'ice' | 'neutral' | 'light' | 'dark'; body?: 'normal' | 'soft' | 'hard' | 'spirit' }) => ({ topic, vague: false, text: '', memo: '', ...facts });
+
+  it('何も聞いていない・うわさだけなら、印は付かない', () => {
+    expect(recommended([]).size).toBe(0);
+    expect(recommended([{ topic: 'trait', vague: true, text: '', memo: '' }]).size).toBe(0);
+  });
+
+  it('属性がはっきりわかれば、その属性を防ぐ防具（すべての段階）と、よく効く砥石・矢の呪文書に付く', () => {
+    const p = recommended([clear('trait', { element: 'fire' })]);
+    expect(p.has('fire_cloak')).toBe(true);
+    expect(p.has('fire_cloak_10')).toBe(true);
+    expect(p.has('ice_cloak')).toBe(false);
+    expect(p.has('ice_whetstone')).toBe(true);
+    expect(p.has('fire_whetstone')).toBe(false);
+    expect(p.has('book_ice_bolt')).toBe(true);
+    expect(p.has('book_fire_bolt')).toBe(false);
+    // 光は、光の衣がいちばん防ぐ
+    expect(recommended([clear('trait', { element: 'light' })]).has('light_robe')).toBe(true);
+  });
+
+  it('体がはっきりわかれば、その体によく効く武器（すべての段階）に付く。普通の体なら付かない', () => {
+    expect(recommended([clear('body', { body: 'hard' })]).has('hammer_3')).toBe(true);
+    expect(recommended([clear('body', { body: 'spirit' })]).has('staff')).toBe(true);
+    expect(recommended([clear('body', { body: 'soft' })]).has('sword')).toBe(true);
+    expect([...recommended([clear('body', { body: 'normal' })])].some((id) => ITEMS[id].effect.kind === 'weapon')).toBe(false);
   });
 });

@@ -6,11 +6,12 @@
 //   店で上の段階を買っても、並びはその場では広がらず、次に潜るときの店で広がる
 // ほかのロジックと同じく、状態を受け取り新しい状態を返す純粋関数でできている。
 
-import { itemSlot } from './combat';
-import { ITEMS, LOADOUT_CONFIG } from './data';
+import { enemyHitDamage, itemSlot } from './combat';
+import { ENCHANT_VS_ELEMENT, ITEMS, LOADOUT_CONFIG, SPELLS, WEAPON_VS_BODY } from './data';
+import type { Intel } from './informant';
 import { ARMOR_BASES, GEAR_TIERS, gearId, gearOf, SPELLBOOK_IDS, SUPPLY_IDS, WEAPON_BASES } from './itemMaster';
 import type { SaveData } from './save';
-import type { GearBaseId, ItemId, Result } from './types';
+import type { Body, Element, EnemyDef, GearBaseId, ItemId, Result, SpellId } from './types';
 
 export type Shelf = 'weapon' | 'armor' | 'supply' | 'book';
 
@@ -149,4 +150,52 @@ export function fitKit(save: SaveData): SaveData {
     })
     .slice(0, LOADOUT_CONFIG.maxItems);
   return { ...save, kit: { ...save.kit, take } };
+}
+
+// ===== おすすめの印 =====
+
+/** その属性の攻撃を受けたときの、防具ごとの受けるダメージの割合（1段目の防具で比べる。守り（def）は入れない） */
+function guardRate(armor: ItemId, element: Element): number {
+  const probe = { id: 'probe', name: '', hp: 1, atk: 100, def: 0, element, body: 'normal' } as EnemyDef;
+  const player = { hp: 1, maxHp: 1, atk: 0, def: 0, poisonTurns: 0, weapon: null, armor, items: [], enchant: null };
+  return enemyHitDamage(player, probe) / 100;
+}
+
+/**
+ * 情報屋からはっきり聞いたこと（うわさは使わない）から、店で「おすすめ」の印を付ける品物。
+ * - 属性（ダンジョン・ボス）がわかれば：その属性の攻撃をいちばん減らす防具の種類（すべての段階）、その属性によく効く砥石・聖水・香油と、属性の矢の呪文書
+ * - 体（多い魔物・ボス）がわかれば：その体によく効く武器の種類（すべての段階）
+ */
+export function recommended(intel: readonly Intel[]): Set<ItemId> {
+  const elements = new Set<Element>();
+  const bodies = new Set<Body>();
+  for (const h of intel) {
+    if (h.vague) continue;
+    if (h.element) elements.add(h.element);
+    if (h.body) bodies.add(h.body);
+  }
+  const picks = new Set<ItemId>();
+  const allTiers = (base: GearBaseId) => {
+    for (let t = 1; t <= GEAR_TIERS; t++) picks.add(gearId(base, t));
+  };
+  for (const body of bodies) {
+    for (const w of WEAPON_BASES) if (WEAPON_VS_BODY[w][body] > 1) allTiers(w);
+  }
+  for (const element of elements) {
+    const rates = ARMOR_BASES.map((a) => [a, guardRate(a, element)] as const);
+    const best = Math.min(...rates.map(([, r]) => r));
+    if (best < 1) for (const [a, r] of rates) if (r === best) allTiers(a);
+    for (const id of [...SUPPLY_IDS, ...SPELLBOOK_IDS] as ItemId[]) {
+      const effect = ITEMS[id].effect;
+      const strike = effect.kind === 'enchant' ? effect.element : effect.kind === 'spellbook' ? boltElement(effect.spell) : null;
+      if (strike && (ENCHANT_VS_ELEMENT[strike][element] ?? 1) > 1) picks.add(id);
+    }
+  }
+  return picks;
+}
+
+/** 属性の矢の呪文の属性（矢でなければ null） */
+function boltElement(spell: SpellId): Element | null {
+  const effect = SPELLS[spell].effect;
+  return effect.kind === 'bolt' ? effect.element : null;
 }

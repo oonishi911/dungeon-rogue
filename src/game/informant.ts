@@ -30,6 +30,9 @@ export interface Intel {
   vague: boolean;
   text: string; // 情報屋の答え
   memo: string; // 店の画面に出す短いメモ
+  // はっきり聞いたときにわかったこと（店の「おすすめ」の印に使う。shop.ts の recommended）。うわさには付けない
+  element?: Element; // ダンジョンの属性、またはボスの属性
+  body?: Body; // 多い魔物の体、またはボスの体
 }
 
 export interface InformantState {
@@ -105,14 +108,14 @@ export function bossOf(dungeon: string, trait: TraitId): EnemyId {
   return dungeonOf(dungeon).encounters[trait].boss;
 }
 
-const bodyText = (b: Body) => `${BODY_NAMES[b]}${b === 'spirit' ? '' : '体'}`;
+const bodyText = (b: Body) => (b === 'spirit' ? BODY_NAMES[b] : b === 'normal' ? `${BODY_NAMES[b]}の体` : `${BODY_NAMES[b]}体`);
 const elementText = (e: Element) => TRAITS[e].name;
 
 function answer(s: InformantState, topic: Topic, vague: boolean): Intel {
   switch (topic) {
     case 'trait': {
       const name = TRAITS[s.trait].name;
-      if (!vague) return { topic, vague, text: `あそこは${name}のダンジョンだ。間違いない。`, memo: `属性：${name}` };
+      if (!vague) return { topic, vague, text: `あそこは${name}のダンジョンだ。間違いない。`, memo: `属性：${name}`, element: s.trait };
       const [a, b] = mix(s.seed, 0x11, s.trait, TRAIT_IDS);
       return {
         topic,
@@ -123,7 +126,7 @@ function answer(s: InformantState, topic: Topic, vague: boolean): Intel {
     }
     case 'body': {
       const body = commonBody(s.dungeon, s.trait);
-      if (!vague) return { topic, vague, text: `多いのは${bodyText(body)}の魔物だ。`, memo: `多い魔物：${bodyText(body)}` };
+      if (!vague) return { topic, vague, text: `多いのは${bodyText(body)}の魔物だ。`, memo: `多い魔物：${bodyText(body)}`, body };
       const [a, b] = mix(s.seed, 0x22, body, BODY_IDS);
       return { topic, vague, text: `${bodyText(a)}の魔物か、${bodyText(b)}の魔物が多いらしいぜ。`, memo: `多い魔物：${bodyText(a)}か${bodyText(b)}（うわさ）` };
     }
@@ -136,6 +139,8 @@ function answer(s: InformantState, topic: Topic, vague: boolean): Intel {
           vague,
           text: `奥にいるのは${boss.name}だ。${elementText(boss.element)}の力を持つ、${bodyText(boss.body)}の化け物さ。`,
           memo: `ボス：${boss.name}（${elementText(boss.element)}・${bodyText(boss.body)}）`,
+          element: boss.element,
+          body: boss.body,
         };
       }
       const [a, b] = mix(s.seed, 0x33, boss.element, TRAIT_IDS);
