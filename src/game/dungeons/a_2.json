@@ -23,7 +23,7 @@
   },
   "growth": {
     "expBase": 10,
-    "expStep": 5,
+    "expStep": 3,
     "hpPerLevel": 2,
     "atkPerLevel": 1,
     "maxLevel": 99,
