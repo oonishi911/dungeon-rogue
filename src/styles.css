@@ -1980,3 +1980,31 @@ button {
   display: grid;
   gap: 0.125rem;
 }
+
+/* ===== 始まりの読み込み画面 ===== */
+.loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.loading__title {
+  font-size: var(--step-3);
+}
+
+.loading__bar {
+  width: min(20rem, 80vw);
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--pine-deep);
+  border: 1px solid var(--pine-line);
+  overflow: hidden;
+}
+
+.loading__fill {
+  height: 100%;
+  background: var(--hp-enemy);
+  transition: width 0.2s ease-out;
+}

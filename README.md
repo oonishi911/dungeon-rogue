@@ -45,6 +45,7 @@ src/
     runSave.ts     探索の途中の状態の保存と読み込み（中断と再開）
     rng.ts         シード付き乱数
     data.ts        アイテム・敵・相性表・設定値
+  preload.ts  始まりの読み込み：テクスチャと音をすべて読み込む（読み込み画面は ui/LoadingScreen.tsx）
   ui/       画面（ロジックを呼び出して表示するだけ）
     ExploreScreen.tsx  探索画面：操作と毎フレームの進行（右側の欄は ExploreSide、確かめる画面は ExploreDialogs、
                        1手ごとの音・振動・演出は exploreFeedback、キーの割り当ては exploreKeys、歩く判断は exploreWalk）
