@@ -55,104 +55,104 @@
     "hammer": [
       {
         "name": "槌",
-        "atk": 3,
+        "atk": 1,
         "price": 30
       },
       {
         "name": "槌+1",
-        "atk": 5,
+        "atk": 2,
         "price": 40
       },
       {
         "name": "槌+2",
-        "atk": 7,
+        "atk": 3,
         "price": 70
       },
       {
         "name": "槌+3",
-        "atk": 9,
+        "atk": 4,
         "price": 100
       },
       {
         "name": "槌+4",
-        "atk": 11,
+        "atk": 5,
         "price": 150
       },
       {
         "name": "槌+5",
-        "atk": 13,
+        "atk": 6,
         "price": 230
       },
       {
         "name": "槌+6",
-        "atk": 15,
+        "atk": 7,
         "price": 340
       },
       {
         "name": "槌+7",
-        "atk": 17,
+        "atk": 8,
         "price": 510
       },
       {
         "name": "槌+8",
-        "atk": 19,
+        "atk": 9,
         "price": 770
       },
       {
         "name": "槌+9",
-        "atk": 21,
+        "atk": 10,
         "price": 1150
       }
     ],
     "staff": [
       {
         "name": "杖",
-        "atk": 3,
+        "atk": 1,
         "price": 30
       },
       {
         "name": "杖+1",
-        "atk": 5,
+        "atk": 2,
         "price": 40
       },
       {
         "name": "杖+2",
-        "atk": 7,
+        "atk": 3,
         "price": 70
       },
       {
         "name": "杖+3",
-        "atk": 9,
+        "atk": 4,
         "price": 100
       },
       {
         "name": "杖+4",
-        "atk": 11,
+        "atk": 5,
         "price": 150
       },
       {
         "name": "杖+5",
-        "atk": 13,
+        "atk": 6,
         "price": 230
       },
       {
         "name": "杖+6",
-        "atk": 15,
+        "atk": 7,
         "price": 340
       },
       {
         "name": "杖+7",
-        "atk": 17,
+        "atk": 8,
         "price": 510
       },
       {
         "name": "杖+8",
-        "atk": 19,
+        "atk": 9,
         "price": 770
       },
       {
         "name": "杖+9",
-        "atk": 21,
+        "atk": 10,
         "price": 1150
       }
     ]
@@ -472,11 +472,11 @@
   "supplies": {
     "potion": {
       "name": "回復薬",
-      "price": 10
+      "price": 30
     },
     "food": {
       "name": "食料",
-      "price": 15
+      "price": 50
     },
     "fire_whetstone": {
       "name": "炎の砥石",
@@ -502,36 +502,36 @@
     },
     "book_sweep": {
       "name": "なぎ払いの呪文書",
-      "price": 40
+      "price": 70
     },
     "book_fire_bolt": {
       "name": "炎の矢の呪文書",
-      "price": 35
+      "price": 100
     },
     "book_ice_bolt": {
       "name": "氷の矢の呪文書",
-      "price": 35
+      "price": 100
     },
     "book_light_lance": {
       "name": "光の槍の呪文書",
-      "price": 35
+      "price": 100
     },
     "book_dark_bolt": {
       "name": "闇の矢の呪文書",
-      "price": 35
+      "price": 100
     },
     "book_heal": {
       "name": "癒しの呪文書",
-      "price": 40
+      "price": 200
     },
     "book_regen": {
       "name": "再生の呪文書",
-      "price": 35
+      "price": 300
     }
   },
   "information": {
-    "trait": 30,
-    "body": 20,
-    "boss": 20
+    "trait": 50,
+    "body": 30,
+    "boss": 30
   }
 }
