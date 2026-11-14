@@ -202,7 +202,7 @@ const FOG_SAMPLE_GLSL = `
   float fogSeen = smoothstep( 0.5, 1.0, fogTexel.g ); // マスの境目（0.5）で、ちょうど背景に溶け込む
 `;
 
-export const FOG_BACKGROUND = new THREE.Color(BACKGROUND); // 画面の色空間（sRGB）のまま、シェーダで背景と混ぜる
+export const FOG_BACKGROUND = new THREE.Color(BACKGROUND); // 背景の色（光の強さの単位。シェーダで、画面の色に直す前に混ぜる）
 
 /**
  * 素材に霧をかける。ピクセルごとに、霧の地図から「今見えている」「一度見た」の度合いを読み、
@@ -212,7 +212,7 @@ export const FOG_BACKGROUND = new THREE.Color(BACKGROUND); // 画面の色空間
  * worldMapped の素材では、テクスチャの貼り方の変更（MAPPED_* の定義）も一緒に行う
  */
 export function applyFog<T extends THREE.Material>(material: T, fog: Fog, mode: 'darken' | 'fade-alpha' = 'darken', key = ''): T {
-  const bg = FOG_BACKGROUND.clone().convertLinearToSRGB();
+  const bg = FOG_BACKGROUND; // 光の強さの単位（three.js の色は、この単位で持つ）
   const before = material.onBeforeCompile.bind(material); // 先に付いている手直し（絵を投影して貼る素材など）も生かす
   material.onBeforeCompile = (shader, renderer) => {
     before(shader, renderer);
@@ -246,6 +246,9 @@ export function applyFog<T extends THREE.Material>(material: T, fog: Fog, mode: 
             #if defined( USE_BUMPMAP ) && ( defined( MAPPED_FLOOR ) || defined( MAPPED_TOP ) || defined( MAPPED_SIDE ) )
               vBumpMapUv = vMapUv;
             #endif
+            #if defined( USE_SPECULARMAP ) && ( defined( MAPPED_FLOOR ) || defined( MAPPED_TOP ) || defined( MAPPED_SIDE ) )
+              vSpecularMapUv = vMapUv;
+            #endif
           #endif
         }`,
       );
@@ -278,12 +281,13 @@ export function applyFog<T extends THREE.Material>(material: T, fog: Fog, mode: 
         )
         .replace(
           '#include <colorspace_fragment>',
-          `#include <colorspace_fragment>
-          ${
+          // 背景の色との混ぜ合わせは、画面の色に直す前（光の強さの単位）で行う。画面の仕上げ（postFx.ts）を通すときも、通さないときも同じ色になる
+          `${
             mode === 'darken'
               ? `gl_FragColor.rgb = mix( vec3( ${bg.r.toFixed(4)}, ${bg.g.toFixed(4)}, ${bg.b.toFixed(4)} ), gl_FragColor.rgb, fogSeen );`
               : 'gl_FragColor.a *= fogSeen;'
-          }`,
+          }
+          #include <colorspace_fragment>`,
         );
   };
   material.customProgramCacheKey = () => `fog-${mode}-${key}`;
@@ -323,8 +327,9 @@ export function createGroundMist(fog: Fog, width: number, depth: number): THREE.
         float mist = fogNoise( vFogWorld.xz * ${GROUND_MIST.scale.toFixed(3)} + mistFlow + 9.1 );
         float dist = length( vFogWorld.xz - fogPlayer ) / fogRadius + ( fogPattern - 0.5 ) * 0.3;
         float thick = smoothstep( ${GROUND_MIST.clearTo.toFixed(2)}, ${GROUND_MIST.thickTo.toFixed(2)}, dist );
-        // 色は画面の色のまま出す（この素材は色空間の変換をしない）
-        gl_FragColor = vec4( ${color.r.toFixed(3)}, ${color.g.toFixed(3)}, ${color.b.toFixed(3)}, ${GROUND_MIST.opacity.toFixed(2)} * thick * ( 0.3 + 0.7 * mist ) * fogSeen );
+        // 色は光の強さの単位で出し、最後に画面の色に直す（画面の仕上げを通すときは、そちらで直す）
+        gl_FragColor = vec4( ${color.r.toFixed(4)}, ${color.g.toFixed(4)}, ${color.b.toFixed(4)}, ${GROUND_MIST.opacity.toFixed(2)} * thick * smoothstep( 0.3, 0.8, mist ) * fogSeen );
+        #include <colorspace_fragment>
       }`,
   });
   const mesh = new THREE.Mesh(geo, material);

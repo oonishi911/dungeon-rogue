@@ -53,15 +53,15 @@ export const FOG_LOOK = {
   edgeWarp: 0.45, // 一度見た場所とまだ見ていない場所の境目を、どれだけゆらがせるか（マス）
   clearFrom: 0.72, // 視界の端（半径の何割から）を、一度見た場所の見え方へ切り替え始めるか
   saturation: 0.3, // 一度見た場所の色の残り方（0で灰色、1でそのまま）
-  mist: [0.05, 0.065, 0.08] as const, // 一度見た場所にかかる、もやの色（青白い。光の強さの単位）
+  mist: [0.022, 0.03, 0.038] as const, // 一度見た場所にかかる、もやの色（青白い。光の強さの単位）
   mistAmount: 0.35, // 一度見た場所に、もやの色をどれだけ混ぜるか（模様で濃い・薄いがある）
 };
 // 地面をはう霧：床の少し上に、ゆっくり流れる半透明の霧の層を置く。主人公のそばは晴れ、視界の外ほど濃い。
 // ?mist=off、または処理の弱い端末（コアが4つ未満）では出さない
 export const GROUND_MIST = {
   height: 0.14, // 床からの高さ（マス。壁より低いので、壁の前では隠れる）
-  color: 0x8ea3ad, // 霧の色（画面の色）
-  opacity: 0.32, // いちばん濃いところの濃さ
+  color: 0x6f818a, // 霧の色
+  opacity: 0.18, // いちばん濃いところの濃さ
   clearTo: 0.55, // 主人公から、視界の半径の何割までは晴れているか
   thickTo: 1.6, // 視界の半径の何倍で、いちばん濃くなるか
   scale: 0.32, // 模様の細かさ（1マスあたり）
@@ -131,6 +131,9 @@ export const TRAIT_GLOSS: Partial<Record<TraitId, { shininess: number; specular:
   fire: { shininess: 22, specular: 0x2e2220 },
 };
 export const NO_GLOSS = { shininess: 30, specular: 0x000000 } as const;
+// ツヤを決めていない特性（無属性・闇）の床と壁：湿った石の、弱い照り返し（2026-11-15）。
+// 床と壁は、テクスチャの明るいところ（石の面）ほど照り返し、暗いところ（継ぎ目・ひび）は照り返さない（specularMap）
+export const WET_STONE = { shininess: 32, specular: 0x262626 } as const;
 
 export const TRAIT_COLORS: Record<TraitId, { floor: number; wall: number }> = {
   fire: { floor: 0x4a2a22, wall: 0x8a3a26 },
@@ -150,4 +153,67 @@ export const DEBRIS = {
   rubbleSize: [0.05, 0.13] as const, // 崩れた石の大きさ（マス）
   darken: 0.6, // 壁の色に掛ける明るさ
   perTile: 4, // 1マスに置ける数の上限（入れ物の大きさを決める）
+};
+
+// 画面全体の仕上げ（postFx.ts）：光のにじみ（明るさが threshold から threshold+knee にかけて、にじみ始める。bloom はにじみの強さ）、
+// 周辺減光（vignette：四隅をどれだけ暗くするか）、粒子感（grain：ざらつきの強さ）。?post=off、処理の弱い端末、描くのが間に合わないときは使わない
+export const POST_FX = { threshold: 0.85, knee: 0.5, bloom: 0.45, vignette: 0.38, grain: 0.035 };
+
+// 部屋の壁掛けたいまつ（sconces.ts）。height：掛ける高さ、out：壁から前へ出す長さ、wideRoom：この幅以上の部屋には2つ掛ける。
+// 光は主人公から reach マス以内の、見えているたいまつ lights 個にだけ灯す（強さ intensity、届く距離 distance）
+export const SCONCE = {
+  height: 0.62,
+  out: 0.12,
+  wideRoom: 7,
+  lights: 3,
+  reach: 9,
+  color: 0xffb070,
+  flameColor: 0xffd29a,
+  intensity: 3.2,
+  distance: 4.5,
+  decay: 1.6,
+  flicker: 0.14,
+  flameSize: 0.22,
+  remembered: 0.3, // 一度見ただけのときの、炎の明るさ
+};
+
+// 空気の粒（particles.ts）。air：主人公のまわりに漂う粒の数（box：漂わせる箱の幅と高さ、マス）。
+// kinds：特性ごとの粒（色、動き：velocity はマス/秒、sway は揺れ幅、size は大きさ、glow なら光る粒として足し合わせる）。
+// 火の粉は、灯っている壁掛けたいまつ（最大 sources 個）から立ちのぼる
+export const PARTICLES = {
+  air: 160,
+  box: { width: 9, height: 2.2 },
+  embers: 36,
+  sources: 3,
+  emberColor: 0xffa648,
+  emberSpeed: 0.55,
+  emberRise: 0.9,
+  emberSize: 0.9,
+  kinds: {
+    fire: { color: 0x8a8580, velocity: [0.05, -0.08, 0.03] as [number, number, number], sway: 0.25, size: 1.0, opacity: 0.55, glow: false }, // 灰
+    ice: { color: 0xe8f4ff, velocity: [0.08, -0.22, 0.04] as [number, number, number], sway: 0.35, size: 1.1, opacity: 0.75, glow: false }, // 細かな雪
+    neutral: { color: 0xd8cfb8, velocity: [0.03, 0.02, 0.02] as [number, number, number], sway: 0.18, size: 0.7, opacity: 0.35, glow: true }, // ちり
+    light: { color: 0xffe08a, velocity: [0.0, 0.07, 0.0] as [number, number, number], sway: 0.2, size: 0.8, opacity: 0.6, glow: true }, // 金色の光の粒
+    dark: { color: 0x1a1024, velocity: [0.04, 0.03, -0.03] as [number, number, number], sway: 0.4, size: 2.2, opacity: 0.45, glow: false }, // 黒いもや
+  },
+};
+
+// 敵の動き：攻撃のとき、少し身を引いてから主人公の方へ飛びかかって戻る（windUp：引く長さ、reach：飛びかかる長さ（マス）、ms：長さ）。
+// 倒れたとき、その場で崩れ落ちる（ms：長さ）。「動きを減らす」設定では、どちらもしない
+export const ENEMY_MOTION = { lunge: { windUp: 0.1, reach: 0.32, ms: 340 }, collapse: { ms: 650 } };
+
+// 床の変化（2026-11-15）：
+// - corridor：通路（部屋の外）の床の明るさ。部屋の床より少し暗く、踏み固めた感じにする
+// - puddle：水たまり。床のマスに chance の確率で置き、たいまつの光が強く照り返す（炎のダンジョンには置かない）
+// - moss：壁の根元に沿って生える、こけ（炎はすす、氷は霜、光は乾いたこけ、闇は紫のこけ）
+export const FLOOR_LOOK = {
+  corridor: 0.8,
+  puddle: { chance: 0.07, size: [0.22, 0.42] as const, color: 0x0b1012, shininess: 70, specular: 0x3a4650, opacity: 0.7 },
+  moss: {
+    chance: 0.4,
+    length: [0.35, 0.8] as const, // 壁に沿った長さ（マス）
+    width: [0.12, 0.22] as const, // 壁から床へ広がる幅（マス）
+    colors: { fire: 0x120a08, ice: 0xcfe3ee, neutral: 0x31492a, light: 0x5f5a2c, dark: 0x2c2244 } as Record<TraitId, number>,
+    opacity: 0.75,
+  },
 };
