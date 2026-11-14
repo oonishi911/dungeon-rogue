@@ -2,14 +2,14 @@
   "name": "深い祠",
   "description": "",
   "floors": {
-    "count": 1,
-    "size": 20,
+    "count": 5,
+    "size": 30,
     "satiety": 350
   },
   "rooms": {
     "attemptRate": 0.3,
     "minSize": 5,
-    "maxSize": 9
+    "maxSize": 11
   },
   "enemies": {
     "amount": 2,
@@ -19,13 +19,13 @@
     "nestMin": 3,
     "nestMax": 8,
     "stayInRoom": true,
-    "bossMinions": 10
+    "bossMinions": 5
   },
   "growth": {
-    "expBase": 30,
-    "expStep": 20,
-    "hpPerLevel": 5,
-    "atkPerLevel": 3,
+    "expBase": 10,
+    "expStep": 5,
+    "hpPerLevel": 2,
+    "atkPerLevel": 1,
     "maxLevel": 99,
     "eliteRate": 3
   },

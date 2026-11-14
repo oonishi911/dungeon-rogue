@@ -3,29 +3,29 @@
   "description": "少し広いダンジョン",
   "floors": {
     "count": 2,
-    "size": 30,
+    "size": 25,
     "satiety": 350
   },
   "rooms": {
     "attemptRate": 0.3,
     "minSize": 5,
-    "maxSize": 9
+    "maxSize": 7
   },
   "enemies": {
     "amount": 2,
     "placement": "mixed",
     "roomWeight": 1,
     "nestChance": 0.5,
-    "nestMin": 3,
-    "nestMax": 8,
+    "nestMin": 1,
+    "nestMax": 3,
     "stayInRoom": true,
-    "bossMinions": 10
+    "bossMinions": 3
   },
   "growth": {
-    "expBase": 30,
-    "expStep": 20,
-    "hpPerLevel": 5,
-    "atkPerLevel": 3,
+    "expBase": 10,
+    "expStep": 5,
+    "hpPerLevel": 2,
+    "atkPerLevel": 1,
     "maxLevel": 99,
     "eliteRate": 3
   },
