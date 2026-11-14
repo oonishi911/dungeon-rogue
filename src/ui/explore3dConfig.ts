@@ -139,3 +139,15 @@ export const TRAIT_COLORS: Record<TraitId, { floor: number; wall: number }> = {
   light: { floor: 0x4a4430, wall: 0xc9bb8a },
   dark: { floor: 0x241d32, wall: 0x52466e },
 };
+
+// 床と壁の凹凸：テクスチャの明るさを高さとみなし、石の継ぎ目やひびに光と陰を付ける（bumpMap）。大きいほど凹凸が強い
+export const SURFACE_BUMP = { floor: 9, top: 7, side: 9 };
+// 床の小石とがれき：マスごとに決まった乱数で、小石を散らし、壁の根元には崩れた石を寄せる（色は壁の色を暗くしたもの）
+export const DEBRIS = {
+  pebbleChance: 0.45, // 壁に接していない床のマスに、小石が1つある確率
+  rubbleChance: 0.6, // 壁に接した床のマスに、崩れた石がある確率（あれば1〜3個）
+  pebbleSize: [0.04, 0.09] as const, // 小石の大きさ（マス）
+  rubbleSize: [0.05, 0.13] as const, // 崩れた石の大きさ（マス）
+  darken: 0.6, // 壁の色に掛ける明るさ
+  perTile: 4, // 1マスに置ける数の上限（入れ物の大きさを決める）
+};
