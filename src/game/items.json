@@ -1,0 +1,532 @@
+{
+  "weapons": {
+    "sword": [
+      {
+        "name": "剣",
+        "atk": 3,
+        "price": 30
+      },
+      {
+        "name": "剣+1",
+        "atk": 5,
+        "price": 40
+      },
+      {
+        "name": "剣+2",
+        "atk": 7,
+        "price": 70
+      },
+      {
+        "name": "剣+3",
+        "atk": 9,
+        "price": 100
+      },
+      {
+        "name": "剣+4",
+        "atk": 11,
+        "price": 150
+      },
+      {
+        "name": "剣+5",
+        "atk": 13,
+        "price": 230
+      },
+      {
+        "name": "剣+6",
+        "atk": 15,
+        "price": 340
+      },
+      {
+        "name": "剣+7",
+        "atk": 17,
+        "price": 510
+      },
+      {
+        "name": "剣+8",
+        "atk": 19,
+        "price": 770
+      },
+      {
+        "name": "剣+9",
+        "atk": 21,
+        "price": 1150
+      }
+    ],
+    "hammer": [
+      {
+        "name": "槌",
+        "atk": 3,
+        "price": 30
+      },
+      {
+        "name": "槌+1",
+        "atk": 5,
+        "price": 40
+      },
+      {
+        "name": "槌+2",
+        "atk": 7,
+        "price": 70
+      },
+      {
+        "name": "槌+3",
+        "atk": 9,
+        "price": 100
+      },
+      {
+        "name": "槌+4",
+        "atk": 11,
+        "price": 150
+      },
+      {
+        "name": "槌+5",
+        "atk": 13,
+        "price": 230
+      },
+      {
+        "name": "槌+6",
+        "atk": 15,
+        "price": 340
+      },
+      {
+        "name": "槌+7",
+        "atk": 17,
+        "price": 510
+      },
+      {
+        "name": "槌+8",
+        "atk": 19,
+        "price": 770
+      },
+      {
+        "name": "槌+9",
+        "atk": 21,
+        "price": 1150
+      }
+    ],
+    "staff": [
+      {
+        "name": "杖",
+        "atk": 3,
+        "price": 30
+      },
+      {
+        "name": "杖+1",
+        "atk": 5,
+        "price": 40
+      },
+      {
+        "name": "杖+2",
+        "atk": 7,
+        "price": 70
+      },
+      {
+        "name": "杖+3",
+        "atk": 9,
+        "price": 100
+      },
+      {
+        "name": "杖+4",
+        "atk": 11,
+        "price": 150
+      },
+      {
+        "name": "杖+5",
+        "atk": 13,
+        "price": 230
+      },
+      {
+        "name": "杖+6",
+        "atk": 15,
+        "price": 340
+      },
+      {
+        "name": "杖+7",
+        "atk": 17,
+        "price": 510
+      },
+      {
+        "name": "杖+8",
+        "atk": 19,
+        "price": 770
+      },
+      {
+        "name": "杖+9",
+        "atk": 21,
+        "price": 1150
+      }
+    ]
+  },
+  "armors": {
+    "fire_cloak": [
+      {
+        "name": "耐火のマント",
+        "def": 0,
+        "rate": 30,
+        "price": 40
+      },
+      {
+        "name": "耐火のマント+1",
+        "def": 1,
+        "rate": 28,
+        "price": 60
+      },
+      {
+        "name": "耐火のマント+2",
+        "def": 2,
+        "rate": 26,
+        "price": 90
+      },
+      {
+        "name": "耐火のマント+3",
+        "def": 3,
+        "rate": 24,
+        "price": 140
+      },
+      {
+        "name": "耐火のマント+4",
+        "def": 4,
+        "rate": 22,
+        "price": 200
+      },
+      {
+        "name": "耐火のマント+5",
+        "def": 5,
+        "rate": 20,
+        "price": 300
+      },
+      {
+        "name": "耐火のマント+6",
+        "def": 6,
+        "rate": 18,
+        "price": 460
+      },
+      {
+        "name": "耐火のマント+7",
+        "def": 7,
+        "rate": 16,
+        "price": 680
+      },
+      {
+        "name": "耐火のマント+8",
+        "def": 8,
+        "rate": 14,
+        "price": 1030
+      },
+      {
+        "name": "耐火のマント+9",
+        "def": 9,
+        "rate": 12,
+        "price": 1540
+      }
+    ],
+    "ice_cloak": [
+      {
+        "name": "耐氷のマント",
+        "def": 0,
+        "rate": 30,
+        "price": 40
+      },
+      {
+        "name": "耐氷のマント+1",
+        "def": 1,
+        "rate": 28,
+        "price": 60
+      },
+      {
+        "name": "耐氷のマント+2",
+        "def": 2,
+        "rate": 26,
+        "price": 90
+      },
+      {
+        "name": "耐氷のマント+3",
+        "def": 3,
+        "rate": 24,
+        "price": 140
+      },
+      {
+        "name": "耐氷のマント+4",
+        "def": 4,
+        "rate": 22,
+        "price": 200
+      },
+      {
+        "name": "耐氷のマント+5",
+        "def": 5,
+        "rate": 20,
+        "price": 300
+      },
+      {
+        "name": "耐氷のマント+6",
+        "def": 6,
+        "rate": 18,
+        "price": 460
+      },
+      {
+        "name": "耐氷のマント+7",
+        "def": 7,
+        "rate": 16,
+        "price": 680
+      },
+      {
+        "name": "耐氷のマント+8",
+        "def": 8,
+        "rate": 14,
+        "price": 1030
+      },
+      {
+        "name": "耐氷のマント+9",
+        "def": 9,
+        "rate": 12,
+        "price": 1540
+      }
+    ],
+    "plate": [
+      {
+        "name": "鎧",
+        "def": 0,
+        "rate": 60,
+        "price": 40
+      },
+      {
+        "name": "鎧+1",
+        "def": 1,
+        "rate": 58,
+        "price": 60
+      },
+      {
+        "name": "鎧+2",
+        "def": 2,
+        "rate": 56,
+        "price": 90
+      },
+      {
+        "name": "鎧+3",
+        "def": 3,
+        "rate": 54,
+        "price": 140
+      },
+      {
+        "name": "鎧+4",
+        "def": 4,
+        "rate": 52,
+        "price": 200
+      },
+      {
+        "name": "鎧+5",
+        "def": 5,
+        "rate": 50,
+        "price": 300
+      },
+      {
+        "name": "鎧+6",
+        "def": 6,
+        "rate": 48,
+        "price": 460
+      },
+      {
+        "name": "鎧+7",
+        "def": 7,
+        "rate": 46,
+        "price": 680
+      },
+      {
+        "name": "鎧+8",
+        "def": 8,
+        "rate": 44,
+        "price": 1030
+      },
+      {
+        "name": "鎧+9",
+        "def": 9,
+        "rate": 42,
+        "price": 1540
+      }
+    ],
+    "light_robe": [
+      {
+        "name": "光の衣",
+        "def": 0,
+        "rate": 30,
+        "price": 50
+      },
+      {
+        "name": "光の衣+1",
+        "def": 1,
+        "rate": 28,
+        "price": 80
+      },
+      {
+        "name": "光の衣+2",
+        "def": 2,
+        "rate": 26,
+        "price": 110
+      },
+      {
+        "name": "光の衣+3",
+        "def": 3,
+        "rate": 24,
+        "price": 170
+      },
+      {
+        "name": "光の衣+4",
+        "def": 4,
+        "rate": 22,
+        "price": 250
+      },
+      {
+        "name": "光の衣+5",
+        "def": 5,
+        "rate": 20,
+        "price": 380
+      },
+      {
+        "name": "光の衣+6",
+        "def": 6,
+        "rate": 18,
+        "price": 570
+      },
+      {
+        "name": "光の衣+7",
+        "def": 7,
+        "rate": 16,
+        "price": 850
+      },
+      {
+        "name": "光の衣+8",
+        "def": 8,
+        "rate": 14,
+        "price": 1280
+      },
+      {
+        "name": "光の衣+9",
+        "def": 9,
+        "rate": 12,
+        "price": 1920
+      }
+    ],
+    "dark_robe": [
+      {
+        "name": "闇の衣",
+        "def": 0,
+        "rate": 30,
+        "price": 50
+      },
+      {
+        "name": "闇の衣+1",
+        "def": 1,
+        "rate": 28,
+        "price": 80
+      },
+      {
+        "name": "闇の衣+2",
+        "def": 2,
+        "rate": 26,
+        "price": 110
+      },
+      {
+        "name": "闇の衣+3",
+        "def": 3,
+        "rate": 24,
+        "price": 170
+      },
+      {
+        "name": "闇の衣+4",
+        "def": 4,
+        "rate": 22,
+        "price": 250
+      },
+      {
+        "name": "闇の衣+5",
+        "def": 5,
+        "rate": 20,
+        "price": 380
+      },
+      {
+        "name": "闇の衣+6",
+        "def": 6,
+        "rate": 18,
+        "price": 570
+      },
+      {
+        "name": "闇の衣+7",
+        "def": 7,
+        "rate": 16,
+        "price": 850
+      },
+      {
+        "name": "闇の衣+8",
+        "def": 8,
+        "rate": 14,
+        "price": 1280
+      },
+      {
+        "name": "闇の衣+9",
+        "def": 9,
+        "rate": 12,
+        "price": 1920
+      }
+    ]
+  },
+  "supplies": {
+    "potion": {
+      "name": "回復薬",
+      "price": 10
+    },
+    "food": {
+      "name": "食料",
+      "price": 15
+    },
+    "fire_whetstone": {
+      "name": "炎の砥石",
+      "price": 20
+    },
+    "ice_whetstone": {
+      "name": "氷の砥石",
+      "price": 20
+    },
+    "holy_water": {
+      "name": "光の聖水",
+      "price": 20
+    },
+    "dark_oil": {
+      "name": "闇の香油",
+      "price": 20
+    }
+  },
+  "spellbooks": {
+    "book_shockwave": {
+      "name": "衝撃波の呪文書",
+      "price": 50
+    },
+    "book_sweep": {
+      "name": "なぎ払いの呪文書",
+      "price": 40
+    },
+    "book_fire_bolt": {
+      "name": "炎の矢の呪文書",
+      "price": 35
+    },
+    "book_ice_bolt": {
+      "name": "氷の矢の呪文書",
+      "price": 35
+    },
+    "book_light_lance": {
+      "name": "光の槍の呪文書",
+      "price": 35
+    },
+    "book_dark_bolt": {
+      "name": "闇の矢の呪文書",
+      "price": 35
+    },
+    "book_heal": {
+      "name": "癒しの呪文書",
+      "price": 40
+    },
+    "book_regen": {
+      "name": "再生の呪文書",
+      "price": 35
+    }
+  }
+}

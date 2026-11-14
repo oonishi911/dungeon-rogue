@@ -15,15 +15,13 @@ export interface TraitDef {
 }
 
 // ===== アイテム =====
+/** 武器と防具の種類（1段目の ID）。それぞれ10段階あり、2段目からは `sword_2` のような ID になる */
+export type GearBaseId = 'sword' | 'hammer' | 'staff' | 'fire_cloak' | 'ice_cloak' | 'plate' | 'light_robe' | 'dark_robe';
+export type GearTier = 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export type GearId = GearBaseId | `${GearBaseId}_${GearTier}`;
+
 export type ItemId =
-  | 'sword'
-  | 'hammer'
-  | 'staff'
-  | 'fire_cloak'
-  | 'ice_cloak'
-  | 'plate'
-  | 'light_robe'
-  | 'dark_robe'
+  | GearId
   | 'potion'
   | 'food'
   | 'fire_whetstone'
@@ -48,8 +46,8 @@ export type ArmorGuard =
   | { kind: 'whole'; element: 'light' | 'dark'; rate: number };
 
 export type ItemEffect =
-  | { kind: 'weapon'; weapon: WeaponType }
-  | { kind: 'armor'; guard: ArmorGuard }
+  | { kind: 'weapon'; weapon: WeaponType; atk: number } // atk：持つと上がる攻撃力（段階が上がるほど大きい）
+  | { kind: 'armor'; guard: ArmorGuard; def: number } // def：持つと上がる守り（段階が上がるほど大きい。1段目は0）
   | { kind: 'heal'; hp: number }
   | { kind: 'food'; satiety: number }
   | { kind: 'enchant'; element: Element; hits: number } // 武器に一時的に属性を付ける
@@ -78,6 +76,7 @@ export interface ItemDef {
   id: ItemId;
   name: string;
   description: string;
+  price: number; // 店での値段（金貨）
   effect: ItemEffect;
 }
 

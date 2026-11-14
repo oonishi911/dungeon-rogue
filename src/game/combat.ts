@@ -28,11 +28,14 @@ export function itemSlot(item: ItemDef): ItemSlot {
 export function buildPlayer(loadout: readonly ItemId[]): PlayerStats {
   const weapon = loadout.find((id) => itemSlot(ITEMS[id]) === 'weapon') ?? null;
   const armor = loadout.find((id) => itemSlot(ITEMS[id]) === 'armor') ?? null;
+  const w = weapon ? ITEMS[weapon].effect : null;
+  const a = armor ? ITEMS[armor].effect : null;
   return {
     hp: C.playerHp,
     maxHp: C.playerHp,
-    atk: C.playerAtk + (weapon ? C.weaponAtk : 0),
-    def: C.playerDef,
+    // 武器は攻撃力を、防具は守りを上げる（段階が上がるほど大きい。品物の設定 items.json）
+    atk: C.playerAtk + (w?.kind === 'weapon' ? w.atk : 0),
+    def: C.playerDef + (a?.kind === 'armor' ? a.def : 0),
     poisonTurns: 0,
     weapon,
     armor,

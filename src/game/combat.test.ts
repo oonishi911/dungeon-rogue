@@ -26,7 +26,10 @@ describe('buildPlayer', () => {
   });
 
   it('武器を持つと攻撃力が上がる', () => {
-    expect(buildPlayer(['sword']).atk).toBe(COMBAT_CONFIG.playerAtk + COMBAT_CONFIG.weaponAtk);
+    expect(buildPlayer(['sword']).atk).toBe(COMBAT_CONFIG.playerAtk + 3);
+    // 段階が上がるほど、攻撃力・守りが上がる
+    expect(buildPlayer(['sword_5']).atk).toBeGreaterThan(buildPlayer(['sword']).atk);
+    expect(buildPlayer(['plate_5']).def).toBeGreaterThan(buildPlayer(['plate']).def);
     expect(buildPlayer([]).atk).toBe(COMBAT_CONFIG.playerAtk);
   });
 });

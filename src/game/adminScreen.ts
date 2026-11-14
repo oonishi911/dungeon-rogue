@@ -1,5 +1,5 @@
 // 開発用の管理画面（?view=admin）の、画面に関わらない決まり：
-// 敵のマスターデータ（enemies.json）と、ダンジョンの設定ファイル（src/game/dungeons/<ID>.json。いくつもある）をまとめて扱う。
+// 敵のマスターデータ（enemies.json）と、品物の設定（items.json）と、ダンジョンの設定ファイル（src/game/dungeons/<ID>.json。いくつもある）をまとめて扱う。
 // ・タブの一覧と、住所（?view=・?tab=・?dungeon=）から開くタブと、直すダンジョンを決めること
 // ・どのタブ・どのダンジョンの値を変えたか
 // ・ダンジョンを複製して作る・消す、敵をすべてのダンジョンから外して消す
@@ -8,13 +8,16 @@
 import { DEFAULT_DUNGEON_ID, dungeonPath, sortDungeonIds } from './dungeons';
 import { describeChanges, encountersWithout, masterProblems, removeEnemy, serializeEnemyMaster, traitsWithBoss, TRAIT_LABELS, type EnemyMaster } from './enemyMaster';
 import { describeDungeonChanges, DUNGEON_LIMITS, dungeonProblems, serializeDungeon, type DungeonFile } from './genMaster';
+import { describeItemChanges, itemProblems, serializeItemMaster, type ItemMaster } from './itemMaster';
 import type { EnemyId } from './types';
 
 export const ENEMY_FILE = 'src/game/enemies.json';
+export const ITEM_FILE = 'src/game/items.json';
 
 /** 管理画面で扱うデータ全部。dungeons はダンジョンの ID（ファイルの名前）ごと */
 export interface AdminData {
   enemies: EnemyMaster;
+  items: ItemMaster;
   dungeons: Record<string, DungeonFile>;
 }
 
@@ -29,6 +32,7 @@ export const copyJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as
  */
 export const ADMIN_TABS = [
   { id: 'enemies', label: '敵', part: 'enemies' },
+  { id: 'items', label: '品物', part: 'items' },
   { id: 'about', label: '名前と説明', part: 'dungeon' },
   { id: 'pool', label: 'ダンジョンに出る敵', part: 'dungeon' },
   { id: 'floors', label: '階の数・広さ・満腹度', part: 'dungeon' },
@@ -77,7 +81,7 @@ export function adminTabUrl(href: string, tab: AdminTab, dungeon: string = DEFAU
 }
 
 /** タブごとの、ダンジョンの設定ファイルの中の場所 */
-const DUNGEON_PARTS: Record<Exclude<AdminTab, 'enemies'>, (d: DungeonFile) => unknown> = {
+const DUNGEON_PARTS: Record<Exclude<AdminTab, 'enemies' | 'items'>, (d: DungeonFile) => unknown> = {
   about: (d) => [d.name, d.description],
   pool: (d) => d.encounters,
   floors: (d) => d.floors,
@@ -93,6 +97,7 @@ const DUNGEON_PARTS: Record<Exclude<AdminTab, 'enemies'>, (d: DungeonFile) => un
  */
 export function tabChanged(tab: AdminTab, base: AdminData, draft: AdminData, dungeon: string = DEFAULT_DUNGEON_ID): boolean {
   if (tab === 'enemies') return stable(base.enemies.enemies) !== stable(draft.enemies.enemies);
+  if (tab === 'items') return stable(base.items) !== stable(draft.items);
   const b = base.dungeons[dungeon];
   const d = draft.dungeons[dungeon];
   if (!b || !d) return Boolean(d);
@@ -156,7 +161,7 @@ export function bossUses(data: AdminData, id: EnemyId): string[] {
 /** 敵を消す。敵のマスターから消し、すべてのダンジョンの道中からも外す */
 export function removeEnemyEverywhere(data: AdminData, id: EnemyId): AdminData {
   const dungeons = Object.fromEntries(Object.entries(data.dungeons).map(([d, file]) => [d, { ...file, encounters: encountersWithout(file.encounters, id) }]));
-  return { enemies: removeEnemy(data.enemies, id), dungeons };
+  return { ...data, enemies: removeEnemy(data.enemies, id), dungeons };
 }
 
 // ===== 公開 =====
@@ -188,6 +193,10 @@ export function planPublish(base: AdminData, draft: AdminData): PublishPlan {
   const enemyChanges = describeChanges(base.enemies, draft.enemies);
   const files: PublishFile[] = [];
   if (enemyChanges.length) files.push({ path: ENEMY_FILE, text: serializeEnemyMaster(draft.enemies), base: serializeEnemyMaster(base.enemies) });
+  const itemChanges = serializeItemMaster(base.items) === serializeItemMaster(draft.items) ? [] : describeItemChanges(base.items, draft.items);
+  if (serializeItemMaster(base.items) !== serializeItemMaster(draft.items)) {
+    files.push({ path: ITEM_FILE, text: serializeItemMaster(draft.items), base: serializeItemMaster(base.items) });
+  }
 
   const names = (id: EnemyId) => draft.enemies.enemies[id]?.name || base.enemies.enemies[id]?.name || id;
   const alive = (id: EnemyId) => id in draft.enemies.enemies;
@@ -211,11 +220,13 @@ export function planPublish(base: AdminData, draft: AdminData): PublishPlan {
     }
   }
 
-  const changes = [...enemyChanges, ...dungeonChanges];
-  const what = enemyChanges.length && dungeonChanges.length ? '敵のデータとダンジョンの設定' : enemyChanges.length ? '敵のデータ' : 'ダンジョンの設定';
+  const itemLines = itemChanges.length || !files.some((f) => f.path === ITEM_FILE) ? itemChanges : ['品物の設定を変更'];
+  const changes = [...enemyChanges, ...itemLines.map((c) => `品物：${c}`), ...dungeonChanges];
+  const parts = [enemyChanges.length && '敵のデータ', itemLines.length && '品物の設定', dungeonChanges.length && 'ダンジョンの設定'].filter(Boolean);
+  const what = parts.length ? parts.join('と') : 'ダンジョンの設定';
   return {
     changes,
-    problems: [...masterProblems(draft.enemies), ...draftDungeonProblems(draft)],
+    problems: [...masterProblems(draft.enemies), ...itemProblems(draft.items).map((p) => `品物：${p}`), ...draftDungeonProblems(draft)],
     files,
     message: `${what}を更新する（管理画面から）\n\n${changes.map((c) => `- ${c}`).join('\n')}`,
   };
