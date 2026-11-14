@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PREP_CONFIG } from './data';
 import { FIELD_ENEMY } from './enemies.fixtures';
 import { enemyDef, type MapEnemy } from './enemies';
-import { magicPower, spellDamage, startExplore, step, type ExploreAction, type ExploreState } from './explore';
+import { magicPower, spellAffinity, spellDamage, startExplore, step, type ExploreAction, type ExploreState } from './explore';
 import { DEFAULT_DUNGEON } from './dungeons';
 import type { FloorMap, Pos } from './map';
 import { buyItem, createPrep } from './prep';
@@ -126,6 +126,19 @@ describe('呪文の働き', () => {
       { x: 2, y: 2 },
       { x: 3, y: 2 },
     ]);
+  });
+
+  it('属性の矢と当たった敵の相性を、演出のために残す（弱点・ふつう・効きにくい。外れたら・矢でなければ null）', () => {
+    const base = enemyDef(enemy({ x: 0, y: 0 }));
+    expect(spellAffinity('fire_bolt', { ...base, element: 'ice' })).toBe('weak');
+    expect(spellAffinity('fire_bolt', { ...base, element: 'fire' })).toBe('resist');
+    expect(spellAffinity('fire_bolt', { ...base, element: 'neutral' })).toBe('normal');
+    expect(spellAffinity('light_lance', { ...base, element: 'dark' })).toBe('weak');
+    const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 3, y: 2 })]);
+    const hit = act(s0, { kind: 'cast', spell: 'fire_bolt', dir: 'right' });
+    expect(hit.cast!.affinity).toBe(spellAffinity('fire_bolt', enemyDef(s0.enemies[0]!)));
+    expect(act(s0, { kind: 'cast', spell: 'fire_bolt', dir: 'left' }).cast!.affinity).toBeNull();
+    expect(act(s0, { kind: 'cast', spell: 'sweep', dir: 'right' }).cast!.affinity).toBeNull();
   });
 
   it('呪文で敵を倒すと、ふつうに倒したときと同じ報酬が入る', () => {

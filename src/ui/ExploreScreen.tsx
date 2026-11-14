@@ -51,11 +51,12 @@ import { tilesetFor } from './tileset';
 // これより大きい（広いマップ）と縮めて表示するので、ドットのままだと細い通路が消えてしまう
 const MINI_SHARP_MAX = 96;
 
-// 1マス動くのにかける時間。なぞり続けたとき・タップで歩くときの速さもこれで決まる（1秒に約3.7マス）
-const STEP_MS = 270;
+// 1マス動くのにかける時間。なぞり続けたとき・タップで歩くときの速さもこれで決まる（1秒に約2.6マス。以前の270ミリ秒から、速さを3割落とした）
+const STEP_MS = 385;
 const DOUBLE_TAP_MS = 350; // この時間（ミリ秒）以内に主人公を2回タップすると、ダブルタップとしてその場で待つ
 // 敵の攻撃の音を鳴らす間合い（秒）。afterAttack：主人公も攻撃したとき、その音のあとに鳴らすまで。gap：敵が何体も攻撃したとき、1体ずつずらす間。max：1回の行動で鳴らす数
 const ENEMY_SOUND = { afterAttack: 0.2, gap: 0.12, max: 3 } as const;
+const CAST_THEN_HURT_MS = 150; // 呪文の矢が当たってから、敵の攻撃を見せるまで（ミリ秒）
 const QUEUE_MAX = 2; // 動いている途中に押した操作を、いくつまで覚えておくか（多すぎると指を止めても歩き続ける）
 
 const KEY_DIRS: Record<string, Dir> = {
@@ -181,6 +182,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   // スマホで、装備・敵・記録をまとめた画面を開いているか（PCでは常に横に出ている）
   const [infoOpen, setInfoOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mpShake, setMpShake] = useState(0); // 魔力が足りずに唱えられなかった回数（魔力のゲージを震わせる）
   // ブラウザの「戻る」が押されて、ページを離れるかを確かめているところ
   const [leaving, setLeaving] = useState(false);
   // リタイアするかを確かめているところ
@@ -197,6 +199,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const motionRef = useRef<{ from: Motion; start: number }>({ from: motionOf(state), start: 0 });
   const heldRef = useRef<Dir[]>([]); // 押し続けている方向（あとから押したものが優先）
   const queueRef = useRef<ExploreAction[]>([]); // 次に1回ずつ行う行動（動いている途中に押した分）
+  const busyUntilRef = useRef(0); // 呪文の矢が飛んでいるあいだは、次の行動を待たせる（当たるまで）
   const walkRef = useRef<WalkGoal | null>(null); // タップ・クリックで向かっている先
   // 仮想スティックで進みたい向きの候補（斜めなら上下・左右の2つ）。1歩ごとに、進める向きを選び直す
   const stickRef = useRef<Dir[] | null>(null);
@@ -235,6 +238,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
         action.kind === 'move' &&
         tileAt(prev.map, { x: prev.player.x + DIR_DELTA[action.dir].x, y: prev.player.y + DIR_DELTA[action.dir].y }) === 'wall';
       if (!bumped) setError(result.error);
+      if (action.kind === 'cast' && result.error === '魔力が足りない') setMpShake((n) => n + 1);
       return false;
     }
     const next = result.value;
@@ -242,8 +246,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     // 攻撃したとき・攻撃されたときは、画面を少し拡大縮小し、ダメージの数字を出す（3D表示のみ）
     // 敵を攻撃したときは、主人公が敵の方を向いて武器を振り、武器ごとの音を鳴らす（1回の行動で1回だけ）
     // 呪文を唱えたときは、武器を振らずに呪文の演出と音にする
+    // 矢が当たるまでのミリ秒。そのあいだは次の行動を待たせ、与えたダメージの数字は当たったときに出す
+    let impactMs = 0;
     if (next.cast) {
-      view3dRef.current?.castSpell(next.cast, prev.player);
+      impactMs = view3dRef.current?.castSpell(next.cast, prev.player) ?? 0;
+      busyUntilRef.current = performance.now() + impactMs;
       playSpell(next.cast.spell);
     }
     const struck = next.cast ? undefined : next.hits.find((hit) => hit.kind === 'dealt');
@@ -253,10 +260,16 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     }
     // 敵に攻撃されたときは、敵の体質ごとの音を鳴らす。主人公の攻撃の音のあと、敵ごとに少しずつずらして鳴らす
     const attackers = next.hits.flatMap((hit) => (hit.kind === 'taken' && hit.by ? [enemyBase(hit.by)] : [])).slice(0, ENEMY_SOUND.max);
-    attackers.forEach((enemy, i) => playEnemyAttack(enemy, (struck ? ENEMY_SOUND.afterAttack : 0) + i * ENEMY_SOUND.gap));
+    attackers.forEach((enemy, i) => playEnemyAttack(enemy, (struck ? ENEMY_SOUND.afterAttack : 0) + (impactMs > 0 ? (impactMs + CAST_THEN_HURT_MS) / 1000 : 0) + i * ENEMY_SOUND.gap));
     for (const hit of next.hits) {
-      view3dRef.current?.hitPulse(hit.kind === 'dealt' ? 'attack' : 'hurt');
-      view3dRef.current?.popDamage(hit.at, hit.amount, hit.kind);
+      const show = () => {
+        view3dRef.current?.hitPulse(hit.kind === 'dealt' ? 'attack' : 'hurt');
+        view3dRef.current?.popDamage(hit.at, hit.amount, hit.kind);
+      };
+      // 呪文の矢のあとに敵が攻撃してきたときは、矢が当たってから見せる
+      const delay = impactMs > 0 ? impactMs + (hit.kind === 'taken' ? CAST_THEN_HURT_MS : 0) : 0;
+      if (delay > 0) window.setTimeout(show, delay);
+      else show();
     }
     // 同じ階で1歩進んだら足音を鳴らす（階を移ったとき・その場で戦ったときは鳴らさない）
     if (next.map === prev.map && !samePos(prev.player, next.player)) playFootstep(next.trait);
@@ -387,7 +400,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     };
     let frameId = 0;
     const tick = (now: number) => {
-      if (now - motionRef.current.start >= STEP_MS && stateRef.current.outcome === 'ongoing') {
+      if (now - motionRef.current.start >= STEP_MS && now >= busyUntilRef.current && stateRef.current.outcome === 'ongoing') {
         const held = heldRef.current.at(-1);
         const [queued, ...rest] = queueRef.current;
         if (queued) {
@@ -597,6 +610,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const onStagePointerDown = (e: PointerEvent<HTMLDivElement>) => {
     // 終わったあとの「結果を見る」ボタンなどは、そのまま押せるようにする
     if (stateRef.current.outcome !== 'ongoing' || touchRef.current || e.button !== 0) return;
+    // 3D画面の上に重ねたボタン（待機・リタイアの確かめなど）は、歩く操作にせず、ボタンとして押させる
+    if ((e.target as HTMLElement).closest('button, a')) return;
     const rect = e.currentTarget.getBoundingClientRect();
     touchRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, left: rect.left, top: rect.top, dragging: false };
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -714,6 +729,22 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
             role="img"
             aria-label={`${floorName}の周囲。マスをタップするとそこまで歩き、指でなぞるとその向きに歩き続ける。主人公をダブルタップするとその場で1ターン待つ。階段は踏むと降りる。${onStairs ? '足元に階段がある' : ''}`}
           />
+          {/* その場で1ターン待つ。3D画面の右下に重ねる（スマホでは、下に出る記録の行より上） */}
+          {!ended && (
+            <button
+              type="button"
+              className="explore__rest"
+              onClick={() => request({ kind: 'wait' })}
+              aria-label="その場で1ターン待つ"
+              title="その場で1ターン待つ（スペースキー）"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9" />
+              </svg>
+              待機
+              <span className="explore__rest-key">スペース</span>
+            </button>
+          )}
           {stick && (
             <div className="stick" style={{ left: stick.x, top: stick.y }} aria-hidden="true">
               <span className="stick__knob" style={{ transform: `translate(${stick.dx}px, ${stick.dy}px)` }} />
@@ -755,7 +786,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
             <div className="explore__ending explore__leave" role="alertdialog" aria-labelledby="explore-retire">
               <p id="explore-retire">リタイアしますか？</p>
               <p className="explore__leave-note">
-                探索をやめて、ダンジョンを出ます。踏破した経験は得られず、手に入れた金貨は、力尽きたときと同じく半分だけ持ち帰ります。
+                探索をやめて、ダンジョンを出ます。踏破にはならず、手に入れた金貨は、力尽きたときと同じく半分だけ持ち帰ります。
               </p>
               <button type="button" className="primary" autoFocus onClick={() => setRetiring(false)}>
                 探索に戻る
@@ -789,9 +820,10 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
 
         <aside className="explore__side">
           <div className="explore__status">
-            <Meter label="HP" value={stats.hp} max={stats.maxHp} tone="hp" />
-            <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" />
-            {state.maxMp > 0 && <Meter label="魔力" value={state.mp} max={state.maxMp} tone="mp" />}
+            {/* 体力・満腹度・魔力は、数字を出さずゲージだけにする。体力と満腹度は、残りが少ないと点滅する */}
+            <Meter label="HP" value={stats.hp} max={stats.maxHp} tone="hp" gaugeOnly warnBelow={0.25} pulse />
+            <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" gaugeOnly warnBelow={0.25} />
+            {state.maxMp > 0 && <Meter label="魔力" value={state.mp} max={state.maxMp} tone="mp" gaugeOnly pulse shakeKey={mpShake} />}
             {/* レベルは、この挑戦のあいだだけ。いちばん上のレベルでは経験値の棒を出さない */}
             {state.level < dungeon.growth.maxLevel ? (
               <Meter label={`レベル${state.level}`} value={state.exp} max={expToNext(state.level, dungeon.growth)} tone="exp" unit="経験値" />
@@ -966,17 +998,60 @@ function LogList({ lines, total }: { lines: string[]; total: number }) {
   );
 }
 
-function Meter({ label, value, max, tone, unit }: { label: string; value: number; max: number; tone: 'hp' | 'satiety' | 'exp' | 'mp'; unit?: string }) {
+interface MeterProps {
+  label: string;
+  value: number;
+  max: number;
+  tone: 'hp' | 'satiety' | 'exp' | 'mp';
+  unit?: string;
+  gaugeOnly?: boolean; // 数字を出さず、ゲージだけにする（読み上げには数字を伝える）
+  warnBelow?: number; // 残りがこの割合より少ないと、ゲージを点滅させる
+  pulse?: boolean; // 増えたとき・減ったときに、ゲージを一瞬光らせる（唱えた魔力・回復した体力）
+  shakeKey?: number; // 変わるたびにゲージを震わせる（魔力が足りないとき）
+}
+
+function Meter({ label, value, max, tone, unit, gaugeOnly, warnBelow, pulse, shakeKey = 0 }: MeterProps) {
+  // 光らせる：値が変わったら、増えた・減ったを少しのあいだ覚える
+  const prev = useRef(value);
+  const [change, setChange] = useState<{ dir: 'up' | 'down'; n: number } | null>(null);
+  useEffect(() => {
+    if (!pulse || value === prev.current) return;
+    const dir = value > prev.current ? 'up' : 'down';
+    prev.current = value;
+    setChange((c) => ({ dir, n: (c?.n ?? 0) + 1 }));
+    const id = window.setTimeout(() => setChange(null), 600);
+    return () => window.clearTimeout(id);
+  }, [value, pulse]);
+  const low = warnBelow !== undefined && value / max < warnBelow;
+  const classes = [
+    'meter__track',
+    `meter__track--${tone}`,
+    low ? 'meter__track--low' : '',
+    change ? `meter__track--${change.dir}` : '',
+    shakeKey > 0 ? 'meter__track--shake' : '',
+  ].join(' ');
   return (
     <div className="meter">
       <div className="meter__head">
         <span>{label}</span>
-        <span>
-          {unit ? `${unit} ` : ''}
-          {value} / {max}
-        </span>
+        {!gaugeOnly && (
+          <span>
+            {unit ? `${unit} ` : ''}
+            {value} / {max}
+          </span>
+        )}
       </div>
-      <div className={`meter__track meter__track--${tone}`} role="meter" aria-label={unit ? `${label}の${unit}` : label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value}>
+      <div
+        // 震わせる・光らせる動きを、起きるたびに始めからやり直す
+        key={`${shakeKey}-${change?.n ?? 0}`}
+        className={classes}
+        role="meter"
+        aria-label={unit ? `${label}の${unit}` : label}
+        aria-valuemin={0}
+        aria-valuemax={max}
+        aria-valuenow={value}
+        aria-valuetext={gaugeOnly ? `${Math.round((value / max) * 100)}%` : undefined}
+      >
         <div className="meter__fill" style={{ width: `${(value / max) * 100}%` }} />
       </div>
     </div>
