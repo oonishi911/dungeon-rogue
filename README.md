@@ -50,7 +50,7 @@ src/
   ui/       画面（ロジックを呼び出して表示するだけ）
     ExploreScreen.tsx  探索画面：操作と毎フレームの進行（右側の欄は ExploreSide、確かめる画面は ExploreDialogs、
                        1手ごとの音・振動・演出は exploreFeedback、キーの割り当ては exploreKeys、歩く判断は exploreWalk）
-    explore3d.ts       3D表示の本体（数値は explore3dConfig、床・壁の貼り方と霧は explore3dKit）
+    explore3d.ts       3D表示の本体（数値は explore3dConfig、床・壁の貼り方と霧は explore3dKit、凹凸の絵は surfaceNormals、画面の仕上げは postFx）
     spellFx.ts         呪文の演出（道具とテクスチャは spellFxKit）
   sprites/  32×32のドット絵（文字列データ）と、SVG・Canvasで描く部品
 scripts/

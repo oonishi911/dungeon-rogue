@@ -10,7 +10,7 @@
 
 import * as THREE from 'three';
 import { ITEMS } from '../game/data';
-import { enemyDef, isAdjacent } from '../game/enemies';
+import { enemyDef, isAdjacent, type MapEnemy } from '../game/enemies';
 import { upStairs } from '../game/explore';
 import { type CastEvent, type Dir, type ExploreState } from '../game/exploreTypes';
 import { dirBetween } from '../game/exploreSight';
@@ -26,10 +26,11 @@ import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
-import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEBRIS, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, RESOLUTION, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
+import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEBRIS, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, RESOLUTION, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
 import { applyFog, createFog, createGroundMist, litBillboard, worldMapped } from './explore3dKit';
 import { asMetal } from './materialLook';
 import { PostFx } from './postFx';
+import { normalMapFrom } from './surfaceNormals';
 import { Particles } from './particles';
 import { Sconces } from './sconces';
 
@@ -38,6 +39,10 @@ interface Atlas {
   floor: THREE.Texture;
   top: THREE.Texture;
   side: THREE.Texture;
+  // 凹凸の絵（法線マップ。surfaceNormals.ts）。作れなかったときは null で、凹凸は付けない
+  floorBump: THREE.Texture | null;
+  topBump: THREE.Texture | null;
+  sideBump: THREE.Texture | null;
 }
 
 /** from から to を見たときの向き（離れていてもよい。縦と横で、差の大きい方の向き） */
@@ -123,6 +128,7 @@ export class DungeonView3D {
       facing: Dir;
     }
   >();
+  private prebuild: MapEnemy[] = []; // 階に入ったとき、組み立て待ちの敵（近い順）
   private readonly textures = new Map<string, THREE.Texture>();
   private readonly materials = new Map<string, THREE.SpriteMaterial>();
   private readonly litMaterials = new Map<string, THREE.MeshLambertMaterial>(); // たいまつで照らされるドット絵（敵）
@@ -296,6 +302,8 @@ export class DungeonView3D {
     this.scene.add(this.hero.root, this.target, this.pathDots);
     // 呪文が敵に当たったら、その敵をのけぞらせる
     this.spellFx.onImpact = (at, strength) => this.knockEnemy(at, strength);
+    this.compile(this.scene); // 床・壁・主人公など、最初から場面にあるものの描き方を先に作る
+    this.post?.compile(this.renderer);
   }
 
   /**
@@ -318,6 +326,7 @@ export class DungeonView3D {
   render(frame: Frame) {
     const s = frame.state;
     if (s !== this.shownState) {
+      if (this.shownState?.map !== s.map) this.queueEnemyModels(s); // 階に入ったとき：その階の敵の模型を先に組み立てる
       this.updateFog(frame);
       this.updateProps(frame);
       this.sconces.update(s, frame.visible);
@@ -335,6 +344,7 @@ export class DungeonView3D {
     const dt = Math.min(0.1, elapsed / 1000);
     this.lastFrameAt = now;
     this.adaptResolution(elapsed);
+    this.prebuildEnemy();
     const moved = frame.from.player.x !== s.player.x || frame.from.player.y !== s.player.y;
     // 1マスずつ動くので、前の位置から今の位置への向きが歩いた向き（階を移ったときは向きを変えない）
     if (moved && Math.abs(frame.from.player.x - s.player.x) + Math.abs(frame.from.player.y - s.player.y) === 1) {
@@ -711,7 +721,7 @@ export class DungeonView3D {
       mesh.dispose();
     }
     for (const atlas of this.atlases.values()) {
-      for (const t of atlas ? [atlas.floor, atlas.top, atlas.side] : []) t.dispose();
+      for (const t of atlas ? [atlas.floor, atlas.top, atlas.side, atlas.floorBump, atlas.topBump, atlas.sideBump] : []) t?.dispose();
     }
     for (const m of [this.shared.chestFront, this.shared.chestSide, this.shared.chestLidMat]) m.map?.dispose();
     for (const r of Object.values(this.shared)) for (const d of Array.isArray(r) ? r : [r]) d.dispose();
@@ -912,8 +922,21 @@ export class DungeonView3D {
       const dir = `${import.meta.env.BASE_URL}textures/${trait}/`;
       const load = (file: string) => loader.loadAsync(dir + file).then((t) => this.smoothTexture(t));
       Promise.all([load(TEXTURE_FILES.floor), load(TEXTURE_FILES.wallTop), load(TEXTURE_FILES.wallSide)])
-        .then(([floor, top, side]) => {
-          this.atlases.set(trait, { floor, top, side });
+        .then(async ([floor, top, side]) => {
+          // 凹凸の絵は、1枚ずつコマを分けて作る（1度にやると、そのコマが止まる）
+          const bump = async (t: THREE.Texture, span: { u: number; v: number }, strength: number) => {
+            await new Promise((done) => requestAnimationFrame(done));
+            try {
+              return normalMapFrom(t.image as HTMLImageElement, span, strength);
+            } catch {
+              return null; // 作れなければ凹凸は付けない（色だけで描く）
+            }
+          };
+          const floorBump = await bump(floor, { u: TEXTURE_SPAN, v: TEXTURE_SPAN }, SURFACE_BUMP.floor);
+          const topBump = await bump(top, { u: TEXTURE_SPAN, v: TEXTURE_SPAN }, SURFACE_BUMP.top);
+          const sideBump = await bump(side, { u: TEXTURE_SPAN, v: WALL_HEIGHT }, SURFACE_BUMP.side);
+          for (const n of [floorBump, topBump, sideBump]) if (n) n.anisotropy = floor.anisotropy;
+          this.atlases.set(trait, { floor, top, side, floorBump, topBump, sideBump });
           this.shownState = null; // 次のフレームで描き直す
         })
         // 1枚でも読み込めなかったときは null のままにして、色で描き続ける
@@ -942,19 +965,18 @@ export class DungeonView3D {
     this.floors.forEach((mesh) => {
       const mat = mesh.material as THREE.MeshPhongMaterial;
       mat.map = atlas?.floor ?? null;
-      // テクスチャの明るさを高さとみなして、石の継ぎ目やひびに陰を付ける
-      mat.bumpMap = mat.map;
+      // テクスチャの明るさを高さとみなして、石の継ぎ目やひびに陰を付ける（事前に作った凹凸の絵を読む）
+      mat.normalMap = atlas?.floorBump ?? null;
       mat.specularMap = mat.map; // 石の面は照り返し、継ぎ目やひびは照り返さない
-      mat.bumpScale = SURFACE_BUMP.floor;
       mat.needsUpdate = true;
     });
     for (const { top, side } of this.wallMaterials) {
       top.map = atlas?.top ?? null;
       side.map = atlas?.side ?? null;
-      top.bumpMap = top.specularMap = top.map;
-      side.bumpMap = side.specularMap = side.map;
-      top.bumpScale = SURFACE_BUMP.top;
-      side.bumpScale = SURFACE_BUMP.side;
+      top.normalMap = atlas?.topBump ?? null;
+      side.normalMap = atlas?.sideBump ?? null;
+      top.specularMap = top.map;
+      side.specularMap = side.map;
       top.needsUpdate = true;
       side.needsUpdate = true;
     }
@@ -1078,27 +1100,7 @@ export class DungeonView3D {
     for (const e of state.enemies) {
       if (!visible.has(e.pos.y * state.map.width + e.pos.x)) continue;
       shown.add(e.uid);
-      let view = this.enemies.get(e.uid);
-      if (!view) {
-        const look = lookOf(e.id);
-        const def = enemyDef(e);
-        // 強敵は赤い輪、ボスは金の輪を足元に置く
-        const ring = e.elite ? new THREE.Mesh(this.shared.ring, def.boss ? this.shared.bossMat : this.shared.eliteMat) : null;
-        const model = this.makeEnemyModel(e.id);
-        let body: THREE.Object3D;
-        if (model) body = model.root;
-        else {
-          const mesh = new THREE.Mesh(this.billboard, this.litSpriteMaterial(look.sprite, look.recolor ?? {}));
-          mesh.receiveShadow = true; // 壁の影に入れば暗くなる
-          body = mesh;
-        }
-        if (ring) ring.receiveShadow = true;
-        const top = model?.height ?? 1;
-        view = { id: e.id, body, model, mark: new THREE.Sprite(), hp: new THREE.Sprite(), ring, top, facing: 'down' };
-        this.scene.add(view.body, view.mark, view.hp);
-        if (ring) this.scene.add(ring);
-        this.enemies.set(e.uid, view);
-      }
+      const view = this.enemies.get(e.uid) ?? this.createEnemyView(e);
       view.body.visible = view.mark.visible = true;
       if (view.ring) view.ring.visible = true;
       // 向き：歩いたらその向き、止まっていても主人公を追っていれば主人公の方を向く
@@ -1127,6 +1129,73 @@ export class DungeonView3D {
         view.body.visible = view.mark.visible = view.hp.visible = false;
         if (view.ring) view.ring.visible = false;
       }
+    }
+  }
+
+  /** 敵1体の見た目（模型か絵の板、頭上のマーク、体力の棒、強敵の輪）を作って、隠したまま場面に置く */
+  private createEnemyView(e: MapEnemy) {
+    const look = lookOf(e.id);
+    const def = enemyDef(e);
+    // 強敵は赤い輪、ボスは金の輪を足元に置く
+    const ring = e.elite ? new THREE.Mesh(this.shared.ring, def.boss ? this.shared.bossMat : this.shared.eliteMat) : null;
+    const model = this.makeEnemyModel(e.id);
+    let body: THREE.Object3D;
+    if (model) body = model.root;
+    else {
+      const mesh = new THREE.Mesh(this.billboard, this.litSpriteMaterial(look.sprite, look.recolor ?? {}));
+      mesh.receiveShadow = true; // 壁の影に入れば暗くなる
+      body = mesh;
+    }
+    if (ring) ring.receiveShadow = true;
+    const top = model?.height ?? 1;
+    const view = { id: e.id, body, model, mark: new THREE.Sprite(), hp: new THREE.Sprite(), ring, top, facing: 'down' as Dir };
+    view.body.visible = view.mark.visible = view.hp.visible = false;
+    if (view.ring) view.ring.visible = false;
+    this.scene.add(view.body, view.mark, view.hp);
+    if (ring) this.scene.add(ring);
+    this.enemies.set(e.uid, view);
+    // 描き方（シェーダー）の準備を、見えるようになる前に済ませる（初めて画面に出たとき、一瞬止まらないように）
+    this.compile(view.body);
+    return view;
+  }
+
+  /**
+   * 階に入ったとき、その階の敵の模型を、見えるようになる前に組み立てておく（近い敵から）。
+   * 1体の組み立てに数ミリ秒〜数十ミリ秒かかるので、1コマに1体ずつ（prebuildEnemy）
+   */
+  private queueEnemyModels(state: ExploreState) {
+    const p = state.player;
+    this.prebuild = state.enemies
+      .filter((e) => !this.enemies.has(e.uid))
+      .sort((a, b) => Math.hypot(a.pos.x - p.x, a.pos.y - p.y) - Math.hypot(b.pos.x - p.x, b.pos.y - p.y));
+  }
+
+  /** 組み立て待ちの敵を、1コマに1体だけ組み立てる（その間に倒された・階を移った敵は飛ばす） */
+  private prebuildEnemy() {
+    const state = this.shownState;
+    if (!state) return;
+    while (this.prebuild.length > 0) {
+      const e = this.prebuild.shift()!;
+      if (this.enemies.has(e.uid) || !state.enemies.some((x) => x.uid === e.uid)) continue;
+      this.createEnemyView(e);
+      return;
+    }
+  }
+
+  /**
+   * 描き方（シェーダー）を、見えるようになる前に作っておく（初めて画面に出たとき、一瞬止まらないように）。
+   * 仕上げを使うときは、仕上げ用の画面に描くので、その向きで作る（描き方は、描く先の色の扱いで変わる）。
+   * 待たずに進める環境では作り終わるのを待たない。失敗しても、初めて描くときに作られるだけ
+   */
+  private compile(object: THREE.Object3D) {
+    const previous = this.renderer.getRenderTarget();
+    try {
+      if (this.post) this.renderer.setRenderTarget(this.post.target);
+      void this.renderer.compileAsync(object, this.camera, this.scene).catch(() => undefined);
+    } catch {
+      // 準備に失敗しても遊べる
+    } finally {
+      this.renderer.setRenderTarget(previous);
     }
   }
 

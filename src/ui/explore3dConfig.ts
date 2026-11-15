@@ -147,8 +147,10 @@ export const TRAIT_COLORS: Record<TraitId, { floor: number; wall: number }> = {
   dark: { floor: 0x241d32, wall: 0x52466e },
 };
 
-// 床と壁の凹凸：テクスチャの明るさを高さとみなし、石の継ぎ目やひびに光と陰を付ける（bumpMap）。大きいほど凹凸が強い
-export const SURFACE_BUMP = { floor: 9, top: 7, side: 9 };
+// 床と壁の凹凸：テクスチャの明るさを高さとみなし、石の継ぎ目やひびに光と陰を付ける。大きいほど凹凸が強い。
+// 凹凸は、絵を読み込んだときに法線マップにしておく（surfaceNormals.ts）。数値は、以前のピクセルごとの計算（bumpMap で 9・7・9）と
+// 同じ見た目になるよう、仕上がりの画像のざらつきを比べて合わせたもの
+export const SURFACE_BUMP = { floor: 8.2, top: 4.7, side: 7.8 };
 // 床の小石とがれき：マスごとに決まった乱数で、小石を散らし、壁の根元には崩れた石を寄せる（色は壁の色を暗くしたもの）
 export const DEBRIS = {
   pebbleChance: 0.135, // 壁に接していない床のマスに、小石が1つある確率
@@ -163,8 +165,10 @@ export const DEBRIS = {
 };
 
 // 画面全体の仕上げ（postFx.ts）：光のにじみ（明るさが threshold から threshold+knee にかけて、にじみ始める。bloom はにじみの強さ）、
-// 周辺減光（vignette：四隅をどれだけ暗くするか）、粒子感（grain：ざらつきの強さ）。?post=off、処理の弱い端末、描くのが間に合わないときは使わない
-export const POST_FX = { threshold: 0.85, knee: 0.5, bloom: 0.45, vignette: 0.38, grain: 0.035 };
+// 周辺減光（vignette：四隅をどれだけ暗くするか）、粒子感（grain：ざらつきの強さ）。?post=off、処理の弱い端末、描くのが間に合わないときは使わない。
+// 軽くする工夫：にじみのぼかしは縦横1回ずつで、そのぶんぼかしの幅（spread）を広げて、前（2回ずつ）と同じくらいにじませる。
+// 縁をなめらかにする重ね描き（マルチサンプル）は、描く画素が bigPixels を超える大きな画面では samplesBig 回、そうでなければ samples 回
+export const POST_FX = { threshold: 0.85, knee: 0.5, bloom: 0.45, vignette: 0.38, grain: 0.035, spread: 1.5, samples: 4, samplesBig: 2, bigPixels: 1_200_000 };
 
 // 部屋の壁掛けたいまつ（sconces.ts）。height：掛ける高さ、out：壁から前へ出す長さ、wideRoom：この幅以上の部屋には2つ掛ける。
 // 光は主人公から reach マス以内の、見えているたいまつ lights 個にだけ灯す（強さ intensity、届く距離 distance）
