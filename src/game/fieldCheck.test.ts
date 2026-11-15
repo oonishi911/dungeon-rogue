@@ -85,6 +85,16 @@ describe('nudge（増減ボタン）', () => {
     expect(nudge(3, -1, { min: 3, max: 15, step: 2 })).toBe(3);
   });
 
+  it('anchor を渡すと、その数から step ごとの目盛りにそろえて動く（値段を10ずつ）', () => {
+    const price = { min: 1, max: 99999, step: 10, anchor: 0 };
+    expect(nudge(30, 1, price)).toBe(40);
+    expect(nudge(35, 1, price)).toBe(40);
+    expect(nudge(35, -1, price)).toBe(30);
+    expect(nudge(30, -1, price)).toBe(20);
+    expect(nudge(5, -1, price)).toBe(1); // 範囲の端（min）で止まる
+    expect(nudge(99995, 1, price)).toBe(99999);
+  });
+
   it('目盛りの間・範囲の外・数でない値からは、いちばん近い目盛りへ動く', () => {
     expect(nudge(2.5, 1, { min: 0, max: 10, step: 1 })).toBe(3);
     expect(nudge(2.5, -1, { min: 0, max: 10, step: 1 })).toBe(2);
