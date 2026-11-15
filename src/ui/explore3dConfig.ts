@@ -247,6 +247,42 @@ export const PARTICLES = {
 // 倒れたとき、その場で崩れ落ちる（ms：長さ）。「動きを減らす」設定では、どちらもしない
 export const ENEMY_MOTION = { lunge: { windUp: 0.1, reach: 0.32, ms: 340 }, collapse: { ms: 650 } };
 
+/**
+ * 倒れ方（deathKind.ts）ごとの演出。hideMs：そのあいだ体を残し、過ぎたら隠して破片を飛ばす（0なら体を残して崩れる）。
+ * pieces：破片・霧の数、speed：飛び散る速さ（マス/秒）、up：上向きの速さ、gravity：落ちる強さ、size：破片の大きさ、color：色
+ */
+export const DEATH_FX = {
+  shatter: { ms: 650, hideMs: 90, pieces: 12, speed: 1.8, up: 1.6, gravity: 6, size: 1.6, color: 0xcdf1ff }, // 氷：砕けて飛び散る
+  burst: { ms: 700, hideMs: 140, pieces: 10, speed: 1.4, up: 2.2, gravity: 7, size: 1.7, color: 0x7fe08a }, // スライム：ふくらんで弾け、しずくになる
+  crumble: { ms: 800, hideMs: 0, pieces: 8, speed: 0.7, up: 0.8, gravity: 5, size: 1.8, color: 0x8d8272 }, // 硬い敵：崩れて、かけらが落ちる
+  vanish: { ms: 900, hideMs: 0, pieces: 7, speed: 0.15, up: 0.9, gravity: -0.4, size: 3.4, color: 0xa78bff }, // 霊体：霧になって立ちのぼる
+} as const;
+
+/** 敵が自分で光る（体質ごと）。floor：足元に広がる光の半径（マス）と濃さ。強敵・ボスは eliteRate 倍の大きさ */
+export const GLOW_FX = {
+  colors: { fire: 0xff7a2a, light: 0xfff2b0, dark: 0x8a5ae0, ice: 0x9fe8ff } as const,
+  radius: { fire: 1.7, light: 1.4, dark: 1.1, ice: 1.1 } as const,
+  opacity: { fire: 0.5, light: 0.4, dark: 0.32, ice: 0.28 } as const,
+  eliteRate: 1.35,
+  flicker: { fire: 0.18, light: 0.06, dark: 0.1, ice: 0.04 } as const, // ちらつきの大きさ（半径の割合）
+  y: 0.03,
+} as const;
+
+/** 強敵・ボスが初めて視界に入ったときの演出：カメラが寄る倍率・寄る時間・保つ時間・戻る時間（ミリ秒） */
+export const INTRO_FX = { zoom: 1.2, inMs: 350, holdMs: 1100, outMs: 500, bossHoldMs: 1700 } as const;
+
+/** 通常攻撃の斬撃の残光。武器の段階（1〜10）が上がると、大きく・本数が増え・色が華やかになる */
+export const AFTERGLOW_FX = {
+  tiers: [
+    { upTo: 3, size: 0.9, count: 1, ms: 220, color: 'rgba(160,230,255,' }, // 1〜3段：細い白青の1本
+    { upTo: 7, size: 1.15, count: 2, ms: 280, color: 'rgba(255,236,150,' }, // 4〜7段：金色の2本
+    { upTo: 10, size: 1.45, count: 3, ms: 340, color: 'rgba(255,170,90,' }, // 8〜10段：橙の3本＋火花
+  ],
+  y: 0.55,
+  stagger: 55,
+  sparks: 6,
+} as const;
+
 // 床の変化（2026-11-15）：
 // - corridor：通路（部屋の外）の床の明るさ。部屋の床より少し暗く、踏み固めた感じにする
 // - puddle：水たまり。床のマスに chance の確率で置き、たいまつの光が強く照り返す（炎のダンジョンには置かない）

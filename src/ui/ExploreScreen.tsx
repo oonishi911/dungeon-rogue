@@ -21,6 +21,7 @@ import type { ItemId, SpellId } from '../game/types';
 import { useBackGuard } from './backGuard';
 import { drawMinimap, MINI_CELL, motionOf, readColors, type Frame, type Motion } from './exploreRender';
 import { DungeonView3D, webglAvailable } from './explore3d';
+import { INTRO_FX } from './explore3dConfig';
 import { devBestHref } from './exploreDev';
 import { EndingPanel, LeaveDialog, RetireDialog } from './ExploreDialogs';
 import { playFeedback } from './exploreFeedback';
@@ -58,6 +59,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const [mpShake, setMpShake] = useState(0); // 魔力が足りずに唱えられなかった回数（魔力のゲージを震わせる）
   // リタイアするかを確かめているところ
   const [retiring, setRetiring] = useState(false);
+  const [intro, setIntro] = useState<{ name: string; boss: boolean; key: number } | null>(null); // 強敵・ボスが初めて見えたときに出す名前
   const retiringRef = useRef(retiring);
   retiringRef.current = retiring;
   const onProgressRef = useRef(onProgress);
@@ -210,6 +212,14 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       return;
     }
     view3dRef.current = view3d;
+    // 強敵・ボスが初めて視界に入ったら、名前を出す（カメラが寄って戻るあいだだけ）
+    let introTimer = 0;
+    let introKey = 0;
+    view3d.onIntro = ({ name, boss }) => {
+      window.clearTimeout(introTimer);
+      setIntro({ name: name.replace('（強敵）', ''), boss, key: ++introKey });
+      introTimer = window.setTimeout(() => setIntro(null), INTRO_FX.inMs + (boss ? INTRO_FX.bossHoldMs : INTRO_FX.holdMs) + INTRO_FX.outMs);
+    };
     // 3D表示は、Canvas の画面上の大きさに合わせて描く（スマホの縦長の画面でも引き伸ばさない）
     const observer = new ResizeObserver(() => view3d.resize(canvas.clientWidth, canvas.clientHeight));
     observer.observe(canvas);
@@ -265,6 +275,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     frameId = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(frameId);
+      window.clearTimeout(introTimer);
       observer.disconnect();
       view3d.dispose();
       view3dRef.current = null;
@@ -538,6 +549,13 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
           <p className="error explore__notice" role="alert">
             {error}
           </p>
+          {/* 強敵・ボスが初めて見えたときの名前。3D画面の上に重ねて、しばらくして消える */}
+          {intro && (
+            <p key={intro.key} className={`explore__intro${intro.boss ? ' explore__intro--boss' : ''}`} aria-hidden="true">
+              <span className="explore__intro-label">{intro.boss ? 'ボス' : '強敵'}</span>
+              {intro.name}
+            </p>
+          )}
           {/* この階の地図。3D画面の右上に、小さく半透明で重ねる。広いマップは縮めて表示するので、なめらかに縮める */}
           <canvas
             ref={miniRef}

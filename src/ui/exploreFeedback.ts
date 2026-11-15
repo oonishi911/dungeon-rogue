@@ -2,6 +2,7 @@
 
 import { playAttack, playChestOpen, playEnemyAttack, playFootstep, playSpell } from '../audio/sound';
 import { enemyBase } from '../game/data';
+import { gearOf } from '../game/itemMaster';
 import { type ExploreState } from '../game/exploreTypes';
 import { samePos } from '../game/exploreSight';
 import type { Pos } from '../game/map';
@@ -31,7 +32,8 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
   const skill = next.foes.find((f) => f.kind === 'skill'); // 武器の固有技を出したとき
   const struck = next.cast ? undefined : next.hits.find((hit) => hit.kind === 'dealt' && !hit.slip);
   if (struck) {
-    view3d?.heroAttack(struck.at);
+    // 通常攻撃には、武器の段階に合わせた残光をつける（固有技のときは、固有技の演出があるのでつけない）
+    view3d?.heroAttack(struck.at, skill ? undefined : { weapon: weaponOf(next.stats.weapon), tier: next.stats.weapon ? (gearOf(next.stats.weapon)?.tier ?? 1) : 1 });
     playAttack(weaponOf(next.stats.weapon));
     // 剣の連斬りは、2回目の斬撃のときも武器を振る
     if (skill?.kind === 'skill' && skill.weapon === 'sword') {
