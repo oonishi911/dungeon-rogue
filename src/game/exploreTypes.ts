@@ -52,14 +52,15 @@ export interface HitEvent {
   ranged?: boolean; // taken のとき、離れたところから撃たれた（敵が飛びかかる演出は出さない）
 }
 
-/** この行動で起きた、敵の特別な行動（画面の演出のために使う。ルールには使わない） */
+/** この行動で起きた、敵の特別な行動や床の出来事（画面の演出のために使う。ルールには使わない） */
 export type FoeEvent =
   | { kind: 'shot'; from: Pos; to: Pos; by: EnemyId } // 遠距離の敵が撃った
   | { kind: 'windup'; at: Pos } // 突進の構え
   | { kind: 'charge'; from: Pos; to: Pos; hit: boolean } // 突進（hit：主人公に当たった）
   | { kind: 'bump'; at: Pos } // 突進が壁にぶつかった
   | { kind: 'summon'; at: Pos; from: Pos } // 敵が呼ばれた（from：呼んだ敵のいたマス）
-  | { kind: 'block'; at: Pos }; // 盾で防がれた
+  | { kind: 'block'; at: Pos } // 盾で防がれた
+  | { kind: 'steam'; at: Pos }; // 燃える床と霜の床がぶつかって、水蒸気になった
 
 /** 属性の矢と、当たった敵の相性。weak：弱点（ダメージが増える）、resist：効きにくい（減る） */
 export type Affinity = 'weak' | 'normal' | 'resist';
@@ -74,6 +75,13 @@ export interface CastEvent {
   bleeding: Pos[]; // 烈なぎ払いで出血した敵のいたマス（演出で使う）
   splash: Pos[]; // 連矢で、まわりのダメージを受けた敵のいたマス（演出で使う。唱える前の位置）
   affinity: Affinity | null; // 属性の矢が当たった敵との相性（演出の強さを変える）。矢でないとき・何にも当たらなかったときは null
+}
+
+/** 床に残る魔法の跡。fire：燃える床（乗っていると毎ターンダメージ）、frost：霜の床（乗っていると、次の1歩に2ターンかかる）。turns：あと何ターン残るか */
+export interface Field {
+  pos: Pos;
+  kind: 'fire' | 'frost';
+  turns: number;
 }
 
 /** 一度離れた階の様子。戻ってきたら、倒した敵・開けた宝箱・晴れた霧はそのまま */
@@ -118,7 +126,8 @@ export interface ExploreState {
   log: string[];
   visited: Record<number, FloorMemory>; // 一度離れた階（階の番号ごと）。今いる階は入らない
   hits: HitEvent[]; // 直前の行動で入ったダメージ（行動のたびに空からやり直す）
-  foes: FoeEvent[]; // 直前の行動で起きた、敵の特別な行動（行動のたびに空からやり直す）
+  foes: FoeEvent[]; // 直前の行動で起きた、敵の特別な行動や床の出来事（行動のたびに空からやり直す）
+  fields: Field[]; // 今いる階の床に残る魔法の跡（燃える床・霜の床）。階を離れると消える
 }
 
 export interface ExploreOptions {

@@ -62,6 +62,7 @@ export interface MapEnemy {
   summonIn?: number; // 召喚まであと何ターン（ない敵は、召喚の間隔から数え始める）
   summoned?: boolean; // 召喚された敵（倒しても報酬はなく、倒した数にも入れない）
   summonedBy?: number; // 呼んだ敵の uid（同時に出していられる数を数えるため）
+  chilled?: boolean; // 霜の床の上で、次の1歩のために1ターン使った（次のターンに歩ける）
 }
 
 /** 敵の行動の個性（なければ空） */

@@ -7,6 +7,7 @@ import { magicPower, spellAffinity, spellDamage } from './magic';
 import { buildPlayer } from './combat';
 import { ITEMS } from './data';
 import { DEFAULT_DUNGEON } from './dungeons';
+import { FIELD_CONFIG } from './fields';
 import type { FloorMap, Pos } from './map';
 import type { ItemId, Result } from './types';
 
@@ -158,7 +159,9 @@ describe('呪文の働き', () => {
       const s = act(s0, { kind: 'cast', spell, dir: 'right' });
       const center = spellDamage(s0.stats, spell, enemyDef(s0.enemies[0]!), GEN);
       const around = Math.max(1, Math.round(center * cfg[spell]!.splash!));
-      expect(s.enemies.map((e) => e.hp)).toEqual([99 - center, 99 - around, 99 - around, 99]);
+      // 炎の連矢は、当たった敵の足元とまわりに燃える床を残すので、同じターンの終わりに、その上の敵が燃える床のダメージを受ける
+      const burn = spell === 'fire_chain' ? FIELD_CONFIG.fireDamage : 0;
+      expect(s.enemies.map((e) => e.hp)).toEqual([99 - center - burn, 99 - around - burn, 99 - around - burn, 99]);
       expect(s.cast!.splash).toEqual([
         { x: 4, y: 3 },
         { x: 4, y: 2 },
