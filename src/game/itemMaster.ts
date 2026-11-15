@@ -1,6 +1,6 @@
 // 品物の設定（src/game/items.json）を読み、正しい形かを確かめる。
 // items.json には、店で売るすべての品物の名前と値段がある。武器と防具は種類ごとに10段階あり、段階ごとに性能も決める
-// （武器：攻撃力と魔力［魔法の強さに足される。magic.ts］、防具：守りと、効く属性のダメージを何%に減らすか）。情報屋の情報料（information）もここにある。
+// （武器：攻撃力と魔力［魔法の強さに足される。magic.ts］、防具：守りと、効く属性のダメージを何%カットするか）。情報屋の情報料（information）もここにある。
 // 品物の働き（回復薬はHPを15回復する、など）と、武器と体質の相性・防具の効く属性は、ここではなくプログラムで決まっている。
 // items.json は、開発用の管理画面（?view=admin の「品物」タブ。src/ui/ItemPanels.tsx）から書き換えて公開できる。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
@@ -37,8 +37,8 @@ export type SpellbookId = (typeof SPELLBOOK_IDS)[number];
 
 /** 武器1段分。atk：持つと上がる攻撃力、mag：持つと上がる魔力（魔法の強さに足される。0なら上がらない） */
 export type WeaponTier = { name: string; atk: number; mag: number; price: number };
-/** 防具1段分。def：持つと上がる守り（受けるダメージから引く）、rate：効く属性のダメージを何%に減らすか */
-export type ArmorTier = { name: string; def: number; rate: number; price: number };
+/** 防具1段分。def：持つと上がる守り（受けるダメージから引く）、cut：効く属性のダメージを何%カットするか（大きいほど強い。100なら受けない） */
+export type ArmorTier = { name: string; def: number; cut: number; price: number };
 /** 道具・呪文書1つ分 */
 export type PlainItem = { name: string; price: number };
 
@@ -61,7 +61,7 @@ export const ITEM_LIMITS = {
   atk: { min: 0, max: 99 },
   mag: { min: 0, max: 99 },
   def: { min: 0, max: 99 },
-  rate: { min: 0, max: 100 },
+  cut: { min: 0, max: 100 },
   info: { min: 0, max: 99999 }, // 情報料（0なら、はっきり聞くのも無料）
 } as const;
 
@@ -74,32 +74,32 @@ export const WEAPON_INFO: Record<WeaponBaseId, { label: string; text: string }> 
   staff: { label: '杖', text: '霊体によく効く。柔らかい敵には効きにくい' },
 };
 
-/** 防具の種類の名前と、どの属性に効くか */
-export const ARMOR_INFO: Record<ArmorBaseId, { label: string; guard: (rate: number) => ArmorGuard; text: (rate: number) => string }> = {
+/** 防具の種類の名前と、どの属性に効くか（guard の rate は、受けるダメージの倍率。カット率30%なら0.7。text の cut は、カット率の%） */
+export const ARMOR_INFO: Record<ArmorBaseId, { label: string; guard: (rate: number) => ArmorGuard; text: (cut: number) => string }> = {
   fire_cloak: {
     label: '耐火のマント',
     guard: (rate) => ({ kind: 'component', component: 'fire', rate }),
-    text: (r) => `炎のダメージを${r}%に減らす（光の攻撃は半分だけ）`,
+    text: (c) => `炎のダメージを${c}%カットする（光の攻撃は半分だけ）`,
   },
   ice_cloak: {
     label: '耐氷のマント',
     guard: (rate) => ({ kind: 'component', component: 'ice', rate }),
-    text: (r) => `氷のダメージを${r}%に減らす（闇の攻撃は半分だけ）`,
+    text: (c) => `氷のダメージを${c}%カットする（闇の攻撃は半分だけ）`,
   },
   plate: {
     label: '鎧',
     guard: (rate) => ({ kind: 'component', component: 'neutral', rate }),
-    text: (r) => `無属性のダメージを${r}%に減らす（光・闇の攻撃は半分だけ）`,
+    text: (c) => `無属性のダメージを${c}%カットする（光・闇の攻撃は半分だけ）`,
   },
   light_robe: {
     label: '光の衣',
     guard: (rate) => ({ kind: 'whole', element: 'light', rate }),
-    text: (r) => `光の攻撃を${r}%に減らす。ほかの属性には効かない`,
+    text: (c) => `光の攻撃のダメージを${c}%カットする。ほかの属性には効かない`,
   },
   dark_robe: {
     label: '闇の衣',
     guard: (rate) => ({ kind: 'whole', element: 'dark', rate }),
-    text: (r) => `闇の攻撃を${r}%に減らす。ほかの属性には効かない`,
+    text: (c) => `闇の攻撃のダメージを${c}%カットする。ほかの属性には効かない`,
   },
 };
 
@@ -173,8 +173,8 @@ export function itemDefs(master: ItemMaster): Record<ItemId, ItemDef> {
         id,
         name: t.name,
         price: t.price,
-        description: `${info.text(t.rate)}${t.def > 0 ? `。守り+${t.def}` : ''}`,
-        effect: { kind: 'armor', guard: info.guard(t.rate / 100), def: t.def },
+        description: `${info.text(t.cut)}${t.def > 0 ? `。守り+${t.def}` : ''}`,
+        effect: { kind: 'armor', guard: info.guard((100 - t.cut) / 100), def: t.def },
       };
     });
   }
@@ -218,7 +218,7 @@ export function itemProblems(data: unknown): string[] {
         checkInt(at, '魔力', t.mag, ITEM_LIMITS.mag);
       } else {
         checkInt(at, '守り', t.def, ITEM_LIMITS.def);
-        checkInt(at, 'ダメージの割合', t.rate, ITEM_LIMITS.rate);
+        checkInt(at, 'カット率', t.cut, ITEM_LIMITS.cut);
       }
       // 段階が上がるほど高く、強くする（下の段より安い・弱い段は作らない）
       const prev = i > 0 && isObj(list[i - 1]) ? (list[i - 1] as Record<string, unknown>) : null;
@@ -228,7 +228,7 @@ export function itemProblems(data: unknown): string[] {
       if (kind === 'weapon' && typeof t.mag === 'number' && typeof prev.mag === 'number' && t.mag < prev.mag) out.push(`${at}：魔力が${i}段目より低い`);
       if (kind === 'armor') {
         if (typeof t.def === 'number' && typeof prev.def === 'number' && t.def < prev.def) out.push(`${at}：守りが${i}段目より低い`);
-        if (typeof t.rate === 'number' && typeof prev.rate === 'number' && t.rate > prev.rate) out.push(`${at}：ダメージの割合が${i}段目より大きい（弱い）`);
+        if (typeof t.cut === 'number' && typeof prev.cut === 'number' && t.cut < prev.cut) out.push(`${at}：カット率が${i}段目より低い`);
       }
     });
   };
@@ -268,7 +268,7 @@ export function serializeItemMaster(master: ItemMaster): string {
 /** 変えたところを、日本語の文で並べる（公開の欄とコミットの説明に使う） */
 export function describeItemChanges(before: ItemMaster, after: ItemMaster): string[] {
   const out: string[] = [];
-  const tierFields = { name: '名前', atk: '攻撃力', mag: '魔力', def: '守り', rate: 'ダメージの割合', price: '値段' } as const;
+  const tierFields = { name: '名前', atk: '攻撃力', mag: '魔力', def: '守り', cut: 'カット率', price: '値段' } as const;
   const diff = (label: string, a: Record<string, unknown>, b: Record<string, unknown>) => {
     for (const [k, word] of Object.entries(tierFields)) {
       if (k in b && a[k] !== b[k]) out.push(`${label}：${word} ${String(a[k])} → ${String(b[k])}`);
