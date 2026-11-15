@@ -28,6 +28,7 @@ import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
 import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEBRIS, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, RESOLUTION, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
 import { applyFog, createFog, createGroundMist, litBillboard, worldMapped } from './explore3dKit';
+import { asMetal } from './materialLook';
 import { PostFx } from './postFx';
 import { Particles } from './particles';
 import { Sconces } from './sconces';
@@ -139,6 +140,9 @@ export class DungeonView3D {
       .translate(0, CHEST.height, 0),
     chestLock: new THREE.BoxGeometry(0.075, 0.085, 0.014),
     chestKeyhole: new THREE.BoxGeometry(0.016, 0.034, 0.004),
+    chestGrooveFront: new THREE.BoxGeometry(CHEST.width - 0.01, 0.007, 0.004),
+    chestGrooveSide: new THREE.BoxGeometry(0.004, 0.007, CHEST.depth - 0.01),
+    chestHinge: new THREE.CylinderGeometry(0.014, 0.014, 0.07, 10).rotateZ(Math.PI / 2), // 蝶番の筒（ふたの軸に沿う）
     ring: new THREE.RingGeometry(0.4, 0.48, 24).rotateX(-Math.PI / 2),
     targetRing: new THREE.RingGeometry(0.32, 0.42, 24).rotateX(-Math.PI / 2),
     // 宝箱の素材。テクスチャ（public/textures/chest/）を読み込むまでは金色で描く
@@ -152,8 +156,9 @@ export class DungeonView3D {
     chestLidInside: new THREE.PlaneGeometry(CHEST.width, CHEST.depth).rotateX(Math.PI / 2).translate(0, CHEST.height, 0),
     chestLidInsideMat: new THREE.MeshLambertMaterial({ color: OPENED_CHEST.lidInside, side: THREE.DoubleSide }),
     // 宝箱の鉄の金具：鋭く光る黒い鉄。鍵穴は真っ暗
-    ironMat: new THREE.MeshPhongMaterial({ color: 0x2a2826, shininess: 90, specular: 0x8a8578 }),
+    ironMat: asMetal(new THREE.MeshPhongMaterial({ color: 0x2a2826, shininess: 90, specular: 0x8a8578 })),
     keyholeMat: new THREE.MeshBasicMaterial({ color: 0x050403 }),
+    grooveMat: new THREE.MeshLambertMaterial({ color: 0x1e130b }), // 板の継ぎ目の暗い溝
     eliteMat: new THREE.MeshLambertMaterial({ color: 0xd9653b }),
     bossMat: new THREE.MeshLambertMaterial({ color: 0xb48d35 }),
     targetMat: new THREE.MeshBasicMaterial({ color: 0x9cc46a }),
@@ -162,6 +167,7 @@ export class DungeonView3D {
   private readonly pathDots: THREE.InstancedMesh; // 歩く道筋の点
   private readonly debris: THREE.InstancedMesh; // 床の小石と、壁の根元の崩れた石
   private readonly puddles: THREE.InstancedMesh; // 水たまり
+  private readonly bones: THREE.InstancedMesh; // 床に散らばった骨
   private readonly moss: THREE.InstancedMesh; // 壁の根元のこけ（特性によって、すす・霜など）
   private roomTiles: { map: unknown; tiles: Set<number> } = { map: null, tiles: new Set() }; // 部屋の床のマス（通路と描き分ける）
   private shownPath: Pos[] | null = null;
@@ -232,8 +238,8 @@ export class DungeonView3D {
     // 影の帯は黒の半透明なので、霧の外では濃さを消す（まだ見ていない場所との境目で、背景より黒くならないように）
     this.wallShadows = new THREE.InstancedMesh(shadowGeo, applyFog(shadowMat, this.fog, 'fade-alpha'), DRAW_CAPACITY * SHADOW_SIDES.length);
     // 階段・宝箱・強敵の足元の輪も、床や壁と同じ霧をかける
-    const { chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat, ironMat, keyholeMat } = this.shared;
-    for (const mat of [chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat, ironMat, keyholeMat]) applyFog(mat, this.fog);
+    const { chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat, ironMat, keyholeMat, grooveMat } = this.shared;
+    for (const mat of [chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat, ironMat, keyholeMat, grooveMat]) applyFog(mat, this.fog);
     this.stairs = new Stairs3D((mat) => applyFog(mat, this.fog));
     this.sconces = new Sconces((mat) => applyFog(mat, this.fog));
     this.scene.add(this.sconces.root);
@@ -264,8 +270,14 @@ export class DungeonView3D {
       applyFog(new THREE.MeshPhongMaterial({ color: 0xffffff, ...NO_GLOSS, alphaMap: blot, transparent: true, opacity: moss.opacity, depthWrite: false }), this.fog),
       DRAW_CAPACITY * 2,
     );
+    // 骨：両端がふくらんだ細い骨を、床に寝かせる
+    const boneGeo = new THREE.LatheGeometry(
+      [[0, -0.07], [0.017, -0.069], [0.022, -0.06], [0.013, -0.046], [0.009, 0], [0.013, 0.046], [0.022, 0.06], [0.017, 0.069], [0, 0.07]].map(([r, y]) => new THREE.Vector2(r, y)),
+      8,
+    ).rotateZ(Math.PI / 2);
+    this.bones = new THREE.InstancedMesh(boneGeo, applyFog(new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 12, specular: 0x222222 }), this.fog), DRAW_CAPACITY);
     this.puddles.renderOrder = this.moss.renderOrder = 0.5; // 床のすぐあと（影の帯より前）
-    for (const mesh of [...this.floors, ...this.walls, this.wallShadows, this.debris, this.puddles, this.moss]) {
+    for (const mesh of [...this.floors, ...this.walls, this.wallShadows, this.debris, this.puddles, this.moss, this.bones]) {
       // 中身を毎回入れ替えるので、最初の中身で計算された範囲で画面外と判定されないようにする
       mesh.frustumCulled = false;
       this.scene.add(mesh);
@@ -713,6 +725,8 @@ export class DungeonView3D {
     let stones = 0;
     let puddles = 0;
     let mosses = 0;
+    let bones = 0;
+    const boneColor = new THREE.Color(DEBRIS.boneColor);
     const roomTiles = this.roomTilesOf(map);
     const mossColor = new THREE.Color(FLOOR_LOOK.moss.colors[trait]);
     const puddleColor = new THREE.Color(FLOOR_LOOK.puddle.color);
@@ -766,6 +780,17 @@ export class DungeonView3D {
             this.debris.setMatrixAt(stones, m.compose(at, q, size.set(s * (0.8 + r(90 + n) * 0.5), s, s * (0.8 + r(95 + n) * 0.5))));
             this.debris.setColorAt(stones++, c.copy(stoneColor).multiplyScalar(0.8 + r(99 + n) * 0.4));
           }
+          // 骨：壁際に多く、ときどき2本重なる
+          if (r(400) < (walls.length > 0 ? DEBRIS.boneChance * 2 : DEBRIS.boneChance)) {
+            const count = r(401) < 0.35 ? 2 : 1;
+            for (let n = 0; n < count && bones < DRAW_CAPACITY; n++) {
+              const len = DEBRIS.boneSize[0] + (DEBRIS.boneSize[1] - DEBRIS.boneSize[0]) * r(410 + n);
+              at.set(x + (r(420 + n) - 0.5) * 0.6, 0.012, z + (r(430 + n) - 0.5) * 0.6);
+              q.setFromAxisAngle(up, r(440 + n) * Math.PI);
+              this.bones.setMatrixAt(bones, m.compose(at, q, size3.set(len / 0.14, len / 0.14, len / 0.14)));
+              this.bones.setColorAt(bones++, c.copy(boneColor).multiplyScalar(0.8 + r(450 + n) * 0.3));
+            }
+          }
           // 水たまり（炎のダンジョンには置かない）
           if (trait !== 'fire' && r(200) < FLOOR_LOOK.puddle.chance) {
             const [lo, hi] = FLOOR_LOOK.puddle.size;
@@ -804,6 +829,7 @@ export class DungeonView3D {
       [this.debris, stones] as const,
       [this.puddles, puddles] as const,
       [this.moss, mosses] as const,
+      [this.bones, bones] as const,
     ];
     for (const [mesh, count] of counts) {
       mesh.count = count;
@@ -971,6 +997,25 @@ export class DungeonView3D {
       const keyhole = new THREE.Mesh(chestKeyhole, keyholeMat);
       keyhole.position.set(0, CHEST.height * 0.8, CHEST.depth / 2 + 0.013);
       body.add(lock, keyhole);
+      // 木の板の継ぎ目（前・後ろ・左右に横の溝を2本）と、奥の縁の蝶番
+      const { chestGrooveFront, chestGrooveSide, chestHinge, grooveMat } = this.shared;
+      for (const y of [CHEST.height / 3, (CHEST.height * 2) / 3]) {
+        for (const z of [CHEST.depth / 2 + 0.002, -CHEST.depth / 2 - 0.002]) {
+          const groove = new THREE.Mesh(chestGrooveFront, grooveMat);
+          groove.position.set(0, y, z);
+          body.add(groove);
+        }
+        for (const x of [CHEST.width / 2 + 0.002, -CHEST.width / 2 - 0.002]) {
+          const groove = new THREE.Mesh(chestGrooveSide, grooveMat);
+          groove.position.set(x, y, 0);
+          body.add(groove);
+        }
+      }
+      for (const bx of [-CHEST.width * 0.3, CHEST.width * 0.3]) {
+        const hinge = new THREE.Mesh(chestHinge, ironMat);
+        hinge.position.set(bx, CHEST.height, -CHEST.depth / 2 - 0.004);
+        body.add(hinge);
+      }
       for (const part of parts) this.props.add(part);
     }
   }

@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import type { WeaponType } from '../game/types';
+import { asMetal } from './materialLook';
 
 const COLORS = {
   steel: '#c9d1d6',
@@ -38,6 +39,7 @@ export class Weapon3D {
   private mat(color: string, emissive?: string) {
     const shine = METALS.has(color) ? { shininess: 80, specular: 0xffffff } : { shininess: 18, specular: 0x2a2622 };
     const m = new THREE.MeshPhongMaterial({ color, ...shine, ...(emissive ? { emissive, emissiveIntensity: 0.6 } : {}) });
+    if (METALS.has(color)) asMetal(m); // 金属は、周りの景色が映り込み、自分の色で光る（materialLook.ts）
     this.disposables.push(m);
     return m;
   }

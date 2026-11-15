@@ -92,6 +92,7 @@ function troll(k: Kit, body: THREE.Group): Rig {
   k.mesh(club, roughen(new THREE.SphereGeometry(0.07, 9, 7).scale(1, 1.3, 1), 0.015, 22, 5), stone, V(0, -0.38, 0));
   k.mesh(club, new THREE.TorusGeometry(0.045, 0.01, 6, 14).rotateX(Math.PI / 2), rope, V(0, -0.32, 0));
   return {
+    legs,
     height: 1.12,
     shadow: 0.36,
     animate(t, walk, walking) {
@@ -211,6 +212,7 @@ function iwao(k: Kit, body: THREE.Group): Rig {
     return g;
   });
   return {
+    legs,
     height: 1.2,
     shadow: 0.42,
     animate(t, walk, walking) {
@@ -352,6 +354,7 @@ function yeti(k: Kit, body: THREE.Group): Rig {
     return g;
   });
   return {
+    legs,
     height: 1.18,
     shadow: 0.38,
     animate(t, walk, walking) {
@@ -476,6 +479,7 @@ function knight(k: Kit, body: THREE.Group, dark: boolean): Rig {
     glows.push(k.glowSprite(shield, 'rgba(255,230,150,0.45)', 0.16, V(0, 0.01, 0.05)));
   }
   return {
+    legs,
     height: 1.12,
     shadow: 0.32,
     animate(t, walk, walking) {

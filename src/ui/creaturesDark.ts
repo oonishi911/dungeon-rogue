@@ -166,6 +166,7 @@ export const DARK_BUILDERS: Record<'dark_bat' | 'shadow' | 'phantom' | 'giant_ra
     const tailCurve = new THREE.CatmullRomCurve3([V(0, 0, 0), V(0.04, -0.08, -0.12), V(-0.05, -0.15, -0.26), V(0.03, -0.18, -0.42)]);
     k.mesh(tail, new THREE.TubeGeometry(tailCurve, 20, 0.016, 6), flesh);
     return {
+      legs,
       height: 0.42,
       shadow: 0.34,
       animate(t, walk, walking) {

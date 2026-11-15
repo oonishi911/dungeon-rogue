@@ -74,6 +74,7 @@ function imp(k: Kit, body: THREE.Group, look: ImpLook): Rig {
     return g;
   });
   return {
+    legs,
     height: 0.78,
     shadow: 0.24,
     animate(t, walk, walking) {
@@ -151,6 +152,7 @@ function hound(k: Kit, body: THREE.Group, boss: boolean): Rig {
   k.mesh(tail, new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V(0, 0, 0), V(0, 0.06, -0.08), V(0, 0.14, -0.12)]), 10, 0.018, 6), dark);
   flames.push(k.glowSprite(tail, 'rgba(255,150,40,0.9)', 0.16, V(0, 0.16, -0.13)));
   const rig: Rig = {
+    legs,
     height: 0.6,
     shadow: 0.3,
     animate(t, walk, walking) {
@@ -237,6 +239,7 @@ function brute(k: Kit, body: THREE.Group, chief: boolean): Rig {
     k.mesh(weapon, spike(V(Math.sin(a) * 0.035, y, Math.cos(a) * 0.035), V(Math.sin(a) * 0.075, y + 0.01, Math.cos(a) * 0.075), 0.012), metal);
   }
   const rig: Rig = {
+    legs,
     height: 0.86,
     shadow: 0.28,
     animate(t, walk, walking) {
@@ -301,6 +304,7 @@ function golem(k: Kit, body: THREE.Group, ice: boolean): Rig {
     return g;
   });
   const rig: Rig = {
+    legs,
     height: 1.12,
     shadow: 0.42,
     animate(t, walk, walking) {
@@ -413,6 +417,7 @@ function armor(k: Kit, body: THREE.Group, guardian: boolean): Rig {
     }
   }
   const rig: Rig = {
+    legs,
     height: guardian ? 1.2 : 1.16,
     shadow: 0.3,
     animate(t, walk, walking) {

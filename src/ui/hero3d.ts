@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import type { Dir } from '../game/exploreTypes';
 import type { WeaponType } from '../game/types';
 import { CLOAKS, PALETTE } from '../sprites/data';
+import { asCloth } from './materialLook';
 import { Weapon3D } from './weapon3d';
 
 export type CloakId = keyof typeof CLOAKS;
@@ -127,7 +128,7 @@ export class Hero3D {
   constructor() {
     const mats = {
       skin: phong(PALETTE.s!),
-      tunic: phong(PALETTE.t!),
+      tunic: asCloth(phong(PALETTE.t!)), // 服とマントは布：つやを消し、織り目の凹凸（materialLook.ts）
       belt: phong(PALETTE.b!),
       boots: phong(PALETTE.B!),
       eyes: phong(PALETTE.k!),
@@ -137,9 +138,9 @@ export class Hero3D {
     };
     // マントとフードは開いた円柱・球なので、内側の面も塗る
     this.cloakMats = {
-      H: phong(CLOAKS.none.H, THREE.DoubleSide),
-      C: phong(CLOAKS.none.C, THREE.DoubleSide),
-      c: phong(CLOAKS.none.c, THREE.DoubleSide),
+      H: asCloth(phong(CLOAKS.none.H, THREE.DoubleSide)),
+      C: asCloth(phong(CLOAKS.none.C, THREE.DoubleSide)),
+      c: asCloth(phong(CLOAKS.none.c, THREE.DoubleSide)),
     };
     this.disposables.push(...Object.values(mats), ...Object.values(this.cloakMats));
 
