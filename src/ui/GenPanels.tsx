@@ -32,6 +32,7 @@ import { generateFloor, type FloorMap } from '../game/map';
 import { floorParams } from '../game/floorParams';
 import type { SpellId } from '../game/types';
 import { cls, NumberField } from './adminParts';
+import { SpellIcon } from './ItemIcon';
 
 const CANVAS_PX = 640; // 見本の長い辺の描画解像度。表示サイズは CSS で合わせる
 
@@ -316,7 +317,10 @@ export function MagicPanel({ base, draft, setDraft }: GenPanelProps) {
       <div className="gen__spells">
         {(Object.keys(SPELL_FIELDS) as SpellId[]).map((spell) => (
           <div key={spell} className="gen__spell">
-            <span className="gen__label">{SPELL_NAMES[spell]}</span>
+            <span className="gen__label gen__spellname">
+              <SpellIcon spell={spell} size={28} />
+              {SPELL_NAMES[spell]}
+            </span>
             {SPELL_FIELDS[spell].map((f) => (
               <label key={f.key} className="gen__spell-field">
                 <span>{f.label}</span>

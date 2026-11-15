@@ -1542,8 +1542,19 @@ button {
 }
 
 .gen__spell .gen__label {
-  flex: 0 0 6rem;
+  flex: 0 0 8.5rem;
   align-self: center;
+}
+
+/* 呪文の名前：呪文のアイコンを左に付ける */
+.gen__spellname {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gen__spellname .item-icon {
+  flex: none;
 }
 
 .gen__spell-field {
