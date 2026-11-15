@@ -35,7 +35,9 @@ const GEN: GenSettings = {
   magic: { maxMp: 20, regenEvery: 6, power: 8, staffPower: 1.5, staffMp: 10, noiseRadius: 3 },
   spells: {
     shockwave: { cost: 6, power: 0.3, push: 3, crash: 3 },
+    shockwave_strong: { cost: 9, power: 0.3, push: 3, crash: 3, stun: 1 },
     sweep: { cost: 5, power: 0.8, range: 3 },
+    sweep_bleed: { cost: 8, power: 0.8, range: 3, bleedTurns: 3, bleedRate: 0.2 },
     fire_bolt: { cost: 4, power: 1, range: 6 },
     ice_bolt: { cost: 4, power: 1, range: 6 },
     light_lance: { cost: 4, power: 1, range: 6 },

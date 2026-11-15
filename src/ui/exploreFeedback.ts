@@ -25,7 +25,7 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
     impactMs = view3d?.castSpell(next.cast, prev.player) ?? 0;
     playSpell(next.cast.spell);
   }
-  const struck = next.cast ? undefined : next.hits.find((hit) => hit.kind === 'dealt');
+  const struck = next.cast ? undefined : next.hits.find((hit) => hit.kind === 'dealt' && !hit.slip);
   if (struck) {
     view3d?.heroAttack(struck.at);
     playAttack(weaponOf(next.stats.weapon));
@@ -35,6 +35,11 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
   attackers.forEach((enemy, i) => playEnemyAttack(enemy, (struck ? ENEMY_SOUND.afterAttack : 0) + (impactMs > 0 ? (impactMs + CAST_THEN_HURT_MS) / 1000 : 0) + i * ENEMY_SOUND.gap));
   for (const hit of next.hits) {
     const show = () => {
+      // 出血のダメージは、数字だけを出す（武器を振る・画面を拡大する・振動はしない）
+      if (hit.slip) {
+        view3d?.popDamage(hit.at, hit.amount, hit.kind);
+        return;
+      }
       view3d?.hitPulse(hit.kind === 'dealt' ? 'attack' : 'hurt');
       // 攻撃してきた敵は、主人公の方へ飛びかかる
       if (hit.kind === 'taken' && hit.by) view3d?.enemyAttack(hit.by);

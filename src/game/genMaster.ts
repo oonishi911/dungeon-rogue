@@ -104,16 +104,25 @@ export const SPELL_FIELDS: Record<SpellId, { key: string; label: string; min: nu
   const power = { key: 'power', label: 'ダメージの倍率', min: 0, max: 10, step: 0.1, integer: false };
   const range = { key: 'range', label: '届くマス数', min: 1, max: 20, step: 1, integer: true };
   const bolt = [cost, power, range];
+  const shockwave = [
+    cost,
+    power,
+    { key: 'push', label: '吹き飛ばすマス数', min: 0, max: 10, step: 1, integer: true },
+    { key: 'crash', label: 'ぶつかったときの追加ダメージ', min: 0, max: 99, step: 1, integer: true },
+  ];
   // 連矢：矢のうえに、当たった敵のまわり8マスの敵に与えるダメージの割合（真ん中の敵に与えるダメージに対して）
   const chain = [cost, power, range, { key: 'splash', label: 'まわりの敵へのダメージの割合', min: 0, max: 2, step: 0.05, integer: false }];
   return {
-    shockwave: [
+    shockwave,
+    shockwave_strong: [...shockwave, { key: 'stun', label: '動けなくするターン数', min: 0, max: 9, step: 1, integer: true }],
+    sweep: [cost, power, range],
+    sweep_bleed: [
       cost,
       power,
-      { key: 'push', label: '吹き飛ばすマス数', min: 0, max: 10, step: 1, integer: true },
-      { key: 'crash', label: 'ぶつかったときの追加ダメージ', min: 0, max: 99, step: 1, integer: true },
+      range,
+      { key: 'bleedTurns', label: '出血が続くターン数', min: 0, max: 20, step: 1, integer: true },
+      { key: 'bleedRate', label: '1ターンの出血ダメージの割合（なぎ払いのダメージに対して）', min: 0, max: 1, step: 0.05, integer: false },
     ],
-    sweep: [cost, power, range],
     fire_bolt: bolt,
     fire_chain: chain,
     ice_bolt: bolt,
@@ -134,7 +143,9 @@ export const SPELL_FIELDS: Record<SpellId, { key: string; label: string; min: nu
 /** 呪文の名前（変更の説明と管理画面で使う。ゲームの中の名前は data.ts の SPELLS と同じ） */
 export const SPELL_NAMES: Record<SpellId, string> = {
   shockwave: '衝撃波',
+  shockwave_strong: '強衝撃',
   sweep: 'なぎ払い',
+  sweep_bleed: '烈なぎ払い',
   fire_bolt: '炎の矢',
   fire_chain: '炎の連矢',
   ice_bolt: '氷の矢',

@@ -47,6 +47,7 @@ export interface HitEvent {
   at: Pos; // ダメージを受けた側がいたマス
   amount: number;
   by?: EnemyId; // taken のとき、攻撃してきた敵（毒など、敵の攻撃でないときはない）
+  slip?: boolean; // dealt のとき、出血のダメージ（主人公が武器を振った演出や、画面の拡大は出さない）
 }
 
 /** 属性の矢と、当たった敵の相性。weak：弱点（ダメージが増える）、resist：効きにくい（減る） */
@@ -58,7 +59,9 @@ export interface CastEvent {
   dir: Dir | null;
   path: Pos[]; // 矢・なぎ払いが通ったマス（演出で使う）
   moves: { from: Pos; to: Pos }[]; // 衝撃波で吹き飛んだ敵の、動く前と後
-  splash: Pos[]; // 炎の連矢で、まわりのダメージを受けた敵のいたマス（演出で使う。唱える前の位置）
+  stunned: Pos[]; // 強衝撃で動けなくなった敵のいたマス（演出で使う。吹き飛んだあとの位置）
+  bleeding: Pos[]; // 烈なぎ払いで出血した敵のいたマス（演出で使う）
+  splash: Pos[]; // 連矢で、まわりのダメージを受けた敵のいたマス（演出で使う。唱える前の位置）
   affinity: Affinity | null; // 属性の矢が当たった敵との相性（演出の強さを変える）。矢でないとき・何にも当たらなかったときは null
 }
 

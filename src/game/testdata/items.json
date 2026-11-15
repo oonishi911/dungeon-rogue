@@ -508,9 +508,17 @@
       "name": "衝撃波の呪文書",
       "price": 50
     },
+    "book_shockwave_strong": {
+      "name": "強衝撃の呪文書",
+      "price": 100
+    },
     "book_sweep": {
       "name": "なぎ払いの呪文書",
       "price": 40
+    },
+    "book_sweep_bleed": {
+      "name": "烈なぎ払いの呪文書",
+      "price": 140
     },
     "book_fire_bolt": {
       "name": "炎の矢の呪文書",

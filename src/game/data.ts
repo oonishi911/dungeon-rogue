@@ -53,7 +53,9 @@ export const BODY_NAMES: Record<Body, string> = {
 /** 呪文。強さと使う魔力は、ダンジョンごとの設定（src/game/dungeons/*.json の spells。管理画面で変えられる） */
 export const SPELLS: Record<SpellId, SpellDef> = {
   shockwave: { id: 'shockwave', name: '衝撃波', aim: false, effect: { kind: 'shockwave' } },
+  shockwave_strong: { id: 'shockwave_strong', name: '強衝撃', aim: false, effect: { kind: 'shockwave', stun: true } },
   sweep: { id: 'sweep', name: 'なぎ払い', aim: true, effect: { kind: 'sweep' } },
+  sweep_bleed: { id: 'sweep_bleed', name: '烈なぎ払い', aim: true, effect: { kind: 'sweep', bleed: true } },
   fire_bolt: { id: 'fire_bolt', name: '炎の矢', aim: true, effect: { kind: 'bolt', element: 'fire' } },
   fire_chain: { id: 'fire_chain', name: '炎の連矢', aim: true, effect: { kind: 'bolt', element: 'fire', splash: true } },
   ice_bolt: { id: 'ice_bolt', name: '氷の矢', aim: true, effect: { kind: 'bolt', element: 'ice' } },

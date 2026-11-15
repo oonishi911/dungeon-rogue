@@ -17,7 +17,7 @@ import type { EnemyDef, ItemId, PlayerStats, SpellId, TraitId } from './types';
 const BOSS_WEIGHT = 3; // ボスは道中の敵の何体分として数えるか（最後に必ず戦うので重く見る）
 // 敵にダメージを与える呪文（有利な呪文書を選ぶ候補）。同じ系統（矢と、その強化版の連矢）は、強化版を先に書く。
 // 同じ点数なら先にあるものを選ぶので、強化版が選ばれる。同じ系統は2冊選ばない
-const SPELL_FAMILIES: SpellId[][] = [['fire_chain', 'fire_bolt'], ['ice_chain', 'ice_bolt'], ['light_chain', 'light_lance'], ['dark_chain', 'dark_bolt'], ['sweep'], ['shockwave']];
+const SPELL_FAMILIES: SpellId[][] = [['fire_chain', 'fire_bolt'], ['ice_chain', 'ice_bolt'], ['light_chain', 'light_lance'], ['dark_chain', 'dark_bolt'], ['sweep_bleed', 'sweep'], ['shockwave_strong', 'shockwave']];
 const ATTACK_SPELLS: SpellId[] = SPELL_FAMILIES.flat();
 const BOLTS: SpellId[] = ATTACK_SPELLS.filter((spell) => SPELLS[spell].effect.kind === 'bolt');
 
@@ -68,6 +68,6 @@ export function bestLoadout(trait: TraitId, dungeon: DungeonFile): ItemId[] {
   const bolt = best(BOLTS, (spell) => total((stats, enemy) => spellDamage(stats, spell, enemy, dungeon), buildPlayer([weapon])));
 
   const consumables: ItemId[] = [enchant, enchant, 'potion', 'potion', 'potion', 'food', 'food', 'food'].slice(0, LOADOUT_CONFIG.maxItems) as ItemId[];
-  const books = [`book_${bolt}`, 'book_sweep', 'book_heal'].slice(0, LOADOUT_CONFIG.maxSpellbooks) as ItemId[];
+  const books = [`book_${bolt}`, 'book_sweep_bleed', 'book_heal'].slice(0, LOADOUT_CONFIG.maxSpellbooks) as ItemId[];
   return [weapon, armor, ...consumables, ...books];
 }

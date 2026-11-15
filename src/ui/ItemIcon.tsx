@@ -66,6 +66,26 @@ const rings = (stroke = C.iceLight) => (
   </g>
 );
 
+/** 強衝撃の印：衝撃の輪に、外へ走る4本の筋と、動けなくする星（中心のきらめき）を足す */
+const strongRings = () => (
+  <>
+    {rings('#9fd0ff')}
+    <g stroke="#ffffff" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M12 0.8v2.6M12 20.6v2.6M0.8 12h2.6M20.6 12h2.6" />
+    </g>
+    <path d="M12 9.6 12.7 11.3 14.4 12 12.7 12.7 12 14.4 11.3 12.7 9.6 12 11.3 11.3z" fill="#ffffff" />
+  </>
+);
+
+/** 烈なぎ払いの印：刃に、したたる血のしずくを2つ足す */
+const bleedSlash = () => (
+  <>
+    {slash('#e8ecf2')}
+    <path d="M17.5 12.2c1.5 2.2 2.2 3.4 2.2 4.6a2.2 2.2 0 0 1-4.4 0c0-1.2.7-2.4 2.2-4.6z" fill="#d6283a" />
+    <path d="M9.4 15.6c1 1.5 1.5 2.3 1.5 3.1a1.5 1.5 0 0 1-3 0c0-.8.5-1.6 1.5-3.1z" fill="#d6283a" />
+  </>
+);
+
 const slash = (stroke = C.steel) => <path d="M4 17C8 7 15 5 20.5 6.5 15.5 7.5 10 11 6.5 19.5z" fill={stroke} />;
 
 /** 連矢の印：矢の印を大きく中央に、まわりに小さな印を2つ添える（まわりの敵にも当たる） */
@@ -81,7 +101,9 @@ const chain = (mark: ReactElement) => (
 
 const SPELL_MARKS: Record<SpellId, () => ReactElement> = {
   shockwave: () => rings(),
+  shockwave_strong: () => strongRings(),
   sweep: () => slash(),
+  sweep_bleed: () => bleedSlash(),
   fire_bolt: () => flame(),
   fire_chain: () => chain(flame()),
   ice_bolt: () => snowflake(C.iceLight),
@@ -214,7 +236,9 @@ const SHAPES: Partial<Record<ItemId, () => ReactElement>> = {
     </>
   ),
   book_shockwave: () => book('#4f6f8a', SPELL_MARKS.shockwave()),
+  book_shockwave_strong: () => book('#4f6f8a', SPELL_MARKS.shockwave_strong()),
   book_sweep: () => book('#5b6b5e', SPELL_MARKS.sweep()),
+  book_sweep_bleed: () => book('#5b4a4e', SPELL_MARKS.sweep_bleed()),
   book_fire_bolt: () => book('#8a3a28', SPELL_MARKS.fire_bolt()),
   book_fire_chain: () => book('#8a3a28', SPELL_MARKS.fire_chain()),
   book_ice_bolt: () => book('#2f5f7f', SPELL_MARKS.ice_bolt()),

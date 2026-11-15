@@ -44,10 +44,24 @@
       "push": 3,
       "crash": 3
     },
+    "shockwave_strong": {
+      "cost": 9,
+      "power": 0.3,
+      "push": 3,
+      "crash": 3,
+      "stun": 1
+    },
     "sweep": {
       "cost": 5,
       "power": 0.8,
       "range": 3
+    },
+    "sweep_bleed": {
+      "cost": 8,
+      "power": 0.8,
+      "range": 3,
+      "bleedTurns": 3,
+      "bleedRate": 0.2
     },
     "fire_bolt": {
       "cost": 4,

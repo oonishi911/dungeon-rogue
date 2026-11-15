@@ -181,6 +181,8 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
 
   next = spendAction(next);
   if (next.outcome !== 'ongoing') return ok(next);
+  next = bleedTurn(next, next.cast?.bleeding ?? []);
+  if (next.outcome !== 'ongoing') return ok(next);
   return ok(enemiesTurn(next));
 }
 
@@ -210,7 +212,7 @@ function leaveFloor(state: ExploreState): ExploreState {
 function returnToFloor(state: ExploreState, floor: number, memory: FloorMemory, at: Pos, message: string): ExploreState {
   const visited = { ...state.visited };
   delete visited[floor]; // 今いる階は覚えておく一覧に入れない
-  const enemies = memory.enemies.map((e) => ({ ...e, mode: 'wander' as const, justNoticed: false, lastSeen: null, searchTurns: 0 }));
+  const enemies = memory.enemies.map(({ stun: _stun, bleed: _bleed, ...e }) => ({ ...e, mode: 'wander' as const, justNoticed: false, lastSeen: null, searchTurns: 0 }));
   return reveal({
     ...state,
     floor,
@@ -393,7 +395,7 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
   const cost = cfg.cost ?? 0;
   if (state.mp < cost) return err('魔力が足りない');
   if (def.aim && !dir) return err('向きを選んでください');
-  const event: CastEvent = { spell, dir: def.aim ? dir : null, path: [], moves: [], splash: [], affinity: null };
+  const event: CastEvent = { spell, dir: def.aim ? dir : null, path: [], moves: [], stunned: [], bleeding: [], splash: [], affinity: null };
   let s: ExploreState = { ...state, mp: state.mp - cost, cast: event, log: [...state.log, `${def.name}を唱えた`] };
   const { stats } = s;
 
@@ -436,6 +438,17 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
         event.splash = around.map((e) => e.pos);
         for (const e of around) s = hurtEnemy(s, e.uid, splashDamage);
       }
+      // 烈なぎ払い：当たって倒れなかった敵が出血する（1ターンのダメージは、その敵に与えたダメージの割合。もう出血していれば、かけ直す）
+      if (def.effect.kind === 'sweep' && def.effect.bleed && (cfg.bleedTurns ?? 0) > 0 && (cfg.bleedRate ?? 0) > 0) {
+        for (const t of targets) {
+          const alive = s.enemies.find((e) => e.uid === t.uid);
+          if (!alive) continue;
+          const amount = Math.max(1, Math.round(spellDamage(s.stats, spell, enemyDef(t), settings) * (cfg.bleedRate ?? 0)));
+          event.bleeding.push(alive.pos);
+          s = { ...s, enemies: s.enemies.map((e) => (e.uid === t.uid ? { ...e, bleed: { amount, turns: cfg.bleedTurns ?? 0 } } : e)) };
+        }
+        if (event.bleeding.length > 0) s = { ...s, log: [...s.log, `当たった敵は出血した（${cfg.bleedTurns}ターン）`] };
+      }
       break;
     }
     case 'shockwave': {
@@ -465,6 +478,12 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
           s = { ...s, log: [...s.log, `${enemyDef(target).name}は壁にぶつかった`] };
           s = hurtEnemy(s, target.uid, cfg.crash ?? 0);
         }
+        // 強衝撃：倒れなかった敵が動けなくなる（ボスも）
+        const left = s.enemies.find((e) => e.uid === target.uid);
+        if (def.effect.kind === 'shockwave' && def.effect.stun && left && (cfg.stun ?? 0) > 0) {
+          event.stunned.push(left.pos);
+          s = { ...s, enemies: s.enemies.map((e) => (e.uid === target.uid ? { ...e, stun: cfg.stun ?? 0 } : e)), log: [...s.log, `${enemyDef(target).name}は動けなくなった`] };
+        }
       }
       break;
     }
@@ -490,13 +509,13 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
 }
 
 /** 敵に魔法などでダメージを与える。倒したら報酬（ボスなら踏破）、倒れなければこちらに気付く */
-function hurtEnemy(state: ExploreState, uid: number, dmg: number): ExploreState {
+function hurtEnemy(state: ExploreState, uid: number, dmg: number, slip = false): ExploreState {
   const target = state.enemies.find((e) => e.uid === uid);
   if (!target || state.outcome !== 'ongoing') return state;
   const def = enemyDef(target);
   const hp = target.hp - dmg;
-  const log = [...state.log, `${def.name}に${dmg}のダメージ`];
-  state = { ...state, hits: [...state.hits, { kind: 'dealt', at: target.pos, amount: dmg }] };
+  const log = [...state.log, slip ? `${def.name}は出血で${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`];
+  state = { ...state, hits: [...state.hits, slip ? { kind: 'dealt', at: target.pos, amount: dmg, slip: true } : { kind: 'dealt', at: target.pos, amount: dmg }] };
   if (hp <= 0) {
     log.push(`${def.name}を倒した`);
     const defeated = { ...state, enemies: state.enemies.filter((e) => e.uid !== uid), defeated: state.defeated + 1 };
@@ -507,8 +526,33 @@ function hurtEnemy(state: ExploreState, uid: number, dmg: number): ExploreState 
     }
     return defeatReward({ ...defeated, log }, target);
   }
-  const hit: MapEnemy = { ...target, hp, mode: 'chase', justNoticed: target.mode === 'wander', lastSeen: state.player };
+  // 出血のダメージでは、こちらに気付かない
+  const hit: MapEnemy = slip ? { ...target, hp } : { ...target, hp, mode: 'chase', justNoticed: target.mode === 'wander', lastSeen: state.player };
   return { ...state, enemies: state.enemies.map((e) => (e.uid === uid ? hit : e)), log };
+}
+
+/**
+ * 出血している敵が、1ターンにつき1回ダメージを受ける（倒れたら、ふつうに倒したときと同じ報酬）。残りのターンが0になれば出血は止まる。
+ * 出血させたターン（skip のマスにいる敵）は、まだダメージを受けない
+ */
+function bleedTurn(state: ExploreState, skip: readonly Pos[]): ExploreState {
+  let s = state;
+  for (const { uid } of state.enemies.filter((e) => e.bleed)) {
+    const e = s.enemies.find((x) => x.uid === uid);
+    if (!e?.bleed || skip.some((p) => samePos(p, e.pos))) continue;
+    const { amount, turns } = e.bleed;
+    s = hurtEnemy(s, uid, amount, true);
+    if (s.outcome !== 'ongoing') return s;
+    s = {
+      ...s,
+      enemies: s.enemies.map((x) => {
+        if (x.uid !== uid) return x;
+        const { bleed: _bleed, ...rest } = x;
+        return turns > 1 ? { ...rest, bleed: { amount, turns: turns - 1 } } : rest;
+      }),
+    };
+  }
+  return s;
 }
 
 // ===== 敵を倒したときの報酬 =====
@@ -613,7 +657,7 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
 function backAttacks(state: ExploreState, to: Pos): ExploreState {
   let s = state;
   for (const e of state.enemies) {
-    if (e.mode === 'wander' || !isAdjacent(e.pos, state.player) || isAdjacent(e.pos, to)) continue;
+    if (e.mode === 'wander' || (e.stun ?? 0) > 0 || !isAdjacent(e.pos, state.player) || isAdjacent(e.pos, to)) continue;
     let hits = e.elite;
     if (!hits) {
       const roll = nextRandom(s.rngState);
@@ -655,6 +699,12 @@ function enemiesTurn(state: ExploreState): ExploreState {
   };
   for (let i = 0; i < enemies.length; i++) {
     const current = enemies[i]!;
+    // 動けない敵は、このターンは何もしない（気付くことも、動くことも、攻撃することも）
+    if ((current.stun ?? 0) > 0) {
+      const { stun, ...rest } = current;
+      enemies[i] = stun! > 1 ? { ...rest, stun: stun! - 1, justNoticed: false } : { ...rest, justNoticed: false };
+      continue;
+    }
     const def = enemyDef(current);
     const sees = canSee(s.map, current.pos, s.player, ENEMY_CONFIG.sight);
     let e: MapEnemy = { ...current, justNoticed: false };

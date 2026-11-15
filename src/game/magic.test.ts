@@ -154,6 +154,65 @@ describe('呪文の働き', () => {
     expect(s.cast!.splash).toEqual([{ x: 4, y: 2 }]);
   });
 
+  it('強衝撃：衝撃波と同じに吹き飛ばし、さらに1ターン動けなくする（そのあいだは攻撃してこない）', () => {
+    // 主人公の隣の敵(2,2)は、後ろの敵(3,2)にふさがれて吹き飛ばない
+    const make = (spell: 'shockwave' | 'shockwave_strong') => {
+      const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 2, y: 2 }), enemy({ x: 3, y: 2 })], ['book_shockwave', 'book_shockwave_strong']);
+      return { s0, s: act({ ...s0, mp: 99 }, { kind: 'cast', spell }) };
+    };
+    const plain = make('shockwave');
+    expect(plain.s.stats.hp).toBeLessThan(plain.s0.stats.hp); // ふつうの衝撃波では、隣の敵が攻撃してくる
+    const strong = make('shockwave_strong');
+    expect(strong.s.stats.hp).toBe(strong.s0.stats.hp); // 強衝撃では、動けないので攻撃してこない
+    expect(strong.s.cast!.stunned).toEqual([{ x: 2, y: 2 }]);
+    expect(strong.s.enemies[0]!.stun).toBeUndefined(); // 1ターンで元に戻る
+    const next = act(strong.s, { kind: 'wait' });
+    expect(next.stats.hp).toBeLessThan(strong.s.stats.hp); // 次のターンからは攻撃してくる
+  });
+
+  it('強衝撃：動けないあいだは、気付いていない敵も気付かず、後ろからの攻撃もしない', () => {
+    const s0 = arena({ x: 2, y: 2 }, [enemy({ x: 3, y: 2 }, { stun: 2 })]);
+    const away = unwrap(step(s0, { kind: 'move', dir: 'left' }));
+    expect(away.stats.hp).toBe(s0.stats.hp);
+    expect(away.enemies[0]!.stun).toBe(1);
+  });
+
+  it('烈なぎ払い：当たった敵が出血し、あとの3ターン、1ターンに与えたダメージの2割（四捨五入、最低1）を受ける。そのターンは受けない', () => {
+    const loadout: ItemId[] = ['book_sweep_bleed'];
+    const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 2, y: 2 }), enemy({ x: 3, y: 2 }), enemy({ x: 5, y: 2 })], loadout);
+    const rich = { ...s0, stats: { ...s0.stats, hp: 999, maxHp: 999 } };
+    const dmg = spellDamage(s0.stats, 'sweep_bleed', enemyDef(s0.enemies[0]!), GEN);
+    const slip = Math.max(1, Math.round(dmg * cfg.sweep_bleed!.bleedRate!));
+    const s1 = act(rich, { kind: 'cast', spell: 'sweep_bleed', dir: 'right' });
+    expect(s1.enemies.map((e) => e.hp)).toEqual([99 - dmg, 99 - dmg, 99]);
+    expect(s1.enemies.map((e) => e.bleed)).toEqual([{ amount: slip, turns: 3 }, { amount: slip, turns: 3 }, undefined]);
+    expect(s1.cast!.bleeding).toEqual([{ x: 2, y: 2 }, { x: 3, y: 2 }]);
+    const s2 = act(s1, { kind: 'wait' });
+    expect(s2.enemies.map((e) => e.hp)).toEqual([99 - dmg - slip, 99 - dmg - slip, 99]);
+    expect(s2.hits.filter((h) => h.kind === 'dealt' && h.slip)).toHaveLength(2);
+    const s4 = act(s2, { kind: 'wait' }, { kind: 'wait' });
+    expect(s4.enemies.map((e) => e.hp)).toEqual([99 - dmg - slip * 3, 99 - dmg - slip * 3, 99]);
+    expect(s4.enemies.map((e) => e.bleed)).toEqual([undefined, undefined, undefined]);
+    expect(act(s4, { kind: 'wait' }).enemies.map((e) => e.hp)).toEqual(s4.enemies.map((e) => e.hp)); // 出血は止まっている
+  });
+
+  it('烈なぎ払い：出血で倒せる（ふつうに倒したときと同じ報酬）。出血のダメージでは、気付いていない敵は気付かない', () => {
+    const loadout: ItemId[] = ['book_sweep_bleed'];
+    const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 3, y: 2 })], loadout);
+    const dmg = spellDamage(s0.stats, 'sweep_bleed', enemyDef(s0.enemies[0]!), GEN);
+    const weak = { ...s0, enemies: [{ ...s0.enemies[0]!, hp: dmg + 1 }] };
+    const s1 = act(weak, { kind: 'cast', spell: 'sweep_bleed', dir: 'right' });
+    expect(s1.enemies).toHaveLength(1);
+    const s2 = act(s1, { kind: 'wait' });
+    expect(s2.enemies).toHaveLength(0);
+    expect(s2.defeated).toBe(s0.defeated + 1);
+    // 遠くで気付いていない敵が出血しても、うろつきのまま
+    const calm = arena({ x: 1, y: 2 }, [enemy({ x: 9, y: 2 }, { mode: 'wander', bleed: { amount: 2, turns: 2 } })]);
+    const s3 = act(calm, { kind: 'wait' });
+    expect(s3.enemies[0]!.hp).toBe(97);
+    expect(s3.enemies[0]!.mode).toBe('wander');
+  });
+
   it('属性の矢と当たった敵の相性を、演出のために残す（弱点・ふつう・効きにくい。外れたら・矢でなければ null）', () => {
     const base = enemyDef(enemy({ x: 0, y: 0 }));
     expect(spellAffinity('fire_bolt', { ...base, element: 'ice' })).toBe('weak');

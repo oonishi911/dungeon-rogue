@@ -41,6 +41,8 @@ export interface MapEnemy {
   lastSeen: Pos | null; // 最後にプレイヤーを見た場所
   searchTurns: number; // search のとき、あと何ターン探すか
   room?: Room; // 気付くまでは、この部屋の中だけを歩く（部屋に置いた敵で、設定の stayInRoom がオンのとき）
+  stun?: number; // 動けないターンの残り（強衝撃。あるあいだは、気付くことも、動くことも、攻撃することもしない）
+  bleed?: { amount: number; turns: number }; // 出血（烈なぎ払い）。あと何ターン、1ターンにいくつのダメージを受けるか
   home?: Pos; // 強敵の持ち場（置かれた場所）。この近くをうろつき、追っても離れすぎると持ち場へ戻る
 }
 

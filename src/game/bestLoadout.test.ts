@@ -54,7 +54,7 @@ describe('出発時に持たせる、有利な呪文書', () => {
       const list = books(trait);
       expect(list).toHaveLength(START_SPELLBOOKS);
       expect(new Set(list).size).toBe(list.length);
-      const attacks: ItemId[] = ['book_fire_chain', 'book_ice_chain', 'book_light_chain', 'book_dark_chain', 'book_sweep', 'book_shockwave'];
+      const attacks: ItemId[] = ['book_fire_chain', 'book_ice_chain', 'book_light_chain', 'book_dark_chain', 'book_sweep_bleed', 'book_shockwave_strong'];
       for (const id of list) expect(attacks).toContain(id);
     }
   });

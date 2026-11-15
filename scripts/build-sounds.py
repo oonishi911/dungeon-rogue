@@ -1012,6 +1012,46 @@ def spell_dark_bolt():
     return finish_spell(y, 0.4)
 
 
+def mix_spell(a, b):
+    """2つの呪文の音（左右2チャンネル）を重ね、大きさをそろえる"""
+    n = max(len(a), len(b))
+    out = np.zeros((n, 2))
+    out[:len(a)] += a
+    out[:len(b)] += b
+    out = out / np.max(np.abs(out)) * SPELL_PEAK
+    fade = int(0.08 * SR)
+    out[-fade:] *= np.linspace(1, 0, fade)[:, None]
+    return out
+
+
+def spell_shockwave_strong():
+    """強衝撃：衝撃波に、さらに深い「ドォン」、石が割れる「バキッ」、動けなくなる星の高い鈴の音を重ねる"""
+    rng = np.random.default_rng(101)
+    n = int(SR * 1.1)
+    t = np.arange(n) / SR
+    y = np.sin(2 * np.pi * (48 * t - 18 * t * t)) * np.exp(-t / 0.25) * 3.0
+    k = int(0.05 * SR)
+    y[:k] += low(rng.standard_normal(k), 2500) * env(k, 0.001, 0.02) * 2.2
+    y += sweep_noise(n, 0.05, 0.4, 3000, 400, rng) * 0.9
+    for i, f in enumerate([2093, 2637, 3136, 4186]):  # 頭の上をまわる星
+        y += tone(n, f, 0.14 + i * 0.05, 0.3, 0.22)
+    return mix_spell(spell_shockwave(), finish_spell(y, 0.5))
+
+
+def spell_sweep_bleed():
+    """烈なぎ払い：なぎ払いの刃に、肉を断つ鈍い「ズバッ」と、したたる血の「ぽたっ」を重ねる"""
+    rng = np.random.default_rng(103)
+    n = int(SR * 0.9)
+    y = np.sin(2 * np.pi * 85 * np.arange(n) / SR) * np.exp(-np.arange(n) / SR / 0.09) * 2.0
+    k = int(0.09 * SR)
+    a = int(0.1 * SR)
+    y[a:a + k] += band(rng.standard_normal(k), 300, 1800) * env(k, 0.002, 0.04) * 1.8
+    for at, f in [(0.34, 1500), (0.46, 1250), (0.6, 1050)]:  # したたる血のしずく
+        y += tone(n, f, at, 0.05, 0.5, glide=-1800)
+    y += sweep_noise(n, 0.12, 0.25, 700, 3000, rng) * 0.5
+    return mix_spell(spell_sweep(), finish_spell(y, 0.3))
+
+
 def chain_of(make):
     """連矢：矢の音のあとに、当たった音の部分を高さを上げて2回、少しずつ小さくして重ねる（まわりの敵に当たる音）"""
     y = make()
@@ -1061,7 +1101,9 @@ def spell_regen():
 
 SPELL_SOUNDS = {
     'shockwave': spell_shockwave,
+    'shockwave_strong': spell_shockwave_strong,
     'sweep': spell_sweep,
+    'sweep_bleed': spell_sweep_bleed,
     'fire_bolt': spell_fire_bolt,
     'fire_chain': lambda: chain_of(spell_fire_bolt),
     'ice_bolt': spell_ice_bolt,
