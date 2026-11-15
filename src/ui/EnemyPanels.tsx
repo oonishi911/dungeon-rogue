@@ -45,7 +45,7 @@ export function EnemiesPanel({
         金貨・経験値・落とす%は倒したときの報酬です（落とす%：回復薬か食料を落とす確率）。強敵は、金貨と経験値がダンジョンごとの倍率（「レベルと強敵の報酬」のタブ）で増え、必ず宝箱を落とします。
       </p>
       <div className="admin__scroll">
-        <table className="admin__table">
+        <table className="admin__table admin__table--cards">
           <thead>
             <tr>
               <th scope="col">名前</th>
@@ -101,7 +101,7 @@ export function EnemiesPanel({
                     </span>
                   </th>
                   {(['hp', 'atk', 'def'] as const).map((key) => (
-                    <td key={key}>
+                    <td key={key} data-label={{ hp: 'HP', atk: '攻撃', def: '防御' }[key]} className="admin__c2">
                       <NumberField
                         value={e[key]}
                         min={LIMITS[key].min}
@@ -112,7 +112,7 @@ export function EnemiesPanel({
                       />
                     </td>
                   ))}
-                  <td>
+                  <td data-label="属性" className="admin__c3">
                     <select
                       className={cls('admin__select', e.element !== b.element)}
                       value={e.element}
@@ -126,7 +126,7 @@ export function EnemiesPanel({
                       ))}
                     </select>
                   </td>
-                  <td>
+                  <td data-label="体質" className="admin__c3">
                     <select
                       className={cls('admin__select', e.body !== b.body)}
                       value={e.body}
@@ -141,7 +141,7 @@ export function EnemiesPanel({
                     </select>
                   </td>
                   {(['physical', 'magic'] as const).map((key) => (
-                    <td key={key}>
+                    <td key={key} data-label={RATE_LABELS[key]} className="admin__c3">
                       <NumberField
                         value={e[key] ?? 1}
                         min={LIMITS.rate.min}
@@ -154,7 +154,7 @@ export function EnemiesPanel({
                       />
                     </td>
                   ))}
-                  <td>
+                  <td data-label="ボスにする" className="admin__c6 admin__boss-cell">
                     <input
                       type="checkbox"
                       className={cls('admin__check', Boolean(e.boss) !== Boolean(b.boss))}
@@ -164,7 +164,7 @@ export function EnemiesPanel({
                     />
                   </td>
                   {(['gold', 'exp', 'drop'] as const).map((key) => (
-                    <td key={key}>
+                    <td key={key} data-label={{ gold: '報酬 金貨', exp: '報酬 経験値', drop: '報酬 落とす%' }[key]} className="admin__c2">
                       {e.boss ? (
                         <span className="admin__ingame" title="ボスを倒したときは、ボスの報酬が出る">—</span>
                       ) : (
@@ -179,7 +179,7 @@ export function EnemiesPanel({
                       )}
                     </td>
                   ))}
-                  <td>
+                  <td data-label="見た目" className="admin__c6">
                     <select
                       className={cls('admin__select admin__look', lookKey !== JSON.stringify(b.look))}
                       value={lookKey}
@@ -193,7 +193,7 @@ export function EnemiesPanel({
                       ))}
                     </select>
                   </td>
-                  <td>
+                  <td className="admin__c6 admin__remove-cell">
                     <button
                       type="button"
                       className="explore__wait admin__remove"
