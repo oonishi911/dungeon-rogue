@@ -121,6 +121,7 @@ export class DungeonView3D {
   private combatZoom = 1; // 戦闘中に寄せている倍率（なめらかに変わる）
   private lastCombatAt = -Infinity; // 最後に戦闘中だった時刻
   private readonly damagePops: { sprite: THREE.Sprite; start: number }[] = [];
+  private readonly roars: { mesh: THREE.Mesh; at: Pos; start: number; phase: number }[] = []; // ボスの咆哮の輪
   private readonly shots: { mesh: THREE.Mesh; from: Pos; to: Pos; start: number; ms: number }[] = []; // 飛んでいる、遠距離の敵の矢
   // 霧：描いている床と壁の1つ1つ（どの入れ物の何番目か・どのマスか・元の色）と、マスごとの今の明るさ
   // 霧：マスごとの「見えている」「一度見た」を1マス1ドットの小さな画像にして、描くときにピクセルごとになめらかに読む
@@ -190,6 +191,8 @@ export class DungeonView3D {
     grooveMat: new THREE.MeshLambertMaterial({ color: 0x1e130b }), // 板の継ぎ目の暗い溝
     eliteMat: new THREE.MeshLambertMaterial({ color: 0xd9653b }),
     bossMat: new THREE.MeshLambertMaterial({ color: 0xb48d35 }),
+    bossMat2: new THREE.MeshLambertMaterial({ color: FOE_FX.phase.colors[1] }), // ボスの輪：第2段階
+    bossMat3: new THREE.MeshLambertMaterial({ color: FOE_FX.phase.colors[2] }), // 第3段階
     targetMat: new THREE.MeshBasicMaterial({ color: 0x9cc46a }),
   };
   private readonly target: THREE.Mesh;
@@ -268,8 +271,8 @@ export class DungeonView3D {
     // 影の帯は黒の半透明なので、霧の外では濃さを消す（まだ見ていない場所との境目で、背景より黒くならないように）
     this.wallShadows = new THREE.InstancedMesh(shadowGeo, applyFog(shadowMat, this.fog, 'fade-alpha'), DRAW_CAPACITY * SHADOW_SIDES.length);
     // 階段・宝箱・強敵の足元の輪も、床や壁と同じ霧をかける
-    const { chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat, ironMat, keyholeMat, grooveMat } = this.shared;
-    for (const mat of [chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat, ironMat, keyholeMat, grooveMat]) applyFog(mat, this.fog);
+    const { chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat, bossMat2, bossMat3, ironMat, keyholeMat, grooveMat } = this.shared;
+    for (const mat of [chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat, bossMat2, bossMat3, ironMat, keyholeMat, grooveMat]) applyFog(mat, this.fog);
     this.stairs = new Stairs3D((mat) => applyFog(mat, this.fog));
     this.sconces = new Sconces((mat) => applyFog(mat, this.fog));
     this.scene.add(this.sconces.root);
@@ -388,6 +391,7 @@ export class DungeonView3D {
     this.updateShots(now);
     this.updateFieldLook(now);
     this.updatePuffs(now);
+    this.updateRoars(now);
     this.updateSkillFx(now);
     this.spellFx.update(now);
     const zoom = this.updateCombatZoom(s, now, dt) * this.pulseZoom(now);
@@ -743,8 +747,53 @@ export class DungeonView3D {
       else if (f.kind === 'steam') this.puff(f.at);
       else if (f.kind === 'bump') this.popText(f.at, '★', FOE_FX.marks.bump);
       else if (f.kind === 'summon') this.popText(f.at, '呼', FOE_FX.marks.summon);
+      else if (f.kind === 'roar') this.roar(f.at, f.phase);
+      else if (f.kind === 'sow') this.sow(f);
     }
     return shotMs;
+  }
+
+  /** ボスの咆哮：足元から輪が広がり、画面が揺れる。段階が高いほど大きく、強く揺れる */
+  private roar(at: Pos, phase: number) {
+    const color = FOE_FX.phase.colors[Math.min(2, Math.max(0, phase - 1))]!;
+    this.popText(at, '咆', `#${color.toString(16).padStart(6, '0')}`);
+    if (this.reduceMotion) return;
+    const mesh = new THREE.Mesh(this.shared.ring, new THREE.MeshBasicMaterial({ color, transparent: true, depthTest: false, side: THREE.DoubleSide }));
+    mesh.renderOrder = 14;
+    mesh.position.set(at.x, 0.05, at.y);
+    this.scene.add(mesh);
+    this.roars.push({ mesh, at, start: performance.now(), phase });
+    this.spellFx.shakeScreen(FOE_FX.phase.shake * (phase - 1));
+  }
+
+  /** 咆哮の輪を広げながら薄くし、終わったものを片付ける */
+  private updateRoars(now: number) {
+    for (let k = this.roars.length - 1; k >= 0; k--) {
+      const { mesh, at, start, phase } = this.roars[k]!;
+      const t = (now - start) / FOE_FX.phase.roarMs;
+      if (t >= 1) {
+        this.scene.remove(mesh);
+        (mesh.material as THREE.Material).dispose();
+        this.roars.splice(k, 1);
+        continue;
+      }
+      mesh.position.set(at.x, 0.05, at.y);
+      mesh.scale.setScalar(1 + (FOE_FX.phase.roarReach + phase) * t);
+      (mesh.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - t);
+    }
+  }
+
+  /** ボスの床まき：ボスから、床の落ちるマスへ、炎の玉・氷の玉を投げる（床そのものは状態から描く） */
+  private sow(f: Extract<FoeEvent, { kind: 'sow' }>) {
+    if (this.reduceMotion) return;
+    const color = f.field === 'fire' ? FOE_FX.shotColors.fire : FOE_FX.shotColors.ice;
+    for (const to of f.to) {
+      const mesh = new THREE.Mesh(this.shared.shotBall, new THREE.MeshBasicMaterial({ color, transparent: true, depthTest: false }));
+      mesh.renderOrder = 15;
+      mesh.position.set(f.at.x, FOE_FX.shot.height, f.at.y);
+      this.scene.add(mesh);
+      this.shots.push({ mesh, from: f.at, to, start: performance.now(), ms: FOE_FX.shot.ms });
+    }
   }
 
   /**
@@ -1420,6 +1469,20 @@ export class DungeonView3D {
       const view = this.enemies.get(e.uid) ?? this.createEnemyView(e);
       view.body.visible = view.mark.visible = true;
       if (view.ring) view.ring.visible = true;
+      const def = enemyDef(e);
+      // ボスの段階：段階が上がると、体が少し大きくなり、足元の輪の色が変わって大きくなる。盾は、持つ段階になってから作る
+      if (def.boss) {
+        const phase = e.phase ?? 1;
+        view.body.scale.setScalar(1 + FOE_FX.phase.grow * (phase - 1));
+        if (view.ring) {
+          view.ring.material = [this.shared.bossMat, this.shared.bossMat2, this.shared.bossMat3][Math.min(2, phase - 1)]!;
+          view.ring.scale.setScalar(1 + FOE_FX.phase.ringGrow * (phase - 1));
+        }
+        if (!view.shield && behaviorsOf(def).includes('shield')) {
+          view.shield = new THREE.Mesh(this.shared.shieldPlate, this.shared.shieldMat);
+          this.scene.add(view.shield);
+        }
+      }
       if (view.shield) view.shield.visible = true;
       // 向き：歩いたらその向き、止まっていても主人公を追っていれば主人公の方を向く
       const from = frame.from.enemies.get(e.uid);
@@ -1433,7 +1496,6 @@ export class DungeonView3D {
       else if (e.bleed) view.mark.material = this.textMaterial('●', '#e0384a');
       else view.mark.material = this.textMaterial(ENEMY_MARK[e.mode].mark, e.mode === 'wander' ? '#b9b29f' : '#e2c178');
       view.mark.scale.setScalar(e.justNoticed || e.charge ? 0.7 : 0.45);
-      const def = enemyDef(e);
       view.hp.visible = e.hp < def.hp;
       view.hp.material = this.hpMaterial(Math.ceil((e.hp / def.hp) * 10));
       view.hp.scale.set(0.8, 0.1, 1);

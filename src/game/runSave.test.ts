@@ -81,6 +81,14 @@ describe('packRun / parseRun', () => {
     expect(parseRun(edited(withFoe, (r) => { (r.state.current.enemies[0] as { summoned: unknown }).summoned = 'yes'; }))).toBeNull();
   });
 
+  it('ボスの段階も、保存して戻せる。範囲外の値は null', () => {
+    const state = start();
+    const withPhase = { ...state, enemies: [{ ...state.enemies[0]!, phase: 3 }, ...state.enemies.slice(1)] };
+    expect(parseRun(saved(withPhase))!.state.enemies[0]).toMatchObject({ phase: 3 });
+    expect(parseRun(edited(withPhase, (r) => { (r.state.current.enemies[0] as { phase: number }).phase = 4; }))).toBeNull();
+    expect(parseRun(edited(withPhase, (r) => { (r.state.current.enemies[0] as { phase: number }).phase = 0; }))).toBeNull();
+  });
+
   it('魔力の欄ができる前の中断データ（mag がない）は、0として読む', () => {
     const state = start();
     const old = edited(state, (run) => void delete (run.state.stats as Partial<typeof run.state.stats>).mag);

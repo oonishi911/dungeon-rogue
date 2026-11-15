@@ -62,6 +62,8 @@ export type FoeEvent =
   | { kind: 'summon'; at: Pos; from: Pos } // 敵が呼ばれた（from：呼んだ敵のいたマス）
   | { kind: 'block'; at: Pos } // 盾で防がれた
   | { kind: 'steam'; at: Pos } // 燃える床と霜の床がぶつかって、水蒸気になった
+  | { kind: 'roar'; at: Pos; phase: number } // ボスが段階を上げて、咆哮した
+  | { kind: 'sow'; at: Pos; to: Pos[]; field: Field['kind'] } // ボスが主人公のまわりに床をまいた
   | { kind: 'skill'; weapon: WeaponType; from: Pos; dir: Dir | null; path: Pos[] }; // 武器の固有技（path：当たったマス。魔力弾は、飛んだマスすべて）
 
 /** 属性の矢と、当たった敵の相性。weak：弱点（ダメージが増える）、resist：効きにくい（減る） */

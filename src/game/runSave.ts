@@ -10,6 +10,7 @@
 // 読み込んだデータは壊れていたり古い形式だったりするので、形を確かめてから使う。合わなければ null（新しい挑戦を始める）
 // 遊んでいるダンジョンは ID で持つ。ID がない・そのダンジョンの設定ファイルが消されているときは、続きはあきらめる
 
+import { PHASE_MAX } from './bossPhase';
 import { ENEMIES, ITEMS, LOADOUT_CONFIG, SPELLS, TRAIT_IDS } from './data';
 import { dungeonOf, hasDungeon } from './dungeons';
 import type { MapEnemy } from './enemies';
@@ -133,6 +134,7 @@ function isEnemy(map: FloorMap, v: unknown): v is MapEnemy {
   if (!(v.facing === undefined || isDir(v.facing)) || !(v.charge === undefined || isDir(v.charge))) return false;
   if (!(v.cool === undefined || isCount(v.cool)) || !(v.summonIn === undefined || isCount(v.summonIn))) return false;
   if (!(v.chilled === undefined || typeof v.chilled === 'boolean')) return false;
+  if (!(v.phase === undefined || (isCount(v.phase, 1) && v.phase <= PHASE_MAX))) return false;
   if (!(v.summoned === undefined || typeof v.summoned === 'boolean') || !(v.summonedBy === undefined || isCount(v.summonedBy))) return false;
   const room = v.room;
   return room === undefined || (isObject(room) && isCount(room.x) && isCount(room.y) && isCount(room.width) && isCount(room.height));
