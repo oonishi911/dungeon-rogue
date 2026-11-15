@@ -89,13 +89,13 @@ export const DUNGEON_LIMITS = {
 } as const;
 
 /** 魔力と魔法の強さの項目（名前・範囲・整数か） */
-export const MAGIC_FIELDS: { key: keyof MagicSettings; label: string; min: number; max: number; step: number; hint: string }[] = [
-  { key: 'maxMp', label: '魔力の最大', min: 0, max: 200, step: 1, hint: '探索を始めるときは、魔力がいっぱい' },
-  { key: 'regenEvery', label: '魔力が1回復する行動数', min: 1, max: 100, step: 1, hint: 'この行動数ごとに、魔力が1回復する' },
-  { key: 'power', label: '魔法の強さ', min: 0, max: 100, step: 1, hint: '呪文のダメージ＝魔法の強さ×呪文の倍率（敵の防御は無視する）' },
-  { key: 'staffPower', label: '杖での魔法の強さの倍率', min: 1, max: 5, step: 0.1, hint: '杖を持っていると、魔法がこの倍だけ強くなる' },
-  { key: 'staffMp', label: '杖で増える魔力の最大', min: 0, max: 100, step: 1, hint: '' },
-  { key: 'noiseRadius', label: '唱えると気付かれる距離', min: 0, max: 20, step: 1, hint: 'このマス数以内の、うろついている敵が気付く（0：気付かない）' },
+export const MAGIC_FIELDS: { key: keyof MagicSettings; label: string; min: number; max: number; step: number; hint: string; example: string }[] = [
+  { key: 'maxMp', label: '魔力の最大', min: 0, max: 200, step: 1, hint: '呪文を唱えるのに使う魔力の最大です。探索を始めるときは、魔力がいっぱいです。', example: '10で、使う魔力が2の呪文なら、続けて5回唱えられます。' },
+  { key: 'regenEvery', label: '魔力が1回復する行動数', min: 1, max: 100, step: 1, hint: 'この行動数ごとに、魔力が1回復します。小さいほど、早く回復します。', example: '5なら、5行動ごとに魔力が1回復（50行動で10回復）。' },
+  { key: 'power', label: '魔法の強さ', min: 0, max: 100, step: 1, hint: '呪文のダメージのもとです。ダメージ＝魔法の強さ×呪文の倍率（敵の防御は無視する）。', example: '8で、倍率1.5の呪文なら、ダメージは12。' },
+  { key: 'staffPower', label: '杖での魔法の強さの倍率', min: 1, max: 5, step: 0.1, hint: '杖を持っているとき、魔法の強さに掛ける倍率です。', example: '1.5なら、魔法の強さ8が12になります（1なら、変わりません）。' },
+  { key: 'staffMp', label: '杖で増える魔力の最大', min: 0, max: 100, step: 1, hint: '杖を持っているとき、魔力の最大に足される分です。', example: '魔力の最大が10で、これが5なら、杖を持つと15になります。' },
+  { key: 'noiseRadius', label: '唱えると気付かれる距離', min: 0, max: 20, step: 1, hint: '呪文を唱えると、このマス数以内の、うろついている敵が気付きます（0：気付かない）。', example: '5なら、唱えた場所から5マス以内の敵が気付きます。' },
 ];
 
 /** 呪文ごとの項目（名前・範囲・整数か）。どの呪文も最初は cost */
