@@ -2,7 +2,7 @@
 
 import type { MapEnemy } from './enemies';
 import type { FloorMap, Pos } from './map';
-import type { EnemyId, ItemId, PlayerStats, SpellId, TraitId } from './types';
+import type { EnemyId, ItemId, PlayerStats, SpellId, TraitId, WeaponType } from './types';
 
 // 数値はすべて仮。バランス調整で見直す
 export const EXPLORE_CONFIG = {
@@ -28,6 +28,7 @@ export type ExploreAction =
   | { kind: 'ascend' } // 上り階段（2階目からの入口）から、1つ上の階へ戻る
   | { kind: 'use_item'; item: ItemId }
   | { kind: 'cast'; spell: SpellId; dir?: Dir } // 呪文を唱える。向きを選ぶ呪文（なぎ払い・矢）は dir が要る
+  | { kind: 'skill'; dir?: Dir } // 武器の固有技（技ゲージが満タンのとき）。向きを選ぶ技（剣の連斬り・杖の魔力弾）は dir が要る
   | { kind: 'retire' }; // リタイア：探索をやめてダンジョンを出る（踏破しなかった扱い。金貨は力尽きたときと同じだけ持ち帰る）
 
 export type ExploreOutcome = 'ongoing' | 'cleared' | 'defeated' | 'retired';
@@ -62,7 +63,8 @@ export type FoeEvent =
   | { kind: 'block'; at: Pos } // 盾で防がれた
   | { kind: 'steam'; at: Pos } // 燃える床と霜の床がぶつかって、水蒸気になった
   | { kind: 'roar'; at: Pos; phase: number } // ボスが段階を上げて、咆哮した
-  | { kind: 'sow'; at: Pos; to: Pos[]; field: Field['kind'] }; // ボスが主人公のまわりに床をまいた
+  | { kind: 'sow'; at: Pos; to: Pos[]; field: Field['kind'] } // ボスが主人公のまわりに床をまいた
+  | { kind: 'skill'; weapon: WeaponType; from: Pos; dir: Dir | null; path: Pos[] }; // 武器の固有技（path：当たったマス。魔力弾は、飛んだマスすべて）
 
 /** 属性の矢と、当たった敵の相性。weak：弱点（ダメージが増える）、resist：効きにくい（減る） */
 export type Affinity = 'weak' | 'normal' | 'resist';
@@ -129,6 +131,7 @@ export interface ExploreState {
   visited: Record<number, FloorMemory>; // 一度離れた階（階の番号ごと）。今いる階は入らない
   hits: HitEvent[]; // 直前の行動で入ったダメージ（行動のたびに空からやり直す）
   foes: FoeEvent[]; // 直前の行動で起きた、敵の特別な行動や床の出来事（行動のたびに空からやり直す）
+  skill: number; // 技ゲージ（通常攻撃を当てた回数。満タンは武器の段階で決まる。武器がなければ0）
   fields: Field[]; // 今いる階の床に残る魔法の跡（燃える床・霜の床）。階を離れると消える
 }
 

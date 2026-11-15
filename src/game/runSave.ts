@@ -255,6 +255,7 @@ export function parseRun(text: string | null): ResumedRun | null {
     visited,
     hits: [],
     foes: [],
+    skill: isCount(s.skill) ? s.skill : 0, // 技ゲージを持たない前の版の途中保存は、空から続ける
     fields: [], // 床の跡は数ターンで消えるので、保存しない
   };
   return { base, outcome, seed: raw.seed, state };

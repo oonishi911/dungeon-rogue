@@ -24,7 +24,7 @@ import { DungeonView3D, webglAvailable } from './explore3d';
 import { devBestHref } from './exploreDev';
 import { EndingPanel, LeaveDialog, RetireDialog } from './ExploreDialogs';
 import { playFeedback } from './exploreFeedback';
-import { KEY_ACTIONS, KEY_DIRS, SPELL_KEYS } from './exploreKeys';
+import { KEY_ACTIONS, KEY_DIRS, SKILL_KEY, SPELL_KEYS } from './exploreKeys';
 import { LogList } from './ExploreParts';
 import { ExploreSide } from './ExploreSide';
 import { avoidOnWalk, visibleEnemyIds, type WalkGoal } from './exploreWalk';
@@ -106,6 +106,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     }
     // 向きのある呪文は、主人公が向いている方向に唱える
     if (action.kind === 'cast' && SPELLS[action.spell].aim && !action.dir) action = { ...action, dir: facingRef.current };
+    // 武器の固有技（剣・杖）も、主人公が向いている方向に出す
+    if (action.kind === 'skill' && !action.dir) action = { ...action, dir: facingRef.current };
     const result = step(prev, action);
     if (!result.ok) {
       // 壁にぶつかったときは知らせない（なぞって歩いていると何度もぶつかるので、うるさいだけ）
@@ -119,7 +121,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     const next = result.value;
     // 音・振動・3D 画面の演出を始める。呪文を唱えたときは、矢が当たるまで次の行動を待たせる
     const impactMs = playFeedback(prev, next, view3dRef.current);
-    if (next.cast) busyUntilRef.current = performance.now() + impactMs;
+    if (impactMs > 0) busyUntilRef.current = performance.now() + impactMs;
     // 階を移ったときは動かさずに切り替える
     motionRef.current = { from: motionOf(next.map === prev.map ? prev : next), start: performance.now() };
     stateRef.current = next;
@@ -154,6 +156,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   );
   const chooseSpellRef = useRef(chooseSpell);
   chooseSpellRef.current = chooseSpell;
+
+  /** 武器の固有技を出す（向きのある技は、perform で向きを入れる） */
+  const useSkillNow = useCallback(() => request({ kind: 'skill' }), [request]);
+  const useSkillRef = useRef(useSkillNow);
+  useSkillRef.current = useSkillNow;
 
   const hold = useCallback((dir: Dir) => {
     walkRef.current = null;
@@ -297,6 +304,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       if (dir) {
         e.preventDefault(); // 矢印キーでページがスクロールしないように
         if (!e.repeat) hold(dir);
+        return;
+      }
+      if (key === SKILL_KEY) {
+        e.preventDefault();
+        if (!e.repeat) useSkillRef.current();
         return;
       }
       const spellIndex = SPELL_KEYS.indexOf(key as (typeof SPELL_KEYS)[number]);
@@ -564,6 +576,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
           recentLog={recentLog}
           infoOpen={infoOpen}
           onCast={chooseSpell}
+          onSkill={useSkillNow}
           onUseItem={(item) => request({ kind: 'use_item', item })}
           onCloseInfo={() => setInfoOpen(false)}
           onRetire={() => {

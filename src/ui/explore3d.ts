@@ -90,6 +90,8 @@ export class DungeonView3D {
   private readonly props = new THREE.Group(); // 階段・宝箱・目印
   private readonly fieldGroup = new THREE.Group(); // 床に残る魔法の跡（燃える床・霜の床）
   private fieldMats: Record<'fire' | 'fireLast' | 'frost' | 'frostLast', THREE.MeshBasicMaterial> | null = null;
+  private readonly slashes: { sprite: THREE.Sprite; start: number }[] = []; // 剣の斬撃の残光
+  private readonly rings: { mesh: THREE.Mesh; start: number }[] = []; // 槌の地響きの輪
   private readonly puffs: { sprite: THREE.Sprite; at: Pos; start: number; drift: number }[] = []; // 立ち上る水蒸気
   private readonly stairs: Stairs3D; // 特性ごとの階段の模型
   private readonly sconces: Sconces; // 部屋の壁掛けたいまつ
@@ -120,7 +122,7 @@ export class DungeonView3D {
   private lastCombatAt = -Infinity; // 最後に戦闘中だった時刻
   private readonly damagePops: { sprite: THREE.Sprite; start: number }[] = [];
   private readonly roars: { mesh: THREE.Mesh; at: Pos; start: number; phase: number }[] = []; // ボスの咆哮の輪
-  private readonly shots: { mesh: THREE.Mesh; from: Pos; to: Pos; start: number }[] = []; // 飛んでいる、遠距離の敵の矢
+  private readonly shots: { mesh: THREE.Mesh; from: Pos; to: Pos; start: number; ms: number }[] = []; // 飛んでいる、遠距離の敵の矢
   // 霧：描いている床と壁の1つ1つ（どの入れ物の何番目か・どのマスか・元の色）と、マスごとの今の明るさ
   // 霧：マスごとの「見えている」「一度見た」を1マス1ドットの小さな画像にして、描くときにピクセルごとになめらかに読む
   private readonly fog = createFog();
@@ -170,6 +172,7 @@ export class DungeonView3D {
     shieldPlate: new THREE.BoxGeometry(FOE_FX.shield.size, FOE_FX.shield.size, FOE_FX.shield.thick),
     shieldMat: new THREE.MeshLambertMaterial({ color: FOE_FX.shield.color }),
     shotBall: new THREE.SphereGeometry(FOE_FX.shot.size, 12, 8),
+    slamRing: new THREE.RingGeometry(0.92, 1, 36).rotateX(-Math.PI / 2),
     fieldPlate: new THREE.PlaneGeometry(FOE_FX.field.size, FOE_FX.field.size).rotateX(-Math.PI / 2),
     targetRing: new THREE.RingGeometry(0.32, 0.42, 24).rotateX(-Math.PI / 2),
     // 宝箱の素材。テクスチャ（public/textures/chest/）を読み込むまでは金色で描く
@@ -389,6 +392,7 @@ export class DungeonView3D {
     this.updateFieldLook(now);
     this.updatePuffs(now);
     this.updateRoars(now);
+    this.updateSkillFx(now);
     this.spellFx.update(now);
     const zoom = this.updateCombatZoom(s, now, dt) * this.pulseZoom(now);
     if (Math.abs(zoom - this.camera.zoom) > 1e-4) {
@@ -737,9 +741,10 @@ export class DungeonView3D {
         mesh.renderOrder = 15;
         mesh.position.set(f.from.x, FOE_FX.shot.height, f.from.y);
         this.scene.add(mesh);
-        this.shots.push({ mesh, from: f.from, to: f.to, start: performance.now() });
+        this.shots.push({ mesh, from: f.from, to: f.to, start: performance.now(), ms: FOE_FX.shot.ms });
         shotMs = FOE_FX.shot.ms;
-      } else if (f.kind === 'steam') this.puff(f.at);
+      } else if (f.kind === 'skill') shotMs = Math.max(shotMs, this.playSkill(f));
+      else if (f.kind === 'steam') this.puff(f.at);
       else if (f.kind === 'bump') this.popText(f.at, '★', FOE_FX.marks.bump);
       else if (f.kind === 'summon') this.popText(f.at, '呼', FOE_FX.marks.summon);
       else if (f.kind === 'roar') this.roar(f.at, f.phase);
@@ -787,7 +792,89 @@ export class DungeonView3D {
       mesh.renderOrder = 15;
       mesh.position.set(f.at.x, FOE_FX.shot.height, f.at.y);
       this.scene.add(mesh);
-      this.shots.push({ mesh, from: f.at, to, start: performance.now() });
+      this.shots.push({ mesh, from: f.at, to, start: performance.now(), ms: FOE_FX.shot.ms });
+    }
+  }
+
+  /**
+   * 武器の固有技の演出：剣は斬撃の残光が2回、槌は足元から広がる輪、杖は魔力の玉が飛ぶ。
+   * 返す値は、当たるまでのミリ秒（玉が飛ぶ杖だけ。ほかは0）
+   */
+  private playSkill(f: Extract<FoeEvent, { kind: 'skill' }>): number {
+    const fx = FOE_FX.skill;
+    const now = performance.now();
+    if (f.weapon === 'staff') {
+      if (this.reduceMotion) return 0;
+      const to = f.path[f.path.length - 1] ?? f.from;
+      const mesh = new THREE.Mesh(this.shared.shotBall, new THREE.MeshBasicMaterial({ color: fx.bolt.color, transparent: true, depthTest: false }));
+      mesh.scale.setScalar(fx.bolt.scale);
+      mesh.renderOrder = 15;
+      mesh.position.set(f.from.x, FOE_FX.shot.height, f.from.y);
+      this.scene.add(mesh);
+      this.shots.push({ mesh, from: f.from, to: to, start: now, ms: FOE_FX.shot.ms });
+      return FOE_FX.shot.ms;
+    }
+    if (f.weapon === 'hammer') {
+      const mesh = new THREE.Mesh(this.shared.slamRing, new THREE.MeshBasicMaterial({ color: fx.slam.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+      mesh.position.set(f.from.x, fx.slam.y, f.from.y);
+      mesh.scale.setScalar(fx.slam.from);
+      this.scene.add(mesh);
+      this.rings.push({ mesh, start: now });
+      return 0;
+    }
+    // 剣：当たったマスに、斜めの斬撃を2本（時間をずらして）
+    const at = f.path[0] ?? f.from;
+    const map = this.texture('slash', 64, 32, (ctx) => {
+      const g = ctx.createLinearGradient(0, 0, 64, 0);
+      g.addColorStop(0, 'rgba(160,230,255,0)');
+      g.addColorStop(0.5, 'rgba(255,255,255,1)');
+      g.addColorStop(1, 'rgba(160,230,255,0)');
+      ctx.strokeStyle = g;
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(2, 22);
+      ctx.quadraticCurveTo(32, 6, 62, 22);
+      ctx.stroke();
+    });
+    for (let i = 0; i < 2; i++) {
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map, transparent: true, depthTest: false, opacity: 0, rotation: i === 0 ? 0.55 : -0.55 }));
+      sprite.renderOrder = 16;
+      sprite.scale.set(fx.slash.size, fx.slash.size / 2, 1);
+      sprite.position.set(at.x, fx.slash.y, at.y);
+      this.scene.add(sprite);
+      this.slashes.push({ sprite, start: now + i * fx.slash.stagger });
+    }
+    return 0;
+  }
+
+  /** 斬撃の残光と、地響きの輪を動かし、終わったものを片付ける */
+  private updateSkillFx(now: number) {
+    const fx = FOE_FX.skill;
+    for (let k = this.slashes.length - 1; k >= 0; k--) {
+      const { sprite, start } = this.slashes[k]!;
+      const t = (now - start) / fx.slash.ms;
+      if (t < 0) continue;
+      if (t >= 1) {
+        this.scene.remove(sprite);
+        sprite.material.dispose();
+        this.slashes.splice(k, 1);
+        continue;
+      }
+      sprite.material.opacity = 1 - t;
+      sprite.scale.set(fx.slash.size * (0.8 + 0.4 * t), (fx.slash.size / 2) * (0.8 + 0.4 * t), 1);
+    }
+    for (let k = this.rings.length - 1; k >= 0; k--) {
+      const { mesh, start } = this.rings[k]!;
+      const t = (now - start) / fx.slam.ms;
+      if (t >= 1) {
+        this.scene.remove(mesh);
+        (mesh.material as THREE.Material).dispose();
+        this.rings.splice(k, 1);
+        continue;
+      }
+      mesh.scale.setScalar(fx.slam.from + (fx.slam.to - fx.slam.from) * t);
+      (mesh.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - t);
     }
   }
 
@@ -908,8 +995,8 @@ export class DungeonView3D {
   /** 飛んでいる矢を動かし、当たったものを片付ける */
   private updateShots(now: number) {
     for (let k = this.shots.length - 1; k >= 0; k--) {
-      const { mesh, from, to, start } = this.shots[k]!;
-      const t = (now - start) / FOE_FX.shot.ms;
+      const { mesh, from, to, start, ms } = this.shots[k]!;
+      const t = (now - start) / ms;
       if (t >= 1) {
         this.scene.remove(mesh);
         (mesh.material as THREE.Material).dispose();
