@@ -123,7 +123,7 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
                           value={rec[k] as number}
                           min={ITEM_LIMITS[k].min}
                           max={ITEM_LIMITS[k].max}
-                          changed={rec[k] !== b?.[k]}
+                          changed={rec[k] !== b?.[k]} base={b?.[k] as number | undefined}
                           label={`${t.name}の${{ atk: '攻撃力', def: '守り', rate: 'ダメージの割合' }[k]}`}
                           onChange={(v) => setTier(g, i, { [k]: v })}
                         />
@@ -134,7 +134,7 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
                         value={t.price}
                         min={ITEM_LIMITS.price.min}
                         max={ITEM_LIMITS.price.max}
-                        changed={t.price !== b?.price}
+                        changed={t.price !== b?.price} base={b?.price as number | undefined}
                         label={`${t.name}の値段`}
                         onChange={(v) => setTier(g, i, { price: v })}
                       />
@@ -159,7 +159,7 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
                         value={t.price}
                         min={ITEM_LIMITS.price.min}
                         max={ITEM_LIMITS.price.max}
-                        changed={t.price !== b?.price}
+                        changed={t.price !== b?.price} base={b?.price}
                         label={`${t.name}の値段`}
                         onChange={(v) => setPlain(group, id, { price: v })}
                       />
@@ -176,7 +176,7 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
                       value={draft.information[t]}
                       min={ITEM_LIMITS.info.min}
                       max={ITEM_LIMITS.info.max}
-                      changed={draft.information[t] !== base.information[t]}
+                      changed={draft.information[t] !== base.information[t]} base={base.information[t]}
                       label={`${INFO_LABELS[t]}の情報料`}
                       onChange={(v) => setDraft((d) => ({ ...d, information: { ...d.information, [t]: v } }))}
                     />

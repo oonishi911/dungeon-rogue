@@ -2,9 +2,10 @@
 // 敵のマスターデータ（src/game/enemies.json）と、品物の設定（src/game/items.json。名前・値段・武器と防具の段階ごとの性能）と、ダンジョンの設定ファイル（src/game/dungeons/<ID>.json。プレイヤーが選ぶダンジョンごとに1つ）を、
 // タブで分けて1つの画面で変えられる：敵／品物／名前と説明／ダンジョンに出る敵／階の数・広さ・満腹度／小部屋／敵の数と置き方／レベルと強敵の報酬／魔法。
 // ダンジョンの設定のタブでは、上の欄で直すダンジョンを選ぶ。ダンジョンは、複製して作る・消すこともできる。
-// 変えた内容は「変更を公開」でまとめてリポジトリに保存され（変えたファイルを、1回のコミットで）、自動チェックが通れば数分で公開版に反映される
+// 変えた内容は「変更を公開」でまとめてリポジトリに保存され（変えたファイルを、1回のコミットで）、自動チェックが通れば数分で公開版に反映される。
+// 変えている途中の内容は、ブラウザに残して、次に開いたときに戻す（下書き。adminScreen.ts の packDraft・unpackDraft）。画面の下には、変えた数と「変更を公開」のバーを固定で出す（adminParts.tsx の PublishBar）
 
-import { useMemo, useState, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type SetStateAction } from 'react';
 import {
   ADMIN_TABS,
   adminDungeonFromUrl,
@@ -14,11 +15,13 @@ import {
   copyJson,
   duplicateDungeon,
   isDungeonTab,
+  packDraft,
   planPublish,
   removeDungeon,
   removeEnemyEverywhere,
   showsPreview,
   tabChanged,
+  unpackDraft,
   type AdminData,
   type AdminTab,
 } from '../game/adminScreen';
@@ -27,24 +30,57 @@ import type { ItemMaster } from '../game/itemMaster';
 import { DEFAULT_DUNGEON_ID, DUNGEON_IDS, DUNGEONS, sortDungeonIds } from '../game/dungeons';
 import type { EnemyMaster } from '../game/enemyMaster';
 import type { DungeonFile } from '../game/genMaster';
-import { AdminTabs, PublishPanel, usePublish } from './adminParts';
+import { AdminTabs, PublishBar, PublishPanel, readDraft, usePublish, writeDraft } from './adminParts';
 import { AboutPanel, DungeonPicker, PoolPanel } from './DungeonPanels';
 import { EnemiesPanel } from './EnemyPanels';
 import { ItemsPanel } from './ItemPanels';
 import { FloorsPanel, GrowthPanel, MagicPanel, PlacementPanel, PreviewSection, RoomsPanel } from './GenPanels';
 
 const published = (): AdminData => copyJson({ enemies: ENEMY_MASTER, items: ITEM_MASTER, dungeons: { ...DUNGEONS } });
+/** 開いたとき：公開版と、ブラウザに残してあった下書き（公開版が同じなら戻す） */
+function initial(): { base: AdminData; draft: AdminData; notice: Notice } {
+  const base = published();
+  const restore = unpackDraft(readDraft(), base);
+  if (restore.kind === 'restored') return { base, draft: restore.draft, notice: { kind: 'restored', changes: restore.changes } };
+  return { base, draft: copyJson(base), notice: restore.kind === 'stale' ? { kind: 'stale' } : null };
+}
+
+/** 画面の上に出す、下書きのお知らせ。restored：戻した、stale：公開版が変わっていて使えなかった */
+type Notice = { kind: 'restored'; changes: number } | { kind: 'stale' } | null;
+
+/** 変えている途中の内容を、少し待ってからブラウザに残す（入力のたびに書かない）。画面を閉じる・隠すときは、待たずにすぐ残す */
+const SAVE_DELAY_MS = 400;
+
 const apply = <T,>(action: SetStateAction<T>, prev: T): T => (typeof action === 'function' ? (action as (p: T) => T)(prev) : action);
 
 export function Admin() {
   // base：今公開されている（この画面を開いたときの）データ。draft：画面で変えているデータ
-  const [base, setBase] = useState<AdminData>(published);
-  const [draft, setDraft] = useState<AdminData>(published);
+  const [start] = useState(initial);
+  const [base, setBase] = useState<AdminData>(start.base);
+  const [draft, setDraft] = useState<AdminData>(start.draft);
+  const [notice, setNotice] = useState<Notice>(start.notice);
   const [tab, setTab] = useState<AdminTab>(() => adminTabFromUrl(window.location.search));
   const [dungeonId, setDungeonId] = useState(() => adminDungeonFromUrl(window.location.search, DUNGEON_IDS));
   const [seed, setSeed] = useState(1);
   const publisher = usePublish();
   const plan = useMemo(() => planPublish(base, draft), [base, draft]);
+
+  // 下書きをブラウザに残す（誤って閉じても、読み込み直しても、続きから直せる）
+  const latest = useRef({ base, draft });
+  latest.current = { base, draft };
+  useEffect(() => {
+    const timer = window.setTimeout(() => writeDraft(packDraft(base, draft)), SAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [base, draft]);
+  useEffect(() => {
+    const flush = () => writeDraft(packDraft(latest.current.base, latest.current.draft));
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', flush);
+    };
+  }, []);
 
   // 直しているダンジョン（消したばかりなら標準）
   const current = draft.dungeons[dungeonId] ? dungeonId : DEFAULT_DUNGEON_ID;
@@ -72,13 +108,16 @@ export function Admin() {
     if (plan.problems.length || !plan.files.length) return;
     void publisher.send(plan.files, plan.message, () => setBase(copyJson(draft)));
   };
-  const onReset = () => setDraft(copyJson(base));
+  const onReset = () => {
+    setDraft(copyJson(base));
+    setNotice(null);
+  };
 
   const genProps = { base: dungeonBase ?? dungeon, draft: dungeon, setDraft: setDungeon };
   const names = new Map(sortDungeonIds(Object.keys(draft.dungeons)).map((id) => [id, draft.dungeons[id]!.name]));
 
   return (
-    <main className="screen admin">
+    <main className={plan.changes.length > 0 || publisher.busy || publisher.publish.state !== 'idle' ? 'screen admin admin--bar' : 'screen admin'}>
       <header className="top">
         <div>
           <p className="top__run">開発用</p>
@@ -93,6 +132,23 @@ export function Admin() {
         current={tab}
         onSelect={select}
       />
+
+      {notice?.kind === 'restored' && (
+        <p className="admin__notice" role="status">
+          前回の続きから、変えかけの内容（{notice.changes}件）を戻しました。
+          <button type="button" className="explore__wait" disabled={publisher.busy} onClick={onReset}>
+            捨てて、公開版に戻す
+          </button>
+        </p>
+      )}
+      {notice?.kind === 'stale' && (
+        <p className="admin__notice" role="status">
+          前回の変えかけの内容は、公開されているデータが変わっていたので、戻せませんでした。
+          <button type="button" className="explore__wait" onClick={() => setNotice(null)}>
+            閉じる
+          </button>
+        </p>
+      )}
 
       <p className="admin__lead">
         値を変えて「変更を公開」を押すと、変えたところが一度にリポジトリに保存され、自動チェックが通れば数分で公開版に反映されます。
@@ -159,6 +215,7 @@ export function Admin() {
         onReset={onReset}
         onPublish={onPublish}
       />
+      <PublishBar count={plan.changes.length} problems={plan.problems.length} publisher={publisher} onPublish={onPublish} />
     </main>
   );
 }

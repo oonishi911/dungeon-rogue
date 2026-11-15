@@ -3,6 +3,9 @@ import { ITEM_MASTER } from './data';
 import { serializeItemMaster } from './itemMaster';
 import {
   ADMIN_TABS,
+  DRAFT_KEY,
+  packDraft,
+  unpackDraft,
   adminDungeonFromUrl,
   adminTabFromUrl,
   adminTabUrl,
@@ -267,5 +270,46 @@ describe('品物の設定の公開', () => {
     const problems = planPublish(BASE, draft).problems;
     expect(problems.some((p) => p.includes('剣の3段目') && p.includes('値段'))).toBe(true);
     expect(problems.some((p) => p.includes('鎧の4段目') && p.includes('守り'))).toBe(true);
+  });
+});
+
+describe('下書き（書きかけの変更をブラウザに残して、戻す）', () => {
+  it('何も変えていなければ、残さない', () => {
+    expect(packDraft(BASE, copyJson(BASE))).toBeNull();
+    expect(DRAFT_KEY).toBe('dungeon-rogue:admin-draft');
+  });
+
+  it('変えていれば残し、同じ公開版なら戻す（変えた数も数える）', () => {
+    const draft = edited((d) => {
+      goblinHp(d);
+      floorCount(d);
+    });
+    const raw = packDraft(BASE, draft)!;
+    const r = unpackDraft(raw, copyJson(BASE));
+    expect(r.kind).toBe('restored');
+    if (r.kind === 'restored') {
+      expect(r.draft).toEqual(draft);
+      expect(r.changes).toBe(planPublish(BASE, draft).changes.length);
+    }
+  });
+
+  it('残っていなければ none', () => {
+    expect(unpackDraft(null, BASE)).toEqual({ kind: 'none' });
+  });
+
+  it('公開版が変わっていたら（土台が違う）、戻さずに捨てる', () => {
+    const raw = packDraft(BASE, edited(goblinHp))!;
+    expect(unpackDraft(raw, edited(floorCount))).toEqual({ kind: 'stale' });
+  });
+
+  it('壊れた文字列や、形の違うデータも捨てる', () => {
+    expect(unpackDraft('{', BASE)).toEqual({ kind: 'stale' });
+    expect(unpackDraft(JSON.stringify({ version: 1, base: {}, draft: {} }), BASE)).toEqual({ kind: 'stale' });
+    expect(unpackDraft(JSON.stringify({ version: 2, base: BASE, draft: BASE }), BASE)).toEqual({ kind: 'stale' });
+  });
+
+  it('下書きが公開版と同じ中身になっていたら、戻さない', () => {
+    const raw = JSON.stringify({ version: 1, base: BASE, draft: BASE });
+    expect(unpackDraft(raw, BASE)).toEqual({ kind: 'none' });
   });
 });

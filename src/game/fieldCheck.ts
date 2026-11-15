@@ -60,3 +60,29 @@ export function textError(text: string, rule: TextRule): string | null {
   if (rule.taken?.has(t)) return `「${t}」は${rule.takenText ?? 'もう使われています'}。ほかの値にしてください。`;
   return null;
 }
+
+// ===== 増減ボタン =====
+
+const decimalsOf = (n: number): number => {
+  const s = String(n);
+  const dot = s.indexOf('.');
+  return dot < 0 ? 0 : s.length - dot - 1;
+};
+
+/**
+ * 数の欄の「−」「＋」ボタンで動かした値。min から step ごとの目盛りのうち、今の値の次の目盛り（dir が 1 なら上、-1 なら下）にして、
+ * min〜max に収める（今の値が目盛りの間や範囲の外でも、いちばん近い目盛りへ動く。奇数だけの欄は、min が奇数で step が2なので、奇数のまま動く）。
+ * 小数の誤差（0.1 + 0.2 など）が出ないよう、step と min の小数の桁で丸める
+ */
+export function nudge(value: number, dir: 1 | -1, rule: { min: number; max: number; step?: number }): number {
+  const step = rule.step ?? 1;
+  const digits = Math.max(decimalsOf(step), decimalsOf(rule.min));
+  const round = (n: number) => Number(n.toFixed(digits));
+  const clamp = (n: number) => Math.min(rule.max, Math.max(rule.min, n));
+  if (!Number.isFinite(value)) return clamp(round(rule.min));
+  if (value < rule.min) return clamp(round(rule.min));
+  if (value > rule.max) return clamp(round(rule.min + Math.floor((rule.max - rule.min) / step + 1e-9) * step));
+  const k = (value - rule.min) / step;
+  const next = dir > 0 ? Math.floor(k + 1e-9) + 1 : Math.ceil(k - 1e-9) - 1;
+  return clamp(round(rule.min + next * step));
+}

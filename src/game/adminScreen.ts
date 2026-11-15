@@ -4,6 +4,7 @@
 // ・どのタブ・どのダンジョンの値を変えたか
 // ・ダンジョンを複製して作る・消す、敵をすべてのダンジョンから外して消す
 // ・「変更を公開」で保存する（作る・書き換える・消す）ファイルと、コミットの説明、直すところの一覧
+// ・書きかけの変更（下書き）を、ブラウザに残して、次に開いたときに戻す決まり
 
 import { DEFAULT_DUNGEON_ID, dungeonPath, sortDungeonIds } from './dungeons';
 import { describeChanges, encountersWithout, masterProblems, removeEnemy, serializeEnemyMaster, traitsWithBoss, TRAIT_LABELS, type EnemyMaster } from './enemyMaster';
@@ -247,4 +248,40 @@ function draftDungeonProblems(draft: AdminData): string[] {
     else if (name) seen.set(name, id);
   }
   return problems;
+}
+
+// ===== 下書き =====
+// 値を変えている途中の画面を、ブラウザに残しておく（誤って閉じても、読み込み直しても消えないように）。
+// 残すのは、変えたときの公開版（base）と、変えている途中のデータ（draft）。次に開いたとき、公開版が同じなら下書きを戻す。
+// 公開版が変わっていたら（公開が済んで反映された、ほかの人が公開した、など）、下書きの土台が違うので、戻さずに捨てる。
+
+/** 下書きを残すときの名前（localStorage） */
+export const DRAFT_KEY = 'dungeon-rogue:admin-draft';
+
+/** 下書きを残す文字列。公開版から変えたところがなければ null（残さない） */
+export function packDraft(base: AdminData, draft: AdminData): string | null {
+  if (stable(base) === stable(draft)) return null;
+  return JSON.stringify({ version: 1, base, draft });
+}
+
+/** 残してあった下書きをどうするか。none：残っていない、restored：戻す、stale：公開版が変わっていたので捨てる（壊れた下書きも捨てる） */
+export type DraftRestore = { kind: 'none' } | { kind: 'restored'; draft: AdminData; changes: number } | { kind: 'stale' };
+
+const isAdminData = (v: unknown): v is AdminData => {
+  const d = v as Partial<AdminData> | null;
+  return Boolean(d && typeof d === 'object' && d.enemies && typeof d.enemies === 'object' && d.items && typeof d.items === 'object' && d.dungeons && typeof d.dungeons === 'object');
+};
+
+/** 残してあった文字列（なければ null）と、今の公開版から、下書きを戻すか決める */
+export function unpackDraft(raw: string | null, published: AdminData): DraftRestore {
+  if (!raw) return { kind: 'none' };
+  try {
+    const saved = JSON.parse(raw) as { version?: number; base?: unknown; draft?: unknown };
+    if (saved.version !== 1 || !isAdminData(saved.base) || !isAdminData(saved.draft)) return { kind: 'stale' };
+    if (stable(saved.base) !== stable(published)) return { kind: 'stale' };
+    const changes = planPublish(published, saved.draft).changes.length;
+    return changes > 0 ? { kind: 'restored', draft: copyJson(saved.draft), changes } : { kind: 'none' };
+  } catch {
+    return { kind: 'stale' };
+  }
 }

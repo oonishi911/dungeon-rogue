@@ -1,8 +1,10 @@
 // 開発用の管理画面（Admin.tsx）で使う部品：タブ、変更の一覧・トークン・「変更を公開」と、公開の進み具合、入力欄。
-// 敵のマスターデータ（EnemyPanels.tsx）と、ダンジョンの設定（GenPanels.tsx）のタブで使う
+// 敵のマスターデータ（EnemyPanels.tsx）と、ダンジョンの設定（GenPanels.tsx）のタブで使う。
+// 入力欄には、増減ボタン・スライダー・「戻す」ボタンが付く。画面の下に固定する「変更を公開」のバー（PublishBar）もここ
 
-import { useEffect, useId, useState } from 'react';
-import { numberError, textError, type TextRule } from '../game/fieldCheck';
+import { useEffect, useId, useRef, useState } from 'react';
+import { DRAFT_KEY } from '../game/adminScreen';
+import { nudge, numberError, textError, type TextRule } from '../game/fieldCheck';
 import { deployStage, loadToken, publishFiles, PublishError, REPO, saveToken, type DeployStage, type PublishItem } from './githubPublish';
 
 const POLL_MS = 10_000; // 公開の進み具合を確かめる間隔
@@ -221,8 +223,70 @@ function PublishStatus({ publish }: { publish: Publish }) {
   );
 }
 
+/** 増減ボタンを押し続けたとき、連続して動き始めるまでの時間と、動く間隔（ミリ秒） */
+const HOLD = { delay: 420, every: 70 };
+
+/**
+ * 「−」「＋」のボタン。押すと1回、押し続けると連続して動かす（指でも、マウスでも）。
+ * キーボードでは、ボタンに移らず、欄の中で上下の矢印キーを使う（ボタンは読み上げ・押す操作のために残す）
+ */
+function StepButton({ plus, label, disabled, onStep }: { plus: boolean; label: string; disabled: boolean; onStep: () => void }) {
+  const timers = useRef<{ start?: number; repeat?: number }>({});
+  const act = useRef(onStep);
+  act.current = onStep;
+  const stop = () => {
+    window.clearTimeout(timers.current.start);
+    window.clearInterval(timers.current.repeat);
+    timers.current = {};
+  };
+  useEffect(() => stop, []);
+  useEffect(() => {
+    if (disabled) stop(); // 端まで来たら、押し続けていても止める
+  }, [disabled]);
+  return (
+    <button
+      type="button"
+      className="admin__step"
+      aria-label={label}
+      tabIndex={-1}
+      disabled={disabled}
+      onPointerDown={(ev) => {
+        if (ev.button !== 0) return;
+        ev.preventDefault(); // 欄からカーソルが外れない・文字が選ばれない
+        stop();
+        act.current();
+        timers.current.start = window.setTimeout(() => (timers.current.repeat = window.setInterval(() => act.current(), HOLD.every)), HOLD.delay);
+      }}
+      onPointerUp={stop}
+      onPointerLeave={stop}
+      onPointerCancel={stop}
+      onContextMenu={(ev) => ev.preventDefault()}
+      // 読み上げ・キーボードの操作から押されたとき（ポインターの操作は、上で済んでいる）
+      onClick={(ev) => {
+        if (ev.detail === 0) act.current();
+      }}
+    >
+      {plus ? '＋' : '−'}
+    </button>
+  );
+}
+
+/** 変えた欄の横の「公開版の値に戻す」ボタン（変えていなければ何も出さない） */
+export function ResetMark({ show, label, onClick }: { show: boolean; label: string; onClick: () => void }) {
+  if (!show) return null;
+  return (
+    <button type="button" className="admin__reset" aria-label={label} title={label} onClick={onClick}>
+      <span aria-hidden="true">↺</span>
+      <span className="admin__reset-text">戻す</span>
+    </button>
+  );
+}
+
 /**
  * 数の入力欄。入力した直後に決まり（範囲・整数・奇数）を確かめ、合わなければ、欄の下に原因と正しい値の範囲を出す。
+ * 欄の両側の「−」「＋」で、step ずつ動かせる（押し続けると連続して動く。決まりは fieldCheck.ts の nudge）。
+ * slider を付けると、欄の下に、指でなぞって決めるスライダーも出る（'narrow' なら、狭い画面だけ）。範囲の狭い値向け。
+ * base（公開版の値）を渡すと、変えた欄に「戻す」ボタンが出る。
  * error は、ほかの欄との大小（最小は最大以下、など）のように、この欄だけでは決まらないエラー（欄の決まりに合っているときだけ出す）。
  * 決まりに合わない値も、数として読めれば onChange で渡す（公開の欄の「直すところ」にも出て、公開できないようにするため）
  */
@@ -236,6 +300,8 @@ export function NumberField(props: {
   error?: string | null;
   changed: boolean;
   label: string;
+  base?: number;
+  slider?: boolean | 'narrow';
   onChange: (v: number) => void;
 }) {
   const [text, setText] = useState(String(props.value));
@@ -244,35 +310,72 @@ export function NumberField(props: {
   const rule = { min: props.min, max: props.max, step, ...(props.integer !== undefined ? { integer: props.integer } : {}), odd: props.odd ?? false };
   const error = numberError(text, rule) ?? props.error ?? null;
   const errorId = useId();
+  // 押し続けたときに、そのときの値から動かせるよう、いつも新しい値と関数を持っておく
+  const latest = useRef({ text, value: props.value, onChange: props.onChange });
+  latest.current = { text, value: props.value, onChange: props.onChange };
+  const set = (v: number) => {
+    latest.current.text = String(v);
+    setText(String(v));
+    latest.current.onChange(v);
+  };
+  const move = (dir: 1 | -1) => {
+    const typed = Number(latest.current.text);
+    const from = latest.current.text.trim() !== '' && Number.isFinite(typed) ? typed : latest.current.value;
+    set(nudge(from, dir, rule));
+  };
+  const shown = text.trim() !== '' && Number.isFinite(Number(text)) ? Number(text) : props.value;
+  const base = props.base;
   return (
     <span className="admin__field">
-      <input
-        className={cls(cls('admin__number', props.changed), Boolean(error), 'is-invalid')}
-        type="number"
-        inputMode={Number.isInteger(step) ? 'numeric' : 'decimal'}
-        min={props.min}
-        max={props.max}
-        step={step}
-        value={text}
-        aria-label={props.label}
-        aria-invalid={Boolean(error)}
-        aria-describedby={error ? errorId : undefined}
-        onChange={(e) => {
-          setText(e.target.value);
-          const v = Number(e.target.value);
-          if (e.target.value.trim() !== '' && Number.isFinite(v)) props.onChange(v);
-        }}
-        // 空や数でない文字のまま離れたら、今の値に戻す（範囲の外の数は、直すまでそのまま残してエラーを出す）
-        onBlur={() => {
-          if (text.trim() === '' || !Number.isFinite(Number(text))) setText(String(props.value));
-        }}
-      />
+      <span className="admin__numrow">
+        <StepButton plus={false} label={`${props.label}を減らす`} disabled={shown <= props.min} onStep={() => move(-1)} />
+        <input
+          className={cls(cls('admin__number', props.changed), Boolean(error), 'is-invalid')}
+          type="number"
+          inputMode={Number.isInteger(step) ? 'numeric' : 'decimal'}
+          min={props.min}
+          max={props.max}
+          step={step}
+          value={text}
+          aria-label={props.label}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
+          onChange={(e) => {
+            setText(e.target.value);
+            const v = Number(e.target.value);
+            if (e.target.value.trim() !== '' && Number.isFinite(v)) props.onChange(v);
+          }}
+          // 空や数でない文字のまま離れたら、今の値に戻す（範囲の外の数は、直すまでそのまま残してエラーを出す）
+          onBlur={() => {
+            if (text.trim() === '' || !Number.isFinite(Number(text))) setText(String(props.value));
+          }}
+        />
+        <StepButton plus label={`${props.label}を増やす`} disabled={shown >= props.max} onStep={() => move(1)} />
+        <ResetMark
+          show={props.changed && base !== undefined && Number.isFinite(base) && base >= props.min && base <= props.max}
+          label={`${props.label}を公開版の値（${base}）に戻す`}
+          onClick={() => set(base!)}
+        />
+      </span>
+      {props.slider && (
+        <input
+          type="range"
+          className={cls('admin__slider', props.slider === 'narrow', 'admin__slider--narrow')}
+          min={props.min}
+          max={props.max}
+          step={step}
+          value={Math.min(props.max, Math.max(props.min, shown))}
+          aria-label={`${props.label}（スライダー）`}
+          tabIndex={-1}
+          onChange={(e) => set(Number(e.target.value))}
+        />
+      )}
       <FieldError id={errorId} error={error} />
     </span>
   );
 }
 
-/** 文字の入力欄。入力した直後に決まり（長さ・使える文字・ほかと同じでないか）を確かめ、合わなければ欄の下に原因と直し方を出す */
+/** 文字の入力欄。入力した直後に決まり（長さ・使える文字・ほかと同じでないか）を確かめ、合わなければ欄の下に原因と直し方を出す。base（公開版の文字）を渡すと、変えた欄に「戻す」ボタンが出る */
 export function TextField(props: {
   value: string;
   rule: TextRule;
@@ -282,22 +385,26 @@ export function TextField(props: {
   placeholder?: string;
   spellCheck?: boolean;
   quietWhenEmpty?: boolean; // 空のときはエラーを出さない（入力を始める前の欄）
+  base?: string;
   onChange: (v: string) => void;
 }) {
   const error = props.quietWhenEmpty && props.value === '' ? null : textError(props.value, props.rule);
   const errorId = useId();
   return (
     <span className="admin__field">
-      <input
-        className={cls(cls(props.className ?? 'admin__name', props.changed), Boolean(error), 'is-invalid')}
-        value={props.value}
-        aria-label={props.label}
-        aria-invalid={Boolean(error)}
-        aria-describedby={error ? errorId : undefined}
-        placeholder={props.placeholder}
-        spellCheck={props.spellCheck}
-        onChange={(e) => props.onChange(e.target.value)}
-      />
+      <span className="admin__numrow">
+        <input
+          className={cls(cls(props.className ?? 'admin__name', props.changed), Boolean(error), 'is-invalid')}
+          value={props.value}
+          aria-label={props.label}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
+          placeholder={props.placeholder}
+          spellCheck={props.spellCheck}
+          onChange={(e) => props.onChange(e.target.value)}
+        />
+        <ResetMark show={props.changed && Boolean(props.base)} label={`${props.label}を公開版の「${props.base}」に戻す`} onClick={() => props.onChange(props.base!)} />
+      </span>
       <FieldError id={errorId} error={error} />
     </span>
   );
@@ -314,4 +421,92 @@ function FieldError({ id, error }: { id: string; error: string | null }) {
 
 export function cls(base: string, on: boolean, extra = 'is-changed'): string {
   return on ? `${base} ${extra}` : base;
+}
+
+// ===== 下書き =====
+
+/** ブラウザに残してある下書き（ない・読めないときは null） */
+export function readDraft(): string | null {
+  try {
+    return window.localStorage.getItem(DRAFT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** 下書きを残す（null なら消す）。ブラウザに残せなくても、画面は使える */
+export function writeDraft(raw: string | null): void {
+  try {
+    if (raw === null) window.localStorage.removeItem(DRAFT_KEY);
+    else window.localStorage.setItem(DRAFT_KEY, raw);
+  } catch {
+    // 残せなくても、そのまま使える
+  }
+}
+
+// ===== 画面の下に固定する「変更を公開」のバー =====
+
+/** バーに出す、公開の進み具合の短い言葉（何もしていなければ null） */
+export function publishBarText(publish: Publish): string | null {
+  switch (publish.state) {
+    case 'idle':
+      return null;
+    case 'sending':
+      return '保存しています…';
+    case 'error':
+      return '保存に失敗しました';
+    case 'watching':
+      return { waiting: '保存しました。自動チェックを待っています…', checking: '自動チェック中です…', deploying: '公開しています…', done: '公開しました。ゲームを読み込み直すと反映されます', failed: '公開に失敗しました' }[publish.stage.stage];
+  }
+}
+
+/**
+ * 画面の下に固定する、変更の数と「変更を公開」のバー。どのタブにいても、すぐ公開できる（トークンの入力や、変えた内容の一覧は、公開の欄にある）。
+ * 変えたところがあるあいだと、公開の進み具合を出しているあいだだけ出す。トークンがまだなら、押すと公開の欄へ移ってトークンの欄に入る。
+ * 直すところがあるときは、公開できない（押すと、直すところの一覧がある公開の欄へ移る）
+ */
+export function PublishBar(props: { count: number; problems: number; publisher: ReturnType<typeof usePublish>; onPublish: () => void }) {
+  const { count, problems, publisher } = props;
+  const [closed, setClosed] = useState(false);
+  const status = publishBarText(publisher.publish);
+  const finished = publisher.publish.state === 'error' || (publisher.publish.state === 'watching' && ['done', 'failed'].includes(publisher.publish.stage.stage));
+  // 変えたとき・新しく公開を始めたときは、閉じていても出す
+  useEffect(() => setClosed(false), [count, publisher.publish.state]);
+  if (!(count > 0 || publisher.busy || (finished && !closed))) return null;
+
+  const toPanel = (focusToken: boolean) => {
+    document.getElementById('admin-publish')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (focusToken) window.setTimeout(() => document.querySelector<HTMLInputElement>('.admin__token input')?.focus({ preventScroll: true }), 350);
+  };
+  const needToken = !publisher.token;
+  const label = problems > 0 ? '直すところを見る' : needToken ? 'トークンを入れる' : '変更を公開';
+  return (
+    <div className="admin__bar" role="region" aria-label="変更を公開">
+      <p className="admin__bar-text" role="status">
+        {count > 0 && <strong>変更 {count}件</strong>}
+        {problems > 0 && <span className="admin__bar-bad"> 直すところ {problems}件</span>}
+        {status && <span className="admin__bar-status"> {status}</span>}
+      </p>
+      {count > 0 && (
+        <div className="admin__bar-actions">
+          <button type="button" className="explore__wait" onClick={() => toPanel(false)}>
+            内容を見る
+          </button>
+          <button
+            type="button"
+            className="explore__wait admin__go"
+            disabled={publisher.busy}
+            onClick={() => (problems > 0 ? toPanel(false) : needToken ? toPanel(true) : props.onPublish())}
+          >
+            {label}
+          </button>
+        </div>
+      )}
+      {count === 0 && !publisher.busy && (
+        <button type="button" className="explore__wait" onClick={() => setClosed(true)}>
+          閉じる
+        </button>
+      )}
+    </div>
+  );
 }
