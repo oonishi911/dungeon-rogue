@@ -15,19 +15,19 @@ public/textures/
   neutral/   無属性
   light/     光
   dark/      闇
-    floor.png       床
-    wall-top.png    壁の上面
-    wall-side.png   壁の側面
+    floor.jpg       床
+    wall-top.jpg    壁の上面
+    wall-side.jpg   壁の側面
 ```
 
-- PNG。大きさと、1枚が何マス分かは次のとおり。
+- JPEG（品質90。PNGのままだと15MBほどになり、ゲームを開くときの読み込みが重いため。`scripts/compress-textures.py` で変える）。1マスあたり256px（2026-11-15 に、128pxから2倍にした）。大きさと、1枚が何マス分かは次のとおり。
 
 | 画像 | 何マス分か | 仮の素材 | 画像から作った素材 |
 |---|---|---|---|
-| 床 | 4×4マス | 512×512px | 512×512px |
-| 壁の上面 | 4×4マス | 512×512px | 512×512px |
-| 壁の側面 | 横4マス×高さ1 | 512×128px | 512×128px |
-- **なめらかな質感**として描く（ドット絵ではない）。画面では拡大・縮小ともになめらかに補間し、縮小用の画像（ミップマップ）を作って、歩いたときに模様がちらつかないようにしている。斜めから見る床がぼけないよう、異方性フィルタリング（最大8）もかけている。
+| 床 | 4×4マス | 1024×1024px | 1024×1024px |
+| 壁の上面 | 4×4マス | 1024×1024px | 1024×1024px |
+| 壁の側面 | 横4マス×高さ1 | 1024×256px | 1024×256px |
+- **なめらかな質感**として描く（ドット絵ではない）。画面では拡大・縮小ともになめらかに補間し、縮小用の画像（ミップマップ）を作って、歩いたときに模様がちらつかないようにしている。斜めから見る床がぼけないよう、異方性フィルタリング（最大16。端末が対応する範囲まで）もかけている。
 - どれも1マスあたり128px。画面では1マスが約48px（CSSピクセル）で映る。スマホは画面が2〜3倍細かいので、実際には1マスに約100〜150ドットを使う。128pxならほぼ1ドットずつ表示されるので、これより大きくしても見た目はほとんど変わらない。
 - どれも1枚の絵を何マスにもまたがって貼る。マスごとに絵のどこを使うかは、ダンジョンの中の位置で決める（`src/ui/explore3d.ts` の `worldMapped`）。そのため、隣り合うマスの模様はつながり、同じ模様の繰り返しは4マスごとになる。**端どうしがつながるように描き、マスの境目に目地や縁取りは描かない**（床も壁も、マスに分かれずひと続きに見えるように）。
 - 1枚でも読み込めなかったときは、その特性は色だけで描く。
@@ -88,6 +88,7 @@ python3 scripts/build-chest-textures.py
 ```bash
 pip install pillow numpy
 python3 scripts/build-photo-textures.py ice assets/texture-sources/ice.jpg
+python3 scripts/compress-textures.py   # PNG を、軽い JPEG にする
 ```
 
 - 元の画像は `assets/texture-sources/{特性}.jpg`（または `.png`）に置く。1024×1024px くらいがよい
@@ -98,6 +99,7 @@ python3 scripts/build-photo-textures.py ice assets/texture-sources/ice.jpg
 
 ```bash
 npx tsx scripts/build-textures.ts
+python3 scripts/compress-textures.py   # PNG を、軽い JPEG にする
 ```
 
 端でつながるノイズを重ねて描いている（乱数は使わないので、作り直しても同じ絵になる）。色は `scripts/pixels.ts` の `PALETTES`。

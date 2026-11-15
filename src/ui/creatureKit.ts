@@ -14,12 +14,12 @@ export const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
 export const P = (r: number, y: number) => new THREE.Vector2(r, y); // 回転体の輪郭の点（半径, 高さ）
 
 /** 楕円体（中心が原点）。画面では敵は小さく映るので、面の数は控えめにする（細かくしても見分けられず、描くのが重くなるだけ） */
-export function ellipsoid(rx: number, ry: number, rz: number, w = 18, h = 12): THREE.BufferGeometry {
+export function ellipsoid(rx: number, ry: number, rz: number, w = 28, h = 20): THREE.BufferGeometry {
   return new THREE.SphereGeometry(1, w, h).scale(rx, ry, rz);
 }
 
 /** 2点のあいだをつなぐ円柱（腕や脚、骨）。a の太さが ra、b の太さが rb */
-export function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number, segments = 10): THREE.BufferGeometry {
+export function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number, segments = 16): THREE.BufferGeometry {
   const dir = new THREE.Vector3().subVectors(b, a);
   const geo = new THREE.CylinderGeometry(rb, ra, dir.length(), segments, 2);
   geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), dir.clone().normalize()));

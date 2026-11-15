@@ -74,7 +74,7 @@ const BREATH = { height: 0.007, speed: 2.4 };
 /** 2点のあいだをつなぐ円柱（腕など）。a の太さが ra、b の太さが rb */
 function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number): THREE.BufferGeometry {
   const dir = new THREE.Vector3().subVectors(b, a);
-  const geo = new THREE.CylinderGeometry(rb, ra, dir.length(), 10);
+  const geo = new THREE.CylinderGeometry(rb, ra, dir.length(), 16);
   // 円柱は y 軸向きなので、a から b の向きへ回して、真ん中に置く
   geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()));
   const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
@@ -166,17 +166,17 @@ export class Hero3D {
     }
 
     // 服（マントの内側）とベルト
-    add(new THREE.CylinderGeometry(0.13, 0.16, 0.3, 16), mats.tunic, 0, 0.36, 0); // 服は腰の下まで（その下に脚が見える）
-    add(new THREE.CylinderGeometry(0.155, 0.16, 0.04, 16), mats.belt, 0, 0.3, 0);
+    add(new THREE.CylinderGeometry(0.13, 0.16, 0.3, 24), mats.tunic, 0, 0.36, 0); // 服は腰の下まで（その下に脚が見える）
+    add(new THREE.CylinderGeometry(0.155, 0.16, 0.04, 24), mats.belt, 0, 0.3, 0);
 
     // マント：前（+z）を開けて、中の服が見えるようにする。裾は濃い色。
     // three.js の円柱は、角度0が +z の向き（x = sin、z = cos）なので、角度0を中心に開ける
     const gap = 0.9; // 前の開きの角度（ラジアン）
     // 裾がひるがえるよう、縦にも分けておき、毎フレーム頂点を動かす（flowCloak）
     // 裾は膝の上まで（脚と靴の動きが見えるように）
-    const cloakGeo = new THREE.CylinderGeometry(0.17, 0.25, 0.34, 20, 5, true, gap / 2, Math.PI * 2 - gap);
+    const cloakGeo = new THREE.CylinderGeometry(0.17, 0.25, 0.34, 30, 5, true, gap / 2, Math.PI * 2 - gap);
     add(cloakGeo, this.cloakMats.C, 0, 0.38, 0);
-    const hemGeo = new THREE.CylinderGeometry(0.25, 0.255, 0.05, 20, 1, true, gap / 2, Math.PI * 2 - gap);
+    const hemGeo = new THREE.CylinderGeometry(0.25, 0.255, 0.05, 30, 1, true, gap / 2, Math.PI * 2 - gap);
     add(hemGeo, this.cloakMats.c, 0, 0.235, 0);
     for (const [geo, y] of [[cloakGeo, 0.38], [hemGeo, 0.235]] as const) {
       const pos = geo.getAttribute('position') as THREE.BufferAttribute;
@@ -191,7 +191,7 @@ export class Hero3D {
       const parent = side === 1 ? this.leftArm : this.rightArm;
       const origin = shoulder;
       add(limb(shoulder.clone().sub(origin), hand.clone().sub(origin), 0.04, 0.035), mats.tunic, 0, 0, 0, parent);
-      add(new THREE.SphereGeometry(0.048, 10, 8), mats.skin, hand.x - origin.x, hand.y - origin.y, hand.z - origin.z, parent);
+      add(new THREE.SphereGeometry(0.048, 16, 12), mats.skin, hand.x - origin.x, hand.y - origin.y, hand.z - origin.z, parent);
       if (side === 1) {
         this.leftArm.position.copy(shoulder);
         this.leftHand.position.copy(hand).sub(shoulder);
@@ -206,12 +206,12 @@ export class Hero3D {
 
     // 頭とフード。フードは顔の前（+z）を開ける
     // （three.js の球は、横の角度 phi が π/2 のところが +z。phi 0.2π〜0.8π を開けると、顔の前が開く）
-    add(new THREE.SphereGeometry(0.14, 16, 12), mats.skin, 0, 0.7, 0.01);
-    add(new THREE.SphereGeometry(0.175, 16, 12, Math.PI * 0.8, Math.PI * 1.4), this.cloakMats.H, 0, 0.72, -0.01);
+    add(new THREE.SphereGeometry(0.14, 26, 18), mats.skin, 0, 0.7, 0.01);
+    add(new THREE.SphereGeometry(0.175, 26, 18, Math.PI * 0.8, Math.PI * 1.4), this.cloakMats.H, 0, 0.72, -0.01);
 
     // 髪（長め）：フードの開きから見える前髪と、顔の両横から胸まで垂れる髪、フードの下から背中へ流れる髪
     // 前髪：頭の球に少し大きい球の上の前側だけをかぶせる（目の上まで）
-    add(new THREE.SphereGeometry(0.148, 16, 8, Math.PI * 0.15, Math.PI * 0.7, 0, Math.PI * 0.42), mats.hair, 0, 0.7, 0.012);
+    add(new THREE.SphereGeometry(0.148, 26, 14, Math.PI * 0.15, Math.PI * 0.7, 0, Math.PI * 0.42), mats.hair, 0, 0.7, 0.012);
     for (const side of [-1, 1]) {
       // 顔の横の髪：こめかみから、あごの下を通って胸まで
       add(limb(new THREE.Vector3(side * 0.112, 0.74, 0.065), new THREE.Vector3(side * 0.125, 0.47, 0.11), 0.032, 0.022), mats.hair, 0, 0, 0);
@@ -220,7 +220,7 @@ export class Hero3D {
     for (const [x, end] of [[-0.055, 0.38], [0, 0.33], [0.055, 0.38]] as const) {
       add(limb(new THREE.Vector3(x, 0.63, -0.15), new THREE.Vector3(x * 1.25, end, -0.205), 0.042, 0.016), mats.hair, 0, 0, 0);
     }
-    add(new THREE.CylinderGeometry(0.1, 0.17, 0.12, 20), this.cloakMats.H, 0, 0.57, 0); // 肩にかかるフードの裾
+    add(new THREE.CylinderGeometry(0.1, 0.17, 0.12, 28), this.cloakMats.H, 0, 0.57, 0); // 肩にかかるフードの裾
 
     // 目
     add(new THREE.BoxGeometry(0.03, 0.045, 0.02), mats.eyes, -0.05, 0.7, 0.14);

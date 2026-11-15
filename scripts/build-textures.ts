@@ -1,6 +1,6 @@
 // 3D表示の仮のテクスチャ（public/textures/{特性}/*.png）を作るスクリプト。
-// なめらかな質感（ドット絵ではない）で、1マスあたり128px。床（1枚で4×4マス、512×512px）・
-// 壁の上面（1枚で4×4マス、512×512px）・壁の側面（1枚で横4マス、512×128px）を、別々の画像として書き出す。
+// なめらかな質感（ドット絵ではない）で、1マスあたり256px。床（1枚で4×4マス、1024×1024px）・
+// 壁の上面（1枚で4×4マス、1024×1024px）・壁の側面（1枚で横4マス、1024×256px）を、別々の画像として書き出す。
 // どれも1枚の絵を何マスにもまたがって貼るので、マスの境目に縁取りや目地を付けず、絵の端どうしがつながるように描く。
 // 本番の画像ができたら、同じ名前・同じ大きさのPNGに差し替える。仕様は docs/textures.md を参照。
 // 実行：npx tsx scripts/build-textures.ts
@@ -10,7 +10,8 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { PALETTES, PixelImage, type Palette, type RGB } from './pixels';
 
-const SIZE = 128; // 1マスの大きさ（px）
+const SIZE = 256; // 1マスの大きさ（px）
+const SCALE = SIZE / 128; // 以前の1マス128pxのときの数値（目地の太さなど）を、今の大きさに直す倍率
 const WALL_SPAN = 4; // 床と壁の絵1枚が、何マス分にまたがるか（src/ui/explore3d.ts の TEXTURE_SPAN と合わせる）
 
 // ===== ノイズ =====
@@ -88,12 +89,12 @@ function floorTexture(p: Palette): PixelImage {
   const size = SIZE * WALL_SPAN;
   return paint(
     (x, y) => {
-      const mottled = fbm(x, y, 11, 4, 5, WALL_SPAN);
-      const grain = fbm(x, y, 18, 16, 3, WALL_SPAN);
+      const mottled = fbm(x, y, 11, 4, 6, WALL_SPAN);
+      const grain = fbm(x, y, 18, 16, 4, WALL_SPAN);
       let c = mix(p.floor, p.speck, clamp01(mottled * 1.6 - 0.35));
       c = shade(c, 0.88 + grain * 0.24);
       // ひび：ノイズが細い帯になるところを暗くする
-      const crack = Math.abs(fbm(x, y, 24, 2, 3, WALL_SPAN) - 0.5);
+      const crack = Math.abs(fbm(x, y, 24, 2, 4, WALL_SPAN) - 0.5);
       if (crack < 0.03) c = mix(c, p.edge, 0.3 * smooth(1 - crack / 0.03));
       // 小石：明るいしみをぼかして散らす
       const pebble = valueNoise(x, y, 24, 40, WALL_SPAN);
@@ -115,8 +116,8 @@ function wallTopTexture(p: Palette): PixelImage {
   const size = SIZE * WALL_SPAN;
   return paint(
     (x, y) => {
-      const mottled = fbm(x, y, 201, 4, 5, WALL_SPAN);
-      const grain = fbm(x, y, 207, 16, 3, WALL_SPAN);
+      const mottled = fbm(x, y, 201, 4, 6, WALL_SPAN);
+      const grain = fbm(x, y, 207, 16, 4, WALL_SPAN);
       const c = mix(p.wall, p.light, clamp01(mottled - 0.25) * 0.45);
       return shade(c, 0.85 + grain * 0.3);
     },
@@ -126,7 +127,7 @@ function wallTopTexture(p: Palette): PixelImage {
 }
 
 /**
- * 壁の側面：横4マスにまたがるレンガ積み。4段（1段32px）で、1マスに2つ、段ごとに半分ずらす。
+ * 壁の側面：横4マスにまたがるレンガ積み。4段（1段64px）で、1マスに2つ、段ごとに半分ずらす。
  * レンガごとに色合いを少し変え、角を丸め、目地はなめらかに沈ませる。左右の端でつながる
  */
 function wallSideTexture(p: Palette): PixelImage {
@@ -134,7 +135,7 @@ function wallSideTexture(p: Palette): PixelImage {
   const rows = 4;
   const rowH = SIZE / rows;
   const brickW = SIZE / 2;
-  const mortar = 3;
+  const mortar = 3 * SCALE;
   return paint((x, y) => {
     const row = Math.floor(y / rowH);
     const shift = row % 2 === 0 ? 0 : brickW / 2;
@@ -144,15 +145,15 @@ function wallSideTexture(p: Palette): PixelImage {
     const ly = y - row * rowH;
     // レンガごとの色合いと、表面の凹凸
     const tone = lattice(col, row, width / brickW, 401);
-    const grain = fbm(x, y, 409, 16, 3, WALL_SPAN);
-    const mottled = fbm(x, y, 419, 4, 5, WALL_SPAN);
+    const grain = fbm(x, y, 409, 16, 4, WALL_SPAN);
+    const mottled = fbm(x, y, 419, 4, 6, WALL_SPAN);
     let c = mix(p.wall, p.light, tone * 0.22 + clamp01(mottled - 0.4) * 0.3);
     c = shade(c, 0.82 + grain * 0.3);
     // 上側は光が当たって明るく、下側は少し暗い
     c = shade(c, 1.08 - (ly / rowH) * 0.16);
     // 角を丸めた面取りで、目地へなめらかに沈む
-    const b = bevel(lx, ly, brickW, rowH, mortar + 7);
-    const inMortar = 1 - smooth(clamp01((Math.min(lx, ly, brickW - lx, rowH - ly) - mortar + 2.5) / 4));
+    const b = bevel(lx, ly, brickW, rowH, mortar + 7 * SCALE);
+    const inMortar = 1 - smooth(clamp01((Math.min(lx, ly, brickW - lx, rowH - ly) - mortar + 2.5 * SCALE) / (4 * SCALE)));
     c = shade(c, 0.7 + 0.3 * b);
     return mix(c, mix(p.edge, p.wall, 0.35), inMortar * 0.8);
   }, width, SIZE);

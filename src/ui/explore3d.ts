@@ -3,7 +3,7 @@
 //
 // - 床と壁は、同じ形をまとめて描く InstancedMesh で描く。主人公の周りの画面に映る範囲だけを描くので、
 //   マップがどれだけ広くても描く量は変わらない
-// - 床と壁には、ダンジョン特性ごとのテクスチャ（public/textures/{特性}.png）を貼る。読み込むまでは色で描く
+// - 床と壁には、ダンジョン特性ごとのテクスチャ（public/textures/{特性}/*.jpg）を貼る。読み込むまでは色で描く
 // - 霧：まだ見ていないマスは描かない。一度見たマスは暗く、今見えているマスは明るく描く
 // - 主人公は立体の模型（hero3d.ts）。敵も、形も色もプログラムで組んだ立体の模型（creatures.ts）。
 //   模型のない敵（新しく足した敵など）と宝箱は、絵を常にカメラを向く板（スプライト）として立てる
@@ -26,7 +26,7 @@ import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
-import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEBRIS, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, RESOLUTION, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
+import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEBRIS, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, QUALITY, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
 import { applyFog, createFog, createGroundMist, litBillboard, worldMapped } from './explore3dKit';
 import { asMetal } from './materialLook';
 import { PostFx } from './postFx';
@@ -93,8 +93,16 @@ export class DungeonView3D {
   private readonly hero = new Hero3D(); // 主人公は立体の模型（敵や宝箱はドット絵の板のまま）
   private heroDir: Dir = 'down'; // 最後に歩いた向き。模型をこの向きへ回す
   private lastFrameAt = performance.now();
-  private pixelRatio = Math.min(window.devicePixelRatio, RESOLUTION.max);
-  private slowFrames = 0; // 描くのが間に合わなかったコマの数（解像度を下げるかを決める）
+  // 画質の段（QUALITY）。描くのが間に合わなければ下げ、余裕が戻れば上げる。?quality=番号 を付けると、その段に固定する
+  private readonly fixedQuality = new URLSearchParams(location.search).get('quality') !== null;
+  private level = startLevel();
+  private ceiling = 0; // これより上の段へは上げない（上げてすぐ下がった段は、二度と上げない）
+  private pixelRatio = levelOf(this.level).ratio;
+  private slowFrames = 0; // 描くのが間に合わなかったコマの数（段を下げるかを決める）
+  private fastFrames = 0; // 余裕のあるコマが続いた数（段を上げるかを決める）
+  private raisedAt = -Infinity; // 段を上げた時刻
+  private cssWidth = 0;
+  private cssHeight = 0;
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private readonly spellFx = new SpellEffects(this.scene, this.reduceMotion); // 呪文の演出
   private pulse: { kind: HitPulse; start: number } | null = null;
@@ -113,8 +121,8 @@ export class DungeonView3D {
   // 地面をはう霧（?mist=off、または処理の弱い端末では出さない）
   private readonly mist: THREE.Mesh | null = rich('mist') ? createGroundMist(this.fog, DRAW_RANGE.x * 2 + 2, DRAW_RANGE.z * 2 + 2) : null;
   private flickerTime = 0; // たいまつのゆらぎの時間（秒）
-  // 画面全体の仕上げ（光のにじみ・周辺減光・粒子感）。?post=off、処理の弱い端末では使わず、描くのが間に合わなくなったらやめる
-  private post: PostFx | null = rich('post') ? new PostFx() : null;
+  // 画面全体の仕上げ（光のにじみ・周辺減光・粒子感・輪郭の強調）。?post=off、処理の弱い端末では使わず、描くのが間に合わなくなったらやめる
+  private post: PostFx | null = null; // 段が決める（applyLevel）
   private readonly enemies = new Map<
     number,
     {
@@ -183,12 +191,14 @@ export class DungeonView3D {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.setSize(canvas.width, canvas.height, false);
+    this.cssWidth = canvas.width;
+    this.cssHeight = canvas.height;
     if (this.shadows) {
       this.renderer.shadowMap.enabled = true;
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 影の縁を少しぼかす
       this.renderer.shadowMap.autoUpdate = false; // 描き直すときを自分で決める（render の中）
       this.torch.castShadow = true;
-      this.torch.shadow.mapSize.set(TORCH.shadowMapSize, TORCH.shadowMapSize);
+      this.torch.shadow.mapSize.set(levelOf(this.level).shadow, levelOf(this.level).shadow);
       this.torch.shadow.camera.near = 0.1;
       this.torch.shadow.camera.far = TORCH.distance;
       this.torch.shadow.bias = -0.002;
@@ -296,8 +306,8 @@ export class DungeonView3D {
     this.scene.add(this.hero.root, this.target, this.pathDots);
     // 呪文が敵に当たったら、その敵をのけぞらせる
     this.spellFx.onImpact = (at, strength) => this.knockEnemy(at, strength);
+    this.applyLevel(); // 今の段の効果（仕上げ・霧・粒・影の細かさ）にする。仕上げの描き方もここで先に作る
     this.compile(this.scene); // 床・壁・主人公など、最初から場面にあるものの描き方を先に作る
-    this.post?.compile(this.renderer);
   }
 
   /**
@@ -307,6 +317,8 @@ export class DungeonView3D {
   resize(width: number, height: number) {
     if (width <= 0 || height <= 0) return;
     this.renderer.setSize(width, height, false);
+    this.cssWidth = width;
+    this.cssHeight = height;
     this.post?.setSize(width * this.pixelRatio, height * this.pixelRatio);
     // 主人公までの距離で1マスが TILE_PX に映る視野：画面の高さの半分 ÷（距離 × TILE_PX）= tan(視野の半分)
     const distance = Math.hypot(CAMERA.height, CAMERA.back);
@@ -337,7 +349,7 @@ export class DungeonView3D {
     const elapsed = now - this.lastFrameAt;
     const dt = Math.min(0.1, elapsed / 1000);
     this.lastFrameAt = now;
-    this.adaptResolution(elapsed);
+    this.adaptQuality(elapsed, now);
     this.prebuildEnemy();
     const moved = frame.from.player.x !== s.player.x || frame.from.player.y !== s.player.y;
     // 1マスずつ動くので、前の位置から今の位置への向きが歩いた向き（階を移ったときは向きを変えない）
@@ -353,7 +365,7 @@ export class DungeonView3D {
     this.fog.update(p, dt, this.reduceMotion, TORCH_FLICKER.sight * flicker);
     this.mist?.position.set(p.x, GROUND_MIST.height, p.y);
     this.sconces.tick(p, dt, this.reduceMotion);
-    this.particles.tick(this.sconces.flames, this.pixelRatio);
+    if (this.particles.root.visible) this.particles.tick(this.sconces.flames, this.pixelRatio);
     this.updateDamagePops(now);
     this.spellFx.update(now);
     const zoom = this.updateCombatZoom(s, now, dt) * this.pulseZoom(now);
@@ -417,16 +429,69 @@ export class DungeonView3D {
     else this.renderer.render(this.scene, this.camera);
   }
 
-  /** 描くのが間に合わないコマが続いたら、描く解像度を下げる（RESOLUTION）。elapsed は前のコマからの時間（ms） */
-  private adaptResolution(elapsed: number) {
-    if (this.pixelRatio <= RESOLUTION.low || elapsed > 250) return; // 長く止まっていたとき（別の画面を見ていたなど）は数えない
-    this.slowFrames = elapsed > RESOLUTION.slowMs ? this.slowFrames + 1 : Math.max(0, this.slowFrames - 1);
-    if (this.slowFrames < RESOLUTION.frames) return;
-    this.pixelRatio = RESOLUTION.low;
-    this.renderer.setPixelRatio(this.pixelRatio);
-    // 仕上げもやめて、描く量を減らす
-    this.post?.dispose();
-    this.post = null;
+  /**
+   * 画質の段を、コマの長さを見て変える（QUALITY）。遅いコマがたまったら1段下げ、余裕のあるコマが続いたら1段上げてみる。
+   * 上げてすぐ（QUALITY.retryMs 以内に）また遅くなったら、その段へは二度と上げない（上げ下げを繰り返さない）。
+   * elapsed は前のコマからの時間（ms）。長く止まっていたとき（別の画面を見ていたなど）は数えない
+   */
+  private adaptQuality(elapsed: number, now: number) {
+    if (this.fixedQuality || elapsed > 250) return;
+    if (elapsed > QUALITY.slowMs) {
+      this.slowFrames = Math.min(QUALITY.slowFrames * 2, this.slowFrames + (elapsed > 50 ? 3 : 1));
+      this.fastFrames = 0;
+    } else {
+      this.slowFrames = Math.max(0, this.slowFrames - 1);
+      this.fastFrames = elapsed < QUALITY.fastMs ? this.fastFrames + 1 : 0;
+    }
+    if (this.slowFrames >= QUALITY.slowFrames) {
+      const lower = this.neighborLevel(1);
+      if (lower === this.level) return;
+      if (now - this.raisedAt < QUALITY.retryMs) this.ceiling = lower;
+      this.setLevel(lower);
+    } else if (this.fastFrames >= QUALITY.fastFrames) {
+      const upper = this.neighborLevel(-1);
+      if (upper === this.level || upper < this.ceiling) return;
+      this.raisedAt = now;
+      this.setLevel(upper);
+    }
+  }
+
+  /** 今の段から dir（1：下げる、-1：上げる）の向きで、効果が今と変わる最初の段。なければ今の段 */
+  private neighborLevel(dir: 1 | -1): number {
+    const key = (l: number) => JSON.stringify(levelOf(l));
+    for (let l = this.level + dir; l >= 0 && l < QUALITY.levels.length; l += dir) if (key(l) !== key(this.level)) return l;
+    return this.level;
+  }
+
+  private setLevel(level: number) {
+    this.level = level;
+    this.slowFrames = 0;
+    this.fastFrames = 0;
+    this.applyLevel();
+  }
+
+  /** 今の段の効果にする：描く解像度、画面の仕上げ、地面の霧、空気の粒、影の地図の大きさ */
+  private applyLevel() {
+    const cfg = levelOf(this.level);
+    this.pixelRatio = cfg.ratio;
+    this.renderer.setPixelRatio(cfg.ratio); // 描く大きさも、この解像度でやり直される
+    if (cfg.post && !this.post) {
+      this.post = new PostFx();
+      this.post.compile(this.renderer);
+    } else if (!cfg.post && this.post) {
+      this.post.dispose();
+      this.post = null;
+    }
+    this.post?.setSize(this.cssWidth * cfg.ratio, this.cssHeight * cfg.ratio);
+    if (this.mist) this.mist.visible = cfg.mist;
+    this.particles.root.visible = cfg.particles;
+    const shadow = this.torch.shadow;
+    if (this.shadows && shadow.mapSize.x !== cfg.shadow) {
+      shadow.mapSize.set(cfg.shadow, cfg.shadow);
+      shadow.map?.dispose(); // 影の地図を、新しい大きさで作り直す
+      shadow.map = null;
+      this.renderer.shadowMap.needsUpdate = true;
+    }
   }
 
   /** 主人公をその向きに向ける（壁にぶつかって歩けなかったときも向く。向きのある呪文は、この向きに唱える） */
@@ -1325,6 +1390,18 @@ function tileRandom(x: number, z: number, n: number): number {
  * 重い見た目（地面をはう霧・画面の仕上げなど）を使うか。?<名前>=off で切り、?<名前>=on で必ず使う。
  * どちらもなければ、処理の弱い端末（コアが4つ未満）では使わない
  */
+function startLevel(): number {
+  const q = Number(new URLSearchParams(location.search).get('quality'));
+  if (new URLSearchParams(location.search).get('quality') !== null && Number.isInteger(q)) return Math.min(Math.max(q, 0), QUALITY.levels.length - 1);
+  return (navigator.hardwareConcurrency ?? 4) >= QUALITY.fastStartCores ? 0 : 1;
+}
+
+/** ある段の効果。端末の細かさ・弱い端末で使わない効果（rich）を反映する */
+function levelOf(level: number) {
+  const l = QUALITY.levels[level]!;
+  return { ratio: Math.min(window.devicePixelRatio, l.ratio), mist: l.mist && rich('mist'), particles: l.particles, post: l.post && rich('post'), shadow: l.shadow };
+}
+
 function rich(name: string): boolean {
   const v = new URLSearchParams(location.search).get(name);
   if (v === 'off') return false;

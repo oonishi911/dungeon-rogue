@@ -2,6 +2,8 @@
 // - 光のにじみ（ブルーム）：明るいところ（たいまつ・光る目・呪文・壁掛けのたいまつ）を取り出してぼかし、元の画面に足す
 // - 周辺減光：画面の四隅をわずかに暗くして、視線を真ん中（主人公）に集める
 // - 粒子感：ごく薄いざらつきを毎フレーム変えて重ね、絵が平らに見えないようにする
+// - 輪郭の強調：近くの点との差を少し足して、石のひびや敵の輪郭をくっきりさせる
+// - 明るい部分の階調：炎や溶岩の割れ目が白く飛ばず、色を残したまま明るく見えるよう、明るさをなだらかに抑える
 // 軽くするため、ぼかしは縦横1回ずつ、重ね描き（マルチサンプル）は大きな画面では減らす（数値は POST_FX）。
 // 処理の弱い端末や、描くのが間に合わないときは使わない（explore3d.ts が決める）。数値は explore3dConfig.ts の POST_FX。
 
@@ -61,7 +63,19 @@ export class PostFx {
       fragmentShader: `uniform sampler2D tex; uniform sampler2D glow; uniform float time; uniform vec2 size; varying vec2 vUv;
         float grainHash( vec2 p ) { return fract( sin( dot( p, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 ); }
         void main() {
-          vec3 c = texture2D( tex, vUv ).rgb + texture2D( glow, vUv ).rgb * ${POST_FX.bloom.toFixed(3)};
+          // 輪郭を強調する（まわり4点の平均との差を足す。差が大きすぎるところは抑えて、縁に白い線が出ないようにする）
+          vec2 px = 1.0 / size;
+          vec3 c = texture2D( tex, vUv ).rgb;
+          vec3 around = ( texture2D( tex, vUv + vec2( px.x, 0.0 ) ).rgb + texture2D( tex, vUv - vec2( px.x, 0.0 ) ).rgb
+            + texture2D( tex, vUv + vec2( 0.0, px.y ) ).rgb + texture2D( tex, vUv - vec2( 0.0, px.y ) ).rgb ) * 0.25;
+          c = max( c + clamp( c - around, -0.25, 0.25 ) * ${POST_FX.sharpen.toFixed(3)}, 0.0 );
+          c += texture2D( glow, vUv ).rgb * ${POST_FX.bloom.toFixed(3)};
+          // 明るい部分は、白く飛ばさず、色を残したままなだらかに明るさを抑える（rollStart より暗いところは変えない）
+          float peak = max( c.r, max( c.g, c.b ) );
+          if ( peak > ${POST_FX.rollStart.toFixed(3)} ) {
+            float room = 1.0 - ${POST_FX.rollStart.toFixed(3)};
+            c *= ( ${POST_FX.rollStart.toFixed(3)} + room * ( 1.0 - exp( -( peak - ${POST_FX.rollStart.toFixed(3)} ) / room ) ) ) / peak;
+          }
           vec2 d = ( vUv - 0.5 ) * vec2( size.x / size.y, 1.0 );
           c *= 1.0 - ${POST_FX.vignette.toFixed(3)} * smoothstep( 0.35, 0.95, length( d ) );
           gl_FragColor = vec4( c, 1.0 );

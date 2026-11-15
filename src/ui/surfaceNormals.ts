@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { TILE_PX } from './explore3dConfig';
 
-const MAX_SIZE = 512; // 作る絵の大きさの上限（これより大きい絵は、縮めてから作る）
+const MAX_SIZE = 1024; // 作る絵の大きさの上限（これより大きい絵は、縮めてから作る）
 
 // 絵の色（sRGB）を、光の強さ（リニア）に直す表。凹凸は、描くときに絵を読んだ値（リニア）の差から出していたので、同じにする
 const LINEAR = Float32Array.from({ length: 256 }, (_, i) => {
