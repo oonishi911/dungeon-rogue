@@ -93,9 +93,9 @@ export const PATH_CAPACITY = 256; // 歩く道筋の点を、いくつまで描�
  * マスごとに絵のどこを使うかはダンジョンの中の位置で決めるので、隣り合うマスの模様がつながり、マスの境目が見えない
  */
 export const TEXTURE_FILES = {
-  floor: 'floor.png',
-  wallTop: 'wall-top.png',
-  wallSide: 'wall-side.png',
+  floor: 'floor.jpg',
+  wallTop: 'wall-top.jpg',
+  wallSide: 'wall-side.jpg',
 } as const;
 // たいまつの光と影。環境光と上からの光を弱くして、たいまつの光が見える範囲を決めるようにする。
 // 影の地図（シャドウマップ）は6方向から描くので重い。たいまつが動いたときと、壁が入れ替わったときだけ描き直す
@@ -108,17 +108,33 @@ export const TORCH = {
   decay: 1,
   height: 1.25, // 掲げた高さ（主人公の頭より上。体の正面が光りすぎず、脚やマントの動きが見えるように）
   forward: 0.45, // 主人公より少し手前（カメラ側）に掲げる。主人公の体の中に光があると、体が照らされず暗くなるため
-  shadowMapSize: 512,
   // 敵が動いている・倒れているあいだに影を描き直す間隔の下限（ミリ秒）。毎フレーム描き直すと重いので、1秒に30回まで
   shadowRefreshMs: 33,
 };
 export const AMBIENT = 0.3; // 全体を均等に照らす弱い光。光の届かない場所や、一度見ただけのマスがかろうじて見える明るさ
 export const SUN = 0.25; // 上からの弱い光。壁の側面に陰をつける
-// 描く解像度（画面の1ピクセルを何ピクセルで描くか）。細かい画面でも max まで。
-// 描くのが間に合わない端末では、滑らかに動く方を優先して low まで下げる：1コマに slowMs より長くかかることが frames 回たまったら下げる
-// （速いコマが続けば数え直す。一度下げたら戻さない。low は、ぼやけが目立たない程度にとどめる）
-export const RESOLUTION = { max: 2, low: 1.5, slowMs: 26, frames: 60 } as const;
-export const MAX_ANISOTROPY = 8; // 斜めから見た床がぼけないようにする強さの上限（スマホで重くなりすぎないように）
+// 画質の段階（きれいな順）。描くのが間に合わない端末では、1段ずつ下げ、余裕が戻れば1段ずつ元に戻す。
+// - ratio：画面の1ピクセルを何ピクセルで描くか（端末の細かさがこれより小さければ、端末の細かさまで）
+// - mist（地面の霧）・particles（空気の粒）・post（画面の仕上げ）：その段で使うか（端末が弱くて最初から使わないものは、ここでも使わない）
+// - shadow：たいまつの影の地図の大きさ
+// 下げる順番は、見た目の損が小さいものから：影の細かさ → 解像度 3→2 → 粒と霧 → 仕上げ → 解像度 1.5
+export const QUALITY = {
+  levels: [
+    { ratio: 3, mist: true, particles: true, post: true, shadow: 1024 },
+    { ratio: 2, mist: true, particles: true, post: true, shadow: 1024 },
+    { ratio: 2, mist: true, particles: true, post: true, shadow: 512 },
+    { ratio: 2, mist: false, particles: false, post: true, shadow: 512 },
+    { ratio: 2, mist: false, particles: false, post: false, shadow: 512 },
+    { ratio: 1.5, mist: false, particles: false, post: false, shadow: 512 },
+  ],
+  fastStartCores: 6, // コアがこの数以上の端末は、いちばんきれいな段から始める（それ以外は、2番目の段から）
+  slowMs: 26, // 1コマがこれより長くかかったら「遅い」コマ（50ms を超えたら3コマぶんに数える）。遅いコマが slowFrames たまったら1段下げる
+  slowFrames: 60,
+  fastMs: 20, // 1コマがこれより短いコマが fastFrames 続いたら、1段上げてみる
+  fastFrames: 300,
+  retryMs: 20000, // 上げてから、この時間のうちにまた下がったら、その段へは二度と上げない
+} as const;
+export const MAX_ANISOTROPY = 16; // 斜めから見た床がぼけないようにする強さの上限（端末が対応する範囲まで）
 // 宝箱の大きさ（マス）。ふたは奥行きを直径とするかまぼこ形で、本体の上に載る（いちばん上は高さ + 奥行き/2）
 export const CHEST = { width: 0.56, height: 0.3, depth: 0.38 };
 // 開けた宝箱：ふたを奥の縁（蝶番）を軸に後ろへ倒す角度（ラジアン）と、箱の口に見える中の暗さ
@@ -166,9 +182,10 @@ export const DEBRIS = {
 
 // 画面全体の仕上げ（postFx.ts）：光のにじみ（明るさが threshold から threshold+knee にかけて、にじみ始める。bloom はにじみの強さ）、
 // 周辺減光（vignette：四隅をどれだけ暗くするか）、粒子感（grain：ざらつきの強さ）。?post=off、処理の弱い端末、描くのが間に合わないときは使わない。
+// くっきりさせる（sharpen：輪郭の強調の強さ）、明るい部分を白く飛ばさず、色を残したままなだらかに明るくする（rollStart：その明るさから）。
 // 軽くする工夫：にじみのぼかしは縦横1回ずつで、そのぶんぼかしの幅（spread）を広げて、前（2回ずつ）と同じくらいにじませる。
 // 縁をなめらかにする重ね描き（マルチサンプル）は、描く画素が bigPixels を超える大きな画面では samplesBig 回、そうでなければ samples 回
-export const POST_FX = { threshold: 0.85, knee: 0.5, bloom: 0.45, vignette: 0.38, grain: 0.035, spread: 1.5, samples: 4, samplesBig: 2, bigPixels: 1_200_000 };
+export const POST_FX = { threshold: 0.85, knee: 0.5, bloom: 0.45, vignette: 0.38, grain: 0.035, sharpen: 0.4, rollStart: 0.85, spread: 1.5, samples: 4, samplesBig: 2, bigPixels: 1_200_000 };
 
 // 部屋の壁掛けたいまつ（sconces.ts）。height：掛ける高さ、out：壁から前へ出す長さ、wideRoom：この幅以上の部屋には2つ掛ける。
 // 光は主人公から reach マス以内の、見えているたいまつ lights 個にだけ灯す（強さ intensity、届く距離 distance）
