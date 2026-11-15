@@ -55,9 +55,13 @@ export const SPELLS: Record<SpellId, SpellDef> = {
   shockwave: { id: 'shockwave', name: '衝撃波', aim: false, effect: { kind: 'shockwave' } },
   sweep: { id: 'sweep', name: 'なぎ払い', aim: true, effect: { kind: 'sweep' } },
   fire_bolt: { id: 'fire_bolt', name: '炎の矢', aim: true, effect: { kind: 'bolt', element: 'fire' } },
+  fire_chain: { id: 'fire_chain', name: '炎の連矢', aim: true, effect: { kind: 'bolt', element: 'fire', splash: true } },
   ice_bolt: { id: 'ice_bolt', name: '氷の矢', aim: true, effect: { kind: 'bolt', element: 'ice' } },
+  ice_chain: { id: 'ice_chain', name: '氷の連矢', aim: true, effect: { kind: 'bolt', element: 'ice', splash: true } },
   light_lance: { id: 'light_lance', name: '光の槍', aim: true, effect: { kind: 'bolt', element: 'light' } },
+  light_chain: { id: 'light_chain', name: '光の連槍', aim: true, effect: { kind: 'bolt', element: 'light', splash: true } },
   dark_bolt: { id: 'dark_bolt', name: '闇の矢', aim: true, effect: { kind: 'bolt', element: 'dark' } },
+  dark_chain: { id: 'dark_chain', name: '闇の連矢', aim: true, effect: { kind: 'bolt', element: 'dark', splash: true } },
   heal: { id: 'heal', name: '癒し', aim: false, effect: { kind: 'heal' } },
   regen: { id: 'regen', name: '再生', aim: false, effect: { kind: 'regen' } },
 };

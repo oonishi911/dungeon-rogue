@@ -26,7 +26,7 @@ import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
-import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEBRIS, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, QUALITY, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
+import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEBRIS, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, SPLASH_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, QUALITY, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
 import { applyFog, createFog, createGroundMist, litBillboard, worldMapped } from './explore3dKit';
 import { asMetal } from './materialLook';
 import { PostFx } from './postFx';
@@ -514,6 +514,13 @@ export class DungeonView3D {
     }
     const target = last && this.shownState?.enemies.find((e) => e.pos.x === last.x && e.pos.y === last.y);
     if (target && impactMs > 0) this.dying.set(target.uid, performance.now() + impactMs + DYING_EXTRA_MS);
+    // 連矢：まわりの敵も、当たるまで残す（連矢は少し遅れて当たる）
+    if (impactMs > 0) {
+      for (const p of cast.splash) {
+        const near = this.shownState?.enemies.find((e) => e.pos.x === p.x && e.pos.y === p.y);
+        if (near) this.dying.set(near.uid, performance.now() + impactMs + SPLASH_EXTRA_MS + DYING_EXTRA_MS);
+      }
+    }
     return impactMs;
   }
 

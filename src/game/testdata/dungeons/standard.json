@@ -54,20 +54,44 @@
       "power": 1,
       "range": 6
     },
+    "fire_chain": {
+      "cost": 6,
+      "power": 1,
+      "range": 6,
+      "splash": 0.5
+    },
     "ice_bolt": {
       "cost": 4,
       "power": 1,
       "range": 6
+    },
+    "ice_chain": {
+      "cost": 6,
+      "power": 1,
+      "range": 6,
+      "splash": 0.5
     },
     "light_lance": {
       "cost": 4,
       "power": 1,
       "range": 6
     },
+    "light_chain": {
+      "cost": 6,
+      "power": 1,
+      "range": 6,
+      "splash": 0.5
+    },
     "dark_bolt": {
       "cost": 4,
       "power": 1,
       "range": 6
+    },
+    "dark_chain": {
+      "cost": 6,
+      "power": 1,
+      "range": 6,
+      "splash": 0.5
     },
     "heal": {
       "cost": 6,

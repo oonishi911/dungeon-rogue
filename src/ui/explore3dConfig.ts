@@ -30,6 +30,8 @@ export type HitPulse = keyof typeof HIT_PULSE;
 export const SPELL_KNOCK = { amount: 0.3, ms: 280 } as const;
 // 呪文で倒した敵は、矢が当たるまで（と少しのあいだ）消さずに残す
 export const DYING_EXTRA_MS = 160;
+// 連矢でまわりの敵を倒したとき、最初の敵に当たってから、さらに残す時間（演出の間 spellFx.ts の FX.chain が、敵8体まで）
+export const SPLASH_EXTRA_MS = 480;
 export const COMBAT_ZOOM = { zoom: 1.35, inSec: 0.12, outSec: 0.25, holdMs: 900 } as const;
 // ダメージの数字：受けた側の頭の上に小さく出て、なめらかに大きくなりながら少し浮かび、透けて消える
 export const DAMAGE_POP = {

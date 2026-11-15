@@ -58,6 +58,7 @@ export interface CastEvent {
   dir: Dir | null;
   path: Pos[]; // 矢・なぎ払いが通ったマス（演出で使う）
   moves: { from: Pos; to: Pos }[]; // 衝撃波で吹き飛んだ敵の、動く前と後
+  splash: Pos[]; // 炎の連矢で、まわりのダメージを受けた敵のいたマス（演出で使う。唱える前の位置）
   affinity: Affinity | null; // 属性の矢が当たった敵との相性（演出の強さを変える）。矢でないとき・何にも当たらなかったときは null
 }
 

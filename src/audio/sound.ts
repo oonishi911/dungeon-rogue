@@ -48,9 +48,13 @@ const SPELL_SOUNDS: Record<SpellId, string> = {
   shockwave: 'spell-shockwave.mp3',
   sweep: 'spell-sweep.mp3',
   fire_bolt: 'spell-fire_bolt.mp3',
+  fire_chain: 'spell-fire_chain.mp3',
   ice_bolt: 'spell-ice_bolt.mp3',
+  ice_chain: 'spell-ice_chain.mp3',
   light_lance: 'spell-light_lance.mp3',
+  light_chain: 'spell-light_chain.mp3',
   dark_bolt: 'spell-dark_bolt.mp3',
+  dark_chain: 'spell-dark_chain.mp3',
   heal: 'spell-heal.mp3',
   regen: 'spell-regen.mp3',
 };

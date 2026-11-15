@@ -30,7 +30,20 @@ const ELEMENT_COLORS: Record<Element, number> = {
   neutral: 0xe8e2d0,
 };
 
-const BOLT_ELEMENT: Partial<Record<SpellId, Element>> = { fire_bolt: 'fire', ice_bolt: 'ice', light_lance: 'light', dark_bolt: 'dark' };
+// 矢・槍の呪文の属性。連矢（〜_chain）は、当たった敵のまわりの敵にも小さく当たる
+const BOLT_ELEMENT: Partial<Record<SpellId, Element>> = {
+  fire_bolt: 'fire',
+  fire_chain: 'fire',
+  ice_bolt: 'ice',
+  ice_chain: 'ice',
+  light_lance: 'light',
+  light_chain: 'light',
+  dark_bolt: 'dark',
+  dark_chain: 'dark',
+};
+
+// 強化版の呪文（連矢など）。ふつうの呪文より演出を派手にする（二重の魔法陣、大きな爆発、まわりへの光の筋）
+const STRONG_SPELLS: ReadonlySet<SpellId> = new Set<SpellId>(['fire_chain', 'ice_chain', 'light_chain', 'dark_chain']);
 
 // 相性による強さ（大きさ・粒の数・揺れ・閃光に掛ける）。何にも当たらなかったときは miss
 const STRENGTH = { weak: 1.5, normal: 1, resist: 0.55, miss: 0.7 } as const;
@@ -40,6 +53,8 @@ const FX = {
   height: 0.5, // 演出を出す高さ（主人公の胸のあたり）
   circle: { ms: 700, size: 1.7 }, // 唱える溜めの魔法陣
   bolt: { chargeMs: 180, tileMs: 60, minFlyMs: 170, lanceMs: 70 },
+  chain: { delayMs: 110, gapMs: 45, size: 0.8, linkMs: 380 }, // 連矢：まわりの敵に当たるまでの間（ミリ秒）、敵ごとのずれ、演出の大きさの割合、光の筋が出ている時間
+  grand: { ms: 900, rings: 3, pillarHeight: 3.2, sparks: 40, flash: 0.45, shake: 0.5 }, // 強化版の、当たったときの大爆発
   shockwave: { ms: 520, radius: 2.1, color: 0xcfe6ff },
   sweep: { ms: 320, width: 0.55, color: 0xf2ecd8 },
   heal: { ms: 900, sparks: 18, rise: 1.2, color: 0x8dffb4 },
@@ -322,8 +337,15 @@ export class SpellEffects {
     const fly = element === 'light' ? FX.bolt.lanceMs : Math.max(FX.bolt.minFlyMs, FX.bolt.tileMs * tiles);
     const launch = now + charge;
     const hit = launch + fly;
+    const strong = STRONG_SPELLS.has(cast.spell);
     this.castCircle(now, from, color, element === 'light' ? 1.1 : 1);
-    if (element === 'dark') this.darken(0.35);
+    if (strong) {
+      // 強化版：魔法陣がもう1つ、大きく重なって開き、画面が光る
+      this.later(now + 90, () => this.castCircle(performance.now(), from, 0xffffff, 1.55));
+      this.flash(color, 0.22);
+      this.shakeBy(0.15);
+    }
+    if (element === 'dark') this.darken(strong ? 0.5 : 0.35);
     if (element === 'light') this.flash(0xfff6d0, 0.18);
 
     switch (element) {
@@ -341,26 +363,98 @@ export class SpellEffects {
     }
     const at = last ?? from;
     this.later(hit, () => {
-      switch (element) {
-        case 'fire':
-          this.fireImpact(end, color, strength);
-          break;
-        case 'ice':
-          this.iceImpact(end, color, strength);
-          break;
-        case 'light':
-          this.lightImpact(end, color, strength);
-          break;
-        default:
-          this.darkImpact(end, color, strength);
-      }
+      this.impact(element, end, color, strength * (strong ? 1.25 : 1));
+      if (strong) this.grandBurst(end, color, 1.9, !!last);
       if (affinity === 'weak') this.weakBurst(end, color);
       if (affinity && last) {
         this.hitSpark(end, strength);
         this.onImpact?.(at, strength, color);
       }
     });
+    // 連矢：最初に当たった敵のまわりの敵にも、少し遅れて、小さく当たる
+    cast.splash.forEach((p, i) => {
+      this.later(hit + FX.chain.delayMs + i * FX.chain.gapMs, () => {
+        const near = new THREE.Vector3(p.x, FX.height, p.y);
+        this.impact(element, near, color, FX.chain.size * (this.reduceMotion ? 0.8 : 1));
+        this.hitSpark(near, FX.chain.size);
+        this.link(end, near, color);
+        this.onImpact?.(p, FX.chain.size, color);
+      });
+    });
     return hit - now;
+  }
+
+  /** 強化版が当たったときの大爆発：外へ広がる輪を重ね、光の柱を立て、光の粒を放射状に飛ばし、画面を光らせて揺らす。radius は輪の広がり（マス） */
+  private grandBurst(at: THREE.Vector3, color: number, radius: number, hit: boolean) {
+    const now = performance.now();
+    if (!hit) return; // 何にも当たらなかったときは出さない
+    const { ms, rings, pillarHeight, sparks, flash, shake } = FX.grand;
+    for (let i = 0; i < rings; i++) {
+      const ring = this.floorPlane(this.tex.ring, i === 0 ? 0xffffff : color, 0.07 + i * 0.002);
+      ring.position.set(at.x, ring.position.y, at.z);
+      this.add(now + i * 110, ms * 0.6, [ring], (t) => {
+        const r = (0.4 + radius * 1.5 * easeOut(t)) * (1 + i * 0.18);
+        ring.scale.set(r, 1, r);
+        outerMat(ring).opacity = (1 - t) * (i === 0 ? 1 : 0.8);
+      });
+    }
+    // 光の柱
+    const pillar = new THREE.Mesh(this.shared.column, this.glowMaterial(color, this.tex.column));
+    pillar.position.set(at.x, 0, at.z);
+    pillar.renderOrder = 15;
+    this.add(now, ms * 0.7, [pillar], (t) => {
+      const grow = Math.min(1, t / 0.18);
+      pillar.scale.set(0.9 * (1 - t * 0.7), pillarHeight * grow, 0.9 * (1 - t * 0.7));
+      outerMat(pillar).opacity = 0.85 * Math.max(0, 1 - t * 1.15);
+    });
+    // 光の粒を放射状に
+    this.emit({ at: at.clone().setY(0.3), count: sparks, color: () => pick([0xffffff, color, color]), speed: [2.2, 5.2], flat: true, up: 0.8, gravity: 2.2, drag: 0.8, life: [450, 950], size: [0.22, 0.04], additive: true, texture: 'spark', jitter: 0.1 });
+    this.lightUp(now, 800, color, 34, () => at.clone().setY(1.1), (t) => (1 - t) ** 1.4);
+    this.flash(0xffffff, flash);
+    this.shakeBy(shake);
+  }
+
+  /** 連矢：最初に当たった敵から、まわりの敵へ走る光の筋 */
+  private link(from: THREE.Vector3, to: THREE.Vector3, color: number) {
+    const now = performance.now();
+    const dx = to.x - from.x;
+    const dz = to.z - from.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.01) return;
+    const outer = this.floorPlane(this.tex.beam, color, FX.height);
+    const core = this.floorPlane(this.tex.beam, 0xffffff, FX.height + 0.01);
+    for (const o of [outer, core]) {
+      o.position.set((from.x + to.x) / 2, o.position.y, (from.z + to.z) / 2);
+      o.rotation.y = -Math.atan2(dz, dx);
+    }
+    this.add(now, FX.chain.linkMs, [outer, core], (t) => {
+      const fade = 1 - t ** 1.6;
+      for (const [o, width, alpha] of [
+        [outer, 0.55, 0.85],
+        [core, 0.18, 1],
+      ] as const) {
+        o.scale.set(len, 1, Math.max(0.001, width * (1 - t * 0.6)));
+        outerMat(o).opacity = alpha * fade;
+      }
+    });
+    this.emit({ at: from.clone().lerp(to, 0.5), count: 8, color: () => pick([0xffffff, color]), speed: [0.3, 1.2], up: 0.5, gravity: -0.2, life: [300, 650], size: [0.16, 0.03], additive: true, texture: 'spark', jitter: 0.2 });
+  }
+
+  /** 矢・槍が当たったときの、属性ごとの演出 */
+  private impact(element: Element, at: THREE.Vector3, color: number, strength: number) {
+    switch (element) {
+      case 'fire':
+        this.fireImpact(at, color, strength);
+        break;
+      case 'ice':
+        this.iceImpact(at, color, strength);
+        break;
+      case 'light':
+        this.lightImpact(at, color, strength);
+        break;
+      default:
+        this.darkImpact(at, color, strength);
+    }
   }
 
   /** 当たった敵が一瞬白く光る */
