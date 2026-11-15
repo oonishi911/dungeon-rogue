@@ -42,6 +42,13 @@ export const DAMAGE_POP = {
   rise: 0.35, // 消えるまでに浮かぶ高さ（マス）
   colors: { dealt: '#ece5d3', taken: '#e5624f' }, // 与えた：明るい生成り / 受けた：赤
 } as const;
+// 敵の行動の個性の演出（遠距離の矢・盾・突進の構え・召喚）
+export const FOE_FX = {
+  shot: { ms: 260, height: 0.6, size: 0.13 }, // 遠距離の矢：飛ぶ時間・飛ぶ高さ・玉の大きさ（マス）
+  shotColors: { fire: 0xff8a3c, ice: 0x9fe8ff, light: 0xfff2a8, dark: 0xa070e0, neutral: 0xe6dcc0 }, // 敵の体質ごとの矢の色
+  shield: { size: 0.62, thick: 0.07, reach: 0.4, y: 0.5, color: 0xbfc7d1 }, // 盾持ちの盾：板の大きさ・厚さ・体からの距離・高さ・色
+  marks: { charge: '#ff5a4a', bump: '#ffe27a', summon: '#c08aff', blocked: '#9fb4c8' }, // 突進の構え・壁にぶつかった・召喚・盾に防がれたときの色
+} as const;
 export const REMEMBERED = 0.3; // 一度見たが今は見えていないマスの明るさ
 // 見える範囲の明るさ。主人公のそばは1で、視界の端へ向かってなめらかに edge まで暗くする。
 // マスの明るさは、見え始め・見えなくなるときに fade の速さ（1秒あたり）で少しずつ変える。

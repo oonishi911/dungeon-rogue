@@ -48,7 +48,18 @@ export interface HitEvent {
   amount: number;
   by?: EnemyId; // taken のとき、攻撃してきた敵（毒など、敵の攻撃でないときはない）
   slip?: boolean; // dealt のとき、出血のダメージ（主人公が武器を振った演出や、画面の拡大は出さない）
+  blocked?: boolean; // dealt のとき、盾持ちの敵に正面から防がれた（ダメージが減っている）
+  ranged?: boolean; // taken のとき、離れたところから撃たれた（敵が飛びかかる演出は出さない）
 }
+
+/** この行動で起きた、敵の特別な行動（画面の演出のために使う。ルールには使わない） */
+export type FoeEvent =
+  | { kind: 'shot'; from: Pos; to: Pos; by: EnemyId } // 遠距離の敵が撃った
+  | { kind: 'windup'; at: Pos } // 突進の構え
+  | { kind: 'charge'; from: Pos; to: Pos; hit: boolean } // 突進（hit：主人公に当たった）
+  | { kind: 'bump'; at: Pos } // 突進が壁にぶつかった
+  | { kind: 'summon'; at: Pos; from: Pos } // 敵が呼ばれた（from：呼んだ敵のいたマス）
+  | { kind: 'block'; at: Pos }; // 盾で防がれた
 
 /** 属性の矢と、当たった敵の相性。weak：弱点（ダメージが増える）、resist：効きにくい（減る） */
 export type Affinity = 'weak' | 'normal' | 'resist';
@@ -107,6 +118,7 @@ export interface ExploreState {
   log: string[];
   visited: Record<number, FloorMemory>; // 一度離れた階（階の番号ごと）。今いる階は入らない
   hits: HitEvent[]; // 直前の行動で入ったダメージ（行動のたびに空からやり直す）
+  foes: FoeEvent[]; // 直前の行動で起きた、敵の特別な行動（行動のたびに空からやり直す）
 }
 
 export interface ExploreOptions {

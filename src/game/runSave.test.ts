@@ -61,7 +61,18 @@ describe('packRun / parseRun', () => {
     expect(run!.seed).toBe(SEED);
     expect(run!.outcome).toEqual(outcome);
     expect(run!.base).toEqual(newSave());
-    expect(run!.state).toEqual({ ...state, hits: [], cast: null });
+    expect(run!.state).toEqual({ ...state, hits: [], foes: [], cast: null });
+  });
+
+  it('敵の行動の個性の状態（向き・構え・召喚）も、保存して戻せる。壊れた値は null', () => {
+    const state = start();
+    const base = state.enemies[0]!;
+    const withFoe = { ...state, enemies: [{ ...base, facing: 'left' as const, charge: 'up' as const, cool: 1, summonIn: 3, summoned: true, summonedBy: 9 }, ...state.enemies.slice(1)] };
+    const run = parseRun(saved(withFoe));
+    expect(run!.state.enemies[0]).toMatchObject({ facing: 'left', charge: 'up', cool: 1, summonIn: 3, summoned: true, summonedBy: 9 });
+    expect(parseRun(edited(withFoe, (r) => { (r.state.current.enemies[0] as { facing: string }).facing = 'north'; }))).toBeNull();
+    expect(parseRun(edited(withFoe, (r) => { (r.state.current.enemies[0] as { cool: number }).cool = -1; }))).toBeNull();
+    expect(parseRun(edited(withFoe, (r) => { (r.state.current.enemies[0] as { summoned: unknown }).summoned = 'yes'; }))).toBeNull();
   });
 
   it('魔力の欄ができる前の中断データ（mag がない）は、0として読む', () => {

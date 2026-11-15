@@ -23,6 +23,9 @@
       "def": 0,
       "element": "neutral",
       "body": "soft",
+      "behaviors": [
+        "charger"
+      ],
       "look": {
         "sprite": "flame_hound",
         "recolor": {
@@ -83,6 +86,9 @@
       "def": 1,
       "element": "fire",
       "body": "soft",
+      "behaviors": [
+        "charger"
+      ],
       "look": {
         "sprite": "flame_hound"
       },
@@ -204,6 +210,9 @@
       "def": 3,
       "element": "light",
       "body": "hard",
+      "behaviors": [
+        "shield"
+      ],
       "look": {
         "sprite": "venom_queen",
         "recolor": {
@@ -228,6 +237,9 @@
       "def": 0,
       "element": "light",
       "body": "spirit",
+      "behaviors": [
+        "ranged"
+      ],
       "look": {
         "sprite": "poison_slime",
         "recolor": {
@@ -293,6 +305,9 @@
       "def": 1,
       "element": "dark",
       "body": "spirit",
+      "behaviors": [
+        "ranged"
+      ],
       "look": {
         "sprite": "fire_imp",
         "recolor": {
@@ -462,6 +477,9 @@
       "def": 3,
       "element": "neutral",
       "body": "hard",
+      "behaviors": [
+        "charger"
+      ],
       "look": {
         "sprite": "fire_drake",
         "recolor": {
@@ -506,6 +524,9 @@
       "def": 1,
       "element": "neutral",
       "body": "normal",
+      "behaviors": [
+        "charger"
+      ],
       "look": {
         "sprite": "goblin",
         "recolor": {
@@ -526,6 +547,9 @@
       "def": 1,
       "element": "ice",
       "body": "normal",
+      "behaviors": [
+        "charger"
+      ],
       "look": {
         "sprite": "goblin",
         "recolor": {
@@ -546,6 +570,9 @@
       "def": 3,
       "element": "dark",
       "body": "hard",
+      "behaviors": [
+        "shield"
+      ],
       "look": {
         "sprite": "venom_queen",
         "recolor": {
@@ -570,6 +597,9 @@
       "def": 3,
       "element": "light",
       "body": "hard",
+      "behaviors": [
+        "shield"
+      ],
       "look": {
         "sprite": "venom_queen",
         "recolor": {
@@ -596,6 +626,9 @@
       "body": "hard",
       "physical": 0.75,
       "magic": 1.5,
+      "behaviors": [
+        "shield"
+      ],
       "look": {
         "sprite": "venom_queen",
         "recolor": {
@@ -672,6 +705,10 @@
       "body": "normal",
       "physical": 1.5,
       "magic": 0.5,
+      "behaviors": [
+        "ranged",
+        "summoner"
+      ],
       "look": {
         "sprite": "goblin",
         "recolor": {
@@ -694,6 +731,9 @@
       "body": "normal",
       "physical": 1.5,
       "magic": 0.5,
+      "behaviors": [
+        "ranged"
+      ],
       "look": {
         "sprite": "goblin",
         "recolor": {
@@ -716,6 +756,9 @@
       "body": "normal",
       "physical": 1.5,
       "magic": 0.5,
+      "behaviors": [
+        "ranged"
+      ],
       "look": {
         "sprite": "goblin",
         "recolor": {

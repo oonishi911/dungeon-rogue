@@ -5,7 +5,8 @@ import { enemyBase } from './data';
 import type { EnemySettings } from './genMaster';
 import { DIRS, tileAt, type FloorMap, type Pos, type Room } from './map';
 import { nextInt, nextRandom } from './rng';
-import type { EnemyDef, EnemyId } from './types';
+import type { Dir } from './exploreTypes';
+import type { EnemyBehavior, EnemyDef, EnemyId } from './types';
 
 // 数値はすべて仮。バランス調整で見直す
 export const ENEMY_CONFIG = {
@@ -21,6 +22,18 @@ export const ENEMY_CONFIG = {
   eliteRoam: 2, // 強敵が気付いていないとき、持ち場から何マスまでうろつくか（縦横それぞれ）
   eliteLeash: 6, // 強敵が追うとき、持ち場から何マスまで離れるか（それより先へは行かず、あきらめて持ち場へ戻る）
   chaseSearchLimit: 40, // 追いかけるときの経路探索の最大距離
+  // 行動の個性（types.ts の EnemyBehavior。詳しい決まりは enemyBehavior.ts）
+  rangedRange: 4, // 遠距離：まっすぐこのマス数以内で撃ってくる（2マス以上離れているとき）
+  rangedRate: 0.8, // 遠距離のダメージは、ふつうの攻撃のこの倍率
+  retreatCool: 2, // 遠距離：下がったあと、次に下がれるまでのターン数（そのあいだは近づかれたら殴る。いつまでも逃げ続けて、決着がつかなくなるのを防ぐ）
+  chargeRange: 3, // 突進：まっすぐこのマス数以内にいると、構える（2マス以上離れているとき）
+  chargeRun: 5, // 突進：走る距離の最大（マス）
+  chargeRate: 1.5, // 突進が命中したときのダメージは、ふつうの攻撃のこの倍率
+  chargeCool: 2, // 突進のあと、次に構えるまで待つターン数
+  chargeStun: 1, // 壁にぶつかって動けなくなるターン数
+  shieldCut: 0.7, // 盾持ち：正面からの武器の攻撃を、この割合カットする
+  summonEvery: 5, // 召喚：何ターンごとに呼ぶか
+  summonMax: 2, // 召喚：同時に出していられる数
 } as const;
 
 /**
@@ -43,7 +56,16 @@ export interface MapEnemy {
   stun?: number; // 動けないターンの残り（強衝撃。あるあいだは、気付くことも、動くことも、攻撃することもしない）
   bleed?: { amount: number; turns: number }; // 出血（烈なぎ払い）。あと何ターン、1ターンにいくつのダメージを受けるか
   home?: Pos; // 強敵の持ち場（置かれた場所）。この近くをうろつき、追っても離れすぎると持ち場へ戻る
+  facing?: Dir; // 最後に歩いた向き（盾持ちの正面。ない敵は下向きとして扱う）
+  charge?: Dir; // 突進の構え中：この向きへ、次のターンに走る
+  cool?: number; // 突進のあと、次に構えられるまでのターン数
+  summonIn?: number; // 召喚まであと何ターン（ない敵は、召喚の間隔から数え始める）
+  summoned?: boolean; // 召喚された敵（倒しても報酬はなく、倒した数にも入れない）
+  summonedBy?: number; // 呼んだ敵の uid（同時に出していられる数を数えるため）
 }
+
+/** 敵の行動の個性（なければ空） */
+export const behaviorsOf = (def: Pick<EnemyDef, 'behaviors'>): readonly EnemyBehavior[] => def.behaviors ?? [];
 
 /**
  * 実際に戦うときの敵の能力。敵のマスター（enemies.json）の値のまま。
