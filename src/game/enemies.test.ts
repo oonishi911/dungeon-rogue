@@ -3,7 +3,7 @@ import { enemyHitDamage, playerHitDamage } from './combat';
 import { CHEST_ITEMS, enemyBase, enemyReward, expToNext, LOADOUT_CONFIG, REWARD_CONFIG, TREASURE_CONFIG } from './data';
 import { DEFAULT_DUNGEON } from './dungeons';
 import { BOSS_ENEMY, FIELD_ENEMY } from './enemies.fixtures';
-import { ENEMY_CONFIG, enemyDef, key, spawnBoss, type MapEnemy } from './enemies';
+import { ENEMY_CONFIG, enemyDef, fromHome, key, spawnBoss, type MapEnemy } from './enemies';
 import { startExplore, step } from './explore';
 import { type ExploreAction, type ExploreState } from './exploreTypes';
 import { tileAt, type FloorMap, type Pos } from './map';
@@ -64,6 +64,8 @@ function arena(rows: string[], player: Pos, enemies: MapEnemy[]): ExploreState {
 
 // 横11マス×縦3マスの部屋
 const ROOM = ['###########', '#.........#', '#.........#', '#.........#', '###########'];
+// 横に長い通路（強敵の持ち場から離れる・追うのを確かめる）
+const LONG = ['####################', '#..................#', '#..................#', '#..................#', '####################'];
 // 壁で左右に分かれた部屋（互いに見えない）
 const SPLIT = ['#############', '#.....#.....#', '#.....#.....#', '#.....#.....#', '#############'];
 
@@ -173,12 +175,32 @@ describe('敵の動き', () => {
     expect(s.log.some((l) => l.includes('見失った'))).toBe(false);
   });
 
-  it('強敵は動かない', () => {
-    // 視界の内側に置き、気付いて追跡状態になっても動かないことを確かめる
-    let s = arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 5, y: 2 }, { elite: true })]);
-    for (let i = 0; i < 10; i++) s = act(s, WAIT);
-    expect(s.enemies[0]!.pos).toEqual({ x: 5, y: 2 });
-    expect(s.enemies[0]!.mode).toBe('chase');
+  it('強敵は、置かれた場所が持ち場になる', () => {
+    for (let seed = 0; seed < 10; seed++) {
+      for (const e of startExplore(seed * 7919).enemies.filter((x) => x.elite)) expect(e.home).toEqual(e.pos);
+    }
+  });
+
+  it('強敵は、気付いていなければ持ち場の近く（縦横それぞれ eliteRoam マス）だけをうろつく', () => {
+    const home = { x: 9, y: 2 };
+    let s = arena(LONG, { x: 1, y: 2 }, [enemy(home, { elite: true, home })]);
+    for (let i = 0; i < 60; i++) {
+      s = act({ ...s, enemies: s.enemies.map((e) => ({ ...e, mode: 'wander' as const, lastSeen: null })) }, WAIT);
+      expect(fromHome(home, s.enemies[0]!.pos)).toBeLessThanOrEqual(ENEMY_CONFIG.eliteRoam);
+    }
+  });
+
+  it('強敵は、気付いたら追ってくるが、持ち場から eliteLeash マスより先へは行かず、あきらめて持ち場へ戻る', () => {
+    const home = { x: 14, y: 2 };
+    let s = arena(LONG, { x: 1, y: 2 }, [enemy(home, { elite: true, home, mode: 'chase', lastSeen: { x: 1, y: 2 } })]);
+    s = act(s, WAIT);
+    expect(s.enemies[0]!.pos).toEqual({ x: 13, y: 2 }); // 追ってくる
+    for (let i = 0; i < 20; i++) {
+      s = act({ ...s, enemies: s.enemies.map((e) => (e.mode === 'wander' ? e : { ...e, lastSeen: { x: 1, y: 2 } })) }, WAIT);
+      expect(fromHome(home, s.enemies[0]!.pos)).toBeLessThanOrEqual(ENEMY_CONFIG.eliteLeash);
+    }
+    expect(s.enemies[0]!.mode).toBe('wander');
+    expect(fromHome(home, s.enemies[0]!.pos)).toBeLessThanOrEqual(ENEMY_CONFIG.eliteRoam); // 持ち場の近くへ戻っている
   });
 
   it('うろつく敵は通路の上だけを動き、ほかの敵やプレイヤーと重ならない', () => {
@@ -296,12 +318,12 @@ describe('報酬とボス', () => {
     expect(s.stats.hp).toBe(s0.stats.hp - enemyHitDamage(s0.stats, enemyDef(boss)));
   });
 
-  it('ボスは強敵とちがって歩き、気付いたら追ってくる（強敵はその場から動かない）', () => {
-    const boss = { ...spawnBoss({ x: 5, y: 2 }, GEN.encounters.ice.boss, 0), mode: 'chase' as const, lastSeen: { x: 1, y: 2 } };
-    const s = act(arena(ROOM, { x: 1, y: 2 }, [boss]), WAIT);
-    expect(s.enemies[0]!.pos).toEqual({ x: 4, y: 2 });
-    const elite = { ...boss, id: FIELD_ENEMY, mode: 'chase' as const };
-    expect(act(arena(ROOM, { x: 1, y: 2 }, [elite]), WAIT).enemies[0]!.pos).toEqual({ x: 5, y: 2 });
+  it('ボスは、持ち場を持たず、気付いたら持ち場の決まりなしにどこまでも追ってくる', () => {
+    const boss = { ...spawnBoss({ x: 17, y: 2 }, GEN.encounters.ice.boss, 0), mode: 'chase' as const, lastSeen: { x: 1, y: 2 } };
+    expect(boss.home).toBeUndefined();
+    let s = arena(LONG, { x: 1, y: 2 }, [boss]);
+    for (let i = 0; i < ENEMY_CONFIG.eliteLeash + 3; i++) s = act({ ...s, enemies: s.enemies.map((e) => ({ ...e, mode: 'chase' as const, lastSeen: { x: 1, y: 2 } })) }, WAIT);
+    expect(17 - s.enemies[0]!.pos.x).toBeGreaterThan(ENEMY_CONFIG.eliteLeash);
   });
 
   it('ボスの能力は強敵の倍率で上がらない', () => {

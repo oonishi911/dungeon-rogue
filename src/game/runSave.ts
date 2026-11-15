@@ -127,6 +127,7 @@ function isEnemy(map: FloorMap, v: unknown): v is MapEnemy {
   if (typeof v.elite !== 'boolean' || typeof v.justNoticed !== 'boolean' || !isNumber(v.hp) || !isCount(v.searchTurns)) return false;
   if (v.mode !== 'wander' && v.mode !== 'chase' && v.mode !== 'search') return false;
   if (!isFloorPos(map, v.pos) || !(v.lastSeen === null || isFloorPos(map, v.lastSeen))) return false;
+  if (!(v.home === undefined || isFloorPos(map, v.home))) return false;
   const room = v.room;
   return room === undefined || (isObject(room) && isCount(room.x) && isCount(room.y) && isCount(room.width) && isCount(room.height));
 }

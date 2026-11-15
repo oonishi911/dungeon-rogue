@@ -25,8 +25,10 @@ import { canSee, samePos, visibleTiles } from './exploreSight';
 import type { DungeonFile, RoomSettings } from './genMaster';
 import { spellAffinity, spellDamage, startMagic } from './magic';
 import {
+  eliteArea,
   ENEMY_CONFIG,
   enemyDef,
+  fromHome,
   isAdjacent,
   key,
   nextStepToward,
@@ -622,7 +624,7 @@ function backAttacks(state: ExploreState, to: Pos): ExploreState {
 /**
  * 敵が1体ずつ行動する。
  * 1. プレイヤーが見えるか調べ、状態（うろつき・追跡・探索）を切り替える。気付いたターンは動かない
- * 2. 追跡中・探索中で隣にいれば攻撃し、そうでなければ移動する（強敵は動かない。ボスは歩く）
+ * 2. 追跡中・探索中で隣にいれば攻撃し、そうでなければ移動する（強敵は持ち場の近くだけを動く。ボスは歩く）
  */
 function enemiesTurn(state: ExploreState): ExploreState {
   let s = state;
@@ -674,19 +676,26 @@ function enemiesTurn(state: ExploreState): ExploreState {
       continue;
     }
 
-    // 移動（自分のいるマスは、自分にとっては通れないマスに数えない）。強敵はその場から動かないが、ボスは歩いて追ってくる
-    if (!e.elite || def.boss) {
-      leave(key(e.pos));
-      if (e.mode !== 'wander' && e.lastSeen && !samePos(e.pos, e.lastSeen)) {
-        const nextPos = nextStepToward(s.map, e.pos, e.lastSeen, blocked);
-        if (nextPos && !samePos(nextPos, s.player)) e = { ...e, pos: nextPos };
-      } else {
-        const moved = wanderStep(s.map, e.pos, blocked, s.rngState, e.room);
-        s = { ...s, rngState: moved.rngState };
-        e = { ...e, pos: moved.pos };
-      }
-      enter(key(e.pos));
+    // 移動（自分のいるマスは、自分にとっては通れないマスに数えない）。ボスは歩いて追ってくる。
+    // 強敵は持ち場を守る：ふだんは持ち場の近くをうろつき、気付いたら追うが、持ち場から離れすぎるところへは行かず、あきらめて戻る
+    const home = e.elite && !def.boss ? (e.home ?? e.pos) : null; // 持ち場のない前の版の途中保存は、今いる場所を持ち場にする
+    if (home && !e.home) e = { ...e, home };
+    leave(key(e.pos));
+    if (e.mode !== 'wander' && e.lastSeen && !samePos(e.pos, e.lastSeen)) {
+      const nextPos = nextStepToward(s.map, e.pos, e.lastSeen, blocked);
+      if (home && nextPos && fromHome(home, nextPos) > ENEMY_CONFIG.eliteLeash) {
+        e = { ...e, mode: 'wander', lastSeen: null, searchTurns: 0 }; // 深追いはしない
+      } else if (nextPos && !samePos(nextPos, s.player)) e = { ...e, pos: nextPos };
+    } else if (home && fromHome(home, e.pos) > ENEMY_CONFIG.eliteRoam) {
+      // 持ち場へ戻る
+      const back = nextStepToward(s.map, e.pos, home, blocked);
+      if (back && !samePos(back, s.player)) e = { ...e, pos: back };
+    } else {
+      const moved = wanderStep(s.map, e.pos, blocked, s.rngState, home ? eliteArea(home) : e.room);
+      s = { ...s, rngState: moved.rngState };
+      e = { ...e, pos: moved.pos };
     }
+    enter(key(e.pos));
     enemies[i] = e;
   }
   return { ...s, enemies };

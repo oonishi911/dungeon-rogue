@@ -66,6 +66,8 @@ export class DungeonView3D {
   // 入口から部屋の奥は暗いまま）。見える範囲の明るさは、ほぼこの光で決まる
   private readonly torch = new THREE.PointLight(TORCH.color, TORCH.intensity, TORCH.distance, TORCH.decay);
   private torchAt = new THREE.Vector3(Number.NaN, 0, 0); // 影を最後に描いたときの、たいまつの位置
+  private enemyShadowKey = ''; // 影を最後に描いたときの、たいまつの近くの敵の位置と形（変わったら描き直す）
+  private shadowDrawnAt = 0; // 影を最後に描き直した時刻
   private readonly shadows = new URLSearchParams(location.search).get('shadow') !== 'off'; // ?shadow=off で影を切って比べられる
   private readonly raycaster = new THREE.Raycaster();
   private readonly ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -356,10 +358,21 @@ export class DungeonView3D {
       this.camera.updateProjectionMatrix();
     }
     this.torch.position.set(p.x, TORCH.height, p.y + TORCH.forward);
-    // たいまつが動いたときだけ影を描き直す（壁が入れ替わったときは updateFog で描き直しを頼む）
-    if (this.shadows && !this.torch.position.equals(this.torchAt)) {
-      this.torchAt.copy(this.torch.position);
-      this.renderer.shadowMap.needsUpdate = true;
+    // 影は、たいまつが動いたとき（壁が入れ替わったときは updateFog で描き直しを頼む）と、たいまつの近くの敵が
+    // 動いた・倒れた・消えたときに描き直す（敵も影を落とすので）。敵のための描き直しは、間隔を空けて重さを抑える
+    if (this.shadows) {
+      if (!this.torch.position.equals(this.torchAt)) {
+        this.torchAt.copy(this.torch.position);
+        this.renderer.shadowMap.needsUpdate = true;
+        this.shadowDrawnAt = now;
+      } else if (now - this.shadowDrawnAt >= TORCH.shadowRefreshMs) {
+        const key = this.enemyShadowState();
+        if (key !== this.enemyShadowKey) {
+          this.enemyShadowKey = key;
+          this.renderer.shadowMap.needsUpdate = true;
+          this.shadowDrawnAt = now;
+        }
+      }
     }
     // 呪文の揺れ（spellFx.shake）は、カメラの位置と見る先の両方に足す
     const shake = this.spellFx.shake;
@@ -469,6 +482,22 @@ export class DungeonView3D {
     const off = k.amount * (t < 0.2 ? t / 0.2 : (1 - (t - 0.2) / 0.8) ** 2);
     if (k.base) view.body.position.set(k.base.x + k.dx * off, k.base.y, k.base.z + k.dz * off);
     else view.body.position.set(view.body.position.x + k.dx * off, view.body.position.y, view.body.position.z + k.dz * off);
+  }
+
+  /**
+   * たいまつの光が届く範囲にいる、見えている敵の位置と形を並べた文字（影の描き直しが要るかを比べる）。
+   * 位置・向き・大きさ（崩れ落ちる途中など）を、1/100 マスの細かさで並べる。いなくなった敵は並ばないので、倒れて消えても変わる
+   */
+  private enemyShadowState(): string {
+    const parts: string[] = [];
+    const t = this.torch.position;
+    for (const [uid, view] of this.enemies) {
+      const b = view.body;
+      if (!b.visible || Math.hypot(b.position.x - t.x, b.position.z - t.z) > TORCH.distance) continue;
+      const r = (v: number) => Math.round(v * 100);
+      parts.push(`${uid}:${r(b.position.x)},${r(b.position.y)},${r(b.position.z)},${r(b.rotation.y)},${r(b.rotation.z)},${r(b.scale.y)}`);
+    }
+    return parts.join('|');
   }
 
   /** 矢が当たるまで残していた、倒れた敵を崩れ落ちさせる */
