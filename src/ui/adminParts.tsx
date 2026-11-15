@@ -426,6 +426,19 @@ export function cls(base: string, on: boolean, extra = 'is-changed'): string {
   return on ? `${base} ${extra}` : base;
 }
 
+/** 狭い画面（スマホ）か。画面の幅が変わったら（横向きにしたときなど）、すぐ変わる。styles.css の「狭い画面」と同じ幅（48rem） */
+export function useNarrow(query = '(max-width: 48rem)'): boolean {
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setNarrow(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [query]);
+  return narrow;
+}
+
 // ===== 下書き =====
 
 /** ブラウザに残してある下書き（ない・読めないときは null） */
