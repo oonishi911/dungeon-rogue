@@ -10,7 +10,7 @@
 // 読み込んだデータは壊れていたり古い形式だったりするので、形を確かめてから使う。合わなければ null（新しい挑戦を始める）
 // 遊んでいるダンジョンは ID で持つ。ID がない・そのダンジョンの設定ファイルが消されているときは、続きはあきらめる
 
-import { ENEMIES, ITEMS, SPELLS, TRAIT_IDS } from './data';
+import { ENEMIES, ITEMS, LOADOUT_CONFIG, SPELLS, TRAIT_IDS } from './data';
 import { dungeonOf, hasDungeon } from './dungeons';
 import type { MapEnemy } from './enemies';
 import { mapOfFloor } from './explore';
@@ -236,6 +236,8 @@ export function parseRun(text: string | null): ResumedRun | null {
     seen: current.seen,
     // 視界の半径を持たない前の版の途中保存は、ふつうの半径で続ける
     sightRadius: isCount(s.sightRadius, 1) ? s.sightRadius : EXPLORE_CONFIG.sightRadius,
+    // 道具を持てる数を持たない前の版の途中保存は、ふつうの数で続ける（今持っている数より少なくはしない）
+    maxItems: Math.max(isCount(s.maxItems, 1) ? s.maxItems : LOADOUT_CONFIG.maxItems, s.stats.items.length),
     turn: s.turn,
     rngState: s.rngState,
     outcome: 'ongoing',

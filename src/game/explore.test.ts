@@ -256,6 +256,17 @@ describe('visibleTiles', () => {
   });
 });
 
+describe('大きな袋', () => {
+  it('持っていくと、ダンジョンで道具を持てる数が増える。袋は持ち物に入らない', () => {
+    const e = ITEMS.bag.effect;
+    const slots = e.kind === 'capacity' ? e.slots : NaN;
+    expect(startExplore(1).maxItems).toBe(LOADOUT_CONFIG.maxItems);
+    const s = startExplore(1, { loadout: ['bag', 'potion'] });
+    expect(s.maxItems).toBe(LOADOUT_CONFIG.maxItems + slots);
+    expect(s.stats.items).toEqual(['potion']);
+  });
+});
+
 describe('視界の広さ', () => {
   it('ふつうは EXPLORE_CONFIG.sightRadius。遠見のランタンを持っていくと広がる', () => {
     expect(startExplore(1).sightRadius).toBe(EXPLORE_CONFIG.sightRadius);
@@ -371,6 +382,16 @@ describe('宝箱と金貨', () => {
     const again = act(room, { kind: 'move', dir });
     expect(again.stats.items).toContain(chest.item);
     expect(again.chests.find((c) => c.pos.x === chest.pos.x && c.pos.y === chest.pos.y)).toEqual({ ...chest, gold: 0, item: null, opened: true });
+  });
+
+  it('大きな袋を持っていけば、ふつうの数を持っていても宝箱の道具を取れる', () => {
+    let seed = 1;
+    while (!startExplore(seed, { enemyDensity: 0 }).chests[0]?.item) seed++;
+    const full: ItemId[] = ['bag', ...Array.from({ length: LOADOUT_CONFIG.maxItems }, (): ItemId => 'potion')];
+    const { state, chest, dir } = besideChest(seed, full);
+    const s = act(state, { kind: 'move', dir });
+    expect(s.stats.items).toHaveLength(LOADOUT_CONFIG.maxItems + 1);
+    expect(s.stats.items).toContain(chest.item);
   });
 
   it('踏破すれば金貨を全額、力尽きたら半分持ち帰る', () => {

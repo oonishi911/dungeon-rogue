@@ -15,7 +15,7 @@ export const ARMOR_BASES = ['fire_cloak', 'ice_cloak', 'plate', 'light_robe', 'd
 export type ArmorBaseId = (typeof ARMOR_BASES)[number];
 export const GEAR_BASES: readonly GearBaseId[] = [...WEAPON_BASES, ...ARMOR_BASES];
 
-export const SUPPLY_IDS = ['potion', 'food', 'fire_whetstone', 'ice_whetstone', 'holy_water', 'dark_oil', 'lantern'] as const satisfies readonly ItemId[];
+export const SUPPLY_IDS = ['potion', 'food', 'fire_whetstone', 'ice_whetstone', 'holy_water', 'dark_oil', 'lantern', 'bag'] as const satisfies readonly ItemId[];
 export type SupplyId = (typeof SUPPLY_IDS)[number];
 export const SPELLBOOK_IDS = [
   'book_shockwave',
@@ -104,6 +104,7 @@ export const SUPPLY_INFO: Record<SupplyId, { effect: ItemEffect; text: string }>
   ice_whetstone: { effect: { kind: 'enchant', element: 'ice', hits: 5 }, text: '武器に氷の力を宿す（攻撃5回）。炎の敵によく効く' },
   holy_water: { effect: { kind: 'enchant', element: 'light', hits: 5 }, text: '武器に光の力を宿す（攻撃5回）。闇の敵によく効く' },
   dark_oil: { effect: { kind: 'enchant', element: 'dark', hits: 5 }, text: '武器に闇の力を宿す（攻撃5回）。光の敵によく効く' },
+  bag: { effect: { kind: 'capacity', slots: 3 }, text: '持っていくと、道具を持てる数が3つ増える（袋そのものは数えない。ダンジョンに1回持っていくとなくなる）' },
   lantern: { effect: { kind: 'sight', radius: 5 }, text: '持っていくと、視界が半径5マスに広がる（ダンジョンに1回持っていくとなくなる）' },
 };
 

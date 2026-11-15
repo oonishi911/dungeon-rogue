@@ -2,7 +2,7 @@
 // 持っていく装備（武器と体質の相性、防具と属性の相性）がダメージ計算に直接効く。
 // 戦闘の進行（誰がいつ攻撃するか）は explore.ts にある。
 
-import { COMBAT_CONFIG as C, ELEMENT_COMPONENTS, ENCHANT_VS_ELEMENT, ITEMS, WEAPON_VS_BODY } from './data';
+import { COMBAT_CONFIG as C, ELEMENT_COMPONENTS, ENCHANT_VS_ELEMENT, ITEMS, LOADOUT_CONFIG, WEAPON_VS_BODY } from './data';
 import type { ElementComponent, EnemyDef, ItemDef, ItemId, ItemSlot, PlayerStats } from './types';
 
 export function itemSlot(item: ItemDef): ItemSlot {
@@ -15,6 +15,7 @@ export function itemSlot(item: ItemDef): ItemSlot {
     case 'food':
     case 'enchant':
     case 'sight': // 店では道具として買い、倉庫から持っていく
+    case 'capacity':
       return 'consumable';
     case 'spellbook':
       return 'spellbook';
@@ -40,8 +41,8 @@ export function buildPlayer(loadout: readonly ItemId[]): PlayerStats {
     poisonTurns: 0,
     weapon,
     armor,
-    // 視界を広げる道具（ランタン）は、ダンジョンでは使わないので持ち物に入れない（持ち帰らず、なくなる）
-    items: loadout.filter((id) => itemSlot(ITEMS[id]) === 'consumable' && ITEMS[id].effect.kind !== 'sight'),
+    // 持っていくだけで効く道具（ランタン・大きな袋）は、ダンジョンでは使わないので持ち物に入れない（持ち帰らず、なくなる）
+    items: loadout.filter((id) => itemSlot(ITEMS[id]) === 'consumable' && !isPassive(id)),
     enchant: null,
   };
 }
@@ -81,4 +82,19 @@ export function bodyMultiplier(player: PlayerStats, enemy: EnemyDef): number {
 export function enchantMultiplier(player: PlayerStats, enemy: EnemyDef): number {
   if (!player.enchant) return 1;
   return ENCHANT_VS_ELEMENT[player.enchant.element][enemy.element] ?? 1;
+}
+
+/** 持っていくだけで効く道具か（遠見のランタン・大きな袋）。ダンジョンの持ち物には入らず、探索1回でなくなる */
+export function isPassive(id: ItemId): boolean {
+  const kind = ITEMS[id].effect.kind;
+  return kind === 'sight' || kind === 'capacity';
+}
+
+/** 持っていくものから決まる、ダンジョンで道具を持てる数（大きな袋は1つだけ効く） */
+export function itemCapacity(loadout: readonly ItemId[]): number {
+  const bonus = loadout.reduce((best, id) => {
+    const e = ITEMS[id].effect;
+    return e.kind === 'capacity' ? Math.max(best, e.slots) : best;
+  }, 0);
+  return LOADOUT_CONFIG.maxItems + bonus;
 }

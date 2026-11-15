@@ -497,6 +497,10 @@
     "lantern": {
       "name": "遠見のランタン",
       "price": 40
+    },
+    "bag": {
+      "name": "大きな袋",
+      "price": 100
     }
   },
   "spellbooks": {

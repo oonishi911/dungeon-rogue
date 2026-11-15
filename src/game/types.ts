@@ -29,6 +29,7 @@ export type ItemId =
   | 'holy_water'
   | 'dark_oil'
   | 'lantern'
+  | 'bag'
   | 'book_shockwave'
   | 'book_sweep'
   | 'book_fire_bolt'
@@ -52,6 +53,7 @@ export type ItemEffect =
   | { kind: 'heal'; hp: number }
   | { kind: 'food'; satiety: number }
   | { kind: 'enchant'; element: Element; hits: number } // 武器に一時的に属性を付ける
+  | { kind: 'capacity'; slots: number } // 持っていくと、その探索のあいだ道具を持てる数が増える（ダンジョンでは使わない。探索1回でなくなる）
   | { kind: 'sight'; radius: number } // 持っていくと、その探索のあいだ視界が広がる（ダンジョンでは使わない。探索1回でなくなる）
   | { kind: 'spellbook'; spell: SpellId }; // 呪文書。持っていくと、探索で魔力を使ってその呪文を何度でも唱えられる
 
