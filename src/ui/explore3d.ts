@@ -10,6 +10,7 @@
 
 import * as THREE from 'three';
 import { ITEMS } from '../game/data';
+import { gearOf } from '../game/itemMaster';
 import { enemyDef, isAdjacent, type MapEnemy } from '../game/enemies';
 import { upStairs } from '../game/explore';
 import { type CastEvent, type Dir, type ExploreState } from '../game/exploreTypes';
@@ -342,8 +343,8 @@ export class DungeonView3D {
       this.sconces.update(s, frame.visible);
       this.particles.setTrait(s.trait);
       this.updateEnemies(frame);
-      this.hero.setCloak(cloakOf(s.stats.armor)); // マントは装備した防具の色。準備が当たったかが見た目でわかる
-      this.hero.setWeapon(weaponOf(s.stats.weapon)); // 装備した武器を左手に持つ
+      this.hero.setCloak(cloakOf(s.stats.armor), gearTierOf(s.stats.armor)); // マントは装備した防具の色。段階が上がるほど、縁取り・肩当て・留め具が付く
+      this.hero.setWeapon(weaponOf(s.stats.weapon), gearTierOf(s.stats.weapon)); // 装備した武器を左手に持つ。段階が上がるほど立派な見た目
       this.shownState = s;
     }
 
@@ -1375,6 +1376,11 @@ export class DungeonView3D {
     }
     return tex;
   }
+}
+
+/** 武器・防具の段階（1〜10。武器・防具でなければ1）。見た目の豪華さが段階で変わる */
+export function gearTierOf(item: ItemId | null): number {
+  return (item && gearOf(item)?.tier) || 1;
 }
 
 /** 装備している武器の種類（武器でなければ null） */

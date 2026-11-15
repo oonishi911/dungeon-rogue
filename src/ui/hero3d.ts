@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import type { Dir } from '../game/exploreTypes';
 import type { WeaponType } from '../game/types';
 import { CLOAKS, PALETTE } from '../sprites/data';
-import { asCloth } from './materialLook';
+import { asCloth, asMetal, withRim } from './materialLook';
 import { Weapon3D } from './weapon3d';
 
 export type CloakId = keyof typeof CLOAKS;
@@ -70,6 +70,20 @@ const STRIDE = { leg: 0.7, arm: 0.55, weaponArm: 0.2 };
 const CLOAK_FLOW = { flare: 0.14, wave: 0.02, waveSpeed: 9, follow: 6, top: 0.55 };
 // 待っているあいだの息づかい：体がわずかに上下する（マス）。speed は1秒あたりの角度
 const BREATH = { height: 0.007, speed: 2.4 };
+// まばたき：period 秒ごとに、closeSec 秒かけて目を閉じて開く（目の高さを縮める）。shift は最初のずらし
+const BLINK = { period: 3.8, closeSec: 0.18, shift: 1.3, closed: 0.9 };
+// 防具の段階（1〜10）ごとの見た目の飾り。段階が上がるほど増えていく
+const ARMOR_TIER = { trim: 2, pauldron: 3, clasp: 4, pauldronBig: 5, pauldronSpike: 7, glow: 8, pauldronTwin: 9, top: 10 };
+// 肩当てと飾りの色（防具の種類ごと）。金属の光り方をする
+const ARMOR_METAL: Record<CloakId, string> = {
+  none: '#8a7a60',
+  fire_cloak: '#c8743c',
+  ice_cloak: '#bfe0f2',
+  plate: '#aab2b8',
+  light_robe: '#e8c860',
+  dark_robe: '#6a4a8a',
+};
+const GOLD = '#d9b14a';
 
 /** 2点のあいだをつなぐ円柱（腕など）。a の太さが ra、b の太さが rb */
 function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number): THREE.BufferGeometry {
@@ -124,13 +138,29 @@ export class Hero3D {
   private lastProgress = 1;
   private moving = 0; // 歩いている度合い（0〜1。歩き始め・止まりになめらかに変える）
   private time = 0;
+  private readonly goldMat = asMetal(phong(GOLD)); // 金の飾り（ベルトの留め金など）
+  private readonly eyes = new THREE.Group(); // 白目とひとみ（まばたきで縦に縮める）
+  private readonly trimMat = asCloth(phong(GOLD, THREE.DoubleSide)); // マントの前の開きの縁取り
+  private readonly trims: THREE.Mesh[] = [];
+  // 防具の段階の飾り（肩当てなど）の入れ物。段階や防具が変わるたびに作り直す
+  private readonly gearBody = new THREE.Group();
+  private readonly gearLeft = new THREE.Group();
+  private readonly gearRight = new THREE.Group();
+  private readonly gearMats = { metal: asMetal(phong(GOLD)), gem: new THREE.MeshPhongMaterial({ color: '#9fe8ff', shininess: 90, emissive: '#2a7a9a', emissiveIntensity: 0.4 }) };
+  private readonly gearParts: { dispose(): void }[] = [];
+  private tier = 0;
 
   constructor() {
     const mats = {
       skin: phong(PALETTE.s!),
+      skinShade: phong(new THREE.Color(PALETTE.s!).multiplyScalar(0.82).getStyle()), // 鼻・ほおの影の色
+      white: phong('#f2efe8'), // 白目
+      mouth: phong('#8a4a44'),
       tunic: asCloth(phong(PALETTE.t!)), // 服とマントは布：つやを消し、織り目の凹凸（materialLook.ts）
       belt: phong(PALETTE.b!),
       boots: phong(PALETTE.B!),
+      bootCuff: phong(new THREE.Color(PALETTE.B!).multiplyScalar(1.35).getStyle()),
+      gold: this.goldMat,
       eyes: phong(PALETTE.k!),
       hair: phong(PALETTE.h!, THREE.DoubleSide), // ドット絵の前髪と同じ焦げ茶色
       shadow: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
@@ -142,7 +172,9 @@ export class Hero3D {
       C: asCloth(phong(CLOAKS.none.C, THREE.DoubleSide)),
       c: asCloth(phong(CLOAKS.none.c, THREE.DoubleSide)),
     };
-    this.disposables.push(...Object.values(mats), ...Object.values(this.cloakMats));
+    // 体の縁にうっすら光を足して、暗がりでも輪郭が浮かぶようにする（materialLook.ts の withRim）
+    for (const m of [mats.skin, mats.tunic, mats.belt, mats.boots, mats.hair, ...Object.values(this.cloakMats)]) withRim(m, 0.24);
+    this.disposables.push(...Object.values(mats), ...Object.values(this.cloakMats), this.trimMat, this.gearMats.metal, this.gearMats.gem);
 
     const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D = this.body) => {
       this.disposables.push(geo);
@@ -222,9 +254,47 @@ export class Hero3D {
     }
     add(new THREE.CylinderGeometry(0.1, 0.17, 0.12, 28), this.cloakMats.H, 0, 0.57, 0); // 肩にかかるフードの裾
 
-    // 目
-    add(new THREE.BoxGeometry(0.03, 0.045, 0.02), mats.eyes, -0.05, 0.7, 0.14);
-    add(new THREE.BoxGeometry(0.03, 0.045, 0.02), mats.eyes, 0.05, 0.7, 0.14);
+    // 目：白目に、黒いひとみと小さな白いハイライト。まばたきのため、ひとまとめにして縦に縮められるようにする
+    this.eyes.position.set(0, 0.7, 0);
+    this.body.add(this.eyes);
+    const ball = (rx: number, ry: number, rz: number) => new THREE.SphereGeometry(1, 16, 12).scale(rx, ry, rz);
+    for (const side of [-1, 1]) {
+      add(ball(0.027, 0.03, 0.014), mats.white, side * 0.05, 0, 0.132, this.eyes);
+      add(ball(0.017, 0.024, 0.01), mats.eyes, side * 0.05 + side * -0.002, -0.002, 0.14, this.eyes);
+      add(ball(0.006, 0.006, 0.005), mats.white, side * 0.05 + 0.006, 0.01, 0.148, this.eyes);
+      // まゆ：前髪の下の、少し外が上がったまゆ
+      const brow = add(new THREE.BoxGeometry(0.04, 0.009, 0.012), mats.hair, side * 0.052, 0.034, 0.131, this.eyes);
+      brow.rotation.z = side * 0.1; // 外が少し上がった、引き締まった顔
+    }
+    add(ball(0.013, 0.015, 0.014), mats.skinShade, 0, -0.016, 0.148); // 鼻
+    add(new THREE.BoxGeometry(0.034, 0.006, 0.01), mats.mouth, 0, -0.045, 0.142); // 口
+    // 前髪の毛先：額に落ちる短い房
+    for (const [x, tilt] of [[-0.05, 0.2], [0, 0], [0.055, -0.25]] as const) {
+      const tuft = add(new THREE.ConeGeometry(0.02, 0.06, 8).rotateX(Math.PI), mats.hair, x, 0.738, 0.14);
+      tuft.rotation.z = tilt;
+    }
+
+    // 腰の飾り：ベルトの留め金と、腰の右の小さな袋
+    add(new THREE.BoxGeometry(0.05, 0.034, 0.012), mats.gold, 0, 0.3, 0.162);
+    add(new THREE.BoxGeometry(0.03, 0.02, 0.014), mats.belt, 0, 0.3, 0.166);
+    add(new THREE.BoxGeometry(0.07, 0.07, 0.045), mats.boots, -0.155, 0.27, 0.07).rotation.y = -0.4;
+    // 靴のふち（革の折り返し）
+    for (const hip of this.legs) add(new THREE.CylinderGeometry(0.047, 0.044, 0.026, 14), mats.bootCuff, 0, -0.135, 0.005, hip);
+
+    // マントの縁取り（前の開きのふち）。防具の段階が上がると付く。裾と同じく、歩くとひるがえる
+    for (const start of [gap / 2, Math.PI * 2 - gap / 2 - 0.13]) {
+      const trimGeo = new THREE.CylinderGeometry(0.1735, 0.2555, 0.34, 4, 5, true, start, 0.13);
+      const trim = add(trimGeo, this.trimMat, 0, 0.38, 0);
+      trim.visible = false;
+      this.trims.push(trim);
+      const pos = trimGeo.getAttribute('position') as THREE.BufferAttribute;
+      this.cloakParts.push({ geo: trimGeo, base: Float32Array.from(pos.array as Float32Array), y: 0.38 });
+    }
+
+    // 防具の段階の飾り（肩当て・留め具）の置き場所
+    this.body.add(this.gearBody);
+    this.leftArm.add(this.gearLeft);
+    this.rightArm.add(this.gearRight);
 
     this.root.add(this.body);
 
@@ -234,16 +304,16 @@ export class Hero3D {
     this.root.add(this.hitBox);
   }
 
-  /** 左手に持つ武器（null なら何も持たない）。同じ武器なら作り直さない */
-  setWeapon(type: WeaponType | null) {
-    if ((this.weapon?.type ?? null) === type) return;
+  /** 左手に持つ武器（null なら何も持たない）と、その段階（1〜10。段階が上がるほど立派な見た目）。同じ武器・同じ段階なら作り直さない */
+  setWeapon(type: WeaponType | null, tier = 1) {
+    if ((this.weapon?.type ?? null) === type && (this.weapon?.tier ?? tier) === tier) return;
     if (this.weapon) {
       this.leftHand.remove(this.weapon.root);
       this.weapon.dispose();
       this.weapon = null;
     }
     if (type) {
-      this.weapon = new Weapon3D(type);
+      this.weapon = new Weapon3D(type, tier);
       this.leftHand.add(this.weapon.root);
     }
   }
@@ -253,14 +323,65 @@ export class Hero3D {
     this.swingAt = 0;
   }
 
-  /** マントとフードの色を、装備した防具の色にする */
-  setCloak(cloak: CloakId) {
-    if (cloak === this.cloak) return;
+  /** マントとフードの色を、装備した防具の色にする。tier は防具の段階（1〜10）で、上がるほど縁取り・肩当て・留め具が付く */
+  setCloak(cloak: CloakId, tier = 1) {
+    if (cloak === this.cloak && tier === this.tier) return;
     this.cloak = cloak;
+    this.tier = tier;
     const colors = CLOAKS[cloak];
     this.cloakMats.H.color.set(colors.H);
     this.cloakMats.C.color.set(colors.C);
     this.cloakMats.c.color.set(colors.c);
+    this.buildGear(cloak, tier);
+  }
+
+  /** 防具の段階の飾りを作り直す：縁取り（段階2〜）、肩当て（3〜。5〜で大きく、7〜でとげ、9〜で2つ）、胸の留め具（4〜）。8〜は縁が光る */
+  private buildGear(cloak: CloakId, tier: number) {
+    for (const g of [this.gearBody, this.gearLeft, this.gearRight]) g.clear();
+    for (const d of this.gearParts) d.dispose();
+    this.gearParts.length = 0;
+    const metalColor = ARMOR_METAL[cloak];
+    this.gearMats.metal.color.set(metalColor);
+    this.gearMats.metal.specular = new THREE.Color(metalColor).lerp(new THREE.Color(0xffffff), 0.35);
+    const colors = CLOAKS[cloak];
+    // 縁取り：マントの色を、金色に寄せた色
+    const trim = new THREE.Color(colors.H).lerp(new THREE.Color(GOLD), 0.55);
+    this.trimMat.color.copy(trim);
+    this.trimMat.emissive.copy(trim);
+    this.trimMat.emissiveIntensity = tier >= ARMOR_TIER.top ? 0.55 : tier >= ARMOR_TIER.glow ? 0.3 : 0;
+    for (const t of this.trims) t.visible = tier >= ARMOR_TIER.trim;
+    const gem = this.gearMats.gem;
+    gem.color.set(new THREE.Color(colors.H).lerp(new THREE.Color(0xffffff), 0.3));
+    gem.emissive.set(colors.C);
+    gem.emissiveIntensity = tier >= ARMOR_TIER.glow ? 0.9 : 0.4;
+    const part = <G extends THREE.BufferGeometry>(parent: THREE.Object3D, geo: G, mat: THREE.Material, x: number, y: number, z: number) => {
+      this.gearParts.push(geo);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(x, y, z);
+      parent.add(mesh);
+      return mesh;
+    };
+    if (tier >= ARMOR_TIER.pauldron) {
+      const r = tier >= ARMOR_TIER.pauldronBig ? 0.068 : 0.054;
+      for (const side of [-1, 1] as const) {
+        const arm = side === 1 ? this.gearLeft : this.gearRight; // 肩を軸にした腕の入れ物の中（腕を振ると一緒に動く）
+        part(arm, new THREE.SphereGeometry(r, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1, 0.72, 1.1), this.gearMats.metal, side * 0.035, 0.02, 0);
+        if (tier >= ARMOR_TIER.pauldronBig) part(arm, new THREE.TorusGeometry(r * 0.96, 0.0065, 6, 20).rotateX(Math.PI / 2), this.goldMat, side * 0.035, 0.02, 0);
+        if (tier >= ARMOR_TIER.pauldronSpike) {
+          const spike = part(arm, new THREE.ConeGeometry(0.014, 0.07, 8), this.gearMats.metal, side * (0.035 + r * 0.8), 0.045 + r * 0.55, 0);
+          spike.rotation.z = -side * 0.95;
+        }
+        if (tier >= ARMOR_TIER.pauldronTwin) {
+          const spike = part(arm, new THREE.ConeGeometry(0.011, 0.055, 8), this.gearMats.metal, side * 0.035, 0.06, r * 0.7);
+          spike.rotation.x = 0.8;
+        }
+      }
+    }
+    if (tier >= ARMOR_TIER.clasp) {
+      // 胸の留め具：金の輪に、防具の色の宝石
+      part(this.gearBody, new THREE.TorusGeometry(0.02, 0.006, 6, 16), this.goldMat, 0, 0.5, 0.134);
+      part(this.gearBody, new THREE.OctahedronGeometry(0.014).scale(1, 1.3, 0.8), gem, 0, 0.5, 0.138);
+    }
   }
 
   /**
@@ -291,6 +412,11 @@ export class Hero3D {
     this.legs[1]!.rotation.x = stride * STRIDE.leg;
     this.rightArm.rotation.x = stride * STRIDE.arm;
     if (!reduceMotion) this.flowCloak();
+    // まばたき（動きを減らす設定では、目は開けたまま）
+    const phase2 = (this.time + BLINK.shift) % BLINK.period;
+    const closeAt = BLINK.period - BLINK.closeSec;
+    const closed = reduceMotion || phase2 < closeAt ? 0 : 1 - Math.abs((phase2 - closeAt - BLINK.closeSec / 2) / (BLINK.closeSec / 2));
+    this.eyes.scale.y = 1 - BLINK.closed * Math.max(0, closed);
 
     // 武器を振る動き（動きを減らす設定では振らない）
     let pose = REST_POSE;

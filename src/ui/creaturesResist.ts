@@ -110,7 +110,7 @@ function gargoyle(k: Kit, body: THREE.Group): Rig {
     k.mesh(head, spike(V(s * 0.03, -0.045, 0.1), V(s * 0.032, -0.1, 0.105), 0.01), k.skin(0xd8d2c4, { shine: 30 })); // 牙
     k.mesh(head, spike(V(s * 0.085, 0.02, 0), V(s * 0.18, 0.06, -0.04), 0.025), deep); // とがった耳
   }
-  k.eyes(head, eye, 0.035, 0.05, 0.085, 0.015, 0.55);
+  k.eyes(head, eye, 0.035, 0.05, 0.085, 0.015, 0.55, true);
   const legs = ([-1, 1] as const).map((s) => {
     const g = k.pivot(body, V(s * 0.1, 0.3, -0.04));
     chain(k, g, [V(0, 0, 0), V(s * 0.01, -0.14, 0.08), V(s * 0.01, -0.28, 0)], [0.06, 0.045, 0.035], stone);

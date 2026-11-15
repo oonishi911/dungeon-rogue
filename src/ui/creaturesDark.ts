@@ -150,7 +150,7 @@ export const DARK_BUILDERS: Record<'dark_bat' | 'shadow' | 'phantom' | 'giant_ra
       k.mesh(head, ellipsoid(0.032, 0.036, 0.01).rotateY(s * 0.5), flesh, V(s * 0.06, 0.075, -0.01));
       k.mesh(head, new THREE.BoxGeometry(0.012, 0.03, 0.008), tooth, V(s * 0.007, -0.06, 0.225));
     }
-    k.eyes(head, eye, 0.048, 0.025, 0.105, 0.016, 0.8);
+    k.eyes(head, eye, 0.048, 0.025, 0.105, 0.016, 0.8, true);
     const legs = [
       [-1, 0.16],
       [1, 0.16],
@@ -221,7 +221,7 @@ export const DARK_BUILDERS: Record<'dark_bat' | 'shadow' | 'phantom' | 'giant_ra
     const head = k.pivot(chest, V(0, 0.42, 0.01));
     k.mesh(head, roughen(ellipsoid(0.095, 0.115, 0.1), 0.004, 20), armor, V(0, 0.04, 0));
     k.mesh(head, new THREE.BoxGeometry(0.12, 0.022, 0.03), k.skin(0x05040a), V(0, 0.05, 0.09)); // 兜のすき間
-    k.eyes(head, eye, 0.03, 0.05, 0.1, 0.014, 0.5);
+    k.eyes(head, eye, 0.03, 0.05, 0.1, 0.014, 0.5, true);
     for (const s of [-1, 1]) {
       // 大きな角：横へ出て、上へ反り返る
       const h1 = V(s * 0.08, 0.1, -0.01), h2 = V(s * 0.17, 0.15, -0.04), h3 = V(s * 0.21, 0.28, -0.08), h4 = V(s * 0.19, 0.4, -0.14);

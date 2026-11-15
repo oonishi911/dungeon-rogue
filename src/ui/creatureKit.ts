@@ -6,20 +6,23 @@
 // 体の形はマス単位で、足元が原点、正面が +z。
 
 import * as THREE from 'three';
-import { asMetal } from './materialLook';
+import { asMetal, withRim } from './materialLook';
+
+/** 敵の体の縁の光の強さ（materialLook.ts の withRim） */
+const RIM_SKIN = 0.26;
 
 // ===== 形を作る道具 =====
 
 export const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 export const P = (r: number, y: number) => new THREE.Vector2(r, y); // 回転体の輪郭の点（半径, 高さ）
 
-/** 楕円体（中心が原点）。画面では敵は小さく映るので、面の数は控えめにする（細かくしても見分けられず、描くのが重くなるだけ） */
-export function ellipsoid(rx: number, ry: number, rz: number, w = 28, h = 20): THREE.BufferGeometry {
+/** 楕円体（中心が原点）。マスを大きく映すようにしたので、丸みが目立たない程度に面を細かくする（動かさない部品は1つにまとめて描くので、面を増やしても描く回数は増えない） */
+export function ellipsoid(rx: number, ry: number, rz: number, w = 36, h = 26): THREE.BufferGeometry {
   return new THREE.SphereGeometry(1, w, h).scale(rx, ry, rz);
 }
 
 /** 2点のあいだをつなぐ円柱（腕や脚、骨）。a の太さが ra、b の太さが rb */
-export function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number, segments = 16): THREE.BufferGeometry {
+export function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number, segments = 20): THREE.BufferGeometry {
   const dir = new THREE.Vector3().subVectors(b, a);
   const geo = new THREE.CylinderGeometry(rb, ra, dir.length(), segments, 2);
   geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), dir.clone().normalize()));
@@ -115,14 +118,14 @@ export const WING_BONES: [number, number, number, number][] = [
 let grainTexture: THREE.Texture | null = null;
 export function grain(): THREE.Texture {
   if (grainTexture) return grainTexture;
-  const size = 128;
+  const size = 256; // 近くで見ても粗く見えないよう、細かい粒と、その上に大きめのうねりを重ねる
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
   const img = ctx.createImageData(size, size);
   for (let i = 0; i < size * size; i++) {
     const x = i % size, y = Math.floor(i / size);
-    const v = 128 + wobble(x * 0.31, y * 0.31, 1.7) * 60 + (Math.random() - 0.5) * 70;
+    const v = 128 + wobble(x * 0.16, y * 0.16, 1.7) * 52 + wobble(x * 0.47, y * 0.47, 4.3) * 26 + (Math.random() - 0.5) * 62;
     img.data.set([v, v, v, 255], i * 4);
   }
   ctx.putImageData(img, 0, 0);
@@ -130,6 +133,28 @@ export function grain(): THREE.Texture {
   grainTexture.wrapS = grainTexture.wrapT = THREE.RepeatWrapping;
   grainTexture.repeat.set(3, 3);
   return grainTexture;
+}
+
+/** 色のむらの模様（汚れ・日焼け・血色のむら）。素材の色に掛けて、のっぺりした一色に見えないようにする。明るさは9割前後で、ゆるく変わる */
+let mottleTexture: THREE.Texture | null = null;
+export function mottle(): THREE.Texture {
+  if (mottleTexture) return mottleTexture;
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const img = ctx.createImageData(size, size);
+  for (let i = 0; i < size * size; i++) {
+    const x = i % size, y = Math.floor(i / size);
+    const v = Math.max(0, Math.min(255, 226 + wobble(x * 0.09, y * 0.09, 3.1) * 22 + wobble(x * 0.31, y * 0.31, 8.2) * 9 + (Math.random() - 0.5) * 8));
+    img.data.set([v, v * 0.985, v * 0.97, 255], i * 4);
+  }
+  ctx.putImageData(img, 0, 0);
+  mottleTexture = new THREE.CanvasTexture(canvas);
+  mottleTexture.colorSpace = THREE.SRGBColorSpace;
+  mottleTexture.wrapS = mottleTexture.wrapT = THREE.RepeatWrapping;
+  mottleTexture.repeat.set(2, 2);
+  return mottleTexture;
 }
 
 /** 光る輪（闇の王のまわりの気配など）の画像 */
@@ -148,7 +173,7 @@ export function glowTexture(color: string): THREE.Texture {
 // ===== 模型を組む =====
 
 export type Wrap = <T extends THREE.Material>(material: T, name: string) => T;
-export type SkinOptions = { shine?: number; specular?: number; bump?: number; opacity?: number; double?: boolean; emissive?: number; flat?: boolean };
+export type SkinOptions = { shine?: number; specular?: number; bump?: number; opacity?: number; double?: boolean; emissive?: number; flat?: boolean; rim?: number };
 
 /** 組み立てに使う道具（作った形と素材は、片付けるときのために覚えておく） */
 export class Kit {
@@ -170,7 +195,10 @@ export class Kit {
     if (o.bump) {
       m.bumpMap = grain();
       m.bumpScale = o.bump;
+      if (o.opacity === undefined) m.map = mottle(); // 皮膚や毛や布には、色のむらも付ける（鎧・金属・透ける体は一色のまま）
     }
+    // 縁の光：輪郭が暗がりに沈まないように（透ける体は、すでにぼんやり見えるので付けない）
+    if (o.opacity === undefined) withRim(m, o.rim ?? RIM_SKIN);
     // よく光る部品（鎧・金の飾り・刃など）は金属にする（周りの景色が映り込む。materialLook.ts）
     if ((o.shine ?? 8) >= 60 && o.opacity === undefined) asMetal(m, 0.22);
     this.disposables.push(m);
@@ -201,9 +229,19 @@ export class Kit {
     return g;
   }
 
-  /** 光る目を左右に1対 */
-  eyes(parent: THREE.Object3D, mat: THREE.Material, x: number, y: number, z: number, r: number, squint = 0.6) {
-    for (const side of [-1, 1]) this.mesh(parent, ellipsoid(r, r * squint, r * 0.6, 10, 8), mat, V(side * x, y, z));
+  /**
+   * 光る目を左右に1対。目の真ん中に、その色を白く寄せた明るい芯（ひとみ）を重ねて、光に強弱を付ける。
+   * brow が true なら、目の上に、内側へ下がった暗いまゆ（怒った顔）も付ける（顔が見える敵だけ）
+   */
+  eyes(parent: THREE.Object3D, mat: THREE.Material, x: number, y: number, z: number, r: number, squint = 0.6, brow = false) {
+    const base = (mat as THREE.MeshBasicMaterial).color;
+    const core = this.glow(base ? base.clone().lerp(new THREE.Color(0xffffff), 0.75).getHex() : 0xffffff);
+    const dark = brow ? this.skin(0x120e0c, { rim: 0 }) : null;
+    for (const side of [-1, 1]) {
+      this.mesh(parent, ellipsoid(r, r * squint, r * 0.6, 12, 10), mat, V(side * x, y, z));
+      this.mesh(parent, ellipsoid(r * 0.52, r * squint * 0.62, r * 0.3, 8, 6), core, V(side * x, y, z + r * 0.34));
+      if (dark) this.mesh(parent, limb(V(side * (x + r * 1.5), y + r * 1.55, z + r * 0.1), V(side * (x - r * 0.8), y + r * 1.0, z + r * 0.22), r * 0.3, r * 0.22, 6), dark);
+    }
   }
 
   /** 加算で光る、ぼんやりした光の玉（炎や光の気配）。size は直径（マス） */
