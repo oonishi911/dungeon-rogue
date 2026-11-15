@@ -2186,3 +2186,388 @@ button {
     font-size: 1rem;
   }
 }
+
+/* ===== 入力しやすくする部品（2026-11-15） ===== */
+
+/* 数の欄：「−」「＋」と、変えた欄の「戻す」。欄の両側に付く */
+.admin__numrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+}
+
+.admin__step {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  color: var(--bone);
+  background: var(--pine);
+  border: 1px solid var(--pine-line);
+  border-radius: 4px;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  /* 押し続けたとき、文字が選ばれたり、拡大されたり、長押しのメニューが出たりしない */
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.admin__step:active:not(:disabled) {
+  background: var(--pine-deep);
+}
+
+.admin__step:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.admin__reset {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0 0.4rem;
+  color: var(--procure);
+  background: none;
+  border: 1px solid var(--procure);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.admin__reset-text {
+  margin-left: 0.2rem;
+}
+
+/* スライダー：範囲の狭い値を、指でなぞって決める。'narrow' は、狭い画面だけ */
+.admin__slider {
+  display: block;
+  width: 100%;
+  min-width: 8rem;
+  margin: 0.2rem 0 0;
+  accent-color: var(--procure);
+}
+
+.admin__slider--narrow {
+  display: none;
+}
+
+/* 表の中（PCの広い画面）では、列が広がらないよう、増減ボタン・スライダー・「戻す」の文字は出さない（戻すは、↺ だけ出す） */
+.admin__table .admin__step,
+.admin__table .admin__slider,
+.admin__table .admin__reset-text {
+  display: none;
+}
+
+/* 敵の表の上：探す・並び順・変えた敵だけ */
+.admin__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 8px;
+  background: var(--pine-deep);
+  font-size: var(--step--1);
+}
+
+.admin__search {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.admin__search .admin__name {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.admin__sort,
+.admin__toggle {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.admin__count {
+  color: var(--bone-dim);
+}
+
+/* 属性ごとのまとまりの見出し（押すと、たたむ・ひらく） */
+.admin__table .admin__group-row th {
+  position: static;
+  padding: 0;
+  background: var(--pine-deep);
+  border-bottom: 1px solid var(--pine-line);
+}
+
+.admin__group-toggle {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0 0.6rem;
+  color: var(--bone);
+  background: none;
+  border: none;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin__group-toggle:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.admin__strength-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 前回の続きを戻したときなどの、お知らせ */
+.admin__notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--procure);
+  border-radius: 8px;
+  background: rgb(180 141 53 / 0.1);
+  font-size: var(--step--1);
+  line-height: 1.6;
+}
+
+.admin__notice button {
+  min-height: 2.25rem;
+  padding: 0 0.8rem;
+  color: var(--bone);
+}
+
+/* 画面の下に固定する「変更を公開」のバー */
+.admin--bar {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+}
+
+.admin__bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 0.6rem 1rem calc(0.6rem + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--procure);
+  background: var(--pine-deep);
+  box-shadow: 0 -6px 18px rgb(0 0 0 / 0.35);
+}
+
+.admin__bar-text {
+  margin: 0;
+  font-size: var(--step--1);
+  line-height: 1.5;
+}
+
+.admin__bar-bad {
+  color: var(--alert);
+}
+
+.admin__bar-status {
+  color: var(--bone-dim);
+}
+
+.admin__bar-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.admin__bar button {
+  min-height: 2.5rem;
+  padding: 0 0.9rem;
+  color: var(--bone);
+}
+
+.admin__bar button:disabled {
+  opacity: 0.45;
+}
+
+/* スマホ（狭い画面）：増減ボタンとスライダーを出し、押しやすい大きさにする。敵のカードでは、入力欄の下に並べる */
+@media (max-width: 48rem) {
+  .admin__table .admin__step,
+  .admin__table .admin__reset-text {
+    display: inline-flex;
+  }
+
+  .admin__table .admin__slider {
+    min-width: 0;
+  }
+
+  .admin__table .admin__slider,
+  .admin__table .admin__slider--narrow,
+  .admin__slider--narrow {
+    display: block;
+  }
+
+  .admin__step {
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: 1.25rem;
+  }
+
+  .admin__reset {
+    min-height: 2.25rem;
+    font-size: 0.875rem;
+  }
+
+  .admin__slider {
+    height: 1.75rem;
+  }
+
+  .admin__toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+
+  .admin__toolbar .admin__select,
+  .admin__toolbar .admin__name {
+    min-height: 2.5rem;
+    font-size: 1rem;
+  }
+
+  .admin__bar {
+    padding-right: 0.75rem;
+    padding-left: 0.75rem;
+  }
+
+  /* 敵のカード：数の欄は、入力欄を幅いっぱいにして、その下に「−」「＋」を半分ずつ並べる */
+  .admin__table--cards .admin__numrow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    width: 100%;
+  }
+
+  .admin__table--cards .admin__numrow > .admin__number,
+  .admin__table--cards .admin__numrow > .admin__select,
+  .admin__table--cards .admin__numrow > .admin__name {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  /* 入力欄が上、「−」「＋」がその下（作った順は − 入力欄 ＋） */
+  .admin__table--cards .admin__numrow > .admin__number {
+    order: -1;
+  }
+
+  .admin__table--cards .admin__step {
+    flex: 1 1 0;
+    width: auto;
+  }
+
+  .admin__table--cards .admin__numrow > .admin__check {
+    flex: none;
+  }
+
+  /* 「戻す」は、各欄の名前と同じ行の右端に出す */
+  .admin__table--cards td {
+    position: relative;
+  }
+
+  .admin__table--cards td > .admin__field,
+  .admin__table--cards td > .admin__numrow {
+    display: flex;
+    width: 100%;
+  }
+
+  .admin__table--cards td .admin__reset {
+    position: absolute;
+    top: -0.35rem;
+    right: 0;
+    min-height: 1.75rem;
+    background: var(--pine);
+  }
+
+  .admin__table--cards th .admin__reset {
+    position: static;
+  }
+
+  .admin__table--cards .admin__boss-cell .admin__numrow {
+    flex: 0 0 auto;
+    width: auto;
+    gap: 0.75rem;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .admin__table--cards .admin__boss-cell .admin__reset {
+    position: static;
+  }
+
+  .admin__table--cards .admin__strength {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 0.1rem 0;
+  }
+
+  .admin__table--cards .admin__strength::before {
+    margin: 0;
+  }
+
+  .admin__table--cards .admin__strength-num {
+    font-size: 1.125rem;
+    font-weight: 700;
+  }
+
+  .admin__table--cards tbody .admin__group-row {
+    display: block;
+    margin: 0 0 0.5rem;
+    padding: 0;
+    border: none;
+    background: none;
+  }
+
+  .admin__table--cards tbody .admin__group-row th {
+    padding: 0;
+    border: 1px solid var(--pine-line);
+    border-radius: 10px;
+    background: var(--pine-deep);
+  }
+
+  .admin__group-toggle {
+    min-height: 3rem;
+    font-size: 1.0625rem;
+  }
+}
+
+/* 設定の欄（階の数・小部屋など）：スライダーは、欄の下の行に出し、エラーはその下の行に出す */
+.gen__field .admin__slider {
+  grid-column: 2 / 3;
+  grid-row: 2;
+  width: min(100%, 18rem);
+}
+
+.gen__field:has(.admin__slider) .admin__error {
+  grid-row: 3;
+}

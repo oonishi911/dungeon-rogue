@@ -190,7 +190,7 @@ export function PoolPanel(props: { master: EnemyMaster; base: Encounters | undef
                         value={w}
                         min={0}
                         max={LIMITS.weight.max}
-                        changed={w !== weightOf(base[t].pool, id)}
+                        changed={w !== weightOf(base[t].pool, id)} base={weightOf(base[t].pool, id)}
                         label={`${TRAIT_LABELS[t]}の属性での${nameOf(id)}の出やすさ`}
                         onChange={(v) => setTrait(t, { pool: setWeight(draft[t].pool, id, v) })}
                       />

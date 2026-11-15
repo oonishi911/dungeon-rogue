@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { numberError, orderError, ruleText, textError } from './fieldCheck';
+import { nudge, numberError, orderError, ruleText, textError } from './fieldCheck';
 
 describe('ruleText', () => {
   it('整数・数・奇数を言い分ける', () => {
@@ -57,5 +57,39 @@ describe('textError', () => {
     expect(textError('abcdef', rule)).toBe('6文字あります。5文字までにしてください。');
     expect(textError('Bat1', rule)).toBe('「Bat1」は使えない形です。英小文字だけにしてください。');
     expect(textError('bat', rule)).toBe('「bat」はほかの敵が使っています。ほかの値にしてください。');
+  });
+});
+
+describe('nudge（増減ボタン）', () => {
+  it('step ずつ増やす・減らす', () => {
+    expect(nudge(5, 1, { min: 1, max: 10 })).toBe(6);
+    expect(nudge(5, -1, { min: 1, max: 10 })).toBe(4);
+    expect(nudge(300, 1, { min: 100, max: 100000, step: 100 })).toBe(400);
+  });
+
+  it('範囲の端で止まる', () => {
+    expect(nudge(10, 1, { min: 1, max: 10 })).toBe(10);
+    expect(nudge(1, -1, { min: 1, max: 10 })).toBe(1);
+  });
+
+  it('小数でも誤差が出ない（0.1ずつ・0.05ずつ）', () => {
+    let v = 0;
+    for (let i = 0; i < 3; i++) v = nudge(v, 1, { min: 0, max: 3, step: 0.1 });
+    expect(v).toBe(0.3);
+    expect(nudge(1.05, 1, { min: 0.1, max: 3, step: 0.05 })).toBe(1.1);
+    expect(nudge(0.35, -1, { min: 0, max: 1, step: 0.05 })).toBe(0.3);
+  });
+
+  it('奇数の欄は、奇数のまま動く', () => {
+    expect(nudge(5, 1, { min: 3, max: 15, step: 2 })).toBe(7);
+    expect(nudge(3, -1, { min: 3, max: 15, step: 2 })).toBe(3);
+  });
+
+  it('目盛りの間・範囲の外・数でない値からは、いちばん近い目盛りへ動く', () => {
+    expect(nudge(2.5, 1, { min: 0, max: 10, step: 1 })).toBe(3);
+    expect(nudge(2.5, -1, { min: 0, max: 10, step: 1 })).toBe(2);
+    expect(nudge(99, 1, { min: 1, max: 10 })).toBe(10);
+    expect(nudge(-5, 1, { min: 1, max: 10 })).toBe(1);
+    expect(nudge(Number.NaN, 1, { min: 1, max: 10 })).toBe(1);
   });
 });

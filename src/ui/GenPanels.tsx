@@ -55,13 +55,13 @@ export function FloorsPanel({ base, draft, setDraft }: GenPanelProps) {
       </p>
       <div className="gen__fields">
         <Field label={GEN_LABELS.floorCount} hint="通常の階の数。その下に、ボスの階が1つある。階を増やしたら、満腹度も見直す">
-          <NumberField {...GEN_LIMITS.floorCount} value={f.count} changed={f.count !== bf.count} label={GEN_LABELS.floorCount} onChange={(v) => setFloors({ count: v })} />
+          <NumberField {...GEN_LIMITS.floorCount} value={f.count} changed={f.count !== bf.count} base={bf.count} label={GEN_LABELS.floorCount} onChange={(v) => setFloors({ count: v })} />
         </Field>
         <Field label={GEN_LABELS.floorSize} hint={`一辺のマス数（${f.size}×${f.size}マス）`}>
-          <NumberField {...GEN_LIMITS.floorSize} value={f.size} changed={f.size !== bf.size} label={GEN_LABELS.floorSize} onChange={(v) => setFloors({ size: v })} />
+          <NumberField {...GEN_LIMITS.floorSize} value={f.size} changed={f.size !== bf.size} base={bf.size} label={GEN_LABELS.floorSize} onChange={(v) => setFloors({ size: v })} />
         </Field>
         <Field label={GEN_LABELS.satiety} hint={`探索のはじめの満腹度。これが上限。マップの面積（${f.size ** 2}）の${(f.satiety / f.size ** 2).toFixed(1)}倍`}>
-          <NumberField {...GEN_LIMITS.satiety} value={f.satiety} changed={f.satiety !== bf.satiety} label={GEN_LABELS.satiety} onChange={(v) => setFloors({ satiety: v })} />
+          <NumberField {...GEN_LIMITS.satiety} value={f.satiety} changed={f.satiety !== bf.satiety} base={bf.satiety} label={GEN_LABELS.satiety} onChange={(v) => setFloors({ satiety: v })} />
         </Field>
       </div>
     </section>
@@ -78,14 +78,14 @@ export function RoomsPanel({ base, draft, setDraft }: GenPanelProps) {
       <h2 className="admin__heading">小部屋</h2>
       <div className="gen__fields">
         <Field label={GEN_LABELS.attemptRate} hint="大きいほど部屋が増え、迷路の通路が減る（0：部屋なし）。通路が減ると、行き止まりに置く宝箱と強敵も少し減る">
-          <NumberField {...GEN_LIMITS.attemptRate} value={r.attemptRate} changed={r.attemptRate !== br.attemptRate} label={GEN_LABELS.attemptRate} onChange={(v) => setRooms({ attemptRate: v })} />
+          <NumberField {...GEN_LIMITS.attemptRate} slider value={r.attemptRate} changed={r.attemptRate !== br.attemptRate} base={br.attemptRate} label={GEN_LABELS.attemptRate} onChange={(v) => setRooms({ attemptRate: v })} />
         </Field>
         <Field label={GEN_LABELS.minSize} hint="部屋の一辺のマス数（奇数）">
           <NumberField
             {...GEN_LIMITS.roomSize}
             odd
             value={r.minSize}
-            changed={r.minSize !== br.minSize}
+            changed={r.minSize !== br.minSize} base={br.minSize}
             label={GEN_LABELS.minSize}
             error={orderError('atMost', '最小', r.minSize, '最大', r.maxSize)}
             onChange={(v) => setRooms({ minSize: v })}
@@ -96,7 +96,7 @@ export function RoomsPanel({ base, draft, setDraft }: GenPanelProps) {
             {...GEN_LIMITS.roomSize}
             odd
             value={r.maxSize}
-            changed={r.maxSize !== br.maxSize}
+            changed={r.maxSize !== br.maxSize} base={br.maxSize}
             label={GEN_LABELS.maxSize}
             error={orderError('atLeast', '最大', r.maxSize, '最小', r.minSize)}
             onChange={(v) => setRooms({ maxSize: v })}
@@ -117,7 +117,7 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
       <h2 className="admin__heading">敵の数と置き方</h2>
       <div className="gen__fields">
         <Field label={GEN_LABELS.amount} hint="通常の敵の数（1：今の数。広さに合わせて増える分は、そのまま）。強敵とボスは変わらない">
-          <NumberField {...GEN_LIMITS.amount} value={e.amount} changed={e.amount !== be.amount} label={GEN_LABELS.amount} onChange={(v) => setEnemies({ amount: v })} />
+          <NumberField {...GEN_LIMITS.amount} slider value={e.amount} changed={e.amount !== be.amount} base={be.amount} label={GEN_LABELS.amount} onChange={(v) => setEnemies({ amount: v })} />
         </Field>
         <Field label={GEN_LABELS.placement} hint="部屋だけにすると、通常の敵をすべて部屋に集める。通路だけにすると、部屋には敵を置かない（群れ部屋も作らない）">
           <select
@@ -140,19 +140,19 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
           <NumberField
             {...GEN_LIMITS.weight}
             value={e.roomWeight}
-            changed={e.roomWeight !== be.roomWeight}
+            changed={e.roomWeight !== be.roomWeight} base={be.roomWeight}
             label={GEN_LABELS.roomWeight}
             onChange={(v) => setEnemies({ roomWeight: v })}
           />
         </Field>
         <Field label={GEN_LABELS.nestChance} hint="部屋ごとに、この確率で敵がまとまっている部屋にする（0〜1。0：作らない）。群れの敵は、通常の敵とは別に足す">
-          <NumberField {...GEN_LIMITS.nestChance} value={e.nestChance} changed={e.nestChance !== be.nestChance} label={GEN_LABELS.nestChance} onChange={(v) => setEnemies({ nestChance: v })} />
+          <NumberField {...GEN_LIMITS.nestChance} slider value={e.nestChance} changed={e.nestChance !== be.nestChance} base={be.nestChance} label={GEN_LABELS.nestChance} onChange={(v) => setEnemies({ nestChance: v })} />
         </Field>
         <Field label={GEN_LABELS.nestMin} hint="部屋に入りきらないときは、入る分だけ置く">
           <NumberField
             {...GEN_LIMITS.nestCount}
             value={e.nestMin}
-            changed={e.nestMin !== be.nestMin}
+            changed={e.nestMin !== be.nestMin} base={be.nestMin}
             label={GEN_LABELS.nestMin}
             error={orderError('atMost', '最小', e.nestMin, '最大', e.nestMax)}
             onChange={(v) => setEnemies({ nestMin: v })}
@@ -162,7 +162,7 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
           <NumberField
             {...GEN_LIMITS.nestCount}
             value={e.nestMax}
-            changed={e.nestMax !== be.nestMax}
+            changed={e.nestMax !== be.nestMax} base={be.nestMax}
             label={GEN_LABELS.nestMax}
             error={orderError('atLeast', '最大', e.nestMax, '最小', e.nestMin)}
             onChange={(v) => setEnemies({ nestMax: v })}
@@ -181,7 +181,7 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
           <NumberField
             {...GEN_LIMITS.bossMinions}
             value={e.bossMinions}
-            changed={e.bossMinions !== be.bossMinions}
+            changed={e.bossMinions !== be.bossMinions} base={be.bossMinions}
             label={GEN_LABELS.bossMinions}
             onChange={(v) => setEnemies({ bossMinions: v })}
           />
@@ -215,7 +215,7 @@ export function GrowthPanel({ base, draft, setDraft }: GenPanelProps) {
           ] as const
         ).map(([key, hint]) => (
           <Field key={key} label={GEN_LABELS[key]} hint={hint || undefined}>
-            <NumberField {...GEN_LIMITS[key]} value={g[key]} changed={g[key] !== bg[key]} label={GEN_LABELS[key]} onChange={(v) => setGrowth({ [key]: v })} />
+            <NumberField {...GEN_LIMITS[key]} value={g[key]} changed={g[key] !== bg[key]} base={bg[key]} label={GEN_LABELS[key]} onChange={(v) => setGrowth({ [key]: v })} />
           </Field>
         ))}
       </div>
@@ -243,7 +243,7 @@ export function MagicPanel({ base, draft, setDraft }: GenPanelProps) {
               max={f.max}
               step={f.step}
               value={draft.magic[f.key]}
-              changed={draft.magic[f.key] !== base.magic[f.key]}
+              changed={draft.magic[f.key] !== base.magic[f.key]} base={base.magic[f.key]}
               label={f.label}
               onChange={(v) => setMagic({ [f.key]: v })}
             />
@@ -264,7 +264,7 @@ export function MagicPanel({ base, draft, setDraft }: GenPanelProps) {
                   step={f.step}
                   integer={f.integer}
                   value={draft.spells[spell][f.key]!}
-                  changed={draft.spells[spell][f.key] !== base.spells[spell][f.key]}
+                  changed={draft.spells[spell][f.key] !== base.spells[spell][f.key]} base={base.spells[spell][f.key]}
                   label={`${SPELL_NAMES[spell]}の${f.label}`}
                   onChange={(v) => setSpell(spell, f.key, v)}
                 />
