@@ -3,6 +3,8 @@
 //   照り返しを金属自身の色に寄せる（金は金色に、鉄は白っぽく光る）
 // - 布：照り返しをほとんどなくし、細かな織り目の凹凸を付ける（光が当たっても、つやが出ない）
 // 主人公の服・マント（hero3d.ts）、武器（weapon3d.ts）、敵の鎧など光る部品（creatureKit.ts の Kit.skin）、宝箱の金具が使う。
+// - 縁の光（withRim）：体の縁（横や後ろを向いた面）にうっすら青白い光を足し、暗い背景や暗い床の上でも、輪郭が浮かび上がるようにする
+//   （主人公と敵の模型が使う。マスを大きく映したときに、形を見分けやすくするため）
 
 import * as THREE from 'three';
 
@@ -86,4 +88,35 @@ function weaveTexture(): THREE.Texture {
   weave.wrapS = weave.wrapT = THREE.RepeatWrapping;
   weave.repeat.set(4, 4);
   return weave;
+}
+
+/** 縁の光の色と強さ（強さは、縁でどれだけ明るさを足すか。0なら光らない） */
+export const RIM = { color: 0x7f93b8, strength: 0.3, power: 2.5 };
+
+/**
+ * 縁の光を付ける：カメラに対して横を向いた面（縁）ほど、色を足す。上を向いた面（真正面に近い）はほとんど変わらない。
+ * 先に付いている onBeforeCompile（霧の手直しなど）も生かすので、霧をかける前に呼ぶ。
+ * 色と強さは素材ごとに違えられる（光の当たらない霊の体などは弱く）
+ */
+export function withRim<T extends THREE.MeshPhongMaterial>(m: T, strength = RIM.strength, color: number = RIM.color): T {
+  if (strength <= 0) return m;
+  const before = m.onBeforeCompile.bind(m);
+  m.onBeforeCompile = (shader, renderer) => {
+    before(shader, renderer);
+    shader.uniforms.rimColor = { value: new THREE.Color(color) };
+    shader.uniforms.rimStrength = { value: strength };
+    shader.fragmentShader =
+      'uniform vec3 rimColor;\nuniform float rimStrength;\n' +
+      shader.fragmentShader.replace(
+        '#include <opaque_fragment>',
+        `{
+          float rimDot = 1.0 - clamp( dot( normalize( normal ), normalize( vViewPosition ) ), 0.0, 1.0 );
+          outgoingLight += rimColor * rimStrength * pow( rimDot, ${RIM.power.toFixed(2)} );
+        }
+        #include <opaque_fragment>`,
+      );
+  };
+  const key = m.customProgramCacheKey.bind(m);
+  m.customProgramCacheKey = () => key() + '|rim';
+  return m;
 }

@@ -14,8 +14,8 @@ export const WALL_ROUGH = { amount: 0.045, scale: 2.6, top: 0.5 } as const;
 export const WALL_SHAPES = 16; // 4つの側面のどれが床に面しているかの組み合わせ（softWall.ts の exposureIndex）
 export const CAMERA = { height: 15, back: 11.7 }; // 主人公の真上15・手前11.7から見下ろす（約52度。主人公の脚やマントの動きが横から見える角度）
 // 画面の大きさによらず、主人公のいるあたりの1マスが画面上でこの大きさ（CSSピクセル）に映るよう、視野の広さを決める。
-// スマホの縦画面（幅約390px）で横に約11マス、PCの探索画面（幅約670px）で横に約19マス映る（2026-11-15 に、1マスを48pxから36pxに小さくして、映る範囲を広げた）
-export const TILE_PX = 36;
+// スマホの縦画面（幅約390px）で横に約8マス、PCの探索画面（幅約670px）で横に約14マス映る（2026-11-15 に、1マスを48pxから36pxに小さくして映る範囲を広げたが、その日のうちに、主人公と敵の模型を作り込んで大きく見せるため、48pxに戻した）
+export const TILE_PX = 48;
 export const FOV_LIMIT = { min: 10, max: 75 }; // 極端に大きい・小さい画面でもゆがみすぎないように
 // 攻撃したとき・攻撃されたときの画面効果：カメラを少し寄せて戻す（拡大縮小）。zoom は 1 からのずれの最大、ms は長さ
 export const HIT_PULSE = {

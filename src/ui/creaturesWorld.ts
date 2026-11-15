@@ -47,7 +47,7 @@ function imp(k: Kit, body: THREE.Group, look: ImpLook): Rig {
     k.mesh(head, spike(V(s * 0.085, 0.05, -0.01), V(s * 0.19, 0.08, -0.04), 0.022), skinMat); // とがった耳
     for (const tx of [0.012, 0.034]) k.mesh(head, spike(V(s * tx, 0.003, 0.085), V(s * tx, -0.018, 0.088), 0.005), look.fire ? k.skin(0xc9b890) : accent); // 牙
   }
-  k.eyes(head, eye, 0.035, 0.055, 0.075, 0.017, 0.55);
+  k.eyes(head, eye, 0.035, 0.055, 0.075, 0.017, 0.55, true);
   const flames = look.fire ? [k.glowSprite(head, 'rgba(255,140,40,0.9)', 0.18, V(0, 0.16, -0.02)), k.glowSprite(head, 'rgba(255,200,80,0.8)', 0.1, V(0, 0.21, -0.03))] : [];
   const wings = ([1, -1] as const).map((s) => {
     const w = k.pivot(torso, V(s * 0.05, 0.2, -0.08));
@@ -123,7 +123,7 @@ function hound(k: Kit, body: THREE.Group, boss: boolean): Rig {
       k.mesh(head, spike(h2, h3, 0.016), bone);
     }
   }
-  k.eyes(head, eye, 0.04, 0.02, 0.07, 0.014, 0.5);
+  k.eyes(head, eye, 0.04, 0.02, 0.07, 0.014, 0.5, true);
   // 首から背中へ燃えるたてがみ
   const flames: THREE.Sprite[] = [];
   const maneCount = boss ? 7 : 5;
@@ -213,7 +213,7 @@ function brute(k: Kit, body: THREE.Group, chief: boolean): Rig {
     k.mesh(head, spike(V(s * 0.07, 0.06, 0), V(s * (chief ? 0.13 : 0.2), 0.1, -0.05), 0.03), skinMat); // 耳
     k.mesh(head, spike(V(s * 0.03, 0.0, 0.08), V(s * 0.035, 0.045, 0.09), 0.008), bone); // 下あごから出た牙
   }
-  k.eyes(head, eye, 0.03, 0.065, 0.075, 0.013, 0.6);
+  k.eyes(head, eye, 0.03, 0.065, 0.075, 0.013, 0.6, true);
   if (chief) {
     // 角の付いた鉄の兜
     k.mesh(head, new THREE.SphereGeometry(0.09, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), metal, V(0, 0.07, -0.005));

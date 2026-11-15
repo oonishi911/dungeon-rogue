@@ -68,7 +68,7 @@ function troll(k: Kit, body: THREE.Group): Rig {
     k.mesh(head, spike(V(s * 0.05, -0.04, 0.1), V(s * 0.065, 0.03, 0.12), 0.016), tusk); // 下あごから上へ伸びる牙
     k.mesh(head, spike(V(s * 0.09, 0.04, 0), V(s * 0.15, 0.07, -0.04), 0.022), skin); // とがった耳
   }
-  k.eyes(head, eye, 0.035, 0.04, 0.09, 0.012, 0.6);
+  k.eyes(head, eye, 0.035, 0.04, 0.09, 0.012, 0.6, true);
   // もつれた長い髪：頭の上から背中へ垂れる房
   k.mesh(head, roughen(new THREE.SphereGeometry(0.108, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.45).rotateX(-0.5), 0.01, 25), hair, V(0, 0.05, -0.01));
   for (let i = 0; i < 9; i++) {
@@ -342,7 +342,7 @@ function yeti(k: Kit, body: THREE.Group): Rig {
     });
     chain(k, head, pts, [0.03, 0.027, 0.023, 0.019, 0.014, 0.008], horn);
   }
-  k.eyes(head, eye, 0.035, 0.035, 0.105, 0.012, 0.6);
+  k.eyes(head, eye, 0.035, 0.035, 0.105, 0.012, 0.6, true);
   const arms = ([-1, 1] as const).map((s) => {
     const g = k.pivot(torso, V(s * 0.27, 0.4, 0));
     g.rotation.z = s * 0.14;
