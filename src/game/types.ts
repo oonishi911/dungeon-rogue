@@ -54,7 +54,7 @@ export type ArmorGuard =
   | { kind: 'whole'; element: 'light' | 'dark'; rate: number };
 
 export type ItemEffect =
-  | { kind: 'weapon'; weapon: WeaponType; atk: number } // atk：持つと上がる攻撃力（段階が上がるほど大きい）
+  | { kind: 'weapon'; weapon: WeaponType; atk: number; mag: number } // atk：持つと上がる攻撃力、mag：持つと上がる魔力（魔法の強さに足される。どちらも段階が上がるほど大きい）
   | { kind: 'armor'; guard: ArmorGuard; def: number } // def：持つと上がる守り（段階が上がるほど大きい。1段目は0）
   | { kind: 'heal'; hp: number }
   | { kind: 'food'; satiety: number }

@@ -92,8 +92,8 @@ export const DUNGEON_LIMITS = {
 export const MAGIC_FIELDS: { key: keyof MagicSettings; label: string; min: number; max: number; step: number; hint: string; example: string }[] = [
   { key: 'maxMp', label: '魔力の最大', min: 0, max: 200, step: 1, hint: '呪文を唱えるのに使う魔力の最大です。探索を始めるときは、魔力がいっぱいです。', example: '10で、使う魔力が2の呪文なら、続けて5回唱えられます。' },
   { key: 'regenEvery', label: '魔力が1回復する行動数', min: 1, max: 100, step: 1, hint: 'この行動数ごとに、魔力が1回復します。小さいほど、早く回復します。', example: '5なら、5行動ごとに魔力が1回復（50行動で10回復）。' },
-  { key: 'power', label: '魔法の強さ', min: 0, max: 100, step: 1, hint: '呪文のダメージのもとです。ダメージ＝魔法の強さ×呪文の倍率（敵の防御は無視する）。', example: '8で、倍率1.5の呪文なら、ダメージは12。' },
-  { key: 'staffPower', label: '杖での魔法の強さの倍率', min: 1, max: 5, step: 0.1, hint: '杖を持っているとき、魔法の強さに掛ける倍率です。', example: '1.5なら、魔法の強さ8が12になります（1なら、変わりません）。' },
+  { key: 'power', label: '魔法の強さ', min: 0, max: 100, step: 1, hint: '呪文のダメージのもとです。ダメージ＝（魔法の強さ＋武器の魔力）×呪文の倍率（敵の防御は無視する）。武器の魔力は「品物」タブで決めます。', example: '8で、倍率1.5の呪文なら、ダメージは12。魔力2の武器を持てば、（8＋2）×1.5＝15。' },
+  { key: 'staffPower', label: '杖での魔法の強さの倍率', min: 1, max: 5, step: 0.1, hint: '杖を持っているとき、魔法の強さ（武器の魔力を足したあと）に掛ける倍率です。', example: '1.5なら、魔法の強さ8が12になります（1なら、変わりません）。杖の魔力が2なら、（8＋2）×1.5＝15。' },
   { key: 'staffMp', label: '杖で増える魔力の最大', min: 0, max: 100, step: 1, hint: '杖を持っているとき、魔力の最大に足される分です。', example: '魔力の最大が10で、これが5なら、杖を持つと15になります。' },
   { key: 'noiseRadius', label: '唱えると気付かれる距離', min: 0, max: 20, step: 1, hint: '呪文を唱えると、このマス数以内の、うろついている敵が気付きます（0：気付かない）。', example: '5なら、唱えた場所から5マス以内の敵が気付きます。' },
 ];

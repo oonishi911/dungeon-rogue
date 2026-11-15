@@ -17,9 +17,15 @@ export function startMagic(loadout: readonly ItemId[], M: MagicSettings): { spel
   return { spells: [...new Set(spells)], mp: maxMp, maxMp };
 }
 
-/** 魔法の強さ（M はダンジョンの設定の魔法）。杖を持っていると強くなる */
+/** 持っている武器の魔力（武器の段階ごとの設定 items.json の mag）。武器がなければ0 */
+export function weaponMagic(weapon: ItemId | null): number {
+  const effect = weapon ? ITEMS[weapon].effect : null;
+  return effect?.kind === 'weapon' ? effect.mag : 0;
+}
+
+/** 魔法の強さ（M はダンジョンの設定の魔法）。ダンジョンの魔法の強さに武器の魔力を足し、杖を持っていると、その合計がさらに強くなる */
 export function magicPower(stats: PlayerStats, M: MagicSettings): number {
-  return M.power * (stats.weapon && isStaff(stats.weapon) ? M.staffPower : 1);
+  return (M.power + weaponMagic(stats.weapon)) * (stats.weapon && isStaff(stats.weapon) ? M.staffPower : 1);
 }
 
 export function isStaff(id: ItemId): boolean {

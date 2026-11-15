@@ -1,6 +1,6 @@
 // 品物の設定（src/game/items.json）を読み、正しい形かを確かめる。
 // items.json には、店で売るすべての品物の名前と値段がある。武器と防具は種類ごとに10段階あり、段階ごとに性能も決める
-// （武器：攻撃力、防具：守りと、効く属性のダメージを何%に減らすか）。情報屋の情報料（information）もここにある。
+// （武器：攻撃力と魔力［魔法の強さに足される。magic.ts］、防具：守りと、効く属性のダメージを何%に減らすか）。情報屋の情報料（information）もここにある。
 // 品物の働き（回復薬はHPを15回復する、など）と、武器と体質の相性・防具の効く属性は、ここではなくプログラムで決まっている。
 // items.json は、開発用の管理画面（?view=admin の「品物」タブ。src/ui/ItemPanels.tsx）から書き換えて公開できる。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
@@ -35,8 +35,8 @@ export const SPELLBOOK_IDS = [
 ] as const satisfies readonly ItemId[];
 export type SpellbookId = (typeof SPELLBOOK_IDS)[number];
 
-/** 武器1段分。atk：持つと上がる攻撃力 */
-export type WeaponTier = { name: string; atk: number; price: number };
+/** 武器1段分。atk：持つと上がる攻撃力、mag：持つと上がる魔力（魔法の強さに足される。0なら上がらない） */
+export type WeaponTier = { name: string; atk: number; mag: number; price: number };
 /** 防具1段分。def：持つと上がる守り（受けるダメージから引く）、rate：効く属性のダメージを何%に減らすか */
 export type ArmorTier = { name: string; def: number; rate: number; price: number };
 /** 道具・呪文書1つ分 */
@@ -59,6 +59,7 @@ export const ITEM_LIMITS = {
   name: { max: 16 },
   price: { min: 1, max: 99999 },
   atk: { min: 0, max: 99 },
+  mag: { min: 0, max: 99 },
   def: { min: 0, max: 99 },
   rate: { min: 0, max: 100 },
   info: { min: 0, max: 99999 }, // 情報料（0なら、はっきり聞くのも無料）
@@ -160,7 +161,8 @@ export function itemDefs(master: ItemMaster): Record<ItemId, ItemDef> {
   for (const base of WEAPON_BASES) {
     master.weapons[base].forEach((t, i) => {
       const id = gearId(base, i + 1);
-      out[id] = { id, name: t.name, price: t.price, description: `攻撃力+${t.atk}。${WEAPON_INFO[base].text}`, effect: { kind: 'weapon', weapon: base, atk: t.atk } };
+      const stats = t.mag > 0 ? `攻撃力+${t.atk}、魔力+${t.mag}` : `攻撃力+${t.atk}`;
+      out[id] = { id, name: t.name, price: t.price, description: `${stats}。${WEAPON_INFO[base].text}`, effect: { kind: 'weapon', weapon: base, atk: t.atk, mag: t.mag } };
     });
   }
   for (const base of ARMOR_BASES) {
@@ -211,8 +213,10 @@ export function itemProblems(data: unknown): string[] {
       if (!isObj(t)) return void out.push(`${at}：読めない`);
       checkName(at, t.name);
       checkInt(at, '値段', t.price, ITEM_LIMITS.price);
-      if (kind === 'weapon') checkInt(at, '攻撃力', t.atk, ITEM_LIMITS.atk);
-      else {
+      if (kind === 'weapon') {
+        checkInt(at, '攻撃力', t.atk, ITEM_LIMITS.atk);
+        checkInt(at, '魔力', t.mag, ITEM_LIMITS.mag);
+      } else {
         checkInt(at, '守り', t.def, ITEM_LIMITS.def);
         checkInt(at, 'ダメージの割合', t.rate, ITEM_LIMITS.rate);
       }
@@ -221,6 +225,7 @@ export function itemProblems(data: unknown): string[] {
       if (!prev) return;
       if (typeof t.price === 'number' && typeof prev.price === 'number' && t.price < prev.price) out.push(`${at}：値段が${i}段目（${prev.price}G）より安い`);
       if (kind === 'weapon' && typeof t.atk === 'number' && typeof prev.atk === 'number' && t.atk < prev.atk) out.push(`${at}：攻撃力が${i}段目より低い`);
+      if (kind === 'weapon' && typeof t.mag === 'number' && typeof prev.mag === 'number' && t.mag < prev.mag) out.push(`${at}：魔力が${i}段目より低い`);
       if (kind === 'armor') {
         if (typeof t.def === 'number' && typeof prev.def === 'number' && t.def < prev.def) out.push(`${at}：守りが${i}段目より低い`);
         if (typeof t.rate === 'number' && typeof prev.rate === 'number' && t.rate > prev.rate) out.push(`${at}：ダメージの割合が${i}段目より大きい（弱い）`);
@@ -263,7 +268,7 @@ export function serializeItemMaster(master: ItemMaster): string {
 /** 変えたところを、日本語の文で並べる（公開の欄とコミットの説明に使う） */
 export function describeItemChanges(before: ItemMaster, after: ItemMaster): string[] {
   const out: string[] = [];
-  const tierFields = { name: '名前', atk: '攻撃力', def: '守り', rate: 'ダメージの割合', price: '値段' } as const;
+  const tierFields = { name: '名前', atk: '攻撃力', mag: '魔力', def: '守り', rate: 'ダメージの割合', price: '値段' } as const;
   const diff = (label: string, a: Record<string, unknown>, b: Record<string, unknown>) => {
     for (const [k, word] of Object.entries(tierFields)) {
       if (k in b && a[k] !== b[k]) out.push(`${label}：${word} ${String(a[k])} → ${String(b[k])}`);
