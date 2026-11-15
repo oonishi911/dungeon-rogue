@@ -5,8 +5,9 @@ import { enemyDef } from '../game/enemies';
 import type { ExploreState } from '../game/exploreTypes';
 import type { DungeonFile } from '../game/genMaster';
 import type { ItemId, SpellId } from '../game/types';
+import { SKILL_TEXTS, skillOf } from '../game/weaponSkill';
 import { ENEMY_MARK } from './exploreRender';
-import { SPELL_KEYS } from './exploreKeys';
+import { SKILL_KEY, SPELL_KEYS } from './exploreKeys';
 import { LogList, Meter } from './ExploreParts';
 import { ItemIcon, ItemLabel, SpellIcon } from './ItemIcon';
 
@@ -20,13 +21,15 @@ interface ExploreSideProps {
   recentLog: string[];
   infoOpen: boolean; // スマホで、装備・敵・記録をまとめた画面を開いているか（PCでは常に横に出ている）
   onCast: (spell: SpellId) => void;
+  onSkill: () => void;
   onUseItem: (item: ItemId) => void;
   onCloseInfo: () => void;
   onRetire: () => void;
 }
 
-export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibleEnemies, recentLog, infoOpen, onCast, onUseItem, onCloseInfo, onRetire }: ExploreSideProps) {
+export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibleEnemies, recentLog, infoOpen, onCast, onSkill, onUseItem, onCloseInfo, onRetire }: ExploreSideProps) {
   const { stats } = state;
+  const skill = skillOf(stats.weapon); // 持っている武器の固有技（素手なら無い）
   return (
     <aside className="explore__side">
       <div className="explore__status">
@@ -46,6 +49,25 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
       </div>
 
       <div className="explore__controls">
+        {skill && (
+          // 武器の固有技：通常攻撃を当てるとゲージ（丸）がたまり、満タンで押せる
+          <button
+            type="button"
+            className={`explore__use explore__skill${state.skill >= skill.max ? ' explore__skill--ready' : ''}`}
+            onClick={onSkill}
+            disabled={ended || state.skill < skill.max}
+            aria-label={`${skill.name}（技ゲージ ${state.skill}/${skill.max}）`}
+            title={`${skill.name}：${SKILL_TEXTS[skill.weapon]}（通常攻撃を${skill.max}回当てると使える。主人公が向いている方向に出す）`}
+          >
+            <span className="explore__key">{SKILL_KEY.toUpperCase()}</span>
+            {skill.name}
+            <span className="explore__pips" aria-hidden="true">
+              {Array.from({ length: skill.max }, (_, i) => (
+                <span key={i} className={`explore__pip${i < state.skill ? ' explore__pip--on' : ''}`} />
+              ))}
+            </span>
+          </button>
+        )}
         {state.spells.length > 0 && (
           <ul className="explore__items explore__spells" aria-label="呪文">
             {state.spells.map((spell, i) => {

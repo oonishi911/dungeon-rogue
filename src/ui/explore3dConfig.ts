@@ -49,6 +49,11 @@ export const FOE_FX = {
   shield: { size: 0.62, thick: 0.07, reach: 0.4, y: 0.5, color: 0xbfc7d1 }, // 盾持ちの盾：板の大きさ・厚さ・体からの距離・高さ・色
   field: { y: 0.02, size: 0.94, fireOpacity: 0.85, frostOpacity: 0.8, lastTurn: 0.55, flicker: 0.18 }, // 床の跡：床からの高さ・1マスに対する大きさ・濃さ・最後のターンの薄さ・燃える床のちらつき
   steam: { ms: 800, count: 4, rise: 0.9, size: 0.7 }, // 水蒸気：立ち上る時間・粒の数・立ち上る高さ・粒の大きさ（マス）
+  skill: {
+    slash: { ms: 220, stagger: 170, size: 1.5, y: 0.55 }, // 剣の連斬り：斬撃の残光が消えるまで・2回目までの間隔・大きさ（マス）・高さ
+    slam: { ms: 340, from: 0.4, to: 1.9, y: 0.06, color: 0xffd27a }, // 槌の地響き：輪が広がる時間・はじめと終わりの半径（マス）・床からの高さ・色
+    bolt: { color: 0xb48cff, scale: 1.7 }, // 杖の魔力弾：玉の色・矢の玉に対する大きさ
+  },
   marks: { charge: '#ff5a4a', bump: '#ffe27a', summon: '#c08aff', blocked: '#9fb4c8' }, // 突進の構え・壁にぶつかった・召喚・盾に防がれたときの色
 } as const;
 export const REMEMBERED = 0.3; // 一度見たが今は見えていないマスの明るさ

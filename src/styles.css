@@ -674,6 +674,50 @@ button {
   }
 }
 
+/* 武器の固有技のボタン：技ゲージを丸で右に出す。満タンになると光る */
+.explore__skill {
+  border-color: var(--pine-line);
+}
+
+.explore__pips {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 0.2rem;
+}
+
+.explore__pip {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  border: 1px solid var(--bone-dim);
+}
+
+.explore__pip--on {
+  background: #f0c46a;
+  border-color: #f0c46a;
+}
+
+.explore__skill--ready {
+  border-color: #f0c46a;
+  box-shadow: 0 0 0.6rem rgba(240, 196, 106, 0.55);
+}
+
+.explore__skill:disabled {
+  opacity: 0.75; /* たまっていないときも、ゲージの進みが読めるように、ほかのボタンほどは薄くしない */
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .explore__skill--ready {
+    animation: skill-ready 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes skill-ready {
+  50% {
+    box-shadow: 0 0 1rem rgba(240, 196, 106, 0.9);
+  }
+}
+
 /* 呪文のボタン：使う魔力を右に小さく出す */
 .explore__cost {
   margin-left: auto;
