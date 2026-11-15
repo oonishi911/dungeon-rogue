@@ -126,6 +126,7 @@ export function Admin() {
       </header>
 
       <AdminTabs
+        wrap
         label="設定の種類"
         idPrefix="admin"
         tabs={ADMIN_TABS.map((t) => ({ id: t.id, label: t.label, changed: tabChanged(t.id, base, draft, current) }))}
@@ -150,11 +151,18 @@ export function Admin() {
         </p>
       )}
 
-      <p className="admin__lead">
-        値を変えて「変更を公開」を押すと、変えたところが一度にリポジトリに保存され、自動チェックが通れば数分で公開版に反映されます。
-        「敵」は、すべてのダンジョンで使う敵のデータ（マスター）です。「品物」は、店で売る品物の名前・値段と、武器・防具の段階ごとの性能です。そのほかのタブは、上の欄で選んだダンジョンの設定です。
-        プレイヤーは、遊ぶ前にダンジョンを選びます。タブやダンジョンをまたいで変えても、まとめて公開できます。
-      </p>
+      <ul className="admin__notelist admin__lead">
+        <li>
+          <b>使い方</b>：値を変えて「変更を公開」を押すと、変えたところが一度にリポジトリに保存され、自動チェックが通れば数分で公開版に反映されます。変えかけの内容は、このブラウザに残ります。
+        </li>
+        <li>
+          <b>「敵」「品物」</b>：すべてのダンジョンで使う、敵のデータ（マスター）と、店で売る品物の名前・値段・性能です。
+        </li>
+        <li>
+          <b>そのほかのタブ</b>：上の欄で選んだダンジョン1つの設定です。プレイヤーは、遊ぶ前にダンジョンを選びます。
+          <span className="gen__example">例：「標準」を直したあと、ダンジョンを切り替えて別のダンジョンも直し、まとめて公開できます。</span>
+        </li>
+      </ul>
 
       {isDungeonTab(tab) && <DungeonPicker base={base} draft={draft} current={current} onSelect={selectDungeon} />}
 

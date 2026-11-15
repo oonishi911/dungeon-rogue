@@ -2705,3 +2705,96 @@ button {
   font-weight: 400;
   white-space: nowrap;
 }
+
+/* 値の説明：例は、説明の下に行を変えて、少し目立たせて出す。説明が長い画面の注意書きは、箇条書きにする */
+.gen__example {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--bone);
+  font-size: var(--step--1);
+  line-height: 1.6;
+}
+
+.gen__example::before {
+  content: '';
+}
+
+.admin__note .gen__example,
+.admin__notelist .gen__example {
+  margin: 0.15rem 0 0;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--pine-line);
+}
+
+.admin__notelist {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  color: var(--bone-dim);
+  font-size: var(--step--1);
+  line-height: 1.7;
+  list-style: none;
+}
+
+.admin__notelist b {
+  color: var(--bone);
+}
+
+/* 狭い画面：タブは横にスクロールさせず、枠つきのボタンにして、折り返して全部見せる。入力欄・選ぶ欄・ボタンは、押しやすい高さにそろえる */
+@media (max-width: 48rem) {
+  .admin__tabs--wrap {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+    border-bottom: 0;
+  }
+
+  .admin__tabs--wrap .admin__tab {
+    justify-content: center;
+    min-height: 2.75rem;
+    padding: 0.4rem 0.35rem;
+    border: 1px solid var(--pine-line);
+    border-radius: 8px;
+    background: var(--pine-deep);
+    font-size: 0.875rem;
+    line-height: 1.3;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .admin__tabs--wrap .admin__tab[aria-selected='true'] {
+    border-color: var(--bone);
+  }
+
+  .admin .admin__select,
+  .admin .admin__name,
+  .admin .admin__number,
+  .admin .admin__text,
+  .admin select,
+  .admin input[type='text'],
+  .admin input[type='search'],
+  .admin input[type='password'],
+  .admin textarea {
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
+
+  .admin .explore__wait {
+    min-height: 2.75rem;
+  }
+
+  .admin .admin__check {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .gen__spell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gen__spell-field .admin__number {
+    width: 100%;
+  }
+}

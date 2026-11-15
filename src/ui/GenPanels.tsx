@@ -27,6 +27,7 @@ import {
   type RoomSettings,
 } from '../game/genMaster';
 import { orderError } from '../game/fieldCheck';
+import { SPELL_HINT_LIST } from '../game/genHints';
 import { generateFloor, type FloorMap } from '../game/map';
 import { floorParams } from '../game/floorParams';
 import type { SpellId } from '../game/types';
@@ -54,13 +55,25 @@ export function FloorsPanel({ base, draft, setDraft }: GenPanelProps) {
         敵の数・HPの回復の速さは、広さから自動で決まります。難しさの段階を作りたいときは、ダンジョンを複製して、広さや満腹度を変えた別のダンジョンにします。
       </p>
       <div className="gen__fields">
-        <Field label={GEN_LABELS.floorCount} hint="通常の階の数。その下に、ボスの階が1つある。階を増やしたら、満腹度も見直す">
+        <Field
+          label={GEN_LABELS.floorCount}
+          hint="通常の階の数です。その下に、ボスの階が1つ付きます。階を増やしたら、満腹度も見直してください。"
+          example={`今の${f.count}なら、通常の階が${f.count}つと、ボスの階が1つで、ぜんぶで${f.count + 1}階。`}
+        >
           <NumberField {...GEN_LIMITS.floorCount} value={f.count} changed={f.count !== bf.count} base={bf.count} label={GEN_LABELS.floorCount} onChange={(v) => setFloors({ count: v })} />
         </Field>
-        <Field label={GEN_LABELS.floorSize} hint={`一辺のマス数（${f.size}×${f.size}マス）`}>
+        <Field
+          label={GEN_LABELS.floorSize}
+          hint="階の一辺のマス数です。大きいほど広く、歩く距離が長くなります（狭いほど、HPの回復が速くなります）。"
+          example={`今の${f.size}なら、${f.size}×${f.size}＝${f.size ** 2}マス。20なら小さな階（400マス）、40なら広めの階（1600マス）。`}
+        >
           <NumberField {...GEN_LIMITS.floorSize} value={f.size} changed={f.size !== bf.size} base={bf.size} label={GEN_LABELS.floorSize} onChange={(v) => setFloors({ size: v })} />
         </Field>
-        <Field label={GEN_LABELS.satiety} hint={`探索のはじめの満腹度。これが上限。マップの面積（${f.size ** 2}）の${(f.satiety / f.size ** 2).toFixed(1)}倍`}>
+        <Field
+          label={GEN_LABELS.satiety}
+          hint="探索のはじめの満腹度で、食べ物で回復できる上限でもあります。1行動（1歩・1回の攻撃など）ごとに1減り、0になると、HPが1ずつ減ります。"
+          example={`今の${f.satiety}なら、食べ物なしで、およそ${f.satiety}行動歩けます（階の面積${f.size ** 2}マスの${(f.satiety / f.size ** 2).toFixed(1)}倍）。`}
+        >
           <NumberField {...GEN_LIMITS.satiety} value={f.satiety} changed={f.satiety !== bf.satiety} base={bf.satiety} label={GEN_LABELS.satiety} onChange={(v) => setFloors({ satiety: v })} />
         </Field>
       </div>
@@ -73,14 +86,26 @@ export function RoomsPanel({ base, draft, setDraft }: GenPanelProps) {
   const r = draft.rooms;
   const br = base.rooms;
   const setRooms = (patch: Partial<RoomSettings>) => setDraft((d) => ({ ...d, rooms: { ...d.rooms, ...patch } }));
+  // 部屋を置こうとする回数（map.ts と同じ式）：迷路のセル数（奇数座標のマス）× 部屋の多さ
+  const size = draft.floors.size;
+  const cells = Math.floor((size - 1) / 2) ** 2;
+  const tries = Math.round(cells * r.attemptRate);
   return (
     <section className="admin__section" role="tabpanel" id="admin-rooms-panel" aria-labelledby="admin-rooms-tab">
       <h2 className="admin__heading">小部屋</h2>
       <div className="gen__fields">
-        <Field label={GEN_LABELS.attemptRate} hint="大きいほど部屋が増え、迷路の通路が減る（0：部屋なし）。通路が減ると、行き止まりに置く宝箱と強敵も少し減る">
+        <Field
+          label={GEN_LABELS.attemptRate}
+          hint={`部屋の数の目安です。迷路のマスの数（今の広さ${size}×${size}では${cells}マス）にこの値を掛けた回数だけ、ランダムな場所に部屋を置こうとします。すでに部屋がある所には置けないので、できる部屋の数は、この回数より少なくなります。大きいほど部屋が増え、迷路の通路が減ります（0：部屋なし）。通路が減ると、行き止まりに置く宝箱と強敵も少し減ります。`}
+          example={`今の${r.attemptRate}なら、${cells}マス × ${r.attemptRate} ＝ ${tries}回ためします。0.1なら${Math.round(cells * 0.1)}回、0.3なら${Math.round(cells * 0.3)}回。実際にできる部屋の数は、下の見本の「小部屋」で確かめられます。`}
+        >
           <NumberField {...GEN_LIMITS.attemptRate} slider value={r.attemptRate} changed={r.attemptRate !== br.attemptRate} base={br.attemptRate} label={GEN_LABELS.attemptRate} onChange={(v) => setRooms({ attemptRate: v })} />
         </Field>
-        <Field label={GEN_LABELS.minSize} hint="部屋の一辺のマス数（奇数）">
+        <Field
+          label={GEN_LABELS.minSize}
+          hint="部屋の一辺のマス数（奇数）の、いちばん小さい値です。部屋の縦と横は、最小から最大までの奇数から、別々にランダムに決まります。"
+          example="最小3・最大7なら、縦も横も、3・5・7のどれか（3×3の小さな部屋から、7×7の大きな部屋まで）。"
+        >
           <NumberField
             {...GEN_LIMITS.roomSize}
             odd
@@ -91,7 +116,11 @@ export function RoomsPanel({ base, draft, setDraft }: GenPanelProps) {
             onChange={(v) => setRooms({ minSize: v })}
           />
         </Field>
-        <Field label={GEN_LABELS.maxSize} hint="小さくすると、部屋の数が増えて一つ一つが小さくなる">
+        <Field
+          label={GEN_LABELS.maxSize}
+          hint="部屋の一辺のマス数（奇数）の、いちばん大きい値です。大きくすると、大きな部屋ができますが、部屋どうしが重なって置けない分、数は減ります。"
+          example="最小も最大も5なら、5×5マスの同じ大きさの部屋ばかりになります。"
+        >
           <NumberField
             {...GEN_LIMITS.roomSize}
             odd
@@ -116,10 +145,18 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
     <section className="admin__section" role="tabpanel" id="admin-placement-panel" aria-labelledby="admin-placement-tab">
       <h2 className="admin__heading">敵の数と置き方</h2>
       <div className="gen__fields">
-        <Field label={GEN_LABELS.amount} hint="通常の敵の数（1：今の数。広さに合わせて増える分は、そのまま）。強敵とボスは変わらない">
+        <Field
+          label={GEN_LABELS.amount}
+          hint="通常の敵の数にかける倍率です。1が、広さから決まる今の数です。強敵とボスの数は変わりません。"
+          example="1のとき10体なら、1.5で15体、0.5で5体、0で通常の敵がいなくなります。"
+        >
           <NumberField {...GEN_LIMITS.amount} slider value={e.amount} changed={e.amount !== be.amount} base={be.amount} label={GEN_LABELS.amount} onChange={(v) => setEnemies({ amount: v })} />
         </Field>
-        <Field label={GEN_LABELS.placement} hint="部屋だけにすると、通常の敵をすべて部屋に集める。通路だけにすると、部屋には敵を置かない（群れ部屋も作らない）">
+        <Field
+          label={GEN_LABELS.placement}
+          hint="通常の敵を置く場所です。「部屋にも通路にも」は、部屋も通路も置く場所になります（偏りは、下の「部屋の選ばれやすさ」で決めます）。「部屋だけ」は、すべて部屋に集めます。「通路だけ」は、部屋には置きません（群れ部屋も作りません）。"
+          example="広い部屋の中で戦いたいなら「部屋だけ」、通路で不意に出会ってほしいなら「通路だけ」。"
+        >
           <select
             className={cls('admin__select', e.placement !== be.placement)}
             value={e.placement}
@@ -135,7 +172,8 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
         </Field>
         <Field
           label={GEN_LABELS.roomWeight}
-          hint={e.placement === 'mixed' ? '部屋の床が、通路の床の何倍選ばれやすいか（1：同じ、0：部屋に置かない）' : '「部屋にも通路にも」のときだけ使う'}
+          hint={e.placement === 'mixed' ? '部屋の床1マスが、通路の床1マスの何倍、敵を置く場所に選ばれやすいかです。' : '「敵を置く場所」が「部屋にも通路にも」のときだけ使います。'}
+          example={e.placement === 'mixed' ? '1なら、部屋と通路で同じ。2なら、部屋の床は通路の2倍選ばれやすい（部屋に敵が多くなる）。0なら、部屋には置かない。' : undefined}
         >
           <NumberField
             {...GEN_LIMITS.weight}
@@ -145,10 +183,18 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
             onChange={(v) => setEnemies({ roomWeight: v })}
           />
         </Field>
-        <Field label={GEN_LABELS.nestChance} hint="部屋ごとに、この確率で敵がまとまっている部屋にする（0〜1。0：作らない）。群れの敵は、通常の敵とは別に足す">
+        <Field
+          label={GEN_LABELS.nestChance}
+          hint="部屋ごとに、この確率で、敵がまとまっている「群れ部屋」にします（0〜1）。群れの敵は、通常の敵とは別に足されます。"
+          example="0.2なら、部屋が10個あるとき、およそ2部屋が群れ部屋になります。0なら作らず、1ならすべての部屋が群れ部屋です。"
+        >
           <NumberField {...GEN_LIMITS.nestChance} slider value={e.nestChance} changed={e.nestChance !== be.nestChance} base={be.nestChance} label={GEN_LABELS.nestChance} onChange={(v) => setEnemies({ nestChance: v })} />
         </Field>
-        <Field label={GEN_LABELS.nestMin} hint="部屋に入りきらないときは、入る分だけ置く">
+        <Field
+          label={GEN_LABELS.nestMin}
+          hint="群れ部屋に置く敵の数の下限です。部屋に入りきらないときは、入る分だけ置きます。"
+          example="最小2・最大4なら、群れ部屋ごとに、2〜4体のどれかを置きます。"
+        >
           <NumberField
             {...GEN_LIMITS.nestCount}
             value={e.nestMin}
@@ -158,7 +204,7 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
             onChange={(v) => setEnemies({ nestMin: v })}
           />
         </Field>
-        <Field label={GEN_LABELS.nestMax}>
+        <Field label={GEN_LABELS.nestMax} hint="群れ部屋に置く敵の数の上限です（最小以上にします）。">
           <NumberField
             {...GEN_LIMITS.nestCount}
             value={e.nestMax}
@@ -168,7 +214,11 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
             onChange={(v) => setEnemies({ nestMax: v })}
           />
         </Field>
-        <Field label={GEN_LABELS.stayInRoom} hint="部屋に置いた敵は、主人公に気付くまで部屋の中だけを歩く（気付いたら追ってくる）">
+        <Field
+          label={GEN_LABELS.stayInRoom}
+          hint="オンだと、部屋に置いた敵は、主人公に気付くまで、部屋の中だけを歩きます（気付いたら、部屋を出て追ってきます）。オフだと、気付く前から部屋の外も歩き回ります。"
+          example="オンにすると、部屋の外の通路を歩いている間は、部屋の敵に襲われにくくなります。"
+        >
           <input
             type="checkbox"
             className={cls('admin__check', e.stayInRoom !== be.stayInRoom)}
@@ -177,7 +227,11 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
             onChange={(ev) => setEnemies({ stayInRoom: ev.target.checked })}
           />
         </Field>
-        <Field label={GEN_LABELS.bossMinions} hint="ボスの部屋に、ボスといっしょに置く雑魚敵の数。種類は、その属性の道中の敵から選ぶ（0：ボスだけ）">
+        <Field
+          label={GEN_LABELS.bossMinions}
+          hint="ボスの部屋に、ボスといっしょに置く雑魚敵の数です。種類は、その属性の道中の敵（「ダンジョンに出る敵」のタブ）から選ばれます。"
+          example="3なら、ボスのほかに雑魚敵が3体。0なら、ボスだけです。"
+        >
           <NumberField
             {...GEN_LIMITS.bossMinions}
             value={e.bossMinions}
@@ -206,15 +260,15 @@ export function GrowthPanel({ base, draft, setDraft }: GenPanelProps) {
       <div className="gen__fields">
         {(
           [
-            ['expBase', '経験値がこれだけたまると、レベル1→2に上がる'],
-            ['expStep', 'レベルが上がるたびに、次に要る経験値がこれだけ増える'],
-            ['hpPerLevel', '上がった分だけ、HPも回復する'],
-            ['atkPerLevel', ''],
-            ['maxLevel', ''],
-            ['eliteRate', '強敵は、通常の敵の金貨と経験値のこの倍。強敵は必ず宝箱（金貨と良い道具）も落とす'],
+            ['expBase', '経験値がこれだけたまると、レベル1→2に上がります。', '10なら、経験値が10たまった時点でレベル2。'],
+            ['expStep', 'レベルが上がるたびに、次のレベルに要る経験値が、これだけ増えます。', '最初が10で、増える分が5なら、1→2は10、2→3は15、3→4は20。下の表でも確かめられます。'],
+            ['hpPerLevel', '1レベル上がるごとに増える最大HPです。上がった分だけ、HPも回復します。', '2なら、レベル3で最大HPが4増えます（2×2レベル分）。'],
+            ['atkPerLevel', '1レベル上がるごとに増える攻撃です。敵に与えるダメージ（攻撃−敵の防御）が、その分だけ増えます。', '1なら、レベル3で攻撃が2増え、毎回のダメージも2増えます。'],
+            ['maxLevel', 'このレベルより上には、上がりません。', '10なら、レベル10が上限です。'],
+            ['eliteRate', '強敵を倒したときに得る金貨と経験値が、通常の敵の何倍になるかです。強敵は、必ず宝箱（金貨と良い道具）も落とします。', '2なら、通常の敵が金貨10・経験値5のとき、強敵は金貨20・経験値10。'],
           ] as const
-        ).map(([key, hint]) => (
-          <Field key={key} label={GEN_LABELS[key]} hint={hint || undefined}>
+        ).map(([key, hint, example]) => (
+          <Field key={key} label={GEN_LABELS[key]} hint={hint} example={example}>
             <NumberField {...GEN_LIMITS[key]} value={g[key]} changed={g[key] !== bg[key]} base={bg[key]} label={GEN_LABELS[key]} onChange={(v) => setGrowth({ [key]: v })} />
           </Field>
         ))}
@@ -237,7 +291,7 @@ export function MagicPanel({ base, draft, setDraft }: GenPanelProps) {
       </p>
       <div className="gen__fields">
         {MAGIC_FIELDS.map((f) => (
-          <Field key={f.key} label={f.label} hint={f.hint || undefined}>
+          <Field key={f.key} label={f.label} hint={f.hint || undefined} example={f.example}>
             <NumberField
               min={f.min}
               max={f.max}
@@ -251,6 +305,13 @@ export function MagicPanel({ base, draft, setDraft }: GenPanelProps) {
         ))}
       </div>
       <h3 className="gen__subheading">呪文ごとの設定</h3>
+      <ul className="admin__notelist">
+        {SPELL_HINT_LIST.map((h) => (
+          <li key={h.label}>
+            <b>{h.label}</b>：{h.text}
+          </li>
+        ))}
+      </ul>
       <div className="gen__spells">
         {(Object.keys(SPELL_FIELDS) as SpellId[]).map((spell) => (
           <div key={spell} className="gen__spell">
@@ -331,12 +392,18 @@ function LevelTable({ growth }: { growth: GrowthSettings }) {
   );
 }
 
-function Field(props: { label: string; hint?: string; children: ReactNode }) {
+/** 項目の名前・入力欄・説明（hint）・例（example）。例は、説明の下に、行を変えて出す */
+function Field(props: { label: string; hint?: string; example?: string; children: ReactNode }) {
   return (
     <div className="gen__field">
       <span className="gen__label">{props.label}</span>
       {props.children}
-      {props.hint && <span className="gen__hint">{props.hint}</span>}
+      {(props.hint || props.example) && (
+        <span className="gen__hint">
+          {props.hint}
+          {props.example && <span className="gen__example">例：{props.example}</span>}
+        </span>
+      )}
     </div>
   );
 }

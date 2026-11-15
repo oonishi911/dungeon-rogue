@@ -59,6 +59,7 @@ export function AboutPanel(props: {
       <p className="admin__note">
         プレイヤーは、遊ぶ前にダンジョンを選びます。ここで決める名前と説明は、その選ぶ画面に出ます。
         ダンジョンの ID（<code>{id}</code>）は、ファイルの名前なので変えられません。
+        <span className="gen__example">例：名前は「最初の祠」（16文字まで）、説明は「はじめて挑むのにちょうどいい、短い洞窟」（80文字まで）。</span>
       </p>
       <div className="gen__fields">
         <div className="gen__field">
@@ -193,6 +194,7 @@ export function PoolPanel(props: { master: EnemyMaster; base: Encounters | undef
         <h2 className="admin__heading">ダンジョンに出る敵（{props.dungeonName}）</h2>
         <p className="admin__note">
           ダンジョンの属性（遊ぶたびに、5つのどれかに決まる）を選んで、その属性のときに出る敵の出やすさを決めます（0：出ない。数が大きいほど出やすい）。ボスは、ボスにした敵から選びます。
+          <span className="gen__example">例：ゴブリン2・大ネズミ1・ほかは0なら、出る敵の3分の2がゴブリン、3分の1が大ネズミ（敵ごとの「出る確率」は、下に出ます）。</span>
         </p>
         <div className="admin__traitpick" role="group" aria-label="ダンジョンの属性">
           {MASTER_TRAITS.map((t) => {
@@ -260,6 +262,7 @@ export function PoolPanel(props: { master: EnemyMaster; base: Encounters | undef
       <p className="admin__note">
         ダンジョンの属性（遊ぶたびに、5つのどれかに決まる）ごとに、出る敵を、敵のマスター（「敵」のタブ）から選びます。
         道中の数字は出やすさです（0：出ない。数が大きいほど出やすい）。ボスは、ボスにした敵から選びます。
+        <span className="gen__example">例：ゴブリン2・大ネズミ1・ほかは0なら、出る敵の3分の2がゴブリン、3分の1が大ネズミ（数字の下の%が、その出る確率です）。</span>
       </p>
       <div className="admin__scroll">
         <table className="admin__table admin__table--grid">
