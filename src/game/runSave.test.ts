@@ -64,6 +64,12 @@ describe('packRun / parseRun', () => {
     expect(run!.state).toEqual({ ...state, hits: [], foes: [], fields: [], cast: null });
   });
 
+  it('技ゲージも、保存して戻せる（ない中断データは、空から）', () => {
+    const state = start();
+    expect(parseRun(saved({ ...state, skill: 3 }))!.state.skill).toBe(3);
+    expect(parseRun(edited(state, (r) => { delete (r.state.current as { skill?: number }).skill; }))!.state.skill).toBe(0);
+  });
+
   it('敵の行動の個性の状態（向き・構え・召喚）も、保存して戻せる。壊れた値は null', () => {
     const state = start();
     const base = state.enemies[0]!;

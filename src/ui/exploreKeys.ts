@@ -16,6 +16,9 @@ export const KEY_DIRS: Record<string, Dir> = {
 // 呪文は z・x・c キーで唱える（持ってきた順）
 export const SPELL_KEYS = ['z', 'x', 'c'] as const;
 
+// 武器の固有技（技ゲージが満タンのとき）は f キー
+export const SKILL_KEY = 'f';
+
 export const KEY_ACTIONS: Record<string, ExploreAction> = {
   ' ': { kind: 'wait' },
   '.': { kind: 'wait' },

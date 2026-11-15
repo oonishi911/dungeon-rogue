@@ -4,7 +4,9 @@ import { playAttack, playChestOpen, playEnemyAttack, playFootstep, playSpell } f
 import { enemyBase } from '../game/data';
 import { type ExploreState } from '../game/exploreTypes';
 import { samePos } from '../game/exploreSight';
+import type { Pos } from '../game/map';
 import { weaponOf, type DungeonView3D } from './explore3d';
+import { FOE_FX } from './explore3dConfig';
 import { HAPTICS, vibrate } from './haptics';
 
 // 敵の攻撃の音を鳴らす間合い（秒）。afterAttack：主人公も攻撃したとき、その音のあとに鳴らすまで。gap：敵が何体も攻撃したとき、1体ずつずらす間。max：1回の行動で鳴らす数
@@ -13,7 +15,7 @@ const CAST_THEN_HURT_MS = 150; // 呪文の矢が当たってから、敵の攻�
 
 /**
  * prev から next へ1手進んだときの演出を始める。
- * 返す値は、呪文の矢が当たるまでのミリ秒（呪文を唱えていなければ 0）。そのあいだは次の行動を待たせる
+ * 返す値は、呪文の矢・杖の魔力弾が当たるまでのミリ秒（なければ 0）。そのあいだは次の行動を待たせる
  */
 export function playFeedback(prev: ExploreState, next: ExploreState, view3d: DungeonView3D | null): number {
   // 攻撃したとき・攻撃されたときは、画面を少し拡大縮小し、ダメージの数字を出す（3D表示のみ）
@@ -25,16 +27,27 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
     impactMs = view3d?.castSpell(next.cast, prev.player) ?? 0;
     playSpell(next.cast.spell);
   }
-  const foeMs = view3d?.playFoes(next.foes) ?? 0; // 遠距離の矢が当たるまで（矢に当たった側のダメージの数字は、そのあとに出す）
+  const foeMs = view3d?.playFoes(next.foes) ?? 0; // 遠距離の矢・杖の魔力弾が当たるまで（当たった側のダメージの数字は、そのあとに出す）
+  const skill = next.foes.find((f) => f.kind === 'skill'); // 武器の固有技を出したとき
   const struck = next.cast ? undefined : next.hits.find((hit) => hit.kind === 'dealt' && !hit.slip);
   if (struck) {
     view3d?.heroAttack(struck.at);
     playAttack(weaponOf(next.stats.weapon));
+    // 剣の連斬りは、2回目の斬撃のときも武器を振る
+    if (skill?.kind === 'skill' && skill.weapon === 'sword') {
+      window.setTimeout(() => {
+        view3d?.heroAttack(struck.at);
+        playAttack('sword');
+      }, FOE_FX.skill.slash.stagger);
+    }
   }
   // 敵に攻撃されたときは、敵の体質ごとの音を鳴らす。主人公の攻撃の音のあと、敵ごとに少しずつずらして鳴らす
   const attackers = next.hits.flatMap((hit) => (hit.kind === 'taken' && hit.by ? [{ enemy: enemyBase(hit.by), late: hit.ranged ? foeMs / 1000 : 0 }] : [])).slice(0, ENEMY_SOUND.max);
   attackers.forEach(({ enemy, late }, i) => playEnemyAttack(enemy, (struck ? ENEMY_SOUND.afterAttack : 0) + (impactMs > 0 ? (impactMs + CAST_THEN_HURT_MS) / 1000 : 0) + late + i * ENEMY_SOUND.gap));
+  const shown: Pos[] = []; // 同じマスに続けて数字を出すとき（連斬りの2回目）は、少しずらす
   for (const hit of next.hits) {
+    const again = hit.kind === 'dealt' && !hit.slip ? shown.filter((p) => samePos(p, hit.at)).length : 0;
+    if (hit.kind === 'dealt' && !hit.slip) shown.push(hit.at);
     const show = () => {
       // 出血のダメージは、数字だけを出す（武器を振る・画面を拡大する・振動はしない）
       if (hit.slip) {
@@ -50,7 +63,9 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
       else vibrate(next.outcome === 'defeated' ? HAPTICS.defeated : HAPTICS.hurt);
     };
     // 呪文の矢のあとに敵が攻撃してきたときは、矢が当たってから見せる
-    const delay = Math.max(impactMs > 0 ? impactMs + (hit.kind === 'taken' ? CAST_THEN_HURT_MS : 0) : 0, hit.kind === 'taken' && hit.ranged ? foeMs : 0);
+    const delay =
+      Math.max(impactMs > 0 ? impactMs + (hit.kind === 'taken' ? CAST_THEN_HURT_MS : 0) : 0, hit.kind === 'taken' && hit.ranged ? foeMs : 0, hit.kind === 'dealt' && skill?.kind === 'skill' && skill.weapon === 'staff' ? foeMs : 0) +
+      again * FOE_FX.skill.slash.stagger;
     if (delay > 0) window.setTimeout(show, delay);
     else show();
   }
@@ -64,5 +79,5 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
   if (next.map === prev.map && tookFromChest && (next.gold > prev.gold || next.stats.items.length > prev.stats.items.length)) {
     playChestOpen();
   }
-  return impactMs;
+  return Math.max(impactMs, skill?.kind === 'skill' && skill.weapon === 'staff' ? foeMs : 0); // 杖の魔力弾も、当たるまで次の行動を待たせる
 }

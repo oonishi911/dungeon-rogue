@@ -24,9 +24,10 @@ import {
 } from './exploreTypes';
 import { chargeRun, guardsAgainst, minionTile, retreatStep, stepDir, straightLine, weakestOf } from './enemyBehavior';
 import { canSee, samePos, visibleTiles } from './exploreSight';
+import { SKILL_CONFIG, skillOf } from './weaponSkill';
 import { around9, FIELD_CONFIG, fieldAt, immuneToField, placeField, tickFields, type FieldKind } from './fields';
 import type { DungeonFile, RoomSettings } from './genMaster';
-import { spellAffinity, spellDamage, startMagic } from './magic';
+import { magicPower, spellAffinity, spellDamage, startMagic } from './magic';
 import {
   behaviorsOf,
   eliteArea,
@@ -105,6 +106,7 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     visited: {},
     hits: [],
     foes: [],
+    skill: 0,
     fields: [],
   };
   return enterFloor(state, 0, state.map);
@@ -125,6 +127,7 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
 
   let next: ExploreState;
   let slowed = false; // 霜の床から歩き出すと、その1歩に2ターンかかる
+  let bleedSkip: readonly Pos[] = []; // 出血させたターンは、まだ出血のダメージを受けない敵のいるマス
   switch (action.kind) {
     case 'move': {
       const d = DIR_DELTA[action.dir];
@@ -155,6 +158,15 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
       const r = castSpell(state, action.spell, action.dir ?? null);
       if (!r.ok) return r;
       next = r.value;
+      bleedSkip = next.cast?.bleeding ?? [];
+      if (next.outcome !== 'ongoing') return ok({ ...next, turn: next.turn + 1 });
+      break;
+    }
+    case 'skill': {
+      const r = useSkill(state, action.dir ?? null);
+      if (!r.ok) return r;
+      next = r.value;
+      bleedSkip = next.foes.flatMap((f) => (f.kind === 'skill' && f.weapon === 'sword' ? f.path : []));
       if (next.outcome !== 'ongoing') return ok({ ...next, turn: next.turn + 1 });
       break;
     }
@@ -187,7 +199,7 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
     }
   }
 
-  next = passTurn(next, next.cast?.bleeding ?? []);
+  next = passTurn(next, bleedSkip);
   if (slowed && next.outcome === 'ongoing') next = passTurn(next, []);
   return ok(next);
 }
@@ -659,19 +671,16 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
   const log = [...state.log, guarded ? `${def.name}の盾に防がれた（${dmg}のダメージ）` : surprise ? `${def.name}に不意打ち！ ${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`];
   state = {
     ...state,
+    skill: gaugeUp(state),
     hits: [...state.hits, guarded ? { kind: 'dealt', at: target.pos, amount: dmg, blocked: true } : { kind: 'dealt', at: target.pos, amount: dmg }],
     foes: guarded ? [...state.foes, { kind: 'block', at: target.pos }] : state.foes,
   };
 
   // 属性付与はダメージを計算したあとで1回減らし、0回になると消える。炎・氷の力を宿した武器で当てると、敵の足元に床が残る
-  let stats = state.stats;
-  const enchantField = stats.enchant ? fieldOfElement(stats.enchant.element) : null;
-  if (enchantField) state = addFields(state, [target.pos], enchantField);
-  if (stats.enchant) {
-    const hits = stats.enchant.hits - 1;
-    if (hits <= 0) log.push(`武器から${TRAITS[stats.enchant.element].name}の力が消えた`);
-    stats = { ...stats, enchant: hits > 0 ? { ...stats.enchant, hits } : null };
-  }
+  const used = useEnchant(state, [target.pos]);
+  state = used.state;
+  if (used.ended) log.push(used.ended);
+  const stats = state.stats;
 
   if (hp <= 0) {
     log.push(`${def.name}を倒した`);
@@ -881,6 +890,103 @@ function enemiesTurn(state: ExploreState): ExploreState {
   }
   enemies.push(...spawned);
   return { ...s, enemies };
+}
+
+// ===== 武器の固有技 =====
+
+/** 通常攻撃を当てたら、技ゲージが1たまる（満タンまで。武器がなければたまらない） */
+function gaugeUp(state: ExploreState): number {
+  const skill = skillOf(state.stats.weapon);
+  return skill ? Math.min(skill.max, state.skill + 1) : 0;
+}
+
+/**
+ * 武器に宿した属性の力を1回使う（0回になると消える）。炎・氷の力なら、at のマスに燃える床・霜の床が残る。
+ * 属性が消えたときは、記録に書く言葉を ended で返す
+ */
+function useEnchant(state: ExploreState, at: readonly Pos[]): { state: ExploreState; ended: string | null } {
+  const { enchant } = state.stats;
+  if (!enchant) return { state, ended: null };
+  const kind = fieldOfElement(enchant.element);
+  const placed = kind ? addFields(state, at, kind) : state;
+  const hits = enchant.hits - 1;
+  return {
+    state: { ...placed, stats: { ...placed.stats, enchant: hits > 0 ? { ...enchant, hits } : null } },
+    ended: hits <= 0 ? `武器から${TRAITS[enchant.element].name}の力が消えた` : null,
+  };
+}
+
+/** 武器の固有技を出す。技ゲージが満タンのときだけ（1ターン使い、ゲージは0に戻る）。敵に当たらないときは出せない */
+function useSkill(state: ExploreState, dir: Dir | null): Result<ExploreState> {
+  const skill = skillOf(state.stats.weapon);
+  if (!skill) return err('武器を持っていない');
+  if (state.skill < skill.max) return err('技ゲージがたまっていない');
+  let s: ExploreState = { ...state, skill: 0 };
+  const from = s.player;
+  const cutOf = (e: MapEnemy) => (behaviorsOf(enemyDef(e)).includes('shield') && guardsAgainst(e, from) ? 1 - ENEMY_CONFIG.shieldCut : 1);
+
+  switch (skill.weapon) {
+    case 'sword': {
+      // 連斬り：向いた方向の隣の敵に2回、合計で通常の1.6倍。倒れなかった敵は出血する
+      if (!dir) return err('向きを選んでください');
+      const at = { x: from.x + DIR_DELTA[dir].x, y: from.y + DIR_DELTA[dir].y };
+      const target = s.enemies.find((e) => samePos(e.pos, at));
+      if (!target) return err('向いた方向に敵がいない');
+      const def = enemyDef(target);
+      const raw = playerHitDamage(s.stats, def) * (target.mode === 'wander' ? ENEMY_CONFIG.surpriseMultiplier : 1);
+      const cut = cutOf(target);
+      const each = Math.max(1, Math.round(((raw * SKILL_CONFIG.slashRate) / SKILL_CONFIG.slashHits) * cut));
+      s = { ...s, log: [...s.log, `${skill.name}！`], foes: [...s.foes, { kind: 'skill', weapon: 'sword', from, dir, path: [at] }, ...(cut < 1 ? [{ kind: 'block' as const, at }] : [])] };
+      for (let i = 0; i < SKILL_CONFIG.slashHits; i++) {
+        s = hurtEnemy(s, target.uid, each);
+        if (s.outcome !== 'ongoing' || !s.enemies.some((e) => e.uid === target.uid)) break;
+      }
+      if (s.outcome !== 'ongoing') return ok(s);
+      const used = useEnchant(s, [at]);
+      s = { ...used.state, log: used.ended ? [...used.state.log, used.ended] : used.state.log };
+      if (s.enemies.some((e) => e.uid === target.uid)) {
+        const amount = Math.max(1, Math.round(each * SKILL_CONFIG.bleedRate));
+        s = { ...s, enemies: s.enemies.map((e) => (e.uid === target.uid ? { ...e, bleed: { amount, turns: SKILL_CONFIG.bleedTurns } } : e)), log: [...s.log, `${def.name}は出血した（${SKILL_CONFIG.bleedTurns}ターン）`] };
+      }
+      return ok(s);
+    }
+    case 'hammer': {
+      // 地響き：まわり8マスの敵すべてに通常のダメージと、1ターンの気絶
+      const around = s.enemies.filter((e) => Math.max(Math.abs(e.pos.x - from.x), Math.abs(e.pos.y - from.y)) === 1);
+      if (around.length === 0) return err('まわりに敵がいない');
+      s = { ...s, log: [...s.log, `${skill.name}！`], foes: [...s.foes, { kind: 'skill', weapon: 'hammer', from, dir: null, path: around.map((e) => e.pos) }] };
+      for (const t of around) {
+        const cut = cutOf(t);
+        s = hurtEnemy(s, t.uid, Math.max(1, Math.round(playerHitDamage(s.stats, enemyDef(t)) * cut)));
+        if (s.outcome !== 'ongoing') return ok(s);
+        if (s.enemies.some((e) => e.uid === t.uid)) s = { ...s, enemies: s.enemies.map((e) => (e.uid === t.uid ? { ...e, stun: SKILL_CONFIG.slamStun } : e)) };
+      }
+      const used = useEnchant(s, around.map((e) => e.pos));
+      return ok({ ...used.state, log: used.ended ? [...used.state.log, used.ended] : used.state.log });
+    }
+    case 'staff': {
+      // 魔力弾：向いた方向の最初の敵に、魔法の強さの1.5倍（敵の防御は無視）
+      if (!dir) return err('向きを選んでください');
+      const d = DIR_DELTA[dir];
+      const path: Pos[] = [];
+      let target: MapEnemy | undefined;
+      for (let i = 1; i <= SKILL_CONFIG.boltRange; i++) {
+        const p = { x: from.x + d.x * i, y: from.y + d.y * i };
+        if (tileAt(s.map, p) === 'wall') break;
+        path.push(p);
+        target = s.enemies.find((e) => samePos(e.pos, p));
+        if (target) break;
+      }
+      if (!target) return err('向いた方向に敵がいない');
+      const dmg = Math.max(1, Math.round(magicPower(s.stats, dungeonOfState(s).magic) * SKILL_CONFIG.boltRate * (enemyDef(target).magic ?? 1)));
+      s = { ...s, log: [...s.log, `${skill.name}！`], foes: [...s.foes, { kind: 'skill', weapon: 'staff', from, dir, path }] };
+      return ok(hurtEnemy(s, target.uid, dmg));
+    }
+    default: {
+      const unreachable: never = skill.weapon;
+      return unreachable;
+    }
+  }
 }
 
 // ===== 床に残る魔法の跡 =====
