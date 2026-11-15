@@ -104,6 +104,8 @@ export const SPELL_FIELDS: Record<SpellId, { key: string; label: string; min: nu
   const power = { key: 'power', label: 'ダメージの倍率', min: 0, max: 10, step: 0.1, integer: false };
   const range = { key: 'range', label: '届くマス数', min: 1, max: 20, step: 1, integer: true };
   const bolt = [cost, power, range];
+  // 連矢：矢のうえに、当たった敵のまわり8マスの敵に与えるダメージの割合（真ん中の敵に与えるダメージに対して）
+  const chain = [cost, power, range, { key: 'splash', label: 'まわりの敵へのダメージの割合', min: 0, max: 2, step: 0.05, integer: false }];
   return {
     shockwave: [
       cost,
@@ -113,9 +115,13 @@ export const SPELL_FIELDS: Record<SpellId, { key: string; label: string; min: nu
     ],
     sweep: [cost, power, range],
     fire_bolt: bolt,
+    fire_chain: chain,
     ice_bolt: bolt,
+    ice_chain: chain,
     light_lance: bolt,
+    light_chain: chain,
     dark_bolt: bolt,
+    dark_chain: chain,
     heal: [cost, { key: 'amount', label: '回復するHP', min: 0, max: 999, step: 1, integer: true }],
     regen: [
       cost,
@@ -130,9 +136,13 @@ export const SPELL_NAMES: Record<SpellId, string> = {
   shockwave: '衝撃波',
   sweep: 'なぎ払い',
   fire_bolt: '炎の矢',
+  fire_chain: '炎の連矢',
   ice_bolt: '氷の矢',
+  ice_chain: '氷の連矢',
   light_lance: '光の槍',
+  light_chain: '光の連槍',
   dark_bolt: '闇の矢',
+  dark_chain: '闇の連矢',
   heal: '癒し',
   regen: '再生',
 };

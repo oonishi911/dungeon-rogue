@@ -119,6 +119,41 @@ describe('呪文の働き', () => {
     ]);
   });
 
+  it('連矢：最初に当たった敵のまわり8マスの敵に、真ん中の敵に与えるダメージの割合（splash）だけ与える', () => {
+    const loadout: ItemId[] = ['book_fire_chain', 'book_ice_chain', 'book_light_chain', 'book_dark_chain'];
+    // 真ん中の敵(3,2)、そのななめ(4,3)と後ろ(4,2)の敵、2マス離れた敵(6,2)
+    const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 3, y: 2 }), enemy({ x: 4, y: 3 }), enemy({ x: 4, y: 2 }), enemy({ x: 6, y: 2 })], loadout);
+    for (const spell of ['fire_chain', 'ice_chain', 'light_chain', 'dark_chain'] as const) {
+      const s = act(s0, { kind: 'cast', spell, dir: 'right' });
+      const center = spellDamage(s0.stats, spell, enemyDef(s0.enemies[0]!), GEN);
+      const around = Math.max(1, Math.round(center * cfg[spell]!.splash!));
+      expect(s.enemies.map((e) => e.hp)).toEqual([99 - center, 99 - around, 99 - around, 99]);
+      expect(s.cast!.splash).toEqual([
+        { x: 4, y: 3 },
+        { x: 4, y: 2 },
+      ]);
+      expect(s.mp).toBe(s0.mp - cfg[spell]!.cost!);
+    }
+  });
+
+  it('連矢：何にも当たらなければまわりは巻き込まない。割合が0ならまわりにはダメージがない。ふつうの矢は巻き込まない', () => {
+    const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 3, y: 2 }), enemy({ x: 4, y: 3 })], ['book_fire_chain', 'book_fire_bolt']);
+    const miss = act(s0, { kind: 'cast', spell: 'fire_chain', dir: 'up' });
+    expect(miss.enemies.map((e) => e.hp)).toEqual([99, 99]);
+    expect(miss.cast!.splash).toEqual([]);
+    const none = act({ ...s0, mp: 99 }, { kind: 'cast', spell: 'fire_bolt', dir: 'right' });
+    expect(none.enemies[1]!.hp).toBe(99);
+    expect(none.cast!.splash).toEqual([]);
+  });
+
+  it('連矢：まわりの敵を倒せる。倒した敵は戦った数に入る', () => {
+    const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 3, y: 2 }), enemy({ x: 4, y: 2 }, { hp: 1 })], ['book_fire_chain']);
+    const s = act(s0, { kind: 'cast', spell: 'fire_chain', dir: 'right' });
+    expect(s.enemies).toHaveLength(1);
+    expect(s.defeated).toBe(s0.defeated + 1);
+    expect(s.cast!.splash).toEqual([{ x: 4, y: 2 }]);
+  });
+
   it('属性の矢と当たった敵の相性を、演出のために残す（弱点・ふつう・効きにくい。外れたら・矢でなければ null）', () => {
     const base = enemyDef(enemy({ x: 0, y: 0 }));
     expect(spellAffinity('fire_bolt', { ...base, element: 'ice' })).toBe('weak');

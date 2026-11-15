@@ -30,7 +30,17 @@ const ELEMENT_COLORS: Record<Element, number> = {
   neutral: 0xe8e2d0,
 };
 
-const BOLT_ELEMENT: Partial<Record<SpellId, Element>> = { fire_bolt: 'fire', ice_bolt: 'ice', light_lance: 'light', dark_bolt: 'dark' };
+// 矢・槍の呪文の属性。連矢（〜_chain）は、当たった敵のまわりの敵にも小さく当たる
+const BOLT_ELEMENT: Partial<Record<SpellId, Element>> = {
+  fire_bolt: 'fire',
+  fire_chain: 'fire',
+  ice_bolt: 'ice',
+  ice_chain: 'ice',
+  light_lance: 'light',
+  light_chain: 'light',
+  dark_bolt: 'dark',
+  dark_chain: 'dark',
+};
 
 // 相性による強さ（大きさ・粒の数・揺れ・閃光に掛ける）。何にも当たらなかったときは miss
 const STRENGTH = { weak: 1.5, normal: 1, resist: 0.55, miss: 0.7 } as const;
@@ -40,6 +50,7 @@ const FX = {
   height: 0.5, // 演出を出す高さ（主人公の胸のあたり）
   circle: { ms: 700, size: 1.7 }, // 唱える溜めの魔法陣
   bolt: { chargeMs: 180, tileMs: 60, minFlyMs: 170, lanceMs: 70 },
+  chain: { delayMs: 110, gapMs: 45, size: 0.6 }, // 連矢：まわりの敵に当たるまでの間（ミリ秒）、敵ごとのずれ、演出の大きさの割合
   shockwave: { ms: 520, radius: 2.1, color: 0xcfe6ff },
   sweep: { ms: 320, width: 0.55, color: 0xf2ecd8 },
   heal: { ms: 900, sparks: 18, rise: 1.2, color: 0x8dffb4 },
@@ -341,26 +352,40 @@ export class SpellEffects {
     }
     const at = last ?? from;
     this.later(hit, () => {
-      switch (element) {
-        case 'fire':
-          this.fireImpact(end, color, strength);
-          break;
-        case 'ice':
-          this.iceImpact(end, color, strength);
-          break;
-        case 'light':
-          this.lightImpact(end, color, strength);
-          break;
-        default:
-          this.darkImpact(end, color, strength);
-      }
+      this.impact(element, end, color, strength);
       if (affinity === 'weak') this.weakBurst(end, color);
       if (affinity && last) {
         this.hitSpark(end, strength);
         this.onImpact?.(at, strength, color);
       }
     });
+    // 連矢：最初に当たった敵のまわりの敵にも、少し遅れて、小さく当たる
+    cast.splash.forEach((p, i) => {
+      this.later(hit + FX.chain.delayMs + i * FX.chain.gapMs, () => {
+        const near = new THREE.Vector3(p.x, FX.height, p.y);
+        this.impact(element, near, color, FX.chain.size * (this.reduceMotion ? 0.8 : 1));
+        this.hitSpark(near, FX.chain.size);
+        this.onImpact?.(p, FX.chain.size, color);
+      });
+    });
     return hit - now;
+  }
+
+  /** 矢・槍が当たったときの、属性ごとの演出 */
+  private impact(element: Element, at: THREE.Vector3, color: number, strength: number) {
+    switch (element) {
+      case 'fire':
+        this.fireImpact(at, color, strength);
+        break;
+      case 'ice':
+        this.iceImpact(at, color, strength);
+        break;
+      case 'light':
+        this.lightImpact(at, color, strength);
+        break;
+      default:
+        this.darkImpact(at, color, strength);
+    }
   }
 
   /** 当たった敵が一瞬白く光る */

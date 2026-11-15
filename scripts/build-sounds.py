@@ -1012,6 +1012,25 @@ def spell_dark_bolt():
     return finish_spell(y, 0.4)
 
 
+def chain_of(make):
+    """連矢：矢の音のあとに、当たった音の部分を高さを上げて2回、少しずつ小さくして重ねる（まわりの敵に当たる音）"""
+    y = make()
+    n = len(y)
+    out = np.zeros((n + int(0.3 * SR), 2))
+    out[:n] += y
+    hit = y[int(0.2 * SR):int(0.5 * SR)]
+    for start, rate, gain in [(0.48, 1.18, 0.5), (0.55, 1.35, 0.35)]:
+        m = int(len(hit) / rate)
+        seg = np.stack([np.interp(np.arange(m) * rate, np.arange(len(hit)), hit[:, c]) for c in (0, 1)], axis=1)
+        seg *= np.linspace(1, 0, m)[:, None] * gain
+        a = int(start * SR)
+        out[a:a + m] += seg
+    out = out / np.max(np.abs(out)) * SPELL_PEAK
+    fade = int(0.08 * SR)
+    out[-fade:] *= np.linspace(1, 0, fade)[:, None]
+    return out
+
+
 def spell_heal():
     """癒し：やわらかく上がっていく分散和音と、きらめき"""
     rng = np.random.default_rng(101)
@@ -1044,9 +1063,13 @@ SPELL_SOUNDS = {
     'shockwave': spell_shockwave,
     'sweep': spell_sweep,
     'fire_bolt': spell_fire_bolt,
+    'fire_chain': lambda: chain_of(spell_fire_bolt),
     'ice_bolt': spell_ice_bolt,
+    'ice_chain': lambda: chain_of(spell_ice_bolt),
     'light_lance': spell_light_lance,
+    'light_chain': lambda: chain_of(spell_light_lance),
     'dark_bolt': spell_dark_bolt,
+    'dark_chain': lambda: chain_of(spell_dark_bolt),
     'heal': spell_heal,
     'regen': spell_regen,
 }

@@ -393,7 +393,7 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
   const cost = cfg.cost ?? 0;
   if (state.mp < cost) return err('魔力が足りない');
   if (def.aim && !dir) return err('向きを選んでください');
-  const event: CastEvent = { spell, dir: def.aim ? dir : null, path: [], moves: [], affinity: null };
+  const event: CastEvent = { spell, dir: def.aim ? dir : null, path: [], moves: [], splash: [], affinity: null };
   let s: ExploreState = { ...state, mp: state.mp - cost, cast: event, log: [...state.log, `${def.name}を唱えた`] };
   const { stats } = s;
 
@@ -426,7 +426,16 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
       }
       if (targets.length === 0) s = { ...s, log: [...s.log, '何にも当たらなかった'] };
       if (def.effect.kind === 'bolt' && targets[0]) event.affinity = spellAffinity(spell, enemyDef(targets[0]));
+      // 連矢：最初に当たった敵のまわり8マスの敵にも、その敵に与えるダメージの一部（splash の割合）を与える
+      const center = def.effect.kind === 'bolt' && def.effect.splash ? targets[0] : undefined;
+      const around = center ? s.enemies.filter((e) => e.uid !== center.uid && Math.max(Math.abs(e.pos.x - center.pos.x), Math.abs(e.pos.y - center.pos.y)) === 1) : [];
+      const centerDamage = center ? spellDamage(s.stats, spell, enemyDef(center), settings) : 0;
       for (const t of targets) s = hurtEnemy(s, t.uid, spellDamage(s.stats, spell, enemyDef(t), settings));
+      const splashDamage = centerDamage > 0 && (cfg.splash ?? 0) > 0 ? Math.max(1, Math.round(centerDamage * (cfg.splash ?? 0))) : 0;
+      if (splashDamage > 0) {
+        event.splash = around.map((e) => e.pos);
+        for (const e of around) s = hurtEnemy(s, e.uid, splashDamage);
+      }
       break;
     }
     case 'shockwave': {

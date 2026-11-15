@@ -68,13 +68,28 @@ const rings = (stroke = C.iceLight) => (
 
 const slash = (stroke = C.steel) => <path d="M4 17C8 7 15 5 20.5 6.5 15.5 7.5 10 11 6.5 19.5z" fill={stroke} />;
 
+/** 連矢の印：矢の印を大きく中央に、まわりに小さな印を2つ添える（まわりの敵にも当たる） */
+const chain = (mark: ReactElement) => (
+  <>
+    <g opacity="0.75">
+      {place(mark, 5.6, 6, 8)}
+      {place(mark, 18.4, 18, 8)}
+    </g>
+    {place(mark, 12, 12, 16)}
+  </>
+);
+
 const SPELL_MARKS: Record<SpellId, () => ReactElement> = {
   shockwave: () => rings(),
   sweep: () => slash(),
   fire_bolt: () => flame(),
+  fire_chain: () => chain(flame()),
   ice_bolt: () => snowflake(C.iceLight),
+  ice_chain: () => chain(snowflake(C.iceLight)),
   light_lance: () => sparkle(),
+  light_chain: () => chain(sparkle()),
   dark_bolt: () => moon('#c9b3f0'),
+  dark_chain: () => chain(moon('#c9b3f0')),
   heal: () => heart(),
   regen: () => leaf(),
 };
@@ -201,9 +216,13 @@ const SHAPES: Partial<Record<ItemId, () => ReactElement>> = {
   book_shockwave: () => book('#4f6f8a', SPELL_MARKS.shockwave()),
   book_sweep: () => book('#5b6b5e', SPELL_MARKS.sweep()),
   book_fire_bolt: () => book('#8a3a28', SPELL_MARKS.fire_bolt()),
+  book_fire_chain: () => book('#8a3a28', SPELL_MARKS.fire_chain()),
   book_ice_bolt: () => book('#2f5f7f', SPELL_MARKS.ice_bolt()),
+  book_ice_chain: () => book('#2f5f7f', SPELL_MARKS.ice_chain()),
   book_light_lance: () => book('#8a7432', SPELL_MARKS.light_lance()),
+  book_light_chain: () => book('#8a7432', SPELL_MARKS.light_chain()),
   book_dark_bolt: () => book(C.darkDeep, SPELL_MARKS.dark_bolt()),
+  book_dark_chain: () => book(C.darkDeep, SPELL_MARKS.dark_chain()),
   book_heal: () => book('#7f3546', SPELL_MARKS.heal()),
   book_regen: () => book('#3f6a3a', SPELL_MARKS.regen()),
 };
