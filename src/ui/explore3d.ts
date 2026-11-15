@@ -176,7 +176,6 @@ export class DungeonView3D {
   private readonly debris: THREE.InstancedMesh; // 床の小石と、壁の根元の崩れた石
   private readonly puddles: THREE.InstancedMesh; // 水たまり
   private readonly bones: THREE.InstancedMesh; // 床に散らばった骨
-  private readonly moss: THREE.InstancedMesh; // 壁の根元のこけ（特性によって、すす・霜など）
   private roomTiles: { map: unknown; tiles: Set<number> } = { map: null, tiles: new Set() }; // 部屋の床のマス（通路と描き分ける）
   private shownPath: Pos[] | null = null;
 
@@ -264,19 +263,14 @@ export class DungeonView3D {
       stonePos.setXYZ(i, stonePos.getX(i) * k, stonePos.getY(i) * k, stonePos.getZ(i) * k);
     }
     this.debris = new THREE.InstancedMesh(stoneGeo, applyFog(new THREE.MeshPhongMaterial({ flatShading: true, ...NO_GLOSS }), this.fog), DRAW_CAPACITY * DEBRIS.perTile);
-    // 水たまりとこけ：ふちのぼけた平らなしみ（ふちの濃さは、しみの絵の明るさで決める）
+    // 水たまり：ふちのぼけた平らなしみ（ふちの濃さは、しみの絵の明るさで決める）
     const blot = this.blotTexture();
     const patchGeo = new THREE.CircleGeometry(0.5, 20).rotateX(-Math.PI / 2);
-    const { puddle, moss } = FLOOR_LOOK;
+    const { puddle } = FLOOR_LOOK;
     this.puddles = new THREE.InstancedMesh(
       patchGeo,
       applyFog(new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: puddle.shininess, specular: puddle.specular, alphaMap: blot, transparent: true, opacity: puddle.opacity, depthWrite: false }), this.fog),
       DRAW_CAPACITY,
-    );
-    this.moss = new THREE.InstancedMesh(
-      patchGeo,
-      applyFog(new THREE.MeshPhongMaterial({ color: 0xffffff, ...NO_GLOSS, alphaMap: blot, transparent: true, opacity: moss.opacity, depthWrite: false }), this.fog),
-      DRAW_CAPACITY * 2,
     );
     // 骨：両端がふくらんだ細い骨を、床に寝かせる
     const boneGeo = new THREE.LatheGeometry(
@@ -284,8 +278,8 @@ export class DungeonView3D {
       8,
     ).rotateZ(Math.PI / 2);
     this.bones = new THREE.InstancedMesh(boneGeo, applyFog(new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 12, specular: 0x222222 }), this.fog), DRAW_CAPACITY);
-    this.puddles.renderOrder = this.moss.renderOrder = 0.5; // 床のすぐあと（影の帯より前）
-    for (const mesh of [...this.floors, ...this.walls, this.wallShadows, this.debris, this.puddles, this.moss, this.bones]) {
+    this.puddles.renderOrder = 0.5; // 床のすぐあと（影の帯より前）
+    for (const mesh of [...this.floors, ...this.walls, this.wallShadows, this.debris, this.puddles, this.bones]) {
       // 中身を毎回入れ替えるので、最初の中身で計算された範囲で画面外と判定されないようにする
       mesh.frustumCulled = false;
       this.scene.add(mesh);
@@ -763,11 +757,9 @@ export class DungeonView3D {
     let shadows = 0;
     let stones = 0;
     let puddles = 0;
-    let mosses = 0;
     let bones = 0;
     const boneColor = new THREE.Color(DEBRIS.boneColor);
     const roomTiles = this.roomTilesOf(map);
-    const mossColor = new THREE.Color(FLOOR_LOOK.moss.colors[trait]);
     const puddleColor = new THREE.Color(FLOOR_LOOK.puddle.color);
     const stoneColor = new THREE.Color(colors.wall).multiplyScalar(DEBRIS.darken);
     const e = new THREE.Euler();
@@ -839,18 +831,6 @@ export class DungeonView3D {
             this.puddles.setMatrixAt(puddles, m.compose(at, q, size3.set(size, 1, size * (0.55 + r(205) * 0.4))));
             this.puddles.setColorAt(puddles++, puddleColor);
           }
-          // 壁の根元のこけ：壁に沿って細長く
-          for (const [n, wall] of walls.entries()) {
-            if (mosses >= DRAW_CAPACITY * 2 || r(300 + n) >= FLOOR_LOOK.moss.chance) continue;
-            const { length, width } = FLOOR_LOOK.moss;
-            const len = length[0] + (length[1] - length[0]) * r(310 + n);
-            const wid = width[0] + (width[1] - width[0]) * r(320 + n);
-            const along = (r(330 + n) - 0.5) * (1 - len);
-            at.set(x + wall.dx * (0.5 - wid / 2) + (wall.dx === 0 ? along : 0), 0.007, z + wall.dz * (0.5 - wid / 2) + (wall.dz === 0 ? along : 0));
-            q.identity();
-            this.moss.setMatrixAt(mosses, m.compose(at, q, wall.dx === 0 ? size3.set(len, 1, wid * 2) : size3.set(wid * 2, 1, len)));
-            this.moss.setColorAt(mosses++, c.copy(mossColor).multiplyScalar(0.85 + r(340 + n) * 0.3));
-          }
           // 壁に接する辺に、影の帯を壁側へ寄せて敷く
           for (const side of SHADOW_SIDES) {
             if (!seenWall(x + side.dx, z + side.dz)) continue;
@@ -867,7 +847,6 @@ export class DungeonView3D {
       [this.wallShadows, shadows] as const,
       [this.debris, stones] as const,
       [this.puddles, puddles] as const,
-      [this.moss, mosses] as const,
       [this.bones, bones] as const,
     ];
     for (const [mesh, count] of counts) {

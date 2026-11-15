@@ -153,13 +153,13 @@ export const TRAIT_COLORS: Record<TraitId, { floor: number; wall: number }> = {
 export const SURFACE_BUMP = { floor: 8.2, top: 4.7, side: 7.8 };
 // 床の小石とがれき：マスごとに決まった乱数で、小石を散らし、壁の根元には崩れた石を寄せる（色は壁の色を暗くしたもの）
 export const DEBRIS = {
-  pebbleChance: 0.135, // 壁に接していない床のマスに、小石が1つある確率
-  rubbleChance: 0.18, // 壁に接した床のマスに、崩れた石がある確率（あれば1〜3個）
+  pebbleChance: 0.0675, // 壁に接していない床のマスに、小石が1つある確率
+  rubbleChance: 0.09, // 壁に接した床のマスに、崩れた石がある確率（あれば1〜3個）
   pebbleSize: [0.04, 0.09] as const, // 小石の大きさ（マス）
   rubbleSize: [0.05, 0.13] as const, // 崩れた石の大きさ（マス）
   darken: 0.6, // 壁の色に掛ける明るさ
   perTile: 4, // 1マスに置ける数の上限（入れ物の大きさを決める）
-  boneChance: 0.025, // 床のマスに骨がある確率（壁際はその2倍）
+  boneChance: 0.0125, // 床のマスに骨がある確率（壁際はその2倍）
   boneSize: [0.1, 0.17] as const, // 骨の長さ（マス）
   boneColor: 0xc9bea2,
 };
@@ -216,15 +216,7 @@ export const ENEMY_MOTION = { lunge: { windUp: 0.1, reach: 0.32, ms: 340 }, coll
 // 床の変化（2026-11-15）：
 // - corridor：通路（部屋の外）の床の明るさ。部屋の床より少し暗く、踏み固めた感じにする
 // - puddle：水たまり。床のマスに chance の確率で置き、たいまつの光が強く照り返す（炎のダンジョンには置かない）
-// - moss：壁の根元に沿って生える、こけ（炎はすす、氷は霜、光は乾いたこけ、闇は紫のこけ）
 export const FLOOR_LOOK = {
   corridor: 0.8,
   puddle: { chance: 0.07, size: [0.22, 0.42] as const, color: 0x0b1012, shininess: 70, specular: 0x3a4650, opacity: 0.7 },
-  moss: {
-    chance: 0.4,
-    length: [0.35, 0.8] as const, // 壁に沿った長さ（マス）
-    width: [0.12, 0.22] as const, // 壁から床へ広がる幅（マス）
-    colors: { fire: 0x120a08, ice: 0xcfe3ee, neutral: 0x31492a, light: 0x5f5a2c, dark: 0x2c2244 } as Record<TraitId, number>,
-    opacity: 0.75,
-  },
 };
