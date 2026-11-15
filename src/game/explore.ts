@@ -39,7 +39,7 @@ import {
   type MapEnemy,
 } from './enemies';
 import { generateBossFloor, generateFloor, tileAt, type FloorMap, type Pos } from './map';
-import { floorParams, regenIntervalFor } from './floorParams';
+import { floorParams } from './floorParams';
 import { nextInt, nextRandom } from './rng';
 import type { EnemyId, ItemId, Result, SpellId, TraitId } from './types';
 
@@ -774,7 +774,7 @@ function damagePlayer(state: ExploreState, dmg: number, message: string, by: str
 
 // ===== 満腹度 =====
 
-/** 1行動ぶん満腹度を減らす。満腹度が残っていればHPが少しずつ回復し、0ならHPが減る */
+/** 1行動ぶん満腹度を減らす。0ならHPが減る（HPは歩いても自然には回復しない。回復薬・呪文・レベルアップで戻す） */
 function spendAction(state: ExploreState): ExploreState {
   const poisoned = applyPoison(state);
   if (poisoned.outcome !== 'ongoing') return { ...poisoned, turn: poisoned.turn + 1 };
@@ -784,9 +784,7 @@ function spendAction(state: ExploreState): ExploreState {
   if (state.satiety > 0) {
     const satiety = Math.max(0, state.satiety - EXPLORE_CONFIG.satietyPerAction);
     const log = satiety === 0 ? [...state.log, '空腹で力が出ない…'] : state.log;
-    // 回復の間隔はマップの広さで決まる（狭いほど速い）
-    const regen = turn % regenIntervalFor(state.mapSize) === 0 && stats.hp < stats.maxHp ? 1 : 0;
-    return { ...state, turn, satiety, stats: { ...stats, hp: stats.hp + regen }, log };
+    return { ...state, turn, satiety, log };
   }
   const hp = Math.max(0, stats.hp - EXPLORE_CONFIG.starveDamage);
   if (hp === 0) {

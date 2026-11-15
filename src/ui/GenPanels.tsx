@@ -53,7 +53,7 @@ export function FloorsPanel({ base, draft, setDraft }: GenPanelProps) {
       <h2 className="admin__heading">階の数・広さ・満腹度</h2>
       <p className="admin__note">
         満腹度は、探索のはじめの満腹度で、上限でもあります。広さや階の数を変えても、満腹度は自動では変わらないので、いっしょに見直してください。
-        敵の数・HPの回復の速さは、広さから自動で決まります。難しさの段階を作りたいときは、ダンジョンを複製して、広さや満腹度を変えた別のダンジョンにします。
+        敵の数は、広さから自動で決まります。難しさの段階を作りたいときは、ダンジョンを複製して、広さや満腹度を変えた別のダンジョンにします。
       </p>
       <div className="gen__fields">
         <Field
@@ -65,7 +65,7 @@ export function FloorsPanel({ base, draft, setDraft }: GenPanelProps) {
         </Field>
         <Field
           label={GEN_LABELS.floorSize}
-          hint="階の一辺のマス数です。大きいほど広く、歩く距離が長くなります（狭いほど、HPの回復が速くなります）。"
+          hint="階の一辺のマス数です。大きいほど広く、歩く距離が長くなります。"
           example={`今の${f.size}なら、${f.size}×${f.size}＝${f.size ** 2}マス。20なら小さな階（400マス）、40なら広めの階（1600マス）。`}
         >
           <NumberField {...GEN_LIMITS.floorSize} value={f.size} changed={f.size !== bf.size} base={bf.size} label={GEN_LABELS.floorSize} onChange={(v) => setFloors({ size: v })} />

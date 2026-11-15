@@ -107,6 +107,15 @@ describe('step', () => {
     expect(s.satiety).toBe(floorParams(GEN.floors).maxSatiety - 1);
   });
 
+  it('HPは、歩いても待っても自然には回復しない（満腹度があっても）', () => {
+    const s0 = startExplore(3);
+    const hurt = { ...s0, stats: { ...s0.stats, hp: 3 } };
+    const waits = Array.from({ length: 100 }, () => ({ kind: 'wait' }) as const);
+    const s = act(hurt, ...waits);
+    expect(s.satiety).toBeGreaterThan(0);
+    expect(s.stats.hp).toBe(3);
+  });
+
   it('階段の上でなければ降りられない', () => {
     expect(step(startExplore(4), { kind: 'descend' }).ok).toBe(false);
   });
