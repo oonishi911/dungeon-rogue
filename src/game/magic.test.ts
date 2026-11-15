@@ -4,6 +4,8 @@ import { enemyDef, type MapEnemy } from './enemies';
 import { startExplore, step } from './explore';
 import { type ExploreAction, type ExploreState } from './exploreTypes';
 import { magicPower, spellAffinity, spellDamage } from './magic';
+import { buildPlayer } from './combat';
+import { ITEMS } from './data';
 import { DEFAULT_DUNGEON } from './dungeons';
 import type { FloorMap, Pos } from './map';
 import type { ItemId, Result } from './types';
@@ -60,6 +62,28 @@ describe('魔力と呪文書', () => {
     const staff = startExplore(1, { loadout: ['staff', 'book_heal'] });
     expect(staff.maxMp).toBe(GEN.magic.maxMp + GEN.magic.staffMp);
     expect(magicPower(staff.stats, GEN.magic)).toBe(GEN.magic.power * GEN.magic.staffPower);
+  });
+
+  it('武器の魔力が、魔法の強さに足される。杖なら、足した合計に杖の倍率が掛かる', () => {
+    const mag = (id: ItemId) => {
+      const e = ITEMS[id].effect;
+      return e.kind === 'weapon' ? e.mag : NaN;
+    };
+    expect(mag('staff_5')).toBeGreaterThan(0); // テスト用の設定では、杖の5段目から魔力がある
+    expect(mag('sword_5')).toBe(0);
+    expect(magicPower(buildPlayer(['staff']), GEN.magic)).toBe(GEN.magic.power * GEN.magic.staffPower);
+    expect(magicPower(buildPlayer(['staff_5']), GEN.magic)).toBe((GEN.magic.power + mag('staff_5')) * GEN.magic.staffPower);
+    expect(magicPower(buildPlayer(['sword_5']), GEN.magic)).toBe(GEN.magic.power); // 魔力0の武器は、魔法を強くしない
+    expect(magicPower(buildPlayer([]), GEN.magic)).toBe(GEN.magic.power);
+    // 魔力の最大は、武器の魔力では変わらない
+    expect(startExplore(1, { loadout: ['staff_5', 'book_heal'] }).maxMp).toBe(GEN.magic.maxMp + GEN.magic.staffMp);
+  });
+
+  it('魔力の高い武器を持つと、呪文のダメージが上がる', () => {
+    const foe = enemyDef(enemy({ x: 5, y: 2 }));
+    const damage = (weapon: ItemId) => spellDamage(buildPlayer([weapon]), 'fire_bolt', foe, GEN);
+    expect(damage('staff_10')).toBeGreaterThan(damage('staff'));
+    expect(damage('sword_10')).toBe(damage('sword'));
   });
 
   it('唱えると魔力が減り、足りないときや持っていない呪文は唱えられない', () => {

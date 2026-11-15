@@ -4,51 +4,61 @@
       {
         "name": "剣",
         "atk": 2,
+        "mag": 0,
         "price": 30
       },
       {
         "name": "剣+1",
         "atk": 4,
+        "mag": 0,
         "price": 40
       },
       {
         "name": "剣+2",
         "atk": 6,
+        "mag": 0,
         "price": 70
       },
       {
         "name": "剣+3",
         "atk": 8,
+        "mag": 0,
         "price": 100
       },
       {
         "name": "剣+4",
         "atk": 10,
+        "mag": 0,
         "price": 150
       },
       {
         "name": "剣+5",
         "atk": 12,
+        "mag": 0,
         "price": 230
       },
       {
         "name": "剣+6",
         "atk": 14,
+        "mag": 0,
         "price": 340
       },
       {
         "name": "剣+7",
         "atk": 16,
+        "mag": 0,
         "price": 510
       },
       {
         "name": "剣+8",
         "atk": 18,
+        "mag": 0,
         "price": 770
       },
       {
         "name": "剣+9",
         "atk": 20,
+        "mag": 0,
         "price": 1150
       }
     ],
@@ -56,51 +66,61 @@
       {
         "name": "槌",
         "atk": 2,
+        "mag": 0,
         "price": 30
       },
       {
         "name": "槌+1",
         "atk": 4,
+        "mag": 0,
         "price": 40
       },
       {
         "name": "槌+2",
         "atk": 6,
+        "mag": 0,
         "price": 70
       },
       {
         "name": "槌+3",
         "atk": 8,
+        "mag": 0,
         "price": 100
       },
       {
         "name": "槌+4",
         "atk": 10,
+        "mag": 0,
         "price": 150
       },
       {
         "name": "槌+5",
         "atk": 12,
+        "mag": 0,
         "price": 230
       },
       {
         "name": "槌+6",
         "atk": 14,
+        "mag": 0,
         "price": 340
       },
       {
         "name": "槌+7",
         "atk": 16,
+        "mag": 0,
         "price": 510
       },
       {
         "name": "槌+8",
         "atk": 18,
+        "mag": 0,
         "price": 770
       },
       {
         "name": "槌+9",
         "atk": 20,
+        "mag": 0,
         "price": 1150
       }
     ],
@@ -108,51 +128,61 @@
       {
         "name": "杖",
         "atk": 1,
+        "mag": 0,
         "price": 30
       },
       {
         "name": "杖+1",
         "atk": 2,
+        "mag": 1,
         "price": 40
       },
       {
         "name": "杖+2",
         "atk": 3,
+        "mag": 2,
         "price": 70
       },
       {
         "name": "杖+3",
         "atk": 4,
+        "mag": 3,
         "price": 100
       },
       {
         "name": "杖+4",
         "atk": 5,
+        "mag": 4,
         "price": 150
       },
       {
         "name": "杖+5",
         "atk": 6,
+        "mag": 5,
         "price": 230
       },
       {
         "name": "杖+6",
         "atk": 7,
+        "mag": 6,
         "price": 340
       },
       {
         "name": "杖+7",
         "atk": 8,
+        "mag": 7,
         "price": 510
       },
       {
         "name": "杖+8",
         "atk": 9,
+        "mag": 8,
         "price": 770
       },
       {
         "name": "杖+9",
         "atk": 10,
+        "mag": 9,
         "price": 1150
       }
     ]

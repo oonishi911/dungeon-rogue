@@ -262,6 +262,16 @@ describe('品物の設定の公開', () => {
     expect(tabChanged('items', BASE, draft)).toBe(true);
   });
 
+  it('武器の魔力を変えると、変えた内容に出る。上の段階より低い魔力は、直すところに出る', () => {
+    const draft = edited((d) => void (d.items.weapons.staff[9]!.mag = 12));
+    expect(planPublish(BASE, draft).changes).toEqual(['品物：杖+9（10段目）：魔力 9 → 12']);
+    expect(planPublish(BASE, draft).problems).toEqual([]); // 9段目（8）より高い分には、問題ない
+    const low = edited((d) => void (d.items.weapons.staff[3]!.mag = 0));
+    expect(planPublish(BASE, low).problems.some((p) => p.includes('杖の4段目') && p.includes('魔力'))).toBe(true);
+    const bad = edited((d) => void (d.items.weapons.sword[0]!.mag = 1.5));
+    expect(planPublish(BASE, bad).problems.some((p) => p.includes('剣の1段目') && p.includes('魔力'))).toBe(true);
+  });
+
   it('上の段階より高い・強い段は、直すところに出る', () => {
     const draft = edited((d) => {
       d.items.weapons.sword[2]!.price = 10;

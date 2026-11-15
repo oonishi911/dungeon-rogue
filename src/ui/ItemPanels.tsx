@@ -82,7 +82,7 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
         </li>
         <li>
           <b>武器と防具の段階</b>：種類ごとに10段階あり、段階ごとに性能も決めます。上の段階ほど高く、強くしてください。
-          <span className="gen__example">例：武器は攻撃力。防具は「守り」（受けるダメージから引く数）と「ダメージ（%）」（効く属性のダメージを何%に減らすか）。守り5の防具なら、敵の攻撃10で受けるダメージは10−5＝5。ダメージ（%）が50なら、効く属性の攻撃のダメージは、さらに半分になります。</span>
+          <span className="gen__example">例：武器は「攻撃力」と「魔力」。防具は「守り」（受けるダメージから引く数）と「ダメージ（%）」（効く属性のダメージを何%に減らすか）。守り5の防具なら、敵の攻撃10で受けるダメージは10−5＝5。ダメージ（%）が50なら、効く属性の攻撃のダメージは、さらに半分になります。</span>
         </li>
         <li>
           <b>店に並ぶ段階</b>：プレイヤーが持っている、いちばん上の段階の2つ上までが並びます。
@@ -90,6 +90,10 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
         </li>
         <li>
           <b>情報料</b>：情報屋で「はっきり聞く」ときの値段です（1回目の「それとなく聞く」は無料）。
+        </li>
+        <li>
+          <b>武器の魔力</b>：持っていくと、魔法の強さ（呪文のダメージのもと。「魔法」タブ）に足される数です。0なら、魔法は強くなりません。杖を持っているときは、足したあとの合計に、杖の倍率が掛かります。
+          <span className="gen__example">例：魔法の強さが8で、魔力2の武器を持てば、8＋2＝10。杖で倍率1.5なら、10×1.5＝15です。</span>
         </li>
         <li>武器と体質の相性、防具の効く属性、道具の働き（回復量など）は、ここでは変えられません。</li>
       </ul>
@@ -109,6 +113,7 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
             <tr>
               <th scope="col">{isWeapon || isArmor ? '段階と名前' : group === 'information' ? '聞くこと' : '名前'}</th>
               {isWeapon && <th scope="col">攻撃力</th>}
+              {isWeapon && <th scope="col">魔力</th>}
               {isArmor && <th scope="col">守り</th>}
               {isArmor && <th scope="col">ダメージの割合（%）</th>}
               <th scope="col">値段（G）</th>
@@ -129,19 +134,19 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
                         <TextField value={t.name} rule={nameRule(t.name)} changed={t.name !== b?.name} label={`${i + 1}段目の名前`} onChange={(v) => setTier(g, i, { name: v })} />
                       </span>
                     </th>
-                    {(isWeapon ? (['atk'] as const) : (['def', 'rate'] as const)).map((k) => (
-                      <td key={k} data-label={{ atk: '攻撃力', def: '守り', rate: 'ダメージ（%）' }[k]} className={isWeapon ? 'admin__c3' : 'admin__c2'}>
+                    {(isWeapon ? (['atk', 'mag'] as const) : (['def', 'rate'] as const)).map((k) => (
+                      <td key={k} data-label={{ atk: '攻撃力', mag: '魔力', def: '守り', rate: 'ダメージ（%）' }[k]} className="admin__c2">
                         <NumberField
                           value={rec[k] as number}
                           min={ITEM_LIMITS[k].min}
                           max={ITEM_LIMITS[k].max}
                           changed={rec[k] !== b?.[k]} base={b?.[k] as number | undefined}
-                          label={`${t.name}の${{ atk: '攻撃力', def: '守り', rate: 'ダメージの割合' }[k]}`}
+                          label={`${t.name}の${{ atk: '攻撃力', mag: '魔力', def: '守り', rate: 'ダメージの割合' }[k]}`}
                           onChange={(v) => setTier(g, i, { [k]: v })}
                         />
                       </td>
                     ))}
-                    <td data-label="値段（G）" className={isWeapon ? 'admin__c3' : 'admin__c2'}>
+                    <td data-label="値段（G）" className="admin__c2">
                       <NumberField
                         value={t.price}
                         min={ITEM_LIMITS.price.min}
