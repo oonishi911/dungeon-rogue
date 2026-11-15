@@ -344,6 +344,73 @@ button {
   display: none;
 }
 
+/* 強敵・ボスが初めて見えたときの名前。画面の上の方に出て、すっと消える（動きを減らす設定では、ふわっと出る動きなしで同じ時間だけ出す） */
+.explore__intro {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 14%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  font-size: var(--step-2);
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: #ffd9a8;
+  text-shadow: 0 0 0.75rem rgba(224, 90, 48, 0.85), 0 0.0625rem 0.25rem rgb(0 0 0 / 0.9);
+  pointer-events: none;
+  animation: intro-name 1.95s ease-out both;
+}
+
+.explore__intro--boss {
+  font-size: var(--step-3);
+  color: #ffe6a0;
+  text-shadow: 0 0 1rem rgba(240, 196, 106, 0.95), 0 0.0625rem 0.25rem rgb(0 0 0 / 0.9);
+  animation-duration: 2.55s;
+}
+
+.explore__intro-label {
+  font-size: var(--step--1);
+  letter-spacing: 0.4em;
+  color: #e0384a;
+  text-shadow: 0 0.0625rem 0.25rem rgb(0 0 0 / 0.9);
+}
+
+@keyframes intro-name {
+  0% {
+    opacity: 0;
+    transform: translateY(-0.5rem) scale(1.1);
+  }
+  15% {
+    opacity: 1;
+    transform: none;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .explore__intro {
+    animation-name: intro-fade;
+  }
+}
+
+@keyframes intro-fade {
+  0%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 /* 3D表示は Canvas の画面上の大きさに合わせて描くので、縦横比は CSS で決める */
 .explore__view {
   display: block;

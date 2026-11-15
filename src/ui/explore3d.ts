@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { enemyBase, ITEMS } from '../game/data';
 import { gearOf } from '../game/itemMaster';
 import { behaviorsOf, enemyDef, isAdjacent, type MapEnemy } from '../game/enemies';
+import { deathKindOf, type DeathKind } from '../game/deathKind';
 import { upStairs } from '../game/explore';
 import { DIR_DELTA, type CastEvent, type Dir, type ExploreState, type FoeEvent } from '../game/exploreTypes';
 import { dirBetween } from '../game/exploreSight';
@@ -27,7 +28,7 @@ import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
-import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEBRIS, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, FOE_FX, SPLASH_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, QUALITY, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
+import { AFTERGLOW_FX, AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEATH_FX, DEBRIS, GLOW_FX, INTRO_FX, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, FOE_FX, SPLASH_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, QUALITY, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
 import { applyFog, createFog, createGroundMist, litBillboard, worldMapped } from './explore3dKit';
 import { asMetal } from './materialLook';
 import { PostFx } from './postFx';
@@ -90,7 +91,7 @@ export class DungeonView3D {
   private readonly props = new THREE.Group(); // 階段・宝箱・目印
   private readonly fieldGroup = new THREE.Group(); // 床に残る魔法の跡（燃える床・霜の床）
   private fieldMats: Record<'fire' | 'fireLast' | 'frost' | 'frostLast', THREE.MeshBasicMaterial> | null = null;
-  private readonly slashes: { sprite: THREE.Sprite; start: number }[] = []; // 剣の斬撃の残光
+  private readonly slashes: { sprite: THREE.Sprite; start: number; ms?: number; size?: number; aspect?: number }[] = []; // 剣の斬撃の残光（通常攻撃の残光も）
   private readonly rings: { mesh: THREE.Mesh; start: number }[] = []; // 槌の地響きの輪
   private readonly puffs: { sprite: THREE.Sprite; at: Pos; start: number; drift: number }[] = []; // 立ち上る水蒸気
   private readonly stairs: Stairs3D; // 特性ごとの階段の模型
@@ -117,7 +118,13 @@ export class DungeonView3D {
   private spellDir: { dx: number; dz: number } = { dx: 0, dz: 1 }; // 最後に唱えた呪文の向き
   private readonly dying = new Map<number, number>(); // 呪文の矢が当たるまで残す、倒れた敵（uid → 消す時刻）
   private readonly lunges = new Map<number, number>(); // 飛びかかっている敵（uid → 飛びかかり始めた時刻）
-  private readonly collapses = new Map<number, number>(); // 崩れ落ちている、倒れた敵（uid → 崩れ始めた時刻）
+  private readonly collapses = new Map<number, { start: number; kind: DeathKind; fired: boolean }>(); // 倒れていく敵（uid → 倒れ始めた時刻・倒れ方・破片を出したか）
+  // 倒れた敵の破片・霧、攻撃の火花（from：出た場所、vel：速さ、gravity：落ちる強さ（マイナスなら昇る）、spin：回る速さ、base：霧の大きさ（破片は0））
+  private readonly bits: { obj: THREE.Mesh | THREE.Sprite; from: THREE.Vector3; vel: THREE.Vector3; gravity: number; spin: number; start: number; ms: number; base: number }[] = [];
+  private readonly introduced = new Set<number>(); // 登場演出をした強敵・ボス（uid）
+  private intro: { start: number; holdMs: number } | null = null; // 登場演出の最中（カメラが寄っている）
+  /** 強敵・ボスが初めて視界に入ったとき、名前を出すために呼ぶ（画面側が受け取る） */
+  onIntro: ((info: { name: string; boss: boolean }) => void) | null = null;
   private combatZoom = 1; // 戦闘中に寄せている倍率（なめらかに変わる）
   private lastCombatAt = -Infinity; // 最後に戦闘中だった時刻
   private readonly damagePops: { sprite: THREE.Sprite; start: number }[] = [];
@@ -141,12 +148,16 @@ export class DungeonView3D {
       hp: THREE.Sprite;
       ring: THREE.Mesh | null;
       shield: THREE.Mesh | null; // 盾持ちの敵の盾（向いている正面に置く）
+      glow: THREE.Mesh | null; // 自分で光る敵の、足元に広がる光
+      glowSize: number; // 光の直径（マス）
+      glowFlicker: number; // 光のちらつきの大きさ（割合）
       top: number;
       facing: Dir;
     }
   >();
   private prebuild: MapEnemy[] = []; // 階に入ったとき、組み立て待ちの敵（近い順）
   private readonly textures = new Map<string, THREE.Texture>();
+  private readonly glowMats = new Map<string, THREE.MeshBasicMaterial>(); // 敵の光の材料（体質ごと）
   private readonly materials = new Map<string, THREE.SpriteMaterial>();
   private readonly litMaterials = new Map<string, THREE.MeshLambertMaterial>(); // たいまつで照らされるドット絵（敵）
   // 敵のドット絵を立てる板。いつもカメラの方を向けるが、光の当たり方は足元の床と同じになるよう、面の向き（法線）を真上にしてある
@@ -173,6 +184,8 @@ export class DungeonView3D {
     shieldMat: new THREE.MeshLambertMaterial({ color: FOE_FX.shield.color }),
     shotBall: new THREE.SphereGeometry(FOE_FX.shot.size, 12, 8),
     slamRing: new THREE.RingGeometry(0.92, 1, 36).rotateX(-Math.PI / 2),
+    chip: new THREE.TetrahedronGeometry(0.07), // 破片・火花
+    glowPlane: new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), // 敵の足元の光
     fieldPlate: new THREE.PlaneGeometry(FOE_FX.field.size, FOE_FX.field.size).rotateX(-Math.PI / 2),
     targetRing: new THREE.RingGeometry(0.32, 0.42, 24).rotateX(-Math.PI / 2),
     // 宝箱の素材。テクスチャ（public/textures/chest/）を読み込むまでは金色で描く
@@ -394,7 +407,7 @@ export class DungeonView3D {
     this.updateRoars(now);
     this.updateSkillFx(now);
     this.spellFx.update(now);
-    const zoom = this.updateCombatZoom(s, now, dt) * this.pulseZoom(now);
+    const zoom = this.updateCombatZoom(s, now, dt) * this.pulseZoom(now) * this.introZoom(now);
     if (Math.abs(zoom - this.camera.zoom) > 1e-4) {
       this.camera.zoom = zoom;
       this.camera.updateProjectionMatrix();
@@ -445,6 +458,11 @@ export class DungeonView3D {
       view.mark.position.set(at.x, view.top + 0.15, at.y);
       view.hp.position.set(at.x, 0.06, at.y);
       view.ring?.position.set(at.x, 0.02, at.y);
+      if (view.glow) {
+        const wobble = this.reduceMotion ? 0 : view.glowFlicker * Math.sin(now * 0.007 + e.uid * 1.7) * Math.sin(now * 0.0031 + e.uid);
+        view.glow.position.set(at.x, GLOW_FX.y, at.y);
+        view.glow.scale.setScalar(view.glowSize * (1 + wobble));
+      }
       if (view.shield) {
         const d = DIR_DELTA[view.facing];
         view.shield.position.set(at.x + d.x * FOE_FX.shield.reach, FOE_FX.shield.y, at.y + d.y * FOE_FX.shield.reach);
@@ -454,6 +472,7 @@ export class DungeonView3D {
     this.updateKnock(now);
     this.updateDying(now);
     this.updateCollapses(now);
+    this.updateBits(now);
     this.updateWalkTarget(frame.walkTarget);
     this.updateWalkPath(frame.walkPath);
     if (this.post) this.post.render(this.renderer, this.scene, this.camera, this.reduceMotion ? 0 : dt);
@@ -642,7 +661,7 @@ export class DungeonView3D {
     return reach * (1 - (u - 0.5) / 0.5) ** 2;
   }
 
-  /** 倒れた敵を、その場で崩れ落ちさせる（終わったら消す）。動きを減らす設定では、すぐ消す */
+  /** 倒れた敵を、倒れ方（deathKind.ts）に合わせて消す。動きを減らす設定では、すぐ消す */
   private collapseEnemy(uid: number) {
     const view = this.enemies.get(uid);
     if (!view || !view.body.visible || this.reduceMotion) {
@@ -652,21 +671,119 @@ export class DungeonView3D {
     view.mark.visible = view.hp.visible = false;
     if (view.ring) view.ring.visible = false;
     if (view.shield) view.shield.visible = false;
-    this.collapses.set(uid, performance.now());
+    if (view.glow) view.glow.visible = false;
+    const kind = deathKindOf(view.id, enemyBase(view.id));
+    const fired = kind === 'crumble' || kind === 'vanish'; // 体が残る倒れ方は、最初から破片・霧を出す
+    this.collapses.set(uid, { start: performance.now(), kind, fired });
+    if (fired) this.emitDeathBits(view, kind);
   }
 
-  /** 崩れ落ちる動き：つぶれながら横へ倒れ、床に沈む */
+  /** 体の大きさを変える（立体の模型は横を同じに、ドット絵の板は足元をそろえる） */
+  private squash(view: { model: EnemyModel | null; body: THREE.Object3D }, sx: number, sy: number) {
+    if (view.model) view.body.scale.set(sx, sy, sx);
+    else {
+      view.body.scale.set(sx, sy, 1);
+      view.body.position.y = 0.5 * sy;
+    }
+  }
+
+  /** 倒れた敵の破片（氷・スライム・岩）か霧（霊体）を、体のあった場所から出す */
+  private emitDeathBits(view: { body: THREE.Object3D }, kind: Exclude<DeathKind, 'collapse'>) {
+    const fx = DEATH_FX[kind];
+    const at = new THREE.Vector3(view.body.position.x, kind === 'vanish' ? 0.35 : 0.4, view.body.position.z);
+    this.emitBits(at, { pieces: fx.pieces, speed: fx.speed, up: fx.up, gravity: fx.gravity, size: fx.size, color: fx.color, ms: fx.ms, mist: kind === 'vanish' });
+  }
+
+  /** 破片か霧をまとめて出す。mist なら、広がりながら薄れる霧の玉。そうでなければ、飛び散って落ちる破片 */
+  private emitBits(at: THREE.Vector3, o: { pieces: number; speed: number; up: number; gravity: number; size: number; color: number; ms: number; mist?: boolean; additive?: boolean; delay?: number }) {
+    const now = performance.now();
+    for (let i = 0; i < o.pieces; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = o.speed * (0.5 + Math.random() * 0.8);
+      const vel = new THREE.Vector3(Math.cos(angle) * speed, o.up * (0.6 + Math.random() * 0.8), Math.sin(angle) * speed);
+      let obj: THREE.Mesh | THREE.Sprite;
+      let base = 0;
+      if (o.mist) {
+        const map = this.softTexture('wisp', 32, (ctx) => {
+          const g = ctx.createRadialGradient(16, 16, 1, 16, 16, 15);
+          g.addColorStop(0, 'rgba(255,255,255,0.9)');
+          g.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, 32, 32);
+        });
+        obj = new THREE.Sprite(new THREE.SpriteMaterial({ map, color: o.color, transparent: true, depthTest: false, opacity: 0.4 }));
+        base = 0.3 * o.size * (0.7 + Math.random() * 0.6);
+        obj.scale.setScalar(base);
+        obj.renderOrder = 14;
+      } else {
+        obj = new THREE.Mesh(this.shared.chip, new THREE.MeshBasicMaterial({ color: o.color, transparent: true, depthWrite: false, ...(o.additive ? { blending: THREE.AdditiveBlending } : {}) }));
+        obj.scale.setScalar(o.size * (0.6 + Math.random() * 0.9));
+        obj.renderOrder = 14;
+      }
+      obj.position.copy(at);
+      obj.visible = false;
+      this.scene.add(obj);
+      this.bits.push({ obj, from: at.clone(), vel, gravity: o.gravity, spin: (Math.random() - 0.5) * 14, start: now + (o.delay ?? 0) + (o.mist ? i * 70 : 0), ms: o.ms, base });
+    }
+  }
+
+  /** 破片・霧を動かし、消え終わったものを片付ける */
+  private updateBits(now: number) {
+    for (let k = this.bits.length - 1; k >= 0; k--) {
+      const b = this.bits[k]!;
+      const t = (now - b.start) / b.ms;
+      if (t < 0) continue;
+      if (t >= 1) {
+        this.scene.remove(b.obj);
+        (b.obj.material as THREE.Material).dispose();
+        this.bits.splice(k, 1);
+        continue;
+      }
+      const sec = (now - b.start) / 1000;
+      b.obj.visible = true;
+      b.obj.position.set(b.from.x + b.vel.x * sec, Math.max(0.03, b.from.y + b.vel.y * sec - 0.5 * b.gravity * sec * sec), b.from.z + b.vel.z * sec);
+      (b.obj.material as THREE.Material & { opacity: number }).opacity = (b.base > 0 ? 0.4 : 1) * (1 - t * t);
+      if (b.base > 0) b.obj.scale.setScalar(b.base * (1 + 1.6 * t));
+      else {
+        b.obj.rotation.x += b.spin * 0.016;
+        b.obj.rotation.z += b.spin * 0.012;
+      }
+    }
+  }
+
+  /** 倒れていく動き。倒れ方ごとに違う：氷は砕け、スライムは弾け、硬い敵は崩れ、霊体は霧になって昇り、ほかはつぶれて倒れる */
   private updateCollapses(now: number) {
-    for (const [uid, start] of this.collapses) {
+    for (const [uid, c] of this.collapses) {
       const view = this.enemies.get(uid);
-      const u = (now - start) / ENEMY_MOTION.collapse.ms;
+      const fx = c.kind === 'collapse' ? ENEMY_MOTION.collapse : DEATH_FX[c.kind];
+      const ms = now - c.start;
+      const u = ms / fx.ms;
       if (!view || u >= 1) {
         this.collapses.delete(uid);
         this.removeEnemyView(uid);
         continue;
       }
       const e = u * u * (3 - 2 * u);
-      if (view.model) {
+      if (c.kind === 'shatter' || c.kind === 'burst') {
+        const hideMs = DEATH_FX[c.kind].hideMs;
+        if (ms < hideMs) {
+          // 砕ける前にふくらむ（スライムは大きくふくらむ）
+          const k = ms / hideMs;
+          if (c.kind === 'burst') this.squash(view, 1 + 0.55 * k, 1 - 0.15 * k);
+          else this.squash(view, 1 + 0.08 * k, 1 + 0.08 * k);
+        } else {
+          view.body.visible = false;
+          if (!c.fired) {
+            c.fired = true;
+            this.emitDeathBits(view, c.kind);
+          }
+        }
+      } else if (c.kind === 'vanish') {
+        // 細く伸びながら昇って消える
+        this.squash(view, Math.max(0.05, 1 - 0.7 * e), 1 + 0.45 * e);
+        if (view.model) view.body.position.y = 0.35 * e;
+        if (u > 0.85) view.body.visible = false;
+      } else if (view.model) {
         view.body.scale.set(1 + 0.3 * e, Math.max(0.05, 1 - 0.9 * e), 1 + 0.3 * e);
         view.body.rotation.z = 0.35 * e * (uid % 2 === 0 ? 1 : -1);
         view.body.position.y = -0.05 * e;
@@ -677,11 +794,71 @@ export class DungeonView3D {
     }
   }
 
+  /** 縁をなめらかにした、丸い光の絵（size は一辺のピクセル数。draw は 0〜size の座標で描く） */
+  private softTexture(key: string, size: number, draw: (ctx: CanvasRenderingContext2D) => void): THREE.Texture {
+    const tex = this.texture(key, size, size, draw);
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearFilter;
+    return tex;
+  }
+
   /** 主人公が at のマスの敵を攻撃したとき：敵の方を向いて、武器を振る */
-  heroAttack(at: Pos) {
+  heroAttack(at: Pos, glow?: { weapon: WeaponType | null; tier: number }) {
     const me = this.shownState?.player;
     if (me && Math.abs(me.x - at.x) + Math.abs(me.y - at.y) === 1) this.heroDir = dirBetween(me, at);
     this.hero.swing();
+    if (glow) this.afterglow(at, glow.weapon, glow.tier);
+  }
+
+  /**
+   * 通常攻撃の残光。武器の段階が上がるほど派手になる：
+   * 1〜3段は細い白青の斬撃1本、4〜7段は金色の2本、8〜10段は橙の3本と火花。剣は斬撃、槌と杖は衝撃の光と火花
+   */
+  private afterglow(at: Pos, weapon: WeaponType | null, tier: number) {
+    if (this.reduceMotion) return;
+    const idx = Math.max(0, AFTERGLOW_FX.tiers.findIndex((t) => tier <= t.upTo));
+    const fx = AFTERGLOW_FX.tiers[idx]!;
+    const now = performance.now();
+    if (weapon === 'hammer' || weapon === 'staff') {
+      const map = this.softTexture('flash', 48, (ctx) => {
+        const g = ctx.createRadialGradient(24, 24, 1, 24, 24, 23);
+        g.addColorStop(0, 'rgba(255,255,255,1)');
+        g.addColorStop(0.4, 'rgba(255,255,255,0.45)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 48, 48);
+      });
+      const color = weapon === 'staff' ? [0xc8a8ff, 0xe0c8ff, 0xffffff][idx]! : [0xd8d0c0, 0xffe27a, 0xffa860][idx]!;
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map, color, transparent: true, depthTest: false, opacity: 0, blending: THREE.AdditiveBlending }));
+      sprite.renderOrder = 16;
+      sprite.position.set(at.x, AFTERGLOW_FX.y, at.y);
+      this.scene.add(sprite);
+      this.slashes.push({ sprite, start: now, ms: fx.ms, size: fx.size * 1.4, aspect: 1 });
+      this.emitBits(new THREE.Vector3(at.x, AFTERGLOW_FX.y, at.y), { pieces: 2 + idx * 3, speed: 1.4, up: 1.2, gravity: 5, size: 0.8, color, ms: fx.ms + 150, additive: true });
+      return;
+    }
+    const map = this.texture(`afterglow${idx}`, 64, 32, (ctx) => {
+      const g = ctx.createLinearGradient(0, 0, 64, 0);
+      g.addColorStop(0, `${fx.color}0)`);
+      g.addColorStop(0.5, `${fx.color}1)`);
+      g.addColorStop(1, `${fx.color}0)`);
+      ctx.strokeStyle = g;
+      ctx.lineWidth = 3 + idx * 2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(2, 24);
+      ctx.quadraticCurveTo(32, 4, 62, 24);
+      ctx.stroke();
+    });
+    for (let i = 0; i < fx.count; i++) {
+      const spread = fx.count === 1 ? 0 : (i / (fx.count - 1) - 0.5) * 1.6;
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map, transparent: true, depthTest: false, opacity: 0, rotation: 0.55 + spread, blending: THREE.AdditiveBlending }));
+      sprite.renderOrder = 16;
+      sprite.position.set(at.x, AFTERGLOW_FX.y, at.y);
+      this.scene.add(sprite);
+      this.slashes.push({ sprite, start: now + i * AFTERGLOW_FX.stagger, ms: fx.ms, size: fx.size, aspect: 0.5 });
+    }
+    if (idx >= 2) this.emitBits(new THREE.Vector3(at.x, AFTERGLOW_FX.y, at.y), { pieces: AFTERGLOW_FX.sparks, speed: 1.6, up: 1.3, gravity: 5, size: 0.8, color: 0xffb060, ms: fx.ms + 200, additive: true });
   }
 
   /** 攻撃したとき・攻撃されたときに、画面を少し拡大縮小する。動きを減らす設定では何もしない */
@@ -852,8 +1029,8 @@ export class DungeonView3D {
   private updateSkillFx(now: number) {
     const fx = FOE_FX.skill;
     for (let k = this.slashes.length - 1; k >= 0; k--) {
-      const { sprite, start } = this.slashes[k]!;
-      const t = (now - start) / fx.slash.ms;
+      const { sprite, start, ms, size, aspect } = this.slashes[k]!;
+      const t = (now - start) / (ms ?? fx.slash.ms);
       if (t < 0) continue;
       if (t >= 1) {
         this.scene.remove(sprite);
@@ -862,7 +1039,8 @@ export class DungeonView3D {
         continue;
       }
       sprite.material.opacity = 1 - t;
-      sprite.scale.set(fx.slash.size * (0.8 + 0.4 * t), (fx.slash.size / 2) * (0.8 + 0.4 * t), 1);
+      const w = (size ?? fx.slash.size) * (0.8 + 0.4 * t);
+      sprite.scale.set(w, w * (aspect ?? 0.5), 1);
     }
     for (let k = this.rings.length - 1; k >= 0; k--) {
       const { mesh, start } = this.rings[k]!;
@@ -1044,6 +1222,26 @@ export class DungeonView3D {
     return this.combatZoom;
   }
 
+  /** 登場演出を始める：カメラが寄り、画面側が名前を出す */
+  private startIntro(name: string, boss: boolean) {
+    this.intro = { start: performance.now(), holdMs: boss ? INTRO_FX.bossHoldMs : INTRO_FX.holdMs };
+    this.onIntro?.({ name, boss });
+  }
+
+  /** 登場演出のあいだ、少し寄って戻る倍率（動きを減らす設定では寄らない） */
+  private introZoom(now: number): number {
+    if (!this.intro || this.reduceMotion) return 1;
+    const { start, holdMs } = this.intro;
+    const t = now - start;
+    if (t >= INTRO_FX.inMs + holdMs + INTRO_FX.outMs) {
+      this.intro = null;
+      return 1;
+    }
+    const ease = (x: number) => x * x * (3 - 2 * x);
+    const k = t < INTRO_FX.inMs ? ease(t / INTRO_FX.inMs) : t < INTRO_FX.inMs + holdMs ? 1 : 1 - ease((t - INTRO_FX.inMs - holdMs) / INTRO_FX.outMs);
+    return 1 + (INTRO_FX.zoom - 1) * k;
+  }
+
   /** 攻撃したとき・攻撃されたときの効果の倍率。効果のあいだだけ 1 からずれる */
   private pulseZoom(now: number): number {
     if (!this.pulse) return 1;
@@ -1092,6 +1290,8 @@ export class DungeonView3D {
     this.pathDots.dispose();
     this.hero.dispose();
     for (const view of this.enemies.values()) view.model?.dispose();
+    for (const b of this.bits) (b.obj.material as THREE.Material).dispose();
+    for (const m of this.glowMats.values()) m.dispose();
     this.stairs.dispose();
     for (const { sprite } of this.damagePops) {
       sprite.material.map?.dispose();
@@ -1484,6 +1684,12 @@ export class DungeonView3D {
         }
       }
       if (view.shield) view.shield.visible = true;
+      if (view.glow) view.glow.visible = true;
+      // 強敵とボスは、初めて視界に入ったときに、カメラを寄せて名前を出す
+      if ((e.elite || def.boss) && !this.introduced.has(e.uid)) {
+        this.introduced.add(e.uid);
+        this.startIntro(def.name, def.boss === true);
+      }
       // 向き：歩いたらその向き、止まっていても主人公を追っていれば主人公の方を向く
       const from = frame.from.enemies.get(e.uid);
       if (from && (from.x !== e.pos.x || from.y !== e.pos.y)) view.facing = facingToward(from, e.pos);
@@ -1514,8 +1720,42 @@ export class DungeonView3D {
         view.body.visible = view.mark.visible = view.hp.visible = false;
         if (view.ring) view.ring.visible = false;
         if (view.shield) view.shield.visible = false;
+        if (view.glow) view.glow.visible = false;
       }
     }
+  }
+
+  /** 自分で光る体質の敵の、足元の光の板（体質ごとに材料を1つ使い回す）。光らない敵は null */
+  private makeGlow(element: string): THREE.Mesh | null {
+    if (!(element in GLOW_FX.colors)) return null;
+    let mat = this.glowMats.get(element);
+    if (!mat) {
+      const map = this.softTexture('glow', 64, (ctx) => {
+        const g = ctx.createRadialGradient(32, 32, 2, 32, 32, 31);
+        g.addColorStop(0, 'rgba(255,255,255,1)');
+        g.addColorStop(0.5, 'rgba(255,255,255,0.35)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 64, 64);
+      });
+      mat = new THREE.MeshBasicMaterial({
+        map,
+        color: GLOW_FX.colors[element as keyof typeof GLOW_FX.colors],
+        transparent: true,
+        opacity: GLOW_FX.opacity[element as keyof typeof GLOW_FX.opacity],
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -3,
+      });
+      this.glowMats.set(element, mat);
+    }
+    return new THREE.Mesh(this.shared.glowPlane, mat);
+  }
+
+  /** 光の直径（マス）。半径の2倍。強敵・ボスは大きい */
+  private glowSizeOf(element: string, elite: boolean): number {
+    return GLOW_FX.radius[element as keyof typeof GLOW_FX.radius] * 2 * (elite ? GLOW_FX.eliteRate : 1);
   }
 
   /** 敵1体の見た目（模型か絵の板、頭上のマーク、体力の棒、強敵の輪）を作って、隠したまま場面に置く */
@@ -1536,10 +1776,16 @@ export class DungeonView3D {
     const top = model?.height ?? 1;
     // 盾持ちの敵は、向いている正面に盾の板を持つ
     const shield = behaviorsOf(def).includes('shield') ? new THREE.Mesh(this.shared.shieldPlate, this.shared.shieldMat) : null;
-    const view = { id: e.id, body, model, mark: new THREE.Sprite(), hp: new THREE.Sprite(), ring, shield, top, facing: 'down' as Dir };
+    // 炎・光・闇・氷の敵は、自分で光る（足元に光が広がる。強敵・ボスは大きい）
+    const glow = this.makeGlow(def.element);
+    const view = { id: e.id, body, model, mark: new THREE.Sprite(), hp: new THREE.Sprite(), ring, shield, glow, glowSize: glow ? this.glowSizeOf(def.element, e.elite || def.boss === true) : 0, glowFlicker: glow ? GLOW_FX.flicker[def.element as keyof typeof GLOW_FX.flicker] : 0, top, facing: 'down' as Dir };
     view.body.visible = view.mark.visible = view.hp.visible = false;
     if (view.ring) view.ring.visible = false;
     if (view.shield) view.shield.visible = false;
+    if (view.glow) {
+      view.glow.visible = false;
+      this.scene.add(view.glow);
+    }
     this.scene.add(view.body, view.mark, view.hp);
     if (ring) this.scene.add(ring);
     if (shield) this.scene.add(shield);
@@ -1595,6 +1841,7 @@ export class DungeonView3D {
     this.scene.remove(view.body, view.mark, view.hp);
     if (view.ring) this.scene.remove(view.ring);
     if (view.shield) this.scene.remove(view.shield);
+    if (view.glow) this.scene.remove(view.glow);
     view.model?.dispose();
     this.enemies.delete(uid);
   }
