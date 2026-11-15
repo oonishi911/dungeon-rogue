@@ -1,5 +1,6 @@
 // 開発用の管理画面（Admin.tsx）の、ダンジョンの設定ファイル（src/game/dungeons/<ID>.json）を選ぶ・作る・消すところと、
 // 「名前と説明」「ダンジョンに出る敵」のタブ。
+// 「ダンジョンに出る敵」は、PCの広い画面では、敵×属性の表。狭い画面（スマホ）では、横にスクロールしなくていいよう、属性を1つ選んで、その属性の敵を縦に並べる。
 // ダンジョンは、プレイヤーが遊ぶ前に選ぶ（1つのファイルが1つのダンジョン）。新しいダンジョンは、今あるダンジョンを複製して作る。
 // ほかのタブ（階の数・広さ・満腹度など）は GenPanels.tsx にあり、ここで選んだダンジョンの値を変える
 
@@ -10,7 +11,8 @@ import { enemyIds, LIMITS, MASTER_TRAITS, setWeight, TRAIT_LABELS, weightOf, typ
 import { textError } from '../game/fieldCheck';
 import { DUNGEON_LIMITS, type DungeonFile } from '../game/genMaster';
 import type { EnemyId, TraitId } from '../game/types';
-import { cls, NumberField, TextField } from './adminParts';
+import { enemyStrength } from '../game/enemyView';
+import { cls, NumberField, ResetMark, TextField, useNarrow } from './adminParts';
 
 const STATUS_TEXT = { new: '（新しく作る）', changed: '（変更あり）', same: '' } as const;
 
@@ -158,6 +160,100 @@ export function PoolPanel(props: { master: EnemyMaster; base: Encounters | undef
   const setTrait = (trait: TraitId, patch: Partial<DungeonEnemies>) => props.setDraft((e) => ({ ...e, [trait]: { ...e[trait], ...patch } }));
   const nameOf = (id: EnemyId) => master.enemies[id]?.name ?? id;
 
+  // 狭い画面：属性を1つ選んで、その属性の敵を縦に並べる
+  const narrow = useNarrow();
+  const [sel, setSel] = useState<TraitId>(MASTER_TRAITS[0]!);
+  const [query, setQuery] = useState('');
+  const [onlyUsed, setOnlyUsed] = useState(false);
+  const bossSelect = (t: TraitId, className: string) => (
+    <select
+      className={cls(className, draft[t].boss !== base[t].boss)}
+      value={draft[t].boss}
+      aria-label={`${TRAIT_LABELS[t]}の属性のボス`}
+      onChange={(ev) => setTrait(t, { boss: ev.target.value as EnemyId })}
+    >
+      {!bossIds.includes(draft[t].boss) && <option value={draft[t].boss}>（ボスではない敵）</option>}
+      {bossIds.map((id) => (
+        <option key={id} value={id}>
+          {nameOf(id)}
+        </option>
+      ))}
+    </select>
+  );
+
+  if (narrow) {
+    const pool = draft[sel].pool;
+    const q = query.trim().toLowerCase();
+    const shown = fieldIds.filter((id) => (!q || nameOf(id).toLowerCase().includes(q) || id.toLowerCase().includes(q)) && (!onlyUsed || weightOf(pool, id) > 0));
+    const used = fieldIds.filter((id) => weightOf(pool, id) > 0).length;
+    // 強敵の元になる敵（enemies.ts の strongestOf と同じ：強さの目安がいちばん大きい。同じなら、並びの先のほう）
+    const eliteId = [...pool].sort((a, b) => enemyStrength(master.enemies[b] ?? { hp: 0, atk: 0 }) - enemyStrength(master.enemies[a] ?? { hp: 0, atk: 0 }))[0];
+    return (
+      <section className="admin__section" role="tabpanel" id="admin-pool-panel" aria-labelledby="admin-pool-tab">
+        <h2 className="admin__heading">ダンジョンに出る敵（{props.dungeonName}）</h2>
+        <p className="admin__note">
+          ダンジョンの属性（遊ぶたびに、5つのどれかに決まる）を選んで、その属性のときに出る敵の出やすさを決めます（0：出ない。数が大きいほど出やすい）。ボスは、ボスにした敵から選びます。
+        </p>
+        <div className="admin__traitpick" role="group" aria-label="ダンジョンの属性">
+          {MASTER_TRAITS.map((t) => {
+            const changed = JSON.stringify(draft[t]) !== JSON.stringify(base[t]);
+            return (
+              <button key={t} type="button" className="admin__traitbtn" aria-pressed={t === sel} onClick={() => setSel(t)}>
+                {TRAIT_LABELS[t]}
+                {changed && <span className="admin__tab-mark" aria-label="（変更あり）" />}
+              </button>
+            );
+          })}
+        </div>
+        <div className="admin__bosspick">
+          <span>{TRAIT_LABELS[sel]}の属性のボス</span>
+          <span className="admin__numrow">
+            {bossSelect(sel, 'admin__select')}
+            <ResetMark show={draft[sel].boss !== base[sel].boss} label={`${TRAIT_LABELS[sel]}の属性のボスを公開版の「${nameOf(base[sel].boss)}」に戻す`} onClick={() => setTrait(sel, { boss: base[sel].boss })} />
+          </span>
+        </div>
+        <div className="admin__toolbar admin__toolbar--pool">
+          <label className="admin__search">
+            <span className="visually-hidden">敵を探す</span>
+            <input type="search" className="admin__name" value={query} placeholder="名前で探す" aria-label="敵を探す（名前か ID の一部）" onChange={(ev) => setQuery(ev.target.value)} />
+          </label>
+          <label className="admin__toggle">
+            <input type="checkbox" className="admin__check" checked={onlyUsed} onChange={(ev) => setOnlyUsed(ev.target.checked)} />
+            出る敵だけ
+          </label>
+          <span className="admin__count" role="status">
+            出る敵 {used}種 / {fieldIds.length}種
+          </span>
+        </div>
+        {shown.length === 0 && <p className="admin__note">条件に合う敵がいません。</p>}
+        <ul className="admin__pool">
+          {shown.map((id) => {
+            const w = weightOf(pool, id);
+            const was = weightOf(base[sel].pool, id);
+            return (
+              <li key={id} className="admin__poolrow">
+                <span className="admin__poolname">
+                  {nameOf(id)}
+                  {id === eliteId && <span className="admin__badge">強敵の元</span>}
+                </span>
+                <span className="admin__poolshare">{w > 0 && pool.length > 0 ? `出る確率 ${Math.round((w / pool.length) * 100)}%` : '出ない'}</span>
+                <NumberField
+                  value={w}
+                  min={0}
+                  max={LIMITS.weight.max}
+                  changed={w !== was}
+                  base={was}
+                  label={`${TRAIT_LABELS[sel]}の属性での${nameOf(id)}の出やすさ`}
+                  onChange={(v) => setTrait(sel, { pool: setWeight(draft[sel].pool, id, v) })}
+                />
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    );
+  }
+
   return (
     <section className="admin__section" role="tabpanel" id="admin-pool-panel" aria-labelledby="admin-pool-tab">
       <h2 className="admin__heading">ダンジョンに出る敵（{props.dungeonName}）</h2>
@@ -203,20 +299,7 @@ export function PoolPanel(props: { master: EnemyMaster; base: Encounters | undef
             <tr className="admin__boss-row">
               <th scope="row">ボス</th>
               {MASTER_TRAITS.map((t) => (
-                <td key={t}>
-                  <select
-                    className={cls('admin__select', draft[t].boss !== base[t].boss)}
-                    value={draft[t].boss}
-                    aria-label={`${TRAIT_LABELS[t]}の属性のボス`}
-                    onChange={(ev) => setTrait(t, { boss: ev.target.value as EnemyId })}
-                  >
-                    {!bossIds.includes(draft[t].boss) && <option value={draft[t].boss}>（ボスではない敵）</option>}
-                    {bossIds.map((id) => (
-                      <option key={id} value={id}>
-                        {nameOf(id)}
-                      </option>
-                    ))}
-                  </select>
+                <td key={t}>{bossSelect(t, 'admin__select')}
                 </td>
               ))}
             </tr>

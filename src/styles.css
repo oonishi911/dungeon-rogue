@@ -2582,3 +2582,126 @@ button {
 .admin__tabs--wrap .admin__tab {
   margin-bottom: 0;
 }
+
+/* 「ダンジョンに出る敵」（狭い画面）：属性のボタン、その属性のボス、敵ごとの出やすさ */
+.admin__traitpick {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: 0 0 0.75rem;
+}
+
+.admin__traitbtn {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 0.25rem;
+  color: var(--bone-dim);
+  background: var(--pine-deep);
+  border: 1px solid var(--pine-line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: var(--step--1);
+  cursor: pointer;
+}
+
+.admin__traitbtn[aria-pressed='true'] {
+  color: var(--bone);
+  border-color: var(--bone);
+  font-weight: 700;
+}
+
+.admin__bosspick {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0 0 0.75rem;
+  font-size: var(--step--1);
+}
+
+.admin__bosspick .admin__numrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.admin__bosspick .admin__select {
+  flex: 1 1 10rem;
+  min-height: 2.75rem;
+  font-size: 1rem;
+}
+
+.admin__toolbar--pool {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.admin__pool {
+  display: grid;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--pine-line);
+  border-radius: 10px;
+  background: var(--pine);
+}
+
+.admin__poolrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 0.75rem;
+  align-items: center;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--pine-line);
+}
+
+.admin__poolrow:last-child {
+  border-bottom: none;
+}
+
+.admin__poolname {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.admin__poolshare {
+  grid-column: 1;
+  grid-row: 2;
+  color: var(--bone-dim);
+  font-size: 0.8125rem;
+}
+
+.admin__poolrow .admin__field {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+
+.admin__poolrow .admin__number {
+  width: 3.5rem;
+  min-height: 2.75rem;
+  font-size: 1rem;
+  text-align: right;
+}
+
+.admin__poolrow .admin__reset {
+  min-height: 2.25rem;
+}
+
+.admin__badge {
+  padding: 0.05rem 0.4rem;
+  color: var(--procure);
+  border: 1px solid var(--procure);
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
