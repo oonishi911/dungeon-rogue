@@ -3,104 +3,104 @@
     "sword": [
       {
         "name": "剣",
-        "atk": 1,
+        "atk": 2,
         "price": 30
       },
       {
         "name": "剣+1",
-        "atk": 2,
+        "atk": 4,
         "price": 40
       },
       {
         "name": "剣+2",
-        "atk": 3,
+        "atk": 6,
         "price": 70
       },
       {
         "name": "剣+3",
-        "atk": 4,
+        "atk": 8,
         "price": 100
       },
       {
         "name": "剣+4",
-        "atk": 5,
+        "atk": 10,
         "price": 150
       },
       {
         "name": "剣+5",
-        "atk": 6,
+        "atk": 12,
         "price": 230
       },
       {
         "name": "剣+6",
-        "atk": 7,
+        "atk": 14,
         "price": 340
       },
       {
         "name": "剣+7",
-        "atk": 8,
+        "atk": 16,
         "price": 510
       },
       {
         "name": "剣+8",
-        "atk": 9,
+        "atk": 18,
         "price": 770
       },
       {
         "name": "剣+9",
-        "atk": 10,
+        "atk": 20,
         "price": 1150
       }
     ],
     "hammer": [
       {
         "name": "槌",
-        "atk": 1,
+        "atk": 2,
         "price": 30
       },
       {
         "name": "槌+1",
-        "atk": 2,
+        "atk": 4,
         "price": 40
       },
       {
         "name": "槌+2",
-        "atk": 3,
+        "atk": 6,
         "price": 70
       },
       {
         "name": "槌+3",
-        "atk": 4,
+        "atk": 8,
         "price": 100
       },
       {
         "name": "槌+4",
-        "atk": 5,
+        "atk": 10,
         "price": 150
       },
       {
         "name": "槌+5",
-        "atk": 6,
+        "atk": 12,
         "price": 230
       },
       {
         "name": "槌+6",
-        "atk": 7,
+        "atk": 14,
         "price": 340
       },
       {
         "name": "槌+7",
-        "atk": 8,
+        "atk": 16,
         "price": 510
       },
       {
         "name": "槌+8",
-        "atk": 9,
+        "atk": 18,
         "price": 770
       },
       {
         "name": "槌+9",
-        "atk": 10,
+        "atk": 20,
         "price": 1150
       }
     ],
