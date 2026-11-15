@@ -84,6 +84,7 @@ export interface Fog {
     fogPlayer: { value: THREE.Vector2 };
     fogRadius: { value: number }; // 視界の半径（マス。持っていった道具で変わる）に半マス足したもの。たいまつのゆらぎで少し動く
     fogTime: { value: number }; // 霧の模様を流すための時間（秒。「動きを減らす」設定では止まる）
+    fogNoiseTex: { value: THREE.DataTexture }; // 霧の模様（先に計算しておいた、つなぎ目のないノイズの絵）
   };
   /** 状態が変わったときに、目標の見え方を入れる（階が変わったら地図を作り直し、今の見え方にすぐ合わせる） */
   setTargets(state: ExploreState, visible: Set<number>): void;
@@ -108,6 +109,7 @@ export function createFog(): Fog {
     fogPlayer: { value: new THREE.Vector2() },
     fogRadius: { value: EXPLORE_CONFIG.sightRadius + 0.5 },
     fogTime: { value: 0 },
+    fogNoiseTex: { value: fogNoiseTexture() },
   };
   let radius = EXPLORE_CONFIG.sightRadius + 0.5;
   const write = () => {
@@ -173,15 +175,57 @@ export function createFog(): Fog {
   };
 }
 
-/** 霧の模様（もやもやしたノイズ）。fogNoise は 0〜1 */
-const FOG_NOISE_GLSL = `
-  float fogHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
-  float fogValue( vec2 p ) {
-    vec2 i = floor( p ), f = fract( p );
-    vec2 u = f * f * ( 3.0 - 2.0 * f );
-    return mix( mix( fogHash( i ), fogHash( i + vec2( 1.0, 0.0 ) ), u.x ), mix( fogHash( i + vec2( 0.0, 1.0 ) ), fogHash( i + vec2( 1.0, 1.0 ) ), u.x ), u.y );
+/**
+ * 霧の模様（もやもやしたノイズ）の絵。以前は描くピクセルごとに、乱数を何十回も計算してノイズを作っていたが、
+ * 同じ模様を最初に1回だけ計算して絵にしておき、ピクセルごとには絵を読むだけにする（描く量がずっと減る）。
+ * 絵は、つなぎ目なく繰り返せる（格子の乱数を、NOISE.period 個ごとに繰り返す）値のノイズを、細かさの違う2段重ねたもの。
+ * 1段目の格子は絵の幅に NOISE.period 個、2段目はその2倍の細かさ。値は 0〜1（1枚の絵に2段分を混ぜてある）
+ */
+const NOISE = { period: 16, size: 256 };
+let noiseTexture: THREE.DataTexture | null = null;
+
+function fogNoiseTexture(): THREE.DataTexture {
+  if (noiseTexture) return noiseTexture;
+  const { period, size } = NOISE;
+  // 格子の乱数（決まった数列なので、いつも同じ模様）
+  let seed = 0x9e3779b9;
+  const lattice = Float32Array.from({ length: period * period }, () => {
+    seed = (Math.imul(seed ^ (seed >>> 15), 0x2c1b3c6d) + 0x297a2d39) | 0;
+    seed ^= seed >>> 12;
+    return (seed >>> 0) / 4294967296;
+  });
+  const wrap = (v: number) => ((v % period) + period) % period;
+  const at = (x: number, y: number) => lattice[wrap(y) * period + wrap(x)]!;
+  const value = (x: number, y: number) => {
+    const xi = Math.floor(x);
+    const yi = Math.floor(y);
+    const fx = x - xi;
+    const fy = y - yi;
+    const u = fx * fx * (3 - 2 * fx);
+    const v = fy * fy * (3 - 2 * fy);
+    const top = at(xi, yi) + (at(xi + 1, yi) - at(xi, yi)) * u;
+    const bottom = at(xi, yi + 1) + (at(xi + 1, yi + 1) - at(xi, yi + 1)) * u;
+    return top + (bottom - top) * v;
+  };
+  const data = new Uint8Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const px = ((x + 0.5) / size) * period; // 絵の読み取り位置（texel の中心）
+      const py = ((y + 0.5) / size) * period;
+      data[y * size + x] = Math.round(255 * (0.65 * value(px, py) + 0.35 * value(px * 2 + 17.3, py * 2 + 17.3)));
+    }
   }
-  float fogNoise( vec2 p ) { return 0.65 * fogValue( p ) + 0.35 * fogValue( p * 2.1 + 17.3 ); }
+  noiseTexture = new THREE.DataTexture(data, size, size, THREE.RedFormat, THREE.UnsignedByteType);
+  noiseTexture.wrapS = noiseTexture.wrapT = THREE.RepeatWrapping;
+  noiseTexture.magFilter = noiseTexture.minFilter = THREE.LinearFilter;
+  noiseTexture.needsUpdate = true;
+  return noiseTexture;
+}
+
+/** 霧の模様の読み取り。fogNoise は 0〜1（p は、模様の格子1つを1とする位置） */
+const FOG_NOISE_GLSL = `
+  uniform sampler2D fogNoiseTex;
+  float fogNoise( vec2 p ) { return texture2D( fogNoiseTex, p * ${(1 / NOISE.period).toFixed(5)} ).r; }
 `;
 
 /**
@@ -242,9 +286,12 @@ export function applyFog<T extends THREE.Material>(material: T, fog: Fog, mode: 
               float along = abs( normal.x ) > 0.5 ? -world.z * sign( normal.x ) : world.x * sign( normal.z );
               vMapUv = vec2( along / TEXTURE_SPAN, world.y / WALL_HEIGHT_F );
             #endif
-            // 凹凸（bumpMap）も、色と同じ貼り方で読む
+            // 凹凸（法線マップ。bumpMap のときも）も、色と同じ貼り方で読む
             #if defined( USE_BUMPMAP ) && ( defined( MAPPED_FLOOR ) || defined( MAPPED_TOP ) || defined( MAPPED_SIDE ) )
               vBumpMapUv = vMapUv;
+            #endif
+            #if defined( USE_NORMALMAP ) && ( defined( MAPPED_FLOOR ) || defined( MAPPED_TOP ) || defined( MAPPED_SIDE ) )
+              vNormalMapUv = vMapUv;
             #endif
             #if defined( USE_SPECULARMAP ) && ( defined( MAPPED_FLOOR ) || defined( MAPPED_TOP ) || defined( MAPPED_SIDE ) )
               vSpecularMapUv = vMapUv;

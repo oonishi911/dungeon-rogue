@@ -2,6 +2,7 @@
 // - 光のにじみ（ブルーム）：明るいところ（たいまつ・光る目・呪文・壁掛けのたいまつ）を取り出してぼかし、元の画面に足す
 // - 周辺減光：画面の四隅をわずかに暗くして、視線を真ん中（主人公）に集める
 // - 粒子感：ごく薄いざらつきを毎フレーム変えて重ね、絵が平らに見えないようにする
+// 軽くするため、ぼかしは縦横1回ずつ、重ね描き（マルチサンプル）は大きな画面では減らす（数値は POST_FX）。
 // 処理の弱い端末や、描くのが間に合わないときは使わない（explore3d.ts が決める）。数値は explore3dConfig.ts の POST_FX。
 
 import * as THREE from 'three';
@@ -20,10 +21,11 @@ export class PostFx {
   private readonly blur: THREE.ShaderMaterial;
   private readonly composite: THREE.ShaderMaterial;
   private time = 0;
+  private readonly step = new THREE.Vector2();
 
   constructor() {
     const opts = { type: THREE.HalfFloatType, depthBuffer: false } as const;
-    this.main = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }); // 縁のギザギザを消す（マルチサンプル）
+    this.main = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: POST_FX.samples }); // 縁のギザギザを消す（マルチサンプル）
     this.blurA = new THREE.WebGLRenderTarget(1, 1, opts);
     this.blurB = new THREE.WebGLRenderTarget(1, 1, opts);
     for (const t of [this.blurA, this.blurB]) t.texture.minFilter = t.texture.magFilter = THREE.LinearFilter;
@@ -40,7 +42,7 @@ export class PostFx {
           gl_FragColor = vec4( c * k, 1.0 );
         }`,
     });
-    // 縦か横に、なめらかにぼかす（9点。2回ずつかけて、広くにじませる）
+    // 縦か横に、なめらかにぼかす（9点。縦横1回ずつ。step で幅を決める）
     this.blur = new THREE.ShaderMaterial({
       uniforms: { tex: { value: null }, step: { value: new THREE.Vector2() } },
       vertexShader: VERTEX,
@@ -74,10 +76,38 @@ export class PostFx {
     this.scene.add(this.quad);
   }
 
+  /** シーンを描く先の画面（描き方は描く先の色の扱いで変わるので、描き方を先に作るときに使う） */
+  get target(): THREE.WebGLRenderTarget {
+    return this.main;
+  }
+
+  /** 仕上げの描き方（シェーダー）を先に作っておく（描き方は描く先の色の扱いで変わるので、実際に描く先を指して作る） */
+  compile(renderer: THREE.WebGLRenderer) {
+    const previous = renderer.getRenderTarget();
+    try {
+      const jobs: [THREE.ShaderMaterial, THREE.WebGLRenderTarget | null][] = [[this.bright, this.blurA], [this.blur, this.blurA], [this.composite, null]];
+      for (const [material, target] of jobs) {
+        this.quad.material = material;
+        renderer.setRenderTarget(target);
+        void renderer.compileAsync(this.scene, this.camera).catch(() => undefined);
+      }
+    } catch {
+      // 失敗しても、初めて描くときに作られる
+    } finally {
+      renderer.setRenderTarget(previous);
+    }
+  }
+
   /** 描く大きさ（実際のピクセル数）。画面の大きさや解像度が変わったら呼ぶ */
   setSize(width: number, height: number) {
     const w = Math.max(1, Math.round(width));
     const h = Math.max(1, Math.round(height));
+    // 大きな画面では、重ね描きの回数を減らす（細かい画面なので、縁のギザギザは目立たない）。回数を変えるには作り直す
+    const samples = w * h > POST_FX.bigPixels ? POST_FX.samplesBig : POST_FX.samples;
+    if (samples !== this.main.samples) {
+      this.main.samples = samples;
+      this.main.dispose();
+    }
     this.main.setSize(w, h);
     this.blurA.setSize(Math.max(1, w >> 2), Math.max(1, h >> 2));
     this.blurB.setSize(Math.max(1, w >> 2), Math.max(1, h >> 2));
@@ -93,10 +123,8 @@ export class PostFx {
     this.pass(renderer, this.bright, { tex: this.main.texture }, this.blurA);
     const w = this.blurA.width;
     const h = this.blurA.height;
-    for (let i = 0; i < 2; i++) {
-      this.pass(renderer, this.blur, { tex: this.blurA.texture, step: new THREE.Vector2(1 / w, 0) }, this.blurB);
-      this.pass(renderer, this.blur, { tex: this.blurB.texture, step: new THREE.Vector2(0, 1 / h) }, this.blurA);
-    }
+    this.pass(renderer, this.blur, { tex: this.blurA.texture, step: this.step.set(POST_FX.spread / w, 0) }, this.blurB);
+    this.pass(renderer, this.blur, { tex: this.blurB.texture, step: this.step.set(0, POST_FX.spread / h) }, this.blurA);
     this.pass(renderer, this.composite, { tex: this.main.texture, glow: this.blurA.texture, time: this.time }, null);
   }
 
