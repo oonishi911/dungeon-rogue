@@ -310,12 +310,14 @@
     },
     "flame_beast": {
       "name": "炎の魔獣",
-      "hp": 60,
-      "atk": 18,
-      "def": 2,
+      "hp": 100,
+      "atk": 20,
+      "def": 5,
       "element": "fire",
       "body": "soft",
       "boss": true,
+      "physical": 1.5,
+      "magic": 1.25,
       "look": {
         "sprite": "flame_hound",
         "recolor": {
@@ -333,12 +335,14 @@
     },
     "ice_colossus": {
       "name": "氷の巨像",
-      "hp": 60,
-      "atk": 18,
-      "def": 2,
+      "hp": 100,
+      "atk": 20,
+      "def": 5,
       "element": "ice",
       "body": "hard",
       "boss": true,
+      "physical": 1.5,
+      "magic": 1.25,
       "look": {
         "sprite": "fire_drake",
         "recolor": {
@@ -356,12 +360,14 @@
     },
     "ogre_chief": {
       "name": "鬼の首領",
-      "hp": 60,
-      "atk": 9,
-      "def": 1,
+      "hp": 100,
+      "atk": 20,
+      "def": 5,
       "element": "neutral",
       "body": "normal",
       "boss": true,
+      "physical": 1.5,
+      "magic": 1.25,
       "look": {
         "sprite": "goblin",
         "recolor": {
@@ -377,12 +383,14 @@
     },
     "light_guardian": {
       "name": "光の守護者",
-      "hp": 50,
-      "atk": 14,
-      "def": 2,
+      "hp": 100,
+      "atk": 20,
+      "def": 5,
       "element": "light",
       "body": "hard",
       "boss": true,
+      "physical": 1.5,
+      "magic": 1.25,
       "look": {
         "sprite": "venom_queen",
         "recolor": {
@@ -402,12 +410,14 @@
     },
     "dark_lord": {
       "name": "闇の王",
-      "hp": 60,
-      "atk": 18,
-      "def": 2,
+      "hp": 100,
+      "atk": 20,
+      "def": 5,
       "element": "dark",
       "body": "spirit",
       "boss": true,
+      "physical": 1.5,
+      "magic": 1.25,
       "look": {
         "sprite": "fire_drake",
         "recolor": {
