@@ -324,7 +324,11 @@ export class DungeonView3D {
     const distance = Math.hypot(CAMERA.height, CAMERA.back);
     const fov = THREE.MathUtils.radToDeg(2 * Math.atan(height / 2 / (distance * TILE_PX)));
     this.camera.aspect = width / height;
-    this.camera.fov = THREE.MathUtils.clamp(fov, FOV_LIMIT.min, FOV_LIMIT.max);
+    // 縦に長い画面で、描く範囲（DRAW_RANGE.z）の奥より先が映らないように、視野の広さに上限を付ける（上限を超える画面では、1マスが TILE_PX より少し大きく映る）
+    const pitch = Math.atan(CAMERA.height / CAMERA.back); // 主人公を見下ろす角度
+    const farthest = Math.atan(CAMERA.height / (DRAW_RANGE.z - 1 + CAMERA.back)); // 描く範囲のいちばん奥を見下ろす角度
+    const maxFov = Math.min(FOV_LIMIT.max, THREE.MathUtils.radToDeg(2 * (pitch - farthest)));
+    this.camera.fov = THREE.MathUtils.clamp(fov, FOV_LIMIT.min, maxFov);
     this.camera.updateProjectionMatrix();
   }
 

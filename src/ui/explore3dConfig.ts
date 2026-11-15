@@ -14,8 +14,8 @@ export const WALL_ROUGH = { amount: 0.045, scale: 2.6, top: 0.5 } as const;
 export const WALL_SHAPES = 16; // 4つの側面のどれが床に面しているかの組み合わせ（softWall.ts の exposureIndex）
 export const CAMERA = { height: 15, back: 11.7 }; // 主人公の真上15・手前11.7から見下ろす（約52度。主人公の脚やマントの動きが横から見える角度）
 // 画面の大きさによらず、主人公のいるあたりの1マスが画面上でこの大きさ（CSSピクセル）に映るよう、視野の広さを決める。
-// スマホの縦画面（幅約390px）で横に約8マス、PCの探索画面（幅約670px）で横に約14マス映る
-export const TILE_PX = 48;
+// スマホの縦画面（幅約390px）で横に約11マス、PCの探索画面（幅約670px）で横に約19マス映る（2026-11-15 に、1マスを48pxから36pxに小さくして、映る範囲を広げた）
+export const TILE_PX = 36;
 export const FOV_LIMIT = { min: 10, max: 75 }; // 極端に大きい・小さい画面でもゆがみすぎないように
 // 攻撃したとき・攻撃されたときの画面効果：カメラを少し寄せて戻す（拡大縮小）。zoom は 1 からのずれの最大、ms は長さ
 export const HIT_PULSE = {
@@ -83,9 +83,9 @@ export const SHADOW_SIDES = [
   { dx: -1, dz: 0, angle: Math.PI / 2 },
 ] as const;
 export const BACKGROUND = 0x0b1413;
-// 床と壁を描く範囲（主人公からのマス数）。画面に映る範囲（1マス48pxで、PCなら横14×縦11、スマホの縦画面なら横8×縦16マスほど）より、
-// 動いている途中の分と、大きな画面の分だけ広くとる
-export const DRAW_RANGE = { x: 13, z: 17 };
+// 床と壁を描く範囲（主人公からのマス数）。画面に映る範囲（1マス36pxで、PCなら横19×縦15、スマホの縦画面なら横11×縦21マスほど）より、
+// 動いている途中の分と、大きな画面の分だけ広くとる。奥は、explore3d.ts の resize が、この範囲の外が映らないように視野の広さを抑える
+export const DRAW_RANGE = { x: 20, z: 26 };
 export const DRAW_CAPACITY = (DRAW_RANGE.x * 2 + 1) * (DRAW_RANGE.z * 2 + 1);
 export const PATH_CAPACITY = 256; // 歩く道筋の点を、いくつまで描くか
 
