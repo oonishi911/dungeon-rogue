@@ -47,6 +47,7 @@ export interface GrowthSettings {
   expStep: number; // レベルが1上がるごとに、次に必要な経験値が増える量
   hpPerLevel: number; // 1レベルで増える最大HP（上がった分だけHPも回復する）
   atkPerLevel: number; // 1レベルで増える攻撃力
+  magPerLevel: number; // 1レベルで増える魔力（魔法の強さに足される）
   maxLevel: number; // レベルの上限
   eliteRate: number; // 強敵を倒したときの金貨と経験値の倍率
 }
@@ -174,6 +175,7 @@ export const GEN_LIMITS = {
   expStep: { min: 0, max: 999, step: 1 },
   hpPerLevel: { min: 0, max: 50, step: 1 },
   atkPerLevel: { min: 0, max: 10, step: 1 },
+  magPerLevel: { min: 0, max: 10, step: 1 },
   maxLevel: { min: 1, max: 99, step: 1 },
   eliteRate: { min: 0, max: 10, step: 0.5 },
 } as const;
@@ -198,6 +200,7 @@ export const GEN_LABELS = {
   expStep: '1レベルごとに増える必要経験値',
   hpPerLevel: '1レベルで増える最大HP',
   atkPerLevel: '1レベルで増える攻撃',
+  magPerLevel: '1レベルで増える魔力',
   maxLevel: 'レベルの上限',
   eliteRate: '強敵の金貨と経験値の倍率',
 } as const;
@@ -243,7 +246,7 @@ export function genProblems(data: unknown): string[] {
   num(enemies.bossMinions, GEN_LABELS.bossMinions, GEN_LIMITS.bossMinions);
   if (typeof enemies.bossMinions === 'number' && !Number.isInteger(enemies.bossMinions)) problems.push(`${GEN_LABELS.bossMinions}：整数にする`);
   const { growth } = data;
-  for (const k of ['expBase', 'expStep', 'hpPerLevel', 'atkPerLevel', 'maxLevel'] as const) {
+  for (const k of ['expBase', 'expStep', 'hpPerLevel', 'atkPerLevel', 'magPerLevel', 'maxLevel'] as const) {
     num(growth[k], GEN_LABELS[k], GEN_LIMITS[k]);
     if (typeof growth[k] === 'number' && !Number.isInteger(growth[k])) problems.push(`${GEN_LABELS[k]}：整数にする`);
   }

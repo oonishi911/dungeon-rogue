@@ -23,9 +23,9 @@ export function weaponMagic(weapon: ItemId | null): number {
   return effect?.kind === 'weapon' ? effect.mag : 0;
 }
 
-/** 魔法の強さ（M はダンジョンの設定の魔法）。ダンジョンの魔法の強さに武器の魔力を足し、杖を持っていると、その合計がさらに強くなる */
+/** 魔法の強さ（M はダンジョンの設定の魔法）。ダンジョンの魔法の強さに、武器の魔力とレベルで増えた魔力を足し、杖を持っていると、その合計がさらに強くなる */
 export function magicPower(stats: PlayerStats, M: MagicSettings): number {
-  return (M.power + weaponMagic(stats.weapon)) * (stats.weapon && isStaff(stats.weapon) ? M.staffPower : 1);
+  return (M.power + weaponMagic(stats.weapon) + stats.mag) * (stats.weapon && isStaff(stats.weapon) ? M.staffPower : 1);
 }
 
 export function isStaff(id: ItemId): boolean {

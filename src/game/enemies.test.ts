@@ -254,13 +254,16 @@ describe('報酬とボス', () => {
     expect(s.level).toBe(1);
   });
 
-  it('経験値がたまるとレベルが上がり、最大HPと攻撃力が上がる（上がった分だけHPも回復する）', () => {
+  it('経験値がたまるとレベルが上がり、最大HPと攻撃力と魔力が上がる（上がった分だけHPも回復する）', () => {
     const s0 = arena(ROOM, { x: 1, y: 2 }, [enemy({ x: 2, y: 2 }, { hp: 1 })]);
     const before = { ...s0, exp: expToNext(1, GEN.growth) - 1, stats: { ...s0.stats, hp: 10 } };
     const s = act(before, { kind: 'move', dir: 'right' });
     expect(s.level).toBe(2);
     expect(s.stats.maxHp).toBe(s0.stats.maxHp + GEN.growth.hpPerLevel);
     expect(s.stats.atk).toBe(s0.stats.atk + GEN.growth.atkPerLevel);
+    expect(s0.stats.mag).toBe(0);
+    expect(s.stats.mag).toBe(GEN.growth.magPerLevel);
+    expect(GEN.growth.magPerLevel).toBeGreaterThan(0);
     expect(s.stats.hp).toBe(10 + GEN.growth.hpPerLevel);
     expect(s.log.some((l) => l.includes('レベル2に上がった'))).toBe(true);
   });

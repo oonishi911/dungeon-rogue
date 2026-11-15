@@ -38,6 +38,7 @@ export function buildPlayer(loadout: readonly ItemId[]): PlayerStats {
     // 武器は攻撃力を、防具は守りを上げる（段階が上がるほど大きい。品物の設定 items.json）
     atk: C.playerAtk + (w?.kind === 'weapon' ? w.atk : 0),
     def: C.playerDef + (a?.kind === 'armor' ? a.def : 0),
+    mag: 0,
     poisonTurns: 0,
     weapon,
     armor,
