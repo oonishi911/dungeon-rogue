@@ -4,20 +4,22 @@
 // - 武器：与えるダメージの合計がいちばん多いもの
 // - 防具：受けるダメージの合計がいちばん少ないもの
 // - 属性を付ける道具：付けたときに与えるダメージの合計がいちばん多いもの（同じものを2つ）
-// - 呪文書：属性の矢のうちダメージの合計がいちばん多いもの、なぎ払い、癒しの3冊
+// - 呪文書：属性の矢（強化版の連矢を含む。同じ属性なら強化版）のうちダメージの合計がいちばん多いもの、なぎ払い、癒しの3冊
 // - そのほかの道具：回復薬3つ、食料3つ（道具は全部で8つ）
 
 import { buildPlayer, enemyHitDamage, itemSlot, playerHitDamage } from './combat';
-import { ITEMS, LOADOUT_CONFIG } from './data';
+import { ITEMS, LOADOUT_CONFIG, SPELLS } from './data';
 import { enemyDef } from './enemies';
 import { spellDamage } from './magic';
 import type { DungeonFile } from './genMaster';
 import type { EnemyDef, ItemId, PlayerStats, SpellId, TraitId } from './types';
 
 const BOSS_WEIGHT = 3; // ボスは道中の敵の何体分として数えるか（最後に必ず戦うので重く見る）
-const BOLTS: SpellId[] = ['fire_bolt', 'ice_bolt', 'light_lance', 'dark_bolt'];
-// 敵にダメージを与える呪文（有利な呪文書を選ぶ候補）。同じ点数なら、先にあるものを選ぶ
-const ATTACK_SPELLS: SpellId[] = [...BOLTS, 'sweep', 'shockwave'];
+// 敵にダメージを与える呪文（有利な呪文書を選ぶ候補）。同じ系統（矢と、その強化版の連矢）は、強化版を先に書く。
+// 同じ点数なら先にあるものを選ぶので、強化版が選ばれる。同じ系統は2冊選ばない
+const SPELL_FAMILIES: SpellId[][] = [['fire_chain', 'fire_bolt'], ['ice_chain', 'ice_bolt'], ['light_chain', 'light_lance'], ['dark_chain', 'dark_bolt'], ['sweep'], ['shockwave']];
+const ATTACK_SPELLS: SpellId[] = SPELL_FAMILIES.flat();
+const BOLTS: SpellId[] = ATTACK_SPELLS.filter((spell) => SPELLS[spell].effect.kind === 'bolt');
 
 /**
  * そのダンジョンのその属性で有利に働く呪文書を count 冊選ぶ（出発するときの持ち物。depart.ts）。
@@ -28,10 +30,14 @@ export function favorableSpellbooks(trait: TraitId, dungeon: DungeonFile, gear: 
   const foes = opponents(trait, dungeon);
   const stats = buildPlayer([...gear]);
   const score = (spell: SpellId) => foes.reduce((sum, { def, weight }) => sum + spellDamage(stats, spell, def, dungeon) * weight, 0);
-  return ATTACK_SPELLS.map((spell, i) => ({ spell, i, score: score(spell) }))
-    .sort((a, b) => b.score - a.score || a.i - b.i)
-    .slice(0, Math.min(count, LOADOUT_CONFIG.maxSpellbooks))
-    .map(({ spell }) => `book_${spell}` as ItemId);
+  const chosen: SpellId[] = [];
+  const ranked = ATTACK_SPELLS.map((spell, i) => ({ spell, i, score: score(spell) })).sort((a, b) => b.score - a.score || a.i - b.i);
+  for (const { spell } of ranked) {
+    if (chosen.length >= Math.min(count, LOADOUT_CONFIG.maxSpellbooks)) break;
+    const family = SPELL_FAMILIES.find((f) => f.includes(spell))!;
+    if (!chosen.some((c) => family.includes(c))) chosen.push(spell);
+  }
+  return chosen.map((spell) => `book_${spell}` as ItemId);
 }
 
 /** ダンジョンで出会う敵と、その重み */

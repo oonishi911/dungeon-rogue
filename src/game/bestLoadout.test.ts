@@ -54,21 +54,25 @@ describe('出発時に持たせる、有利な呪文書', () => {
       const list = books(trait);
       expect(list).toHaveLength(START_SPELLBOOKS);
       expect(new Set(list).size).toBe(list.length);
-      const attacks: ItemId[] = ['book_fire_bolt', 'book_ice_bolt', 'book_light_lance', 'book_dark_bolt', 'book_sweep', 'book_shockwave'];
+      const attacks: ItemId[] = ['book_fire_chain', 'book_ice_chain', 'book_light_chain', 'book_dark_chain', 'book_sweep', 'book_shockwave'];
       for (const id of list) expect(attacks).toContain(id);
     }
   });
 
-  it('いちばん先に選ぶのは、その属性の敵の弱点を突く矢', () => {
-    expect(books('fire')[0]).toBe('book_ice_bolt');
-    expect(books('ice')[0]).toBe('book_fire_bolt');
-    expect(books('light')[0]).toBe('book_dark_bolt');
-    expect(books('dark')[0]).toBe('book_light_lance');
+  it('いちばん先に選ぶのは、その属性の敵の弱点を突く矢（矢と連矢は同じダメージなので、強化版の連矢）', () => {
+    expect(books('fire')[0]).toBe('book_ice_chain');
+    expect(books('ice')[0]).toBe('book_fire_chain');
+    expect(books('light')[0]).toBe('book_dark_chain');
+    expect(books('dark')[0]).toBe('book_light_chain');
   });
 
-  it('2冊目は、残りのうち与えるダメージが多いもの（光なら、光に1.5倍効く氷の矢）', () => {
-    expect(books('light')[1]).toBe('book_ice_bolt');
-    expect(books('dark')[1]).toBe('book_fire_bolt');
+  it('2冊目は、残りのうち与えるダメージが多いもの（光なら、光に1.5倍効く氷の連矢）。同じ矢と連矢を2冊選ばない', () => {
+    expect(books('light')[1]).toBe('book_ice_chain');
+    expect(books('dark')[1]).toBe('book_fire_chain');
+    for (const trait of TRAIT_IDS) {
+      const kinds = books(trait, 3).map((id) => id.replace(/_(chain|bolt|lance)$/, ''));
+      expect(new Set(kinds).size).toBe(kinds.length);
+    }
   });
 
   it('持っていける呪文書の数より多くは選ばない', () => {
