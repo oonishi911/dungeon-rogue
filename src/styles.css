@@ -2021,3 +2021,168 @@ button {
   background: var(--hp-enemy);
   transition: width 0.2s ease-out;
 }
+
+/*
+ * 敵の表は、スマホ（幅の狭い画面）では、横にスクロールしなくていいよう、1体を1枚のカードにして縦に並べる。
+ * 各欄の上に、何の数字かの名前（data-label）を出し、入力欄は指で押しやすい大きさにする。
+ * 6列の格子：HP・攻撃・防御は3つ並び、属性・体質と、物理・魔法の倍率は2つずつ並び、報酬の金貨・経験値・落とす%は3つ並ぶ。ボス・見た目・消すは1行ずつ
+ */
+@media (max-width: 48rem) {
+  .admin__table--cards,
+  .admin__table--cards tbody {
+    display: block;
+  }
+
+  .admin__table--cards thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .admin__scroll:has(.admin__table--cards) {
+    overflow: visible;
+    border: none;
+    border-radius: 0;
+  }
+
+  .admin__table--cards tbody tr {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.75rem 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.85rem;
+    border: 1px solid var(--pine-line);
+    border-radius: 10px;
+    background: var(--pine);
+  }
+
+  .admin__table--cards tbody tr.admin__row--new {
+    border-color: var(--procure);
+  }
+
+  .admin__table--cards tbody th,
+  .admin__table--cards tbody td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    white-space: normal;
+    background: none;
+  }
+
+  /* 名前の欄：カードの見出し */
+  .admin__table--cards tbody th {
+    position: static;
+    grid-column: 1 / -1;
+    padding-bottom: 0.65rem;
+    border-bottom: 1px solid var(--pine-line);
+  }
+
+  .admin__table--cards tbody .admin__row--new th {
+    background: none;
+  }
+
+  .admin__table--cards .admin__who {
+    gap: 0.65rem;
+  }
+
+  .admin__table--cards .admin__sprite {
+    width: 44px;
+    height: 44px;
+  }
+
+  .admin__table--cards .admin__who .admin__field {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .admin__table--cards .admin__name {
+    width: 100%;
+    font-size: 1.0625rem;
+  }
+
+  .admin__table--cards .admin__id {
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+  }
+
+  .admin__c2 {
+    grid-column: span 2;
+  }
+
+  .admin__c3 {
+    grid-column: span 3;
+  }
+
+  .admin__c6 {
+    grid-column: 1 / -1;
+  }
+
+  /* 各欄の上の名前 */
+  .admin__table--cards td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--bone-dim);
+    font-size: 0.8125rem;
+    line-height: 1.3;
+  }
+
+  /* 入力欄：幅いっぱい。16px以上にして、iPhone で入力するときに画面が拡大されないようにする */
+  .admin__table--cards .admin__field {
+    display: block;
+  }
+
+  .admin__table--cards .admin__number,
+  .admin__table--cards .admin__select,
+  .admin__table--cards .admin__name {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: none;
+    min-height: 2.75rem;
+    padding: 0.4rem 0.6rem;
+    font-size: 1rem;
+  }
+
+  .admin__table--cards .admin__number {
+    text-align: right;
+  }
+
+  .admin__table--cards .admin__boss-cell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.35rem 0;
+  }
+
+  .admin__table--cards .admin__boss-cell::before {
+    margin: 0;
+    color: var(--bone);
+    font-size: 1rem;
+  }
+
+  .admin__table--cards .admin__check {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .admin__table--cards .admin__ingame {
+    margin: 0;
+    padding: 0.6rem 0;
+    text-align: center;
+    font-size: 1rem;
+  }
+
+  .admin__table--cards .admin__remove-cell {
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--pine-line);
+  }
+
+  .admin__table--cards .admin__remove {
+    width: 100%;
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
+}
