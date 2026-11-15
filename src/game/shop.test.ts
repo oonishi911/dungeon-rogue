@@ -129,7 +129,7 @@ describe('出発と帰り', () => {
 });
 
 describe('おすすめの印', () => {
-  const clear = (topic: 'trait' | 'body' | 'boss', facts: { element?: 'fire' | 'ice' | 'neutral' | 'light' | 'dark'; body?: 'normal' | 'soft' | 'hard' | 'spirit' }) => ({ topic, vague: false, text: '', memo: '', ...facts });
+  const clear = (topic: 'trait' | 'body' | 'boss', facts: { element?: 'fire' | 'ice' | 'neutral' | 'light' | 'dark'; body?: 'normal' | 'soft' | 'hard' | 'spirit'; weakness?: 'magic' | 'physical' | 'none' }) => ({ topic, vague: false, text: '', memo: '', ...facts });
 
   it('何も聞いていない・うわさだけなら、印は付かない', () => {
     expect(recommended([]).size).toBe(0);
@@ -154,6 +154,31 @@ describe('おすすめの印', () => {
     expect(recommended([clear('body', { body: 'spirit' })]).has('staff')).toBe(true);
     expect(recommended([clear('body', { body: 'soft' })]).has('sword')).toBe(true);
     expect([...recommended([clear('body', { body: 'normal' })])].some((id) => ITEMS[id].effect.kind === 'weapon')).toBe(false);
+  });
+});
+
+describe('おすすめの印（魔法・物理の弱点）', () => {
+  const heard = (weakness: 'magic' | 'physical' | 'none') => ({ topic: 'body' as const, vague: false, text: '', memo: '', weakness });
+
+  it('魔法に弱い魔物が多いと聞けば、杖と、ダメージを与える呪文書に付く', () => {
+    const p = recommended([heard('magic')]);
+    expect(p.has('staff')).toBe(true);
+    expect(p.has('staff_10')).toBe(true);
+    expect(p.has('book_fire_chain')).toBe(true);
+    expect(p.has('book_sweep_bleed')).toBe(true);
+    expect(p.has('book_shockwave_strong')).toBe(true);
+    expect(p.has('book_heal')).toBe(false);
+    expect(p.has('sword')).toBe(false);
+  });
+
+  it('物理に弱い魔物が多いと聞けば、剣と槌に付く。偏りがなければ付かない。うわさだけでも付かない', () => {
+    const p = recommended([heard('physical')]);
+    expect(p.has('sword_5')).toBe(true);
+    expect(p.has('hammer')).toBe(true);
+    expect(p.has('staff')).toBe(false);
+    expect(p.has('book_fire_bolt')).toBe(false);
+    expect(recommended([heard('none')]).size).toBe(0);
+    expect(recommended([{ ...heard('magic'), vague: true }]).size).toBe(0);
   });
 });
 

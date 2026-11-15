@@ -1,5 +1,5 @@
 // 情報屋のルール。ダンジョンを選んだあと、店に行く前に、これから入るダンジョンのことを聞き出す。
-// - 聞けることは3つ：どんなダンジョンか（属性）、どんな魔物が多いか（体質）、奥のボスのこと
+// - 聞けることは3つ：どんなダンジョンか（属性）、どんな魔物が多いか（体質と、魔法・物理のどちらに弱い魔物が多いか）、奥のボスのこと
 // - 1回の訪問で聞けるのは INFORMANT_CONFIG.questions 回まで
 // - 1回目だけは「それとなく聞く」ができ、無料。答えはぼんやりしていて、本当の答えと、違う答えの2つが混ざる
 // - 「はっきり聞く」は情報料（品物の設定 items.json の information。管理画面の「品物」タブ）を払い、正しい答えが聞ける
@@ -20,7 +20,7 @@ export type Topic = 'trait' | 'body' | 'boss';
 
 export const TOPICS: readonly { id: Topic; ask: string; label: string }[] = [
   { id: 'trait', ask: 'どんなダンジョンなんだ？', label: 'ダンジョンの属性' },
-  { id: 'body', ask: 'どんな魔物が多い？', label: '多い魔物の体' },
+  { id: 'body', ask: 'どんな魔物が多い？', label: '多い魔物の体と弱点' },
   { id: 'boss', ask: '奥にいるボスのことを教えてくれ', label: 'ボス' },
 ];
 
@@ -33,7 +33,12 @@ export interface Intel {
   // はっきり聞いたときにわかったこと（店の「おすすめ」の印に使う。shop.ts の recommended）。うわさには付けない
   element?: Element; // ダンジョンの属性、またはボスの属性
   body?: Body; // 多い魔物の体、またはボスの体
+  weakness?: Weakness; // 多い魔物が、魔法と物理のどちらに弱いか（多い魔物を、はっきり聞いたとき）
 }
+
+/** 道中の魔物の弱点の偏り。magic：魔法に弱い魔物が多い、physical：物理（武器）に弱い魔物が多い、none：偏りがない */
+export type Weakness = 'magic' | 'physical' | 'none';
+const WEAKNESSES: readonly Weakness[] = ['magic', 'physical', 'none'];
 
 export interface InformantState {
   dungeon: string;
@@ -104,12 +109,41 @@ export function commonBody(dungeon: string, trait: TraitId): Body {
   return BODY_IDS.reduce((best, b) => ((counts.get(b) ?? 0) > (counts.get(best) ?? 0) ? b : best), BODY_IDS[0]!);
 }
 
+/**
+ * 魔物のうち、魔法に弱い（魔法の倍率が物理の倍率より大きい）魔物が多いか、物理に弱い魔物が多いか。出やすさの重みで数え、同じ数か、どちらもいなければ none。
+ * lookup は敵の ID から敵を引く関数（ふつうはゲームの敵のデータ）
+ */
+export function weaknessOf(pool: readonly EnemyId[], lookup: (id: EnemyId) => { physical?: number; magic?: number } | undefined = (id) => ENEMIES[id]): Weakness {
+  let magic = 0;
+  let physical = 0;
+  for (const id of pool) {
+    const e = lookup(id);
+    const m = e?.magic ?? 1;
+    const p = e?.physical ?? 1;
+    if (m > p) magic++;
+    else if (p > m) physical++;
+  }
+  return magic > physical ? 'magic' : physical > magic ? 'physical' : 'none';
+}
+
+/** そのダンジョンの道中の魔物の、弱点の偏り */
+export function commonWeakness(dungeon: string, trait: TraitId): Weakness {
+  return weaknessOf(dungeonOf(dungeon).encounters[trait].pool);
+}
+
 export function bossOf(dungeon: string, trait: TraitId): EnemyId {
   return dungeonOf(dungeon).encounters[trait].boss;
 }
 
 const bodyText = (b: Body) => (b === 'spirit' ? BODY_NAMES[b] : b === 'normal' ? `${BODY_NAMES[b]}の体` : `${BODY_NAMES[b]}体`);
 const elementText = (e: Element) => TRAITS[e].name;
+
+/** 弱点の偏りの、はっきりした言い方と、うわさでの言い方 */
+const WEAK_TEXT: Record<Weakness, { clear: string; rumor: string; memo: string }> = {
+  magic: { clear: '魔法がよく効く奴が多いな。殴るより、呪文のほうが通る。', rumor: '魔法に弱い奴が多い', memo: '魔法に弱い魔物が多い' },
+  physical: { clear: '殴ればすぐ倒れる奴が多いな。呪文はあまり通らねえ。', rumor: '武器で殴れば倒れる奴が多い', memo: '物理に弱い魔物が多い' },
+  none: { clear: '魔法が効く奴も、殴って倒せる奴も、特に偏っちゃいねえ。', rumor: '魔法にも物理にも、偏りはない', memo: '魔法・物理の偏りはない' },
+};
 
 function answer(s: InformantState, topic: Topic, vague: boolean): Intel {
   switch (topic) {
@@ -126,9 +160,18 @@ function answer(s: InformantState, topic: Topic, vague: boolean): Intel {
     }
     case 'body': {
       const body = commonBody(s.dungeon, s.trait);
-      if (!vague) return { topic, vague, text: `多いのは${bodyText(body)}の魔物だ。`, memo: `多い魔物：${bodyText(body)}`, body };
+      const weak = commonWeakness(s.dungeon, s.trait);
+      if (!vague) {
+        return { topic, vague, text: `多いのは${bodyText(body)}の魔物だ。それと、${WEAK_TEXT[weak].clear}`, memo: `多い魔物：${bodyText(body)}。${WEAK_TEXT[weak].memo}`, body, weakness: weak };
+      }
       const [a, b] = mix(s.seed, 0x22, body, BODY_IDS);
-      return { topic, vague, text: `${bodyText(a)}の魔物か、${bodyText(b)}の魔物が多いらしいぜ。`, memo: `多い魔物：${bodyText(a)}か${bodyText(b)}（うわさ）` };
+      const [wa, wb] = mix(s.seed, 0x44, weak, WEAKNESSES);
+      return {
+        topic,
+        vague,
+        text: `${bodyText(a)}の魔物か、${bodyText(b)}の魔物が多いらしいぜ。それと、「${WEAK_TEXT[wa].rumor}」とも「${WEAK_TEXT[wb].rumor}」とも聞く。`,
+        memo: `多い魔物：${bodyText(a)}か${bodyText(b)}。${WEAK_TEXT[wa].memo}か、${WEAK_TEXT[wb].memo}（うわさ）`,
+      };
     }
     case 'boss': {
       const boss = ENEMIES[bossOf(s.dungeon, s.trait)];

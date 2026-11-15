@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ENEMIES, TRAITS, TRAIT_IDS } from './data';
 import { DEFAULT_DUNGEON_ID } from './dungeons';
-import { ask, bossOf, priceOf, commonBody, INFORMANT_CONFIG, questionsLeft, startInformant, type InformantState } from './informant';
+import { ask, bossOf, priceOf, commonBody, commonWeakness, INFORMANT_CONFIG, questionsLeft, startInformant, weaknessOf, type InformantState } from './informant';
 import { newSave, type SaveData } from './save';
 
 const save = (gold: number): SaveData => ({ ...newSave(), gold });
@@ -67,6 +67,36 @@ describe('情報屋', () => {
       if (!b.ok) throw new Error(b.error);
       expect(b.value.state.heard[0]!.memo.length).toBeGreaterThan(0);
       expect(['normal', 'soft', 'hard', 'spirit']).toContain(commonBody(DEFAULT_DUNGEON_ID, trait));
+    }
+  });
+});
+
+describe('情報屋：魔法に弱い魔物・物理に弱い魔物', () => {
+  const rates: Record<string, { physical?: number; magic?: number }> = {
+    armor: { physical: 0.75, magic: 1.5 },
+    mage: { physical: 1.5, magic: 0.5 },
+    plain: {},
+  };
+  const lookup = (id: string) => rates[id];
+
+  it('出やすさの重みで数え、多いほうを答える。同じ数やどちらもいなければ、偏りなし', () => {
+    expect(weaknessOf(['armor', 'plain'], lookup)).toBe('magic');
+    expect(weaknessOf(['mage', 'mage', 'armor'], lookup)).toBe('physical');
+    expect(weaknessOf(['mage', 'armor'], lookup)).toBe('none');
+    expect(weaknessOf(['plain', 'plain'], lookup)).toBe('none');
+    expect(weaknessOf(['unknown'], lookup)).toBe('none');
+  });
+
+  it('はっきり聞くと、体質の答えに弱点の偏りがつく。うわさは、本当と違う答えの2つが混ざる', () => {
+    for (const trait of TRAIT_IDS) {
+      const truth = commonWeakness(DEFAULT_DUNGEON_ID, trait);
+      const clear = ask(start(trait), save(priceOf('body')), 'body', true);
+      if (!clear.ok) throw new Error(clear.error);
+      expect(clear.value.state.heard[0]!.weakness).toBe(truth);
+      const vague = ask(start(trait, 5), save(0), 'body', false);
+      if (!vague.ok) throw new Error(vague.error);
+      expect(vague.value.state.heard[0]!.weakness).toBeUndefined();
+      expect(vague.value.state.heard[0]!.memo).toContain('（うわさ）');
     }
   });
 });

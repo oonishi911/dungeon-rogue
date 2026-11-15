@@ -5,7 +5,7 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { BODY_NAMES } from '../game/data';
 import { ENEMY_CONFIG } from '../game/enemies';
-import { addEnemy, BODIES, ELEMENTS, enemyIds, LIMITS, REWARD_LABELS, TRAIT_LABELS, type EnemyLook, type EnemyMaster, type EnemyRecord } from '../game/enemyMaster';
+import { addEnemy, BODIES, ELEMENTS, enemyIds, LIMITS, RATE_LABELS, REWARD_LABELS, TRAIT_LABELS, type EnemyLook, type EnemyMaster, type EnemyRecord } from '../game/enemyMaster';
 import { Sprite } from '../sprites/Sprite';
 import type { Body, Element, EnemyId } from '../game/types';
 import { textError } from '../game/fieldCheck';
@@ -42,6 +42,7 @@ export function EnemiesPanel({
       <h2 className="admin__heading">敵</h2>
       <p className="admin__note">
         ボス以外の敵は、ゲームの中ではHPと攻撃が{ENEMY_CONFIG.strengthRate === 0.5 ? '半分' : `${ENEMY_CONFIG.strengthRate}倍`}になります（「ゲーム内」の数字）。
+        物理・魔法は、武器で殴られたとき・呪文を受けたときのダメージの倍率です（1：ふつう。1.5：弱点で、1.5倍。0.5：強く、半分。体質や属性の相性とは別に、さらに掛けます）。
         金貨・経験値・落とす%は倒したときの報酬です（落とす%：回復薬か食料を落とす確率）。強敵は、金貨と経験値がダンジョンごとの倍率（「レベルと強敵の報酬」のタブ）で増え、必ず宝箱を落とします。
       </p>
       <div className="admin__scroll">
@@ -54,6 +55,8 @@ export function EnemiesPanel({
               <th scope="col">防御</th>
               <th scope="col">属性</th>
               <th scope="col">体質</th>
+              <th scope="col">物理</th>
+              <th scope="col">魔法</th>
               <th scope="col">ボス</th>
               <th scope="col">金貨</th>
               <th scope="col">経験値</th>
@@ -140,6 +143,20 @@ export function EnemiesPanel({
                       ))}
                     </select>
                   </td>
+                  {(['physical', 'magic'] as const).map((key) => (
+                    <td key={key}>
+                      <NumberField
+                        value={e[key] ?? 1}
+                        min={LIMITS.rate.min}
+                        max={LIMITS.rate.max}
+                        step={LIMITS.rate.step}
+                        integer={false}
+                        changed={(e[key] ?? 1) !== (b[key] ?? 1)}
+                        label={`${e.name}の${RATE_LABELS[key]}`}
+                        onChange={(v) => setEnemy(id, { [key]: v })}
+                      />
+                    </td>
+                  ))}
                   <td>
                     <input
                       type="checkbox"

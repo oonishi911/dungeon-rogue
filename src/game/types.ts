@@ -111,6 +111,8 @@ export interface EnemyDef {
   element: Element;
   body: Body;
   boss?: boolean;
+  physical?: number; // 武器で殴られたときのダメージの倍率（省略は1。1より大きいほど物理に弱く、小さいほど強い）
+  magic?: number; // 呪文を受けたときのダメージの倍率（省略は1。1より大きいほど魔法に弱く、小さいほど強い）
 }
 
 // ===== プレイヤー =====

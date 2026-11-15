@@ -576,6 +576,148 @@
         "exp": 8,
         "drop": 10
       }
+    },
+    "animated_armor": {
+      "name": "動く甲冑",
+      "hp": 24,
+      "atk": 11,
+      "def": 4,
+      "element": "neutral",
+      "body": "hard",
+      "physical": 0.75,
+      "magic": 1.5,
+      "look": {
+        "sprite": "venom_queen",
+        "recolor": {
+          "U": "#6a6e78",
+          "u": "#42454e",
+          "V": "#2a2c33",
+          "v": "#17181c",
+          "E": "#ff5a30",
+          "Z": "#9a9ea8"
+        }
+      },
+      "reward": {
+        "gold": 8,
+        "exp": 7,
+        "drop": 10
+      }
+    },
+    "gargoyle": {
+      "name": "ガーゴイル",
+      "hp": 20,
+      "atk": 14,
+      "def": 3,
+      "element": "dark",
+      "body": "hard",
+      "physical": 0.75,
+      "magic": 1.5,
+      "look": {
+        "sprite": "fire_drake",
+        "recolor": {
+          "F": "#8a8892",
+          "O": "#6b6a73",
+          "R": "#4a4952",
+          "r": "#ff7a30"
+        }
+      },
+      "reward": {
+        "gold": 8,
+        "exp": 7,
+        "drop": 10
+      }
+    },
+    "ice_statue": {
+      "name": "氷の彫像",
+      "hp": 22,
+      "atk": 13,
+      "def": 3,
+      "element": "ice",
+      "body": "hard",
+      "physical": 0.75,
+      "magic": 1.5,
+      "look": {
+        "sprite": "venom_queen",
+        "recolor": {
+          "U": "#cdeefa",
+          "u": "#8fd0ee",
+          "V": "#4f97c4",
+          "v": "#2f5d80",
+          "E": "#ffffff",
+          "Z": "#e8f8ff"
+        }
+      },
+      "reward": {
+        "gold": 8,
+        "exp": 7,
+        "drop": 10
+      }
+    },
+    "cultist": {
+      "name": "呪術師",
+      "hp": 12,
+      "atk": 15,
+      "def": 0,
+      "element": "dark",
+      "body": "normal",
+      "physical": 1.5,
+      "magic": 0.5,
+      "look": {
+        "sprite": "goblin",
+        "recolor": {
+          "g": "#6a5a8a",
+          "G": "#2a1a3e"
+        }
+      },
+      "reward": {
+        "gold": 6,
+        "exp": 6,
+        "drop": 10
+      }
+    },
+    "goblin_mage": {
+      "name": "魔導ゴブリン",
+      "hp": 10,
+      "atk": 11,
+      "def": 0,
+      "element": "neutral",
+      "body": "normal",
+      "physical": 1.5,
+      "magic": 0.5,
+      "look": {
+        "sprite": "goblin",
+        "recolor": {
+          "g": "#7a9a4a",
+          "G": "#3a4a6e"
+        }
+      },
+      "reward": {
+        "gold": 5,
+        "exp": 5,
+        "drop": 10
+      }
+    },
+    "fire_mage": {
+      "name": "炎のまじない師",
+      "hp": 11,
+      "atk": 15,
+      "def": 0,
+      "element": "fire",
+      "body": "normal",
+      "physical": 1.5,
+      "magic": 0.5,
+      "look": {
+        "sprite": "goblin",
+        "recolor": {
+          "g": "#c08060",
+          "G": "#7a2a1a"
+        }
+      },
+      "reward": {
+        "gold": 6,
+        "exp": 6,
+        "drop": 10
+      }
     }
   }
 }

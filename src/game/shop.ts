@@ -186,6 +186,7 @@ function guardRate(armor: ItemId, element: Element): number {
  * 情報屋からはっきり聞いたこと（うわさは使わない）から、店で「おすすめ」の印を付ける品物。
  * - 属性（ダンジョン・ボス）がわかれば：その属性の攻撃をいちばん減らす防具の種類（すべての段階）、その属性によく効く砥石・聖水・香油と、属性の矢の呪文書
  * - 体（多い魔物・ボス）がわかれば：その体によく効く武器の種類（すべての段階）
+ * - 多い魔物の弱点がわかれば：魔法に弱い魔物が多いなら、杖と、ダメージを与える呪文の呪文書。物理に弱い魔物が多いなら、剣と槌
  */
 export function recommended(intel: readonly Intel[]): Set<ItemId> {
   const elements = new Set<Element>();
@@ -199,6 +200,19 @@ export function recommended(intel: readonly Intel[]): Set<ItemId> {
   const allTiers = (base: GearBaseId) => {
     for (let t = 1; t <= GEAR_TIERS; t++) picks.add(gearId(base, t));
   };
+  for (const h of intel) {
+    if (h.vague || !h.weakness || h.weakness === 'none') continue;
+    if (h.weakness === 'physical') {
+      allTiers('sword');
+      allTiers('hammer');
+    } else {
+      allTiers('staff');
+      for (const id of SPELLBOOK_IDS) {
+        const effect = ITEMS[id].effect;
+        if (effect.kind === 'spellbook' && ['bolt', 'sweep', 'shockwave'].includes(SPELLS[effect.spell].effect.kind)) picks.add(id);
+      }
+    }
+  }
   for (const body of bodies) {
     for (const w of WEAPON_BASES) if (WEAPON_VS_BODY[w][body] > 1) allTiers(w);
   }

@@ -44,6 +44,8 @@ export const LIMITS = {
   hp: { min: 1, max: 999 },
   atk: { min: 0, max: 99 },
   def: { min: 0, max: 99 },
+  /** 物理・魔法の倍率（省略は1。小さいほど強く、大きいほど弱い） */
+  rate: { min: 0.1, max: 3, step: 0.05 },
   name: { max: 12 },
   /** 敵の ID：英小文字で始まり、英小文字・数字・_ だけ */
   id: { pattern: /^[a-z][a-z0-9_]{1,23}$/, max: 24 },
@@ -89,6 +91,12 @@ export function masterProblems(data: unknown): string[] {
     if (!(ELEMENTS as readonly unknown[]).includes(e.element)) problems.push(`${label}：属性が正しくない`);
     if (!(BODIES as readonly unknown[]).includes(e.body)) problems.push(`${label}：体質が正しくない`);
     if (e.boss !== undefined && typeof e.boss !== 'boolean') problems.push(`${label}：ボスかどうかが正しくない`);
+    for (const key of ['physical', 'magic'] as const) {
+      const v = e[key];
+      if (v !== undefined && (typeof v !== 'number' || !Number.isFinite(v) || v < LIMITS.rate.min || v > LIMITS.rate.max)) {
+        problems.push(`${label}：${RATE_LABELS[key]}は${LIMITS.rate.min}〜${LIMITS.rate.max}にする`);
+      }
+    }
     problems.push(...lookProblems(label, e.look));
     if (!isObject(e.reward)) problems.push(`${label}：倒したときの報酬がない`);
     else {
@@ -172,10 +180,12 @@ export function enemyDefs(master: EnemyMaster): Record<EnemyId, EnemyDef> {
 export function serializeEnemyMaster(master: EnemyMaster): string {
   const enemies = Object.fromEntries(
     enemyIds(master).map((id) => {
-      const { name, hp, atk, def, element, body, boss, look, reward } = master.enemies[id]!;
+      const { name, hp, atk, def, element, body, boss, physical, magic, look, reward } = master.enemies[id]!;
       const cleanLook = look.recolor && Object.keys(look.recolor).length ? { sprite: look.sprite, recolor: look.recolor } : { sprite: look.sprite };
       const cleanReward = { gold: reward.gold, exp: reward.exp, drop: reward.drop };
-      return [id, { name, hp, atk, def, element, body, ...(boss ? { boss: true } : {}), look: cleanLook, reward: cleanReward }];
+      // 倍率は、1のときは書かない（省略と同じ）
+      const rates = { ...(physical !== undefined && physical !== 1 ? { physical } : {}), ...(magic !== undefined && magic !== 1 ? { magic } : {}) };
+      return [id, { name, hp, atk, def, element, body, ...(boss ? { boss: true } : {}), ...rates, look: cleanLook, reward: cleanReward }];
     }),
   );
   return `${JSON.stringify({ enemies }, null, 2)}\n`;
@@ -249,6 +259,9 @@ export function describeChanges(before: EnemyMaster, after: EnemyMaster): string
     for (const key of ['hp', 'atk', 'def'] as const) if (a[key] !== b[key]) out.push(`${b.name}：${STAT_LABELS[key]} ${a[key]} → ${b[key]}`);
     if (a.element !== b.element) out.push(`${b.name}：属性 ${TRAIT_LABELS[a.element]} → ${TRAIT_LABELS[b.element]}`);
     if (a.body !== b.body) out.push(`${b.name}：体質を変更`);
+    for (const key of ['physical', 'magic'] as const) {
+      if ((a[key] ?? 1) !== (b[key] ?? 1)) out.push(`${b.name}：${RATE_LABELS[key]} ${a[key] ?? 1} → ${b[key] ?? 1}`);
+    }
     if (Boolean(a.boss) !== Boolean(b.boss)) out.push(`${b.name}：${b.boss ? 'ボスにする' : 'ボスではなくする'}`);
     if (JSON.stringify(a.look) !== JSON.stringify(b.look)) out.push(`${b.name}：見た目を変更`);
     for (const key of ['gold', 'exp', 'drop'] as const) {
@@ -283,6 +296,7 @@ export function describeEncounterChanges(before: Encounters, after: Encounters, 
 }
 
 export const STAT_LABELS = { hp: 'HP', atk: '攻撃', def: '防御' } as const;
+export const RATE_LABELS = { physical: '物理の倍率', magic: '魔法の倍率' } as const;
 export const REWARD_LABELS = { gold: '金貨', exp: '経験値', drop: '道具を落とす確率（%）' } as const;
 
 /** 倒したときの報酬（敵の ID ごと） */

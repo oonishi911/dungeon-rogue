@@ -72,6 +72,23 @@ describe('敵のマスターデータを扱う関数', () => {
     expect(describeChanges(clone(), m)).toEqual(['ゴブリン：HP 14 → 20']);
   });
 
+  it('物理・魔法の倍率：省略できる。範囲の外はおかしい値。1のときは書き出さない。変えた内容に出る', () => {
+    const m = clone();
+    expect(masterProblems(m)).toEqual([]);
+    m.enemies.goblin!.physical = 1.5;
+    m.enemies.goblin!.magic = 0.5;
+    expect(masterProblems(m)).toEqual([]);
+    expect(describeChanges(clone(), m)).toEqual(['ゴブリン：物理の倍率 1 → 1.5', 'ゴブリン：魔法の倍率 1 → 0.5']);
+    expect(serializeEnemyMaster(m)).toContain('"physical": 1.5,\n      "magic": 0.5,');
+    m.enemies.goblin!.magic = 1;
+    expect(serializeEnemyMaster(m)).not.toContain('"magic"');
+    m.enemies.goblin!.physical = 99;
+    expect(masterProblems(m)).toHaveLength(1);
+    m.enemies.goblin!.physical = 0;
+    expect(masterProblems(m)).toHaveLength(1);
+    expect(parseEnemyMaster(JSON.parse(serializeEnemyMaster({ enemies: { ...clone().enemies, goblin: { ...clone().enemies.goblin!, magic: 1.5 } } })) as unknown).enemies.goblin!.magic).toBe(1.5);
+  });
+
   it('見た目の色を空にしたときは、書き出さない', () => {
     const m = clone();
     m.enemies.goblin!.look = { sprite: 'goblin', recolor: {} };
