@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import type { ExploreState } from '../game/exploreTypes';
 import type { FloorMap, Pos } from '../game/map';
 import { SCONCE } from './explore3dConfig';
+import { asMetal } from './materialLook';
 
 interface Mounted {
   wall: Pos; // 掛けた壁のマス
@@ -50,7 +51,7 @@ export class Sconces {
 
   /** fog：霧をかける素材の手直し（金具とたいまつの柄は、壁と同じ霧をかける） */
   constructor(fog: <T extends THREE.Material>(m: T) => T) {
-    this.ironMat = fog(new THREE.MeshPhongMaterial({ color: 0x2b2b2e, shininess: 40, specular: 0x555555 }));
+    this.ironMat = fog(asMetal(new THREE.MeshPhongMaterial({ color: 0x2b2b2e, shininess: 40, specular: 0x555555 })));
     this.woodMat = fog(new THREE.MeshPhongMaterial({ color: 0x4a3020, shininess: 4, specular: 0x111111 }));
     // 金具：壁に付ける板と、前へ出した腕
     this.bracket = new THREE.BoxGeometry(0.1, 0.16, 0.03);

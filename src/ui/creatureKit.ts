@@ -6,6 +6,7 @@
 // 体の形はマス単位で、足元が原点、正面が +z。
 
 import * as THREE from 'three';
+import { asMetal } from './materialLook';
 
 // ===== 形を作る道具 =====
 
@@ -170,6 +171,8 @@ export class Kit {
       m.bumpMap = grain();
       m.bumpScale = o.bump;
     }
+    // よく光る部品（鎧・金の飾り・刃など）は金属にする（周りの景色が映り込む。materialLook.ts）
+    if ((o.shine ?? 8) >= 60 && o.opacity === undefined) asMetal(m, 0.22);
     this.disposables.push(m);
     return this.wrap(m, 'creature');
   }
@@ -226,8 +229,39 @@ export class Kit {
   }
 }
 
-/** 動かし方。t は時間、walk は歩き始めてからの時間、walking は歩いているか */
-export type Rig = { height: number; shadow: number; animate(t: number, walk: number, walking: boolean, dt: number): void };
+/**
+ * 動かし方。t は時間、walk は歩き始めてからの時間、walking は歩いているか。
+ * legs：前後に振る脚（腰が軸。rotation.x で振るもの）。渡すと、ひざを作って、前へ振り出すときに曲げる（creatures.ts）
+ */
+export type Rig = { height: number; shadow: number; legs?: THREE.Object3D[]; animate(t: number, walk: number, walking: boolean, dt: number): void };
+
+/**
+ * 脚にひざを作る：脚の部品を、高さの真ん中（ひざ）より下と上に分け、下の部品をひざを軸にした入れ物へ移す。
+ * 作れなかった（部品が上か下にしかない）ときは null
+ */
+export function addKnee(leg: THREE.Object3D): THREE.Group | null {
+  // 部品（形、または形をまとめた入れ物）ごとの、脚の中での大きさ（脚の向きのまま測る）
+  leg.updateMatrixWorld(true);
+  const toLeg = new THREE.Matrix4().copy(leg.matrixWorld).invert();
+  const centers = leg.children.map((m) => {
+    const b = new THREE.Box3().setFromObject(m, true).applyMatrix4(toLeg);
+    return { m, c: b.getCenter(new THREE.Vector3()), minY: b.min.y };
+  });
+  if (centers.length < 2) return null;
+  const kneeY = Math.min(...centers.map((x) => x.minY)) * 0.5;
+  const lower = centers.filter((x) => x.c.y < kneeY);
+  if (lower.length === 0 || lower.length === centers.length) return null;
+  // ひざの位置：ひざの高さにいちばん近い部品の中心の、前後と左右
+  const near = centers.reduce((a, b) => (Math.abs(b.c.y - kneeY) < Math.abs(a.c.y - kneeY) ? b : a));
+  const knee = new THREE.Group();
+  knee.position.set(near.c.x, kneeY, near.c.z);
+  leg.add(knee);
+  for (const { m } of lower) {
+    m.position.sub(knee.position);
+    knee.add(m);
+  }
+  return knee;
+}
 
 /** 模型を組み立てる関数 */
 export type Builder = (k: Kit, body: THREE.Group) => Rig;

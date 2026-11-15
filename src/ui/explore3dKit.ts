@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { EXPLORE_CONFIG, type ExploreState } from '../game/exploreTypes';
 import type { Pos } from '../game/map';
-import { BACKGROUND, CAMERA, FOG_LOOK, GROUND_MIST, REMEMBERED, SIGHT_LIGHT, TEXTURE_SPAN, WALL_HEIGHT, WALL_ROUGH } from './explore3dConfig';
+import { BACKGROUND, CAMERA, CORNER_SHADE, FOG_LOOK, GROUND_MIST, REMEMBERED, SIGHT_LIGHT, TEXTURE_SPAN, WALL_HEIGHT, WALL_ROUGH } from './explore3dConfig';
 
 /**
  * 敵の絵を立てる板（ふつうは1×1、中心が原点）。板はカメラの方へ向けて使うが、そのままだと面の向きがカメラを向くので、
@@ -265,6 +265,10 @@ export function applyFog<T extends THREE.Material>(material: T, fog: Fog, mode: 
         .replace(
           '#include <opaque_fragment>',
           `${FOG_SAMPLE_GLSL}
+          #ifdef MAPPED_SIDE
+            // 壁と床の隅の暗がり：壁の側面の根元ほど暗く
+            outgoingLight *= mix( ${CORNER_SHADE.min.toFixed(2)}, 1.0, smoothstep( 0.0, ${CORNER_SHADE.height.toFixed(2)}, vFogWorld.y ) );
+          #endif
           ${
             mode === 'darken'
               ? `{

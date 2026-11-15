@@ -70,7 +70,9 @@ export const GROUND_MIST = {
 // たいまつのゆらぎ：光の強さと、視界の端を、炎のように小さくちらつかせる（「動きを減らす」設定では止める）
 export const TORCH_FLICKER = { light: 0.12, sight: 0.035, speed: 1 };
 // 壁の根元の影：壁に接する床の辺に敷く帯。幅（マスの何倍か）と、壁際でのいちばん濃いところ、薄くなり方
-export const WALL_SHADOW = { depth: 0.4, darkness: 0.8, falloff: 1.5 }; // falloff：大きいほど壁際で急に薄くなる
+export const WALL_SHADOW = { depth: 0.4, darkness: 0.8, falloff: 1.5 };
+// 壁と床の隅の暗がり（2026-11-15）：壁の側面の根元ほど暗くする（min：床の高さでの明るさ、height：暗がりが届く高さ）。床側は影の帯（WALL_SHADOW）
+export const CORNER_SHADE = { min: 0.45, height: 0.35 }; // falloff：大きいほど壁際で急に薄くなる
 // 影の帯を敷く向き。dx・dz は壁のある方向、angle は帯の暗い側をその方向へ向ける回転
 export const SHADOW_SIDES = [
   { dx: 0, dz: -1, angle: 0 },
@@ -147,12 +149,15 @@ export const TRAIT_COLORS: Record<TraitId, { floor: number; wall: number }> = {
 export const SURFACE_BUMP = { floor: 9, top: 7, side: 9 };
 // 床の小石とがれき：マスごとに決まった乱数で、小石を散らし、壁の根元には崩れた石を寄せる（色は壁の色を暗くしたもの）
 export const DEBRIS = {
-  pebbleChance: 0.45, // 壁に接していない床のマスに、小石が1つある確率
-  rubbleChance: 0.6, // 壁に接した床のマスに、崩れた石がある確率（あれば1〜3個）
+  pebbleChance: 0.135, // 壁に接していない床のマスに、小石が1つある確率
+  rubbleChance: 0.18, // 壁に接した床のマスに、崩れた石がある確率（あれば1〜3個）
   pebbleSize: [0.04, 0.09] as const, // 小石の大きさ（マス）
   rubbleSize: [0.05, 0.13] as const, // 崩れた石の大きさ（マス）
   darken: 0.6, // 壁の色に掛ける明るさ
   perTile: 4, // 1マスに置ける数の上限（入れ物の大きさを決める）
+  boneChance: 0.025, // 床のマスに骨がある確率（壁際はその2倍）
+  boneSize: [0.1, 0.17] as const, // 骨の長さ（マス）
+  boneColor: 0xc9bea2,
 };
 
 // 画面全体の仕上げ（postFx.ts）：光のにじみ（明るさが threshold から threshold+knee にかけて、にじみ始める。bloom はにじみの強さ）、
@@ -181,7 +186,7 @@ export const SCONCE = {
 // kinds：特性ごとの粒（色、動き：velocity はマス/秒、sway は揺れ幅、size は大きさ、glow なら光る粒として足し合わせる）。
 // 火の粉は、灯っている壁掛けたいまつ（最大 sources 個）から立ちのぼる
 export const PARTICLES = {
-  air: 160,
+  air: 64,
   box: { width: 9, height: 2.2 },
   embers: 36,
   sources: 3,
