@@ -6,7 +6,7 @@
 
 import { Fragment, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { BODY_NAMES } from '../game/data';
-import { addEnemy, BODIES, ELEMENTS, enemyIds, LIMITS, RATE_LABELS, REWARD_LABELS, TRAIT_LABELS, type EnemyLook, type EnemyMaster, type EnemyRecord } from '../game/enemyMaster';
+import { addEnemy, BEHAVIOR_LABELS, BEHAVIOR_TEXTS, BEHAVIORS, BODIES, ELEMENTS, enemyIds, LIMITS, RATE_LABELS, REWARD_LABELS, TRAIT_LABELS, type EnemyLook, type EnemyMaster, type EnemyRecord } from '../game/enemyMaster';
 import { Sprite } from '../sprites/Sprite';
 import type { Body, Element, EnemyId } from '../game/types';
 import { textError } from '../game/fieldCheck';
@@ -163,6 +163,32 @@ export function EnemiesPanel({
             <ResetMark show={Boolean(e.boss) !== Boolean(b.boss)} label={`${e.name}のボスの設定を公開版に戻す`} onClick={() => setEnemy(id, { boss: b.boss })} />
           </span>
         </td>
+        <td data-label="行動の個性" className="admin__c6 admin__behaviors">
+          {BEHAVIORS.map((bh) => {
+            const on = e.behaviors?.includes(bh) ?? false;
+            const was = b.behaviors?.includes(bh) ?? false;
+            return (
+              <label key={bh} className="admin__behavior" title={BEHAVIOR_TEXTS[bh]}>
+                <input
+                  type="checkbox"
+                  className={cls('admin__check', on !== was)}
+                  checked={on}
+                  aria-label={`${e.name}の行動の個性：${BEHAVIOR_LABELS[bh]}`}
+                  onChange={(ev) => {
+                    const next = BEHAVIORS.filter((x) => (x === bh ? ev.target.checked : (e.behaviors?.includes(x) ?? false)));
+                    setEnemy(id, { behaviors: next.length ? next : undefined });
+                  }}
+                />
+                {BEHAVIOR_LABELS[bh]}
+              </label>
+            );
+          })}
+          <ResetMark
+            show={BEHAVIORS.some((bh) => (e.behaviors?.includes(bh) ?? false) !== (b.behaviors?.includes(bh) ?? false))}
+            label={`${e.name}の行動の個性を公開版に戻す`}
+            onClick={() => setEnemy(id, { behaviors: b.behaviors })}
+          />
+        </td>
         {(['gold', 'exp', 'drop'] as const).map((key) => (
           <td key={key} data-label={{ gold: '報酬 金貨', exp: '報酬 経験値', drop: '報酬 落とす%' }[key]} className="admin__c2">
             {e.boss ? (
@@ -280,6 +306,7 @@ export function EnemiesPanel({
               <th scope="col">物理</th>
               <th scope="col">魔法</th>
               <th scope="col">ボス</th>
+              <th scope="col">個性</th>
               <th scope="col">金貨</th>
               <th scope="col">経験値</th>
               <th scope="col">落とす%</th>
@@ -296,7 +323,7 @@ export function EnemiesPanel({
                 <Fragment key={g.group ?? 'all'}>
                   {g.group !== null && (
                   <tr key={`group-${g.group}`} className="admin__group-row">
-                    <th colSpan={15} scope="colgroup">
+                    <th colSpan={16} scope="colgroup">
                       <button type="button" className="admin__group-toggle" aria-expanded={open} onClick={() => toggle(g.group!)} disabled={filtering}>
                         <span aria-hidden="true">{open ? '▼' : '▶'}</span> {g.label}（{g.ids.length}体）
                       </button>
@@ -312,6 +339,9 @@ export function EnemiesPanel({
       </div>
       </div>
       <AddEnemy master={draft} disabled={busy} onAdd={(id, record) => setDraft((d) => addEnemy(d, id, record))} />
+      <p className="admin__note">
+        <b>個性</b>：行動の個性です（重ねられます）。遠距離は、まっすぐ4マス以内で見通せれば撃ってきます。突進は、まっすぐ3マス以内で身構えてから走ってきます。盾持ちは、向いている正面からの武器の攻撃を7割カットします。召喚は、5ターンごとに弱い敵を呼びます。文字の上にマウスを置くと、くわしい説明が出ます。
+      </p>
       <p className="admin__note">
         ボスにしているダンジョンがある敵は消せません。消すと、その敵はどのダンジョンにも出なくなります。足した敵は、ダンジョンごとの「ダンジョンに出る敵」のタブで出やすさを決めるまで、どのダンジョンにも出ません。
       </p>

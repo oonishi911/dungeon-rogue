@@ -21,10 +21,12 @@ import {
   type FloorMemory,
   type HitEvent,
 } from './exploreTypes';
+import { chargeRun, guardsAgainst, minionTile, retreatStep, stepDir, straightLine, weakestOf } from './enemyBehavior';
 import { canSee, samePos, visibleTiles } from './exploreSight';
 import type { DungeonFile, RoomSettings } from './genMaster';
 import { spellAffinity, spellDamage, startMagic } from './magic';
 import {
+  behaviorsOf,
   eliteArea,
   ENEMY_CONFIG,
   enemyDef,
@@ -100,6 +102,7 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     log: [],
     visited: {},
     hits: [],
+    foes: [],
   };
   return enterFloor(state, 0, state.map);
 }
@@ -115,7 +118,7 @@ export function sightRadiusOf(loadout: readonly ItemId[]): number {
 /** 1行動進める。壁への移動など行動にならない操作はエラーを返し、ターンも満腹度も消費しない */
 export function step(state: ExploreState, action: ExploreAction): Result<ExploreState> {
   if (state.outcome !== 'ongoing') return err('探索は終わっています');
-  state = { ...state, hits: [], cast: null };
+  state = { ...state, hits: [], foes: [], cast: null };
 
   let next: ExploreState;
   switch (action.kind) {
@@ -518,7 +521,7 @@ function hurtEnemy(state: ExploreState, uid: number, dmg: number, slip = false):
   state = { ...state, hits: [...state.hits, slip ? { kind: 'dealt', at: target.pos, amount: dmg, slip: true } : { kind: 'dealt', at: target.pos, amount: dmg }] };
   if (hp <= 0) {
     log.push(`${def.name}を倒した`);
-    const defeated = { ...state, enemies: state.enemies.filter((e) => e.uid !== uid), defeated: state.defeated + 1 };
+    const defeated = { ...state, enemies: state.enemies.filter((e) => e.uid !== uid), defeated: state.defeated + (target.summoned ? 0 : 1) };
     if (def.boss) {
       const reward = TREASURE_CONFIG.bossGold;
       log.push(`報酬として金貨${reward}Gを手に入れた`, 'ダンジョンを踏破した');
@@ -562,6 +565,7 @@ function bleedTurn(state: ExploreState, skip: readonly Pos[]): ExploreState {
  * 道具は持ち物に入れ、いっぱいなら倒した場所に宝箱で残す。強敵は必ず宝箱を落とす（金貨と良い道具が入っている）
  */
 function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
+  if (enemy.summoned) return state; // 呼ばれた敵を倒しても、報酬はない
   const settings = dungeonOfState(state);
   const growth = settings.growth;
   const reward = enemyReward(enemy.id);
@@ -626,10 +630,17 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
 function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
   const def = enemyDef(target);
   const surprise = target.mode === 'wander';
-  const dmg = playerHitDamage(state.stats, def) * (surprise ? ENEMY_CONFIG.surpriseMultiplier : 1);
+  // 盾持ちの敵は、向いている正面からの攻撃を大きく防ぐ（側面・背中からなら、そのまま通る）
+  const guarded = behaviorsOf(def).includes('shield') && guardsAgainst(target, state.player);
+  const raw = playerHitDamage(state.stats, def) * (surprise ? ENEMY_CONFIG.surpriseMultiplier : 1);
+  const dmg = guarded ? Math.max(1, Math.round(raw * (1 - ENEMY_CONFIG.shieldCut))) : raw;
   const hp = target.hp - dmg;
-  const log = [...state.log, surprise ? `${def.name}に不意打ち！ ${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`];
-  state = { ...state, hits: [...state.hits, { kind: 'dealt', at: target.pos, amount: dmg }] };
+  const log = [...state.log, guarded ? `${def.name}の盾に防がれた（${dmg}のダメージ）` : surprise ? `${def.name}に不意打ち！ ${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`];
+  state = {
+    ...state,
+    hits: [...state.hits, guarded ? { kind: 'dealt', at: target.pos, amount: dmg, blocked: true } : { kind: 'dealt', at: target.pos, amount: dmg }],
+    foes: guarded ? [...state.foes, { kind: 'block', at: target.pos }] : state.foes,
+  };
 
   // 属性付与はダメージを計算したあとで1回減らし、0回になると消える
   let stats = state.stats;
@@ -641,7 +652,7 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
 
   if (hp <= 0) {
     log.push(`${def.name}を倒した`);
-    const defeated = { ...state, stats, enemies: state.enemies.filter((e) => e.uid !== target.uid), defeated: state.defeated + 1 };
+    const defeated = { ...state, stats, enemies: state.enemies.filter((e) => e.uid !== target.uid), defeated: state.defeated + (target.summoned ? 0 : 1) };
     if (def.boss) {
       const reward = TREASURE_CONFIG.bossGold;
       log.push(`報酬として金貨${reward}Gを手に入れた`, 'ダンジョンを踏破した');
@@ -698,11 +709,12 @@ function enemiesTurn(state: ExploreState): ExploreState {
     crowd.set(k, (crowd.get(k) ?? 0) + 1);
     blocked.add(k);
   };
+  const spawned: MapEnemy[] = []; // このターンに呼ばれた敵（次のターンから動く）
   for (let i = 0; i < enemies.length; i++) {
     const current = enemies[i]!;
-    // 動けない敵は、このターンは何もしない（気付くことも、動くことも、攻撃することも）
+    // 動けない敵は、このターンは何もしない（気付くことも、動くことも、攻撃することも）。突進の構えも解ける
     if ((current.stun ?? 0) > 0) {
-      const { stun, ...rest } = current;
+      const { stun, charge: _charge, ...rest } = current;
       enemies[i] = stun! > 1 ? { ...rest, stun: stun! - 1, justNoticed: false } : { ...rest, justNoticed: false };
       continue;
     }
@@ -725,6 +737,83 @@ function enemiesTurn(state: ExploreState): ExploreState {
       if (e.searchTurns <= 0) {
         // 見失ったことも、記録には書かない
         e = { ...e, mode: 'wander', lastSeen: null, searchTurns: 0 };
+      }
+    }
+
+    // 突進の構え：構えた次のターンに、その向きへ走る（主人公が動いていても、同じ向きへ走る）
+    if (e.charge) {
+      const dir = e.charge;
+      const run = chargeRun(s.map, e.pos, dir, s.player, blocked);
+      const from = e.pos;
+      leave(key(from));
+      const { charge: _charge, ...rest } = e;
+      e = { ...rest, pos: run.to, facing: dir, cool: ENEMY_CONFIG.chargeCool };
+      enter(key(e.pos));
+      s = { ...s, foes: [...s.foes, { kind: 'charge', from, to: run.to, hit: run.hit }] };
+      if (run.hit) {
+        enemies[i] = e;
+        s = damagePlayer(s, Math.max(1, Math.ceil(enemyHitDamage(s.stats, def) * ENEMY_CONFIG.chargeRate)), `${def.name}の突進`, def.name, def.id);
+        if (s.outcome !== 'ongoing') return { ...s, enemies };
+        continue;
+      }
+      if (run.wall) {
+        e = { ...e, stun: ENEMY_CONFIG.chargeStun };
+        s = { ...s, foes: [...s.foes, { kind: 'bump', at: run.to }], log: [...s.log, `${def.name}は壁にぶつかって動けなくなった`] };
+      }
+      enemies[i] = e;
+      continue;
+    }
+
+    // 行動の個性（enemyBehavior.ts）：主人公を追っていて見えているあいだ、個性のある行動をしたら、そのターンはほかのことをしない
+    const behaviors = behaviorsOf(def);
+    if ((e.cool ?? 0) > 0) e = { ...e, cool: e.cool! - 1 };
+    if (e.mode === 'chase' && sees && behaviors.length > 0) {
+      const line = straightLine(s.map, e.pos, s.player, blocked);
+      // 召喚：間隔ごとに、近くのあいている床に、道中でいちばん弱い敵を呼ぶ（同時に出していられる数まで）
+      if (behaviors.includes('summoner')) {
+        const left = (e.summonIn ?? ENEMY_CONFIG.summonEvery) - 1;
+        if (left > 0) e = { ...e, summonIn: left };
+        else {
+          e = { ...e, summonIn: ENEMY_CONFIG.summonEvery };
+          const mine = [...enemies, ...spawned].filter((m) => m.summonedBy === e.uid).length;
+          const tile = mine < ENEMY_CONFIG.summonMax ? minionTile(s.map, e.pos, s.player, blocked) : null;
+          if (tile) {
+            const id = weakestOf(dungeonOfState(s).encounters[s.trait].pool);
+            const minion: MapEnemy = { uid: s.nextUid, id, elite: false, pos: tile, hp: enemyDef({ id, elite: false }).hp, mode: 'chase', justNoticed: true, lastSeen: s.player, searchTurns: 0, summoned: true, summonedBy: e.uid };
+            spawned.push(minion);
+            enter(key(tile));
+            s = { ...s, nextUid: s.nextUid + 1, foes: [...s.foes, { kind: 'summon', at: tile, from: e.pos }], log: [...s.log, `${def.name}が${enemyDef(minion).name}を呼んだ`] };
+            enemies[i] = e;
+            continue;
+          }
+        }
+      }
+      // 突進：まっすぐ2〜3マス離れていたら構える
+      if (behaviors.includes('charger') && (e.cool ?? 0) <= 0 && line && line.dist >= 2 && line.dist <= ENEMY_CONFIG.chargeRange) {
+        e = { ...e, charge: line.dir, facing: line.dir };
+        s = { ...s, foes: [...s.foes, { kind: 'windup', at: e.pos }], log: [...s.log, `${def.name}が突進の構えをとった`] };
+        enemies[i] = e;
+        continue;
+      }
+      // 遠距離：まっすぐ2〜4マスで見通せれば撃つ。隣り合うと、撃てる位置へ1歩下がる
+      if (behaviors.includes('ranged')) {
+        if (line && line.dist >= 2 && line.dist <= ENEMY_CONFIG.rangedRange) {
+          enemies[i] = e;
+          s = { ...s, foes: [...s.foes, { kind: 'shot', from: e.pos, to: s.player, by: e.id }] };
+          s = damagePlayer(s, Math.max(1, Math.ceil(enemyHitDamage(s.stats, def) * ENEMY_CONFIG.rangedRate)), `${def.name}の遠距離攻撃`, def.name, def.id, true);
+          if (s.outcome !== 'ongoing') return { ...s, enemies };
+          continue;
+        }
+        if (isAdjacent(e.pos, s.player) && (e.cool ?? 0) <= 0) {
+          const back = retreatStep(s.map, e.pos, s.player, blocked);
+          if (back) {
+            leave(key(e.pos));
+            e = { ...e, pos: back, facing: stepDir(e.pos, back) ?? e.facing, cool: ENEMY_CONFIG.retreatCool };
+            enter(key(back));
+            enemies[i] = e;
+            continue;
+          }
+        }
       }
     }
 
@@ -755,16 +844,20 @@ function enemiesTurn(state: ExploreState): ExploreState {
       s = { ...s, rngState: moved.rngState };
       e = { ...e, pos: moved.pos };
     }
+    // 歩いたら、その向きが正面になる（盾持ちの盾の向き）
+    const faced = samePos(e.pos, current.pos) ? null : stepDir(current.pos, e.pos);
+    if (faced) e = { ...e, facing: faced };
     enter(key(e.pos));
     enemies[i] = e;
   }
+  enemies.push(...spawned);
   return { ...s, enemies };
 }
 
-function damagePlayer(state: ExploreState, dmg: number, message: string, by: string, enemy?: EnemyId): ExploreState {
+function damagePlayer(state: ExploreState, dmg: number, message: string, by: string, enemy?: EnemyId, ranged = false): ExploreState {
   const hp = Math.max(0, state.stats.hp - dmg);
   const log = [...state.log, `${message}で${dmg}のダメージ`];
-  const hit: HitEvent = enemy ? { kind: 'taken', at: state.player, amount: dmg, by: enemy } : { kind: 'taken', at: state.player, amount: dmg };
+  const hit: HitEvent = enemy ? { kind: 'taken', at: state.player, amount: dmg, by: enemy, ...(ranged ? { ranged: true } : {}) } : { kind: 'taken', at: state.player, amount: dmg };
   state = { ...state, hits: [...state.hits, hit] };
   if (hp === 0) {
     return { ...state, stats: { ...state.stats, hp }, outcome: 'defeated', log: [...log, `${by}に倒された…`] };

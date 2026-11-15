@@ -25,14 +25,15 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
     impactMs = view3d?.castSpell(next.cast, prev.player) ?? 0;
     playSpell(next.cast.spell);
   }
+  const foeMs = view3d?.playFoes(next.foes) ?? 0; // 遠距離の矢が当たるまで（矢に当たった側のダメージの数字は、そのあとに出す）
   const struck = next.cast ? undefined : next.hits.find((hit) => hit.kind === 'dealt' && !hit.slip);
   if (struck) {
     view3d?.heroAttack(struck.at);
     playAttack(weaponOf(next.stats.weapon));
   }
   // 敵に攻撃されたときは、敵の体質ごとの音を鳴らす。主人公の攻撃の音のあと、敵ごとに少しずつずらして鳴らす
-  const attackers = next.hits.flatMap((hit) => (hit.kind === 'taken' && hit.by ? [enemyBase(hit.by)] : [])).slice(0, ENEMY_SOUND.max);
-  attackers.forEach((enemy, i) => playEnemyAttack(enemy, (struck ? ENEMY_SOUND.afterAttack : 0) + (impactMs > 0 ? (impactMs + CAST_THEN_HURT_MS) / 1000 : 0) + i * ENEMY_SOUND.gap));
+  const attackers = next.hits.flatMap((hit) => (hit.kind === 'taken' && hit.by ? [{ enemy: enemyBase(hit.by), late: hit.ranged ? foeMs / 1000 : 0 }] : [])).slice(0, ENEMY_SOUND.max);
+  attackers.forEach(({ enemy, late }, i) => playEnemyAttack(enemy, (struck ? ENEMY_SOUND.afterAttack : 0) + (impactMs > 0 ? (impactMs + CAST_THEN_HURT_MS) / 1000 : 0) + late + i * ENEMY_SOUND.gap));
   for (const hit of next.hits) {
     const show = () => {
       // 出血のダメージは、数字だけを出す（武器を振る・画面を拡大する・振動はしない）
@@ -41,15 +42,15 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
         return;
       }
       view3d?.hitPulse(hit.kind === 'dealt' ? 'attack' : 'hurt');
-      // 攻撃してきた敵は、主人公の方へ飛びかかる
-      if (hit.kind === 'taken' && hit.by) view3d?.enemyAttack(hit.by);
-      view3d?.popDamage(hit.at, hit.amount, hit.kind);
+      // 攻撃してきた敵は、主人公の方へ飛びかかる（離れて撃ってきた敵は飛びかからない）
+      if (hit.kind === 'taken' && hit.by && !hit.ranged) view3d?.enemyAttack(hit.by);
+      view3d?.popDamage(hit.at, hit.amount, hit.kind, hit.kind === 'dealt' && hit.blocked === true);
       // スマホを震わせる（振動に対応したスマホだけ）。踏破したとき・力尽きたときは、長く震わせる
       if (hit.kind === 'dealt') vibrate(next.outcome === 'cleared' ? HAPTICS.cleared : HAPTICS.attack);
       else vibrate(next.outcome === 'defeated' ? HAPTICS.defeated : HAPTICS.hurt);
     };
     // 呪文の矢のあとに敵が攻撃してきたときは、矢が当たってから見せる
-    const delay = impactMs > 0 ? impactMs + (hit.kind === 'taken' ? CAST_THEN_HURT_MS : 0) : 0;
+    const delay = Math.max(impactMs > 0 ? impactMs + (hit.kind === 'taken' ? CAST_THEN_HURT_MS : 0) : 0, hit.kind === 'taken' && hit.ranged ? foeMs : 0);
     if (delay > 0) window.setTimeout(show, delay);
     else show();
   }

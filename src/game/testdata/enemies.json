@@ -63,10 +63,13 @@
     "fire_imp": {
       "name": "火の小鬼",
       "hp": 6,
-      "atk": 7,
+      "atk": 4,
       "def": 0,
       "element": "fire",
       "body": "normal",
+      "behaviors": [
+        "ranged"
+      ],
       "look": {
         "sprite": "fire_imp"
       },
@@ -79,10 +82,13 @@
     "flame_hound": {
       "name": "炎の猟犬",
       "hp": 8,
-      "atk": 7,
+      "atk": 5,
       "def": 1,
       "element": "fire",
       "body": "soft",
+      "behaviors": [
+        "charger"
+      ],
       "look": {
         "sprite": "flame_hound"
       },
@@ -556,10 +562,13 @@
     "holy_knight": {
       "name": "聖騎士",
       "hp": 12,
-      "atk": 7,
+      "atk": 6,
       "def": 3,
       "element": "light",
       "body": "hard",
+      "behaviors": [
+        "shield"
+      ],
       "look": {
         "sprite": "venom_queen",
         "recolor": {
@@ -662,6 +671,10 @@
       "body": "normal",
       "physical": 1.5,
       "magic": 0.5,
+      "behaviors": [
+        "ranged",
+        "summoner"
+      ],
       "look": {
         "sprite": "goblin",
         "recolor": {

@@ -9,11 +9,11 @@
 //   模型のない敵（新しく足した敵など）と宝箱は、絵を常にカメラを向く板（スプライト）として立てる
 
 import * as THREE from 'three';
-import { ITEMS } from '../game/data';
+import { enemyBase, ITEMS } from '../game/data';
 import { gearOf } from '../game/itemMaster';
-import { enemyDef, isAdjacent, type MapEnemy } from '../game/enemies';
+import { behaviorsOf, enemyDef, isAdjacent, type MapEnemy } from '../game/enemies';
 import { upStairs } from '../game/explore';
-import { type CastEvent, type Dir, type ExploreState } from '../game/exploreTypes';
+import { DIR_DELTA, type CastEvent, type Dir, type ExploreState, type FoeEvent } from '../game/exploreTypes';
 import { dirBetween } from '../game/exploreSight';
 import type { FloorMap, Pos } from '../game/map';
 import type { EnemyId, ItemId, TraitId, WeaponType } from '../game/types';
@@ -27,7 +27,7 @@ import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
-import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEBRIS, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, SPLASH_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, QUALITY, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
+import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEBRIS, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, FOE_FX, SPLASH_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, QUALITY, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
 import { applyFog, createFog, createGroundMist, litBillboard, worldMapped } from './explore3dKit';
 import { asMetal } from './materialLook';
 import { PostFx } from './postFx';
@@ -116,6 +116,7 @@ export class DungeonView3D {
   private combatZoom = 1; // 戦闘中に寄せている倍率（なめらかに変わる）
   private lastCombatAt = -Infinity; // 最後に戦闘中だった時刻
   private readonly damagePops: { sprite: THREE.Sprite; start: number }[] = [];
+  private readonly shots: { mesh: THREE.Mesh; from: Pos; to: Pos; start: number }[] = []; // 飛んでいる、遠距離の敵の矢
   // 霧：描いている床と壁の1つ1つ（どの入れ物の何番目か・どのマスか・元の色）と、マスごとの今の明るさ
   // 霧：マスごとの「見えている」「一度見た」を1マス1ドットの小さな画像にして、描くときにピクセルごとになめらかに読む
   private readonly fog = createFog();
@@ -133,6 +134,7 @@ export class DungeonView3D {
       mark: THREE.Sprite;
       hp: THREE.Sprite;
       ring: THREE.Mesh | null;
+      shield: THREE.Mesh | null; // 盾持ちの敵の盾（向いている正面に置く）
       top: number;
       facing: Dir;
     }
@@ -161,6 +163,9 @@ export class DungeonView3D {
     chestGrooveSide: new THREE.BoxGeometry(0.004, 0.007, CHEST.depth - 0.01),
     chestHinge: new THREE.CylinderGeometry(0.014, 0.014, 0.07, 10).rotateZ(Math.PI / 2), // 蝶番の筒（ふたの軸に沿う）
     ring: new THREE.RingGeometry(0.4, 0.48, 24).rotateX(-Math.PI / 2),
+    shieldPlate: new THREE.BoxGeometry(FOE_FX.shield.size, FOE_FX.shield.size, FOE_FX.shield.thick),
+    shieldMat: new THREE.MeshLambertMaterial({ color: FOE_FX.shield.color }),
+    shotBall: new THREE.SphereGeometry(FOE_FX.shot.size, 12, 8),
     targetRing: new THREE.RingGeometry(0.32, 0.42, 24).rotateX(-Math.PI / 2),
     // 宝箱の素材。テクスチャ（public/textures/chest/）を読み込むまでは金色で描く
     chestFront: new THREE.MeshLambertMaterial({ color: 0xe2c178 }),
@@ -372,6 +377,7 @@ export class DungeonView3D {
     this.sconces.tick(p, dt, this.reduceMotion);
     if (this.particles.root.visible) this.particles.tick(this.sconces.flames, this.pixelRatio);
     this.updateDamagePops(now);
+    this.updateShots(now);
     this.spellFx.update(now);
     const zoom = this.updateCombatZoom(s, now, dt) * this.pulseZoom(now);
     if (Math.abs(zoom - this.camera.zoom) > 1e-4) {
@@ -424,6 +430,11 @@ export class DungeonView3D {
       view.mark.position.set(at.x, view.top + 0.15, at.y);
       view.hp.position.set(at.x, 0.06, at.y);
       view.ring?.position.set(at.x, 0.02, at.y);
+      if (view.shield) {
+        const d = DIR_DELTA[view.facing];
+        view.shield.position.set(at.x + d.x * FOE_FX.shield.reach, FOE_FX.shield.y, at.y + d.y * FOE_FX.shield.reach);
+        view.shield.rotation.y = d.x !== 0 ? Math.PI / 2 : 0;
+      }
     }
     this.updateKnock(now);
     this.updateDying(now);
@@ -625,6 +636,7 @@ export class DungeonView3D {
     }
     view.mark.visible = view.hp.visible = false;
     if (view.ring) view.ring.visible = false;
+    if (view.shield) view.shield.visible = false;
     this.collapses.set(uid, performance.now());
   }
 
@@ -670,7 +682,12 @@ export class DungeonView3D {
    * ダメージの数字を出す。at は受けた側のマス、kind は与えた（dealt）か受けた（taken）か。
    * 同じマスに続けて出るときは、少しずつ横にずらして重ならないようにする
    */
-  popDamage(at: Pos, amount: number, kind: 'dealt' | 'taken') {
+  popDamage(at: Pos, amount: number, kind: 'dealt' | 'taken', blocked = false) {
+    this.popText(at, String(amount), blocked ? FOE_FX.marks.blocked : DAMAGE_POP.colors[kind]);
+  }
+
+  /** at のマスの上に、色つきの短い文字を浮かべる（ダメージの数字や、突進・召喚の知らせ） */
+  private popText(at: Pos, text: string, color: string) {
     const canvas = document.createElement('canvas');
     canvas.width = 128;
     canvas.height = 64;
@@ -682,9 +699,9 @@ export class DungeonView3D {
     ctx.lineJoin = 'round';
     ctx.lineWidth = 8;
     ctx.strokeStyle = 'rgba(11, 20, 19, 0.9)';
-    ctx.strokeText(String(amount), 64, 34);
-    ctx.fillStyle = DAMAGE_POP.colors[kind];
-    ctx.fillText(String(amount), 64, 34);
+    ctx.strokeText(text, 64, 34);
+    ctx.fillStyle = color;
+    ctx.fillText(text, 64, 34);
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false }));
@@ -695,6 +712,41 @@ export class DungeonView3D {
     this.scene.add(sprite);
     this.damagePops.push({ sprite, start: now });
     this.updateDamagePops(now);
+  }
+
+  /**
+   * 敵の行動の個性の演出を始める（遠距離の矢・壁にぶつかった・召喚）。突進の構えは頭上のマーク、走る動きは敵の位置の移り変わりで見せる。
+   * 返す値は、矢が当たるまでのミリ秒（矢がなければ 0）。そのあいだ、矢に当たった側のダメージの数字を待たせる
+   */
+  playFoes(foes: readonly FoeEvent[]): number {
+    let shotMs = 0;
+    for (const f of foes) {
+      if (f.kind === 'shot' && !this.reduceMotion) {
+        const mesh = new THREE.Mesh(this.shared.shotBall, new THREE.MeshBasicMaterial({ color: FOE_FX.shotColors[enemyBase(f.by).element], transparent: true, depthTest: false }));
+        mesh.renderOrder = 15;
+        mesh.position.set(f.from.x, FOE_FX.shot.height, f.from.y);
+        this.scene.add(mesh);
+        this.shots.push({ mesh, from: f.from, to: f.to, start: performance.now() });
+        shotMs = FOE_FX.shot.ms;
+      } else if (f.kind === 'bump') this.popText(f.at, '★', FOE_FX.marks.bump);
+      else if (f.kind === 'summon') this.popText(f.at, '呼', FOE_FX.marks.summon);
+    }
+    return shotMs;
+  }
+
+  /** 飛んでいる矢を動かし、当たったものを片付ける */
+  private updateShots(now: number) {
+    for (let k = this.shots.length - 1; k >= 0; k--) {
+      const { mesh, from, to, start } = this.shots[k]!;
+      const t = (now - start) / FOE_FX.shot.ms;
+      if (t >= 1) {
+        this.scene.remove(mesh);
+        (mesh.material as THREE.Material).dispose();
+        this.shots.splice(k, 1);
+        continue;
+      }
+      mesh.position.set(from.x + (to.x - from.x) * t, FOE_FX.shot.height, from.y + (to.y - from.y) * t);
+    }
   }
 
   /** ダメージの数字を動かし、消え終わったものを片付ける */
@@ -1159,16 +1211,19 @@ export class DungeonView3D {
       const view = this.enemies.get(e.uid) ?? this.createEnemyView(e);
       view.body.visible = view.mark.visible = true;
       if (view.ring) view.ring.visible = true;
+      if (view.shield) view.shield.visible = true;
       // 向き：歩いたらその向き、止まっていても主人公を追っていれば主人公の方を向く
       const from = frame.from.enemies.get(e.uid);
       if (from && (from.x !== e.pos.x || from.y !== e.pos.y)) view.facing = facingToward(from, e.pos);
       else if (e.mode !== 'wander') view.facing = facingToward(e.pos, state.player);
+      if (view.shield) view.facing = e.facing ?? 'down'; // 盾持ちは、盾を向けている向き（最後に歩いた向き）を向く
       // 頭上のマーク。気付いた瞬間の「！」だけ大きく強調する
       // 動けない敵（強衝撃）は黄色い星、出血している敵（烈なぎ払い）は赤い丸
       if ((e.stun ?? 0) > 0) view.mark.material = this.textMaterial('★', '#ffe27a');
+      else if (e.charge) view.mark.material = this.textMaterial('‼', FOE_FX.marks.charge); // 突進の構え
       else if (e.bleed) view.mark.material = this.textMaterial('●', '#e0384a');
       else view.mark.material = this.textMaterial(ENEMY_MARK[e.mode].mark, e.mode === 'wander' ? '#b9b29f' : '#e2c178');
-      view.mark.scale.setScalar(e.justNoticed ? 0.7 : 0.45);
+      view.mark.scale.setScalar(e.justNoticed || e.charge ? 0.7 : 0.45);
       const def = enemyDef(e);
       view.hp.visible = e.hp < def.hp;
       view.hp.material = this.hpMaterial(Math.ceil((e.hp / def.hp) * 10));
@@ -1187,6 +1242,7 @@ export class DungeonView3D {
       else {
         view.body.visible = view.mark.visible = view.hp.visible = false;
         if (view.ring) view.ring.visible = false;
+        if (view.shield) view.shield.visible = false;
       }
     }
   }
@@ -1207,11 +1263,15 @@ export class DungeonView3D {
     }
     if (ring) ring.receiveShadow = true;
     const top = model?.height ?? 1;
-    const view = { id: e.id, body, model, mark: new THREE.Sprite(), hp: new THREE.Sprite(), ring, top, facing: 'down' as Dir };
+    // 盾持ちの敵は、向いている正面に盾の板を持つ
+    const shield = behaviorsOf(def).includes('shield') ? new THREE.Mesh(this.shared.shieldPlate, this.shared.shieldMat) : null;
+    const view = { id: e.id, body, model, mark: new THREE.Sprite(), hp: new THREE.Sprite(), ring, shield, top, facing: 'down' as Dir };
     view.body.visible = view.mark.visible = view.hp.visible = false;
     if (view.ring) view.ring.visible = false;
+    if (view.shield) view.shield.visible = false;
     this.scene.add(view.body, view.mark, view.hp);
     if (ring) this.scene.add(ring);
+    if (shield) this.scene.add(shield);
     this.enemies.set(e.uid, view);
     // 描き方（シェーダー）の準備を、見えるようになる前に済ませる（初めて画面に出たとき、一瞬止まらないように）
     this.compile(view.body);
@@ -1263,6 +1323,7 @@ export class DungeonView3D {
     if (!view) return;
     this.scene.remove(view.body, view.mark, view.hp);
     if (view.ring) this.scene.remove(view.ring);
+    if (view.shield) this.scene.remove(view.shield);
     view.model?.dispose();
     this.enemies.delete(uid);
   }

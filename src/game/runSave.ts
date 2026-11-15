@@ -30,7 +30,7 @@ interface PackedFloor {
   chests: Chest[];
 }
 
-type PackedState = Omit<ExploreState, 'map' | 'seen' | 'visited' | 'hits' | 'cast' | 'enemies' | 'chests'> & {
+type PackedState = Omit<ExploreState, 'map' | 'seen' | 'visited' | 'hits' | 'foes' | 'cast' | 'enemies' | 'chests'> & {
   current: PackedFloor;
   visited: Record<string, PackedFloor>;
 };
@@ -94,7 +94,7 @@ function packFloor(floor: FloorMemory): PackedFloor {
 
 /** 探索の途中の状態を、保存する形にする */
 export function packRun(base: SaveData, outcome: Departure, seed: number, state: ExploreState): RunSave {
-  const { map, seen, visited, hits: _hits, cast: _cast, enemies, chests, ...rest } = state;
+  const { map, seen, visited, hits: _hits, foes: _foes, cast: _cast, enemies, chests, ...rest } = state;
   return {
     version: RUN_SAVE_VERSION,
     base,
@@ -128,6 +128,11 @@ function isEnemy(map: FloorMap, v: unknown): v is MapEnemy {
   if (v.mode !== 'wander' && v.mode !== 'chase' && v.mode !== 'search') return false;
   if (!isFloorPos(map, v.pos) || !(v.lastSeen === null || isFloorPos(map, v.lastSeen))) return false;
   if (!(v.home === undefined || isFloorPos(map, v.home))) return false;
+  // 行動の個性の欄（できる前の中断データにはない）
+  const isDir = (d: unknown) => d === 'up' || d === 'down' || d === 'left' || d === 'right';
+  if (!(v.facing === undefined || isDir(v.facing)) || !(v.charge === undefined || isDir(v.charge))) return false;
+  if (!(v.cool === undefined || isCount(v.cool)) || !(v.summonIn === undefined || isCount(v.summonIn))) return false;
+  if (!(v.summoned === undefined || typeof v.summoned === 'boolean') || !(v.summonedBy === undefined || isCount(v.summonedBy))) return false;
   const room = v.room;
   return room === undefined || (isObject(room) && isCount(room.x) && isCount(room.y) && isCount(room.width) && isCount(room.height));
 }
@@ -246,6 +251,7 @@ export function parseRun(text: string | null): ResumedRun | null {
     log: s.log as string[],
     visited,
     hits: [],
+    foes: [],
   };
   return { base, outcome, seed: raw.seed, state };
 }

@@ -99,6 +99,15 @@ export interface Departure {
 }
 
 // ===== 敵 =====
+/**
+ * 敵の行動の個性（enemies.json の behaviors。管理画面の「敵」タブで変えられる。1体に複数つけられる）。
+ * - ranged（遠距離）：まっすぐ4マス以内で見通せれば、離れたところから撃ってくる
+ * - charger（突進）：まっすぐ3マス以内にいると身構えて、次のターンに一直線に走ってくる
+ * - shield（盾持ち）：向いている正面からの武器の攻撃を、大きく防ぐ
+ * - summoner（召喚）：数ターンごとに、近くに弱い敵を呼ぶ
+ */
+export type EnemyBehavior = 'ranged' | 'charger' | 'shield' | 'summoner';
+
 // 敵の ID。敵の種類はプログラムに決め打ちせず、src/game/enemies.json にある敵がすべて（管理画面 ?view=admin の「敵」タブで足す・消すことができる）
 export type EnemyId = string;
 
@@ -113,6 +122,7 @@ export interface EnemyDef {
   boss?: boolean;
   physical?: number; // 武器で殴られたときのダメージの倍率（省略は1。1より大きいほど物理に弱く、小さいほど強い）
   magic?: number; // 呪文を受けたときのダメージの倍率（省略は1。1より大きいほど魔法に弱く、小さいほど強い）
+  behaviors?: EnemyBehavior[]; // 行動の個性（省略は、ふつうに近づいて殴るだけ）
 }
 
 // ===== プレイヤー =====

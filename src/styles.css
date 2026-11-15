@@ -1354,6 +1354,22 @@ button {
   box-shadow: none;
 }
 
+/* 敵の行動の個性（遠距離・突進・盾持ち・召喚）のチェック欄 */
+.admin__behaviors {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  align-items: center;
+  gap: 0.25rem 0.8rem;
+}
+
+.admin__behavior {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
 .admin__changes,
 .admin__problems {
   margin: 0 0 1rem;

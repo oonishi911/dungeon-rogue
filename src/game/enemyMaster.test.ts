@@ -89,6 +89,25 @@ describe('敵のマスターデータを扱う関数', () => {
     expect(parseEnemyMaster(JSON.parse(serializeEnemyMaster({ enemies: { ...clone().enemies, goblin: { ...clone().enemies.goblin!, magic: 1.5 } } })) as unknown).enemies.goblin!.magic).toBe(1.5);
   });
 
+  it('行動の個性：省略できる。重ねて選べる。空・重複・知らない値はおかしい値。書き出しは決まった順で、ないときは書かない。変えた内容に出る', () => {
+    const m = clone();
+    expect(masterProblems(m)).toEqual([]);
+    m.enemies.goblin!.behaviors = ['summoner', 'ranged'];
+    expect(masterProblems(m)).toEqual([]);
+    expect(describeChanges(clone(), m)).toEqual(['ゴブリン：行動の個性 なし → 遠距離・召喚']);
+    expect(serializeEnemyMaster(m)).toContain('"behaviors": [\n        "ranged",\n        "summoner"\n      ]');
+    const round = parseEnemyMaster(JSON.parse(serializeEnemyMaster(m)) as unknown);
+    expect(round.enemies.goblin!.behaviors).toEqual(['ranged', 'summoner']);
+    m.enemies.goblin!.behaviors = [];
+    expect(masterProblems(m)).toHaveLength(1);
+    m.enemies.goblin!.behaviors = ['ranged', 'ranged'];
+    expect(masterProblems(m)).toHaveLength(1);
+    m.enemies.goblin!.behaviors = ['flying' as never];
+    expect(masterProblems(m)).toHaveLength(1);
+    delete m.enemies.goblin!.behaviors;
+    expect(serializeEnemyMaster(m)).not.toContain('behaviors');
+  });
+
   it('見た目の色を空にしたときは、書き出さない', () => {
     const m = clone();
     m.enemies.goblin!.look = { sprite: 'goblin', recolor: {} };

@@ -6,11 +6,20 @@
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
 
 import { SPRITES, type SpriteId } from '../sprites/data';
-import type { Body, Element, EnemyDef, EnemyId, TraitId } from './types';
+import type { Body, Element, EnemyBehavior, EnemyDef, EnemyId, TraitId } from './types';
 
 export const ELEMENTS = ['neutral', 'fire', 'ice', 'light', 'dark'] as const satisfies readonly Element[];
 export const BODIES = ['normal', 'soft', 'hard', 'spirit'] as const satisfies readonly Body[];
 export const MASTER_TRAITS: readonly TraitId[] = ELEMENTS;
+/** 敵の行動の個性（types.ts の EnemyBehavior）の一覧と、管理画面に出す名前・説明 */
+export const BEHAVIORS = ['ranged', 'charger', 'shield', 'summoner'] as const satisfies readonly EnemyBehavior[];
+export const BEHAVIOR_LABELS: Record<EnemyBehavior, string> = { ranged: '遠距離', charger: '突進', shield: '盾持ち', summoner: '召喚' };
+export const BEHAVIOR_TEXTS: Record<EnemyBehavior, string> = {
+  ranged: 'まっすぐ4マス以内で見通せれば、離れたところから撃ってくる（ダメージは通常の0.8倍）。隣に来られると、撃てる位置へ1歩下がる',
+  charger: 'まっすぐ3マス以内にいると身構え、次のターンに一直線に走ってくる（当たれば通常の1.5倍。避けられて壁にぶつかると、1ターン動けなくなる）',
+  shield: '向いている正面からの武器の攻撃を7割カットする（向きは最後に歩いた向き。背中・側面・呪文は通常どおり）',
+  summoner: '5ターンごとに、近くに道中でいちばん弱い敵を呼ぶ（同時に2体まで。呼ばれた敵を倒しても、報酬はない）',
+};
 /** 敵の見た目に使える、もとのドット絵（主人公の絵は使えない） */
 export const ENEMY_SPRITES = (Object.keys(SPRITES) as SpriteId[]).filter((s) => s !== 'hero');
 
@@ -97,6 +106,12 @@ export function masterProblems(data: unknown): string[] {
         problems.push(`${label}：${RATE_LABELS[key]}は${LIMITS.rate.min}〜${LIMITS.rate.max}にする`);
       }
     }
+    if (e.behaviors !== undefined) {
+      const b = e.behaviors;
+      if (!Array.isArray(b) || b.length === 0 || !b.every((x) => (BEHAVIORS as readonly unknown[]).includes(x)) || new Set(b).size !== b.length) {
+        problems.push(`${label}：行動の個性が正しくない（${BEHAVIORS.map((x) => BEHAVIOR_LABELS[x]).join('・')}から、重ねずに選ぶ。ないときは書かない）`);
+      }
+    }
     problems.push(...lookProblems(label, e.look));
     if (!isObject(e.reward)) problems.push(`${label}：倒したときの報酬がない`);
     else {
@@ -180,12 +195,14 @@ export function enemyDefs(master: EnemyMaster): Record<EnemyId, EnemyDef> {
 export function serializeEnemyMaster(master: EnemyMaster): string {
   const enemies = Object.fromEntries(
     enemyIds(master).map((id) => {
-      const { name, hp, atk, def, element, body, boss, physical, magic, look, reward } = master.enemies[id]!;
+      const { name, hp, atk, def, element, body, boss, physical, magic, behaviors, look, reward } = master.enemies[id]!;
       const cleanLook = look.recolor && Object.keys(look.recolor).length ? { sprite: look.sprite, recolor: look.recolor } : { sprite: look.sprite };
       const cleanReward = { gold: reward.gold, exp: reward.exp, drop: reward.drop };
       // 倍率は、1のときは書かない（省略と同じ）
       const rates = { ...(physical !== undefined && physical !== 1 ? { physical } : {}), ...(magic !== undefined && magic !== 1 ? { magic } : {}) };
-      return [id, { name, hp, atk, def, element, body, ...(boss ? { boss: true } : {}), ...rates, look: cleanLook, reward: cleanReward }];
+      // 行動の個性は、決まった並び順で、1つもなければ書かない
+      const ordered = BEHAVIORS.filter((b) => behaviors?.includes(b));
+      return [id, { name, hp, atk, def, element, body, ...(boss ? { boss: true } : {}), ...rates, ...(ordered.length ? { behaviors: ordered } : {}), look: cleanLook, reward: cleanReward }];
     }),
   );
   return `${JSON.stringify({ enemies }, null, 2)}\n`;
@@ -262,6 +279,8 @@ export function describeChanges(before: EnemyMaster, after: EnemyMaster): string
     for (const key of ['physical', 'magic'] as const) {
       if ((a[key] ?? 1) !== (b[key] ?? 1)) out.push(`${b.name}：${RATE_LABELS[key]} ${a[key] ?? 1} → ${b[key] ?? 1}`);
     }
+    const [ba, bb] = [BEHAVIORS.filter((x) => a.behaviors?.includes(x)), BEHAVIORS.filter((x) => b.behaviors?.includes(x))];
+    if (ba.join() !== bb.join()) out.push(`${b.name}：行動の個性 ${ba.length ? ba.map((x) => BEHAVIOR_LABELS[x]).join('・') : 'なし'} → ${bb.length ? bb.map((x) => BEHAVIOR_LABELS[x]).join('・') : 'なし'}`);
     if (Boolean(a.boss) !== Boolean(b.boss)) out.push(`${b.name}：${b.boss ? 'ボスにする' : 'ボスではなくする'}`);
     if (JSON.stringify(a.look) !== JSON.stringify(b.look)) out.push(`${b.name}：見た目を変更`);
     for (const key of ['gold', 'exp', 'drop'] as const) {

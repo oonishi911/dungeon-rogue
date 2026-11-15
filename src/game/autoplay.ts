@@ -4,7 +4,8 @@
 
 import { enchantMultiplier, playerHitDamage } from './combat';
 import { ITEMS } from './data';
-import { enemyDef, isAdjacent, key, type MapEnemy } from './enemies';
+import { behaviorsOf, enemyDef, ENEMY_CONFIG, isAdjacent, key, type MapEnemy } from './enemies';
+import { straightLine } from './enemyBehavior';
 import { startExplore, step, toResult } from './explore';
 import { type ExploreAction, type ExploreOptions, type ExploreResult, type ExploreState } from './exploreTypes';
 import { dirBetween } from './exploreSight';
@@ -39,6 +40,17 @@ export function autoAction(state: ExploreState): ExploreAction {
     const enchant = bestEnchant(state, target);
     if (enchant) return { kind: 'use_item', item: enchant };
     return { kind: 'move', dir: dirBetween(player, target.pos) };
+  }
+
+  // 2.5. 撃ってくる敵（遠距離）が、まっすぐ撃てる位置にいたら、先に倒しに行く（歩き続けると、撃たれるだけになるので）
+  const shooter = state.enemies
+    .filter((e) => e.mode === 'chase' && behaviorsOf(enemyDef(e)).includes('ranged'))
+    .map((e) => ({ e, line: straightLine(map, e.pos, player, new Set(state.enemies.map((o) => key(o.pos)))) }))
+    .filter((x) => x.line && x.line.dist <= ENEMY_CONFIG.rangedRange)
+    .sort((a, b) => a.line!.dist - b.line!.dist)[0];
+  if (shooter) {
+    const toward = firstStep(state, (p) => isAdjacent(p, shooter.e.pos), new Set());
+    if (toward) return { kind: 'move', dir: dirBetween(player, toward) };
   }
 
   // 3. 階段の上なら降りる
