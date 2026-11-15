@@ -272,6 +272,18 @@ describe('品物の設定の公開', () => {
     expect(planPublish(BASE, bad).problems.some((p) => p.includes('剣の1段目') && p.includes('魔力'))).toBe(true);
   });
 
+  it('防具のカット率を変えると、変えた内容に出る。上の段階より低い・範囲の外・小数は、直すところに出る', () => {
+    const draft = edited((d) => void (d.items.armors.plate[9]!.cut = 80));
+    expect(planPublish(BASE, draft).changes).toEqual(['品物：鎧+9（10段目）：カット率 58 → 80']);
+    expect(planPublish(BASE, draft).problems).toEqual([]);
+    const low = edited((d) => void (d.items.armors.plate[3]!.cut = 0));
+    expect(planPublish(BASE, low).problems.some((p) => p.includes('鎧の4段目') && p.includes('カット率'))).toBe(true);
+    const over = edited((d) => void (d.items.armors.plate[9]!.cut = 101));
+    expect(planPublish(BASE, over).problems.some((p) => p.includes('鎧の10段目') && p.includes('カット率'))).toBe(true);
+    const frac = edited((d) => void (d.items.armors.fire_cloak[0]!.cut = 70.5));
+    expect(planPublish(BASE, frac).problems.some((p) => p.includes('耐火のマントの1段目') && p.includes('カット率'))).toBe(true);
+  });
+
   it('上の段階より高い・強い段は、直すところに出る', () => {
     const draft = edited((d) => {
       d.items.weapons.sword[2]!.price = 10;

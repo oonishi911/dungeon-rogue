@@ -25,6 +25,13 @@ describe('buildPlayer', () => {
     expect(p.enchant).toBeNull();
   });
 
+  it('防具のカット率は、受けるダメージの倍率になる（カット率70%なら0.3倍）。説明にも「カット」と出る', () => {
+    const cloak = ITEMS.fire_cloak;
+    expect(cloak.effect.kind === 'armor' && cloak.effect.guard.rate).toBe(0.3);
+    expect(cloak.description).toContain('炎のダメージを70%カットする');
+    expect(ITEMS.light_robe.description).toContain('光の攻撃のダメージを70%カットする');
+  });
+
   it('武器を持つと攻撃力が上がる', () => {
     const sword = ITEMS.sword.effect;
     expect(buildPlayer(['sword']).atk).toBe(COMBAT_CONFIG.playerAtk + (sword.kind === 'weapon' ? sword.atk : NaN));
