@@ -2480,9 +2480,14 @@ button {
     order: -1;
   }
 
+  /* 「−」「＋」は、押し間違えないよう、左右の端に離して置く（間は空ける） */
+  .admin__table--cards .admin__numrow {
+    justify-content: space-between;
+  }
+
   .admin__table--cards .admin__step {
-    flex: 1 1 0;
-    width: auto;
+    flex: 0 0 2.75rem;
+    width: 2.75rem;
   }
 
   .admin__table--cards .admin__numrow > .admin__check {
@@ -2796,5 +2801,66 @@ button {
 
   .gen__spell-field .admin__number {
     width: 100%;
+  }
+}
+
+/* 「戻す」の場所取り：変えていない欄にも、見えない「戻す」を置き、出たときに欄の中身（「＋」など）がずれないようにする。狭い画面だけ */
+.admin__reset--slot {
+  display: none;
+}
+
+@media (max-width: 48rem) {
+  .admin__reset--slot {
+    display: inline-flex;
+    min-height: 2.25rem;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  /* 場所取りがいらない所：「戻す」が欄の外に重ねて出る所、選ぶ欄の横（ボタンがない所）、敵の表の見出し・ボス欄 */
+  .admin__table--cards td .admin__reset--slot,
+  .admin__table--cards th .admin__reset--slot,
+  .admin__table--cards .admin__boss-cell .admin__reset--slot,
+  .admin__bosspick .admin__reset--slot {
+    display: none;
+  }
+
+  /* 設定の欄（階の数など）：項目名の下に、「−」入力欄「＋」「戻す」を、幅いっぱいの1行で出す */
+  .gen__field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gen__field .admin__numrow {
+    display: flex;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .gen__field .admin__number {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .gen__field .admin__slider {
+    grid-column: 1;
+    grid-row: auto;
+    width: 100%;
+  }
+
+  .gen__field:has(.admin__slider) .admin__error {
+    grid-row: auto;
+  }
+
+  /* 「ダンジョンに出る敵」：「戻す」は、場所をとらないよう、印だけにする */
+  .admin__poolrow .admin__reset-text {
+    display: none;
+  }
+
+  .admin__poolrow .admin__reset {
+    width: 2.25rem;
+    padding: 0;
+    justify-content: center;
   }
 }

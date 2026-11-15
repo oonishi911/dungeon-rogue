@@ -227,19 +227,26 @@ function PublishStatus({ publish }: { publish: Publish }) {
 
 /** 増減ボタンを押し続けたとき、連続して動き始めるまでの時間と、動く間隔（ミリ秒） */
 const HOLD = { delay: 420, every: 70 };
+/** 指（マウス）が、押した所からこれ以上（px）動いたら、スクロールなどの別の操作とみなして、何もしない */
+const TAP_SLOP = 8;
 
 /**
- * 「−」「＋」のボタン。押すと1回、押し続けると連続して動かす（指でも、マウスでも）。
+ * 「−」「＋」のボタン。誤って押さないよう、触れただけでは動かさない：
+ * ほとんど動かさずに離したとき、1回だけ動かす。そのまま押し続けたら（0.42秒後から）、連続して動かす。
+ * 触れたあとに指が動いたり（スクロール）、ブラウザが操作を取り消したりしたら、何もしない。
  * キーボードでは、ボタンに移らず、欄の中で上下の矢印キーを使う（ボタンは読み上げ・押す操作のために残す）
  */
 function StepButton({ plus, label, disabled, onStep }: { plus: boolean; label: string; disabled: boolean; onStep: () => void }) {
   const timers = useRef<{ start?: number; repeat?: number }>({});
+  // 触れている間の状態：押した位置、連続で動かし始めたか
+  const press = useRef<{ x: number; y: number; repeating: boolean } | null>(null);
   const act = useRef(onStep);
   act.current = onStep;
   const stop = () => {
     window.clearTimeout(timers.current.start);
     window.clearInterval(timers.current.repeat);
     timers.current = {};
+    press.current = null;
   };
   useEffect(() => stop, []);
   useEffect(() => {
@@ -254,12 +261,28 @@ function StepButton({ plus, label, disabled, onStep }: { plus: boolean; label: s
       disabled={disabled}
       onPointerDown={(ev) => {
         if (ev.button !== 0) return;
-        ev.preventDefault(); // 欄からカーソルが外れない・文字が選ばれない
+        if (ev.pointerType === 'mouse') ev.preventDefault(); // 欄からカーソルが外れない・文字が選ばれない（指では、スクロールを邪魔しない）
         stop();
-        act.current();
-        timers.current.start = window.setTimeout(() => (timers.current.repeat = window.setInterval(() => act.current(), HOLD.every)), HOLD.delay);
+        const current = { x: ev.clientX, y: ev.clientY, repeating: false };
+        press.current = current;
+        // 動かさずに押し続けたら、ここから連続して動かす
+        timers.current.start = window.setTimeout(() => {
+          if (press.current !== current) return;
+          current.repeating = true;
+          act.current();
+          timers.current.repeat = window.setInterval(() => act.current(), HOLD.every);
+        }, HOLD.delay);
       }}
-      onPointerUp={stop}
+      onPointerMove={(ev) => {
+        const p = press.current;
+        if (p && !p.repeating && Math.hypot(ev.clientX - p.x, ev.clientY - p.y) > TAP_SLOP) stop(); // スクロールだった
+      }}
+      onPointerUp={() => {
+        const p = press.current;
+        const tapped = p !== null && !p.repeating;
+        stop();
+        if (tapped) act.current();
+      }}
       onPointerLeave={stop}
       onPointerCancel={stop}
       onContextMenu={(ev) => ev.preventDefault()}
@@ -273,9 +296,20 @@ function StepButton({ plus, label, disabled, onStep }: { plus: boolean; label: s
   );
 }
 
-/** 変えた欄の横の「公開版の値に戻す」ボタン（変えていなければ何も出さない） */
+/**
+ * 変えた欄の横の「公開版の値に戻す」ボタン。
+ * 変えていないときも、見えない場所取り（admin__reset--slot）を置く。出たときに欄の中身がずれて、さっきまで「＋」があった所に「戻す」が来て、続けて押してしまうのを防ぐため
+ * （場所取りは、狭い画面だけ幅をとる。styles.css）
+ */
 export function ResetMark({ show, label, onClick }: { show: boolean; label: string; onClick: () => void }) {
-  if (!show) return null;
+  if (!show) {
+    return (
+      <span className="admin__reset admin__reset--slot" aria-hidden="true">
+        <span>↺</span>
+        <span className="admin__reset-text">戻す</span>
+      </span>
+    );
+  }
   return (
     <button type="button" className="admin__reset" aria-label={label} title={label} onClick={onClick}>
       <span aria-hidden="true">↺</span>
