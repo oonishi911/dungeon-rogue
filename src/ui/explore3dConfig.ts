@@ -50,6 +50,7 @@ export const FOE_FX = {
   field: { y: 0.02, size: 0.94, fireOpacity: 0.85, frostOpacity: 0.8, lastTurn: 0.55, flicker: 0.18 }, // 床の跡：床からの高さ・1マスに対する大きさ・濃さ・最後のターンの薄さ・燃える床のちらつき
   steam: { ms: 800, count: 4, rise: 0.9, size: 0.7 }, // 水蒸気：立ち上る時間・粒の数・立ち上る高さ・粒の大きさ（マス）
   marks: { charge: '#ff5a4a', bump: '#ffe27a', summon: '#c08aff', blocked: '#9fb4c8' }, // 突進の構え・壁にぶつかった・召喚・盾に防がれたときの色
+  phase: { colors: [0xb48d35, 0xe07a30, 0xd03030], grow: 0.08, ringGrow: 0.25, roarMs: 900, roarReach: 2.2, shake: 0.3 }, // ボスの段階：足元の輪の色（第1〜3段階）・体の大きくなり方・輪の大きくなり方・咆哮の輪の時間と広がり・揺れ
 } as const;
 export const REMEMBERED = 0.3; // 一度見たが今は見えていないマスの明るさ
 // 見える範囲の明るさ。主人公のそばは1で、視界の端へ向かってなめらかに edge まで暗くする。

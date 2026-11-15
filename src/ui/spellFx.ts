@@ -264,6 +264,11 @@ export class SpellEffects {
 
   // ===== 土台 =====
 
+  /** 画面を揺らす（呪文以外の演出から使う）。amount は 0〜1 */
+  shakeScreen(amount: number) {
+    this.shakeBy(amount);
+  }
+
   /** 画面を揺らす。amount は 0〜1 */
   private shakeBy(amount: number) {
     if (this.reduceMotion) return;

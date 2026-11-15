@@ -1,6 +1,7 @@
 // マップ上の敵：配置・能力・移動の経路。
 // 敵の手番の進め方（気付く・追う・攻撃する）は explore.ts にある。
 
+import { phaseAtkRate, phaseBehaviors } from './bossPhase';
 import { enemyBase } from './data';
 import type { EnemySettings } from './genMaster';
 import { DIRS, tileAt, type FloorMap, type Pos, type Room } from './map';
@@ -63,6 +64,7 @@ export interface MapEnemy {
   summoned?: boolean; // 召喚された敵（倒しても報酬はなく、倒した数にも入れない）
   summonedBy?: number; // 呼んだ敵の uid（同時に出していられる数を数えるため）
   chilled?: boolean; // 霜の床の上で、次の1歩のために1ターン使った（次のターンに歩ける）
+  phase?: number; // ボスの段階（1〜3。ない敵は1。bossPhase.ts）
 }
 
 /** 敵の行動の個性（なければ空） */
@@ -70,11 +72,17 @@ export const behaviorsOf = (def: Pick<EnemyDef, 'behaviors'>): readonly EnemyBeh
 
 /**
  * 実際に戦うときの敵の能力。敵のマスター（enemies.json）の値のまま。
- * 強敵だけ、HP・攻撃力を上げる（防御力はそのまま。ボスは上げない）
+ * 強敵だけ、HP・攻撃力を上げる（防御力はそのまま）。
+ * ボスは、段階（phase）が上がるごとに攻撃力が上がり、行動の個性が加わる（bossPhase.ts）
  */
-export function enemyDef(enemy: Pick<MapEnemy, 'id' | 'elite'>): EnemyDef {
+export function enemyDef(enemy: Pick<MapEnemy, 'id' | 'elite' | 'phase'>): EnemyDef {
   const base = enemyBase(enemy.id);
-  if (base.boss || !enemy.elite) return base;
+  if (base.boss) {
+    const phase = enemy.phase ?? 1;
+    if (phase <= 1) return base;
+    return { ...base, atk: Math.round(base.atk * phaseAtkRate(phase)), behaviors: [...behaviorsOf(base), ...phaseBehaviors(enemy.id, phase)] };
+  }
+  if (!enemy.elite) return base;
   return {
     ...base,
     name: `${base.name}（強敵）`,

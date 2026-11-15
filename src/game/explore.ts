@@ -5,8 +5,9 @@
 //
 // 型と数値は exploreTypes.ts、視界の計算は exploreSight.ts、魔法の計算（魔力・ダメージ・相性）は magic.ts にある。
 
+import { BOSS_CONFIG, phaseOf, phaseSow, PHASE_MAX } from './bossPhase';
 import { buildPlayer, enemyHitDamage, itemCapacity, playerHitDamage } from './combat';
-import { COMBAT_CONFIG, enemyReward, expToNext, ITEMS, REWARD_CONFIG, SPELLS, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
+import { COMBAT_CONFIG, enemyBase, enemyReward, expToNext, ITEMS, REWARD_CONFIG, SPELLS, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
 import { DEFAULT_DUNGEON_ID, dungeonOf } from './dungeons';
 import {
   DIR_DELTA,
@@ -44,7 +45,7 @@ import {
 } from './enemies';
 import { generateBossFloor, generateFloor, tileAt, type FloorMap, type Pos } from './map';
 import { floorParams } from './floorParams';
-import { nextInt, nextRandom } from './rng';
+import { nextInt, nextRandom, shuffle } from './rng';
 import type { EnemyId, ItemId, Result, SpellId, TraitId } from './types';
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value });
@@ -198,6 +199,7 @@ function passTurn(state: ExploreState, bleeding: readonly Pos[]): ExploreState {
   if (s.outcome !== 'ongoing') return s;
   s = bleedTurn(s, bleeding);
   if (s.outcome !== 'ongoing') return s;
+  s = phaseUp(s);
   s = enemiesTurn(s);
   if (s.outcome !== 'ongoing') return s;
   return fieldsTurn(s);
@@ -707,6 +709,44 @@ function backAttacks(state: ExploreState, to: Pos): ExploreState {
   return s;
 }
 
+// ===== ボスの段階 =====
+
+/**
+ * ボスのHPが 2/3・1/3 以下になっていたら、段階を上げる（一度上がった段階は下がらない）。
+ * 段階が上がったボスは、このターンは咆哮して動かない（動けない状態を1ターン入れる。演出は roar の出来事で見せる）
+ */
+function phaseUp(state: ExploreState): ExploreState {
+  let s = state;
+  for (const e of state.enemies) {
+    const base = enemyBase(e.id);
+    if (!base.boss) continue;
+    const phase = Math.min(PHASE_MAX, Math.max(e.phase ?? 1, phaseOf(e.hp, base.hp)));
+    if (phase === (e.phase ?? 1)) continue;
+    s = {
+      ...s,
+      enemies: s.enemies.map((x) => (x.uid === e.uid ? { ...x, phase, stun: Math.max(x.stun ?? 0, 1) } : x)),
+      foes: [...s.foes, { kind: 'roar', at: e.pos, phase }],
+      log: [...s.log, `${base.name}が咆哮した！ 力が増していく…`],
+    };
+  }
+  return s;
+}
+
+/** ボスが主人公のまわり（縦横 BOSS_CONFIG.sowRadius マス以内）の床に、燃える床・霜の床をまく。まいたマスを返す（まく床がないときは何もしない） */
+function sowFields(state: ExploreState, boss: MapEnemy, kind: FieldKind): ExploreState {
+  const { x, y } = state.player;
+  const r = BOSS_CONFIG.sowRadius;
+  const open: Pos[] = [];
+  for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    const p = { x: x + dx, y: y + dy };
+    if ((dx !== 0 || dy !== 0) && tileAt(state.map, p) !== 'wall') open.push(p);
+  }
+  const picked = shuffle(open, state.rngState);
+  const to = picked.value.slice(0, BOSS_CONFIG.sowCount);
+  const s = addFields({ ...state, rngState: picked.state }, to, kind);
+  return { ...s, foes: [...s.foes, { kind: 'sow', at: boss.pos, to, field: kind }], log: [...s.log, `${enemyDef(boss).name}が${kind === 'fire' ? '炎' : '冷気'}をまき散らした`] };
+}
+
 // ===== 敵の手番 =====
 
 /**
@@ -790,6 +830,13 @@ function enemiesTurn(state: ExploreState): ExploreState {
     // 行動の個性（enemyBehavior.ts）：主人公を追っていて見えているあいだ、個性のある行動をしたら、そのターンはほかのことをしない
     const behaviors = behaviorsOf(def);
     if ((e.cool ?? 0) > 0) e = { ...e, cool: e.cool! - 1 };
+    // ボスの床まき：主人公が見えているあいだ、一定のターンごとに、そのターンの行動のかわりに床をまく
+    const sow = def.boss ? phaseSow(e.id, e.phase ?? 1) : null;
+    if (sow && e.mode === 'chase' && sees && s.turn % BOSS_CONFIG.sowEvery === 0) {
+      enemies[i] = e;
+      s = sowFields(s, e, sow);
+      continue;
+    }
     if (e.mode === 'chase' && sees && behaviors.length > 0) {
       const line = straightLine(s.map, e.pos, s.player, blocked);
       // 召喚：間隔ごとに、近くのあいている床に、道中でいちばん弱い敵を呼ぶ（同時に出していられる数まで）

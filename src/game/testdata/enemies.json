@@ -384,7 +384,7 @@
     "light_guardian": {
       "name": "光の守護者",
       "hp": 50,
-      "atk": 14,
+      "atk": 11,
       "def": 2,
       "element": "light",
       "body": "hard",
