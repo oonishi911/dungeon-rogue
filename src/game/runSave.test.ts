@@ -61,7 +61,7 @@ describe('packRun / parseRun', () => {
     expect(run!.seed).toBe(SEED);
     expect(run!.outcome).toEqual(outcome);
     expect(run!.base).toEqual(newSave());
-    expect(run!.state).toEqual({ ...state, hits: [], foes: [], cast: null });
+    expect(run!.state).toEqual({ ...state, hits: [], foes: [], fields: [], cast: null });
   });
 
   it('敵の行動の個性の状態（向き・構え・召喚）も、保存して戻せる。壊れた値は null', () => {

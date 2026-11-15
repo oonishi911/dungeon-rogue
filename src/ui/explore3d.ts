@@ -88,6 +88,9 @@ export class DungeonView3D {
   private readonly atlases = new Map<TraitId, Atlas | null>(); // null は読み込み中か、読み込めなかった
   private appliedAtlas: Atlas | null = null;
   private readonly props = new THREE.Group(); // 階段・宝箱・目印
+  private readonly fieldGroup = new THREE.Group(); // 床に残る魔法の跡（燃える床・霜の床）
+  private fieldMats: Record<'fire' | 'fireLast' | 'frost' | 'frostLast', THREE.MeshBasicMaterial> | null = null;
+  private readonly puffs: { sprite: THREE.Sprite; at: Pos; start: number; drift: number }[] = []; // 立ち上る水蒸気
   private readonly stairs: Stairs3D; // 特性ごとの階段の模型
   private readonly sconces: Sconces; // 部屋の壁掛けたいまつ
   private readonly particles: Particles; // 空気の粒と火の粉
@@ -166,6 +169,7 @@ export class DungeonView3D {
     shieldPlate: new THREE.BoxGeometry(FOE_FX.shield.size, FOE_FX.shield.size, FOE_FX.shield.thick),
     shieldMat: new THREE.MeshLambertMaterial({ color: FOE_FX.shield.color }),
     shotBall: new THREE.SphereGeometry(FOE_FX.shot.size, 12, 8),
+    fieldPlate: new THREE.PlaneGeometry(FOE_FX.field.size, FOE_FX.field.size).rotateX(-Math.PI / 2),
     targetRing: new THREE.RingGeometry(0.32, 0.42, 24).rotateX(-Math.PI / 2),
     // 宝箱の素材。テクスチャ（public/textures/chest/）を読み込むまでは金色で描く
     chestFront: new THREE.MeshLambertMaterial({ color: 0xe2c178 }),
@@ -216,7 +220,7 @@ export class DungeonView3D {
     this.scene.add(new THREE.AmbientLight(0xffffff, AMBIENT));
     const sun = new THREE.DirectionalLight(0xffffff, SUN); // 壁の側面に陰をつける
     sun.position.set(-3, 10, 4);
-    this.scene.add(sun, this.torch, this.props);
+    this.scene.add(sun, this.torch, this.props, this.fieldGroup);
     if (this.mist) this.scene.add(this.mist);
 
     // 床と壁は、描く範囲のマス数ぶんの入れ物を最初に用意しておき、1歩ごとに中身を入れ替える。
@@ -345,6 +349,7 @@ export class DungeonView3D {
       if (this.shownState?.map !== s.map) this.queueEnemyModels(s); // 階に入ったとき：その階の敵の模型を先に組み立てる
       this.updateFog(frame);
       this.updateProps(frame);
+      this.updateFields(frame);
       this.sconces.update(s, frame.visible);
       this.particles.setTrait(s.trait);
       this.updateEnemies(frame);
@@ -378,6 +383,8 @@ export class DungeonView3D {
     if (this.particles.root.visible) this.particles.tick(this.sconces.flames, this.pixelRatio);
     this.updateDamagePops(now);
     this.updateShots(now);
+    this.updateFieldLook(now);
+    this.updatePuffs(now);
     this.spellFx.update(now);
     const zoom = this.updateCombatZoom(s, now, dt) * this.pulseZoom(now);
     if (Math.abs(zoom - this.camera.zoom) > 1e-4) {
@@ -728,10 +735,125 @@ export class DungeonView3D {
         this.scene.add(mesh);
         this.shots.push({ mesh, from: f.from, to: f.to, start: performance.now() });
         shotMs = FOE_FX.shot.ms;
-      } else if (f.kind === 'bump') this.popText(f.at, '★', FOE_FX.marks.bump);
+      } else if (f.kind === 'steam') this.puff(f.at);
+      else if (f.kind === 'bump') this.popText(f.at, '★', FOE_FX.marks.bump);
       else if (f.kind === 'summon') this.popText(f.at, '呼', FOE_FX.marks.summon);
     }
     return shotMs;
+  }
+
+  /** 水蒸気を立ち上らせる（燃える床と霜の床がぶつかったとき） */
+  private puff(at: Pos) {
+    if (this.reduceMotion) return;
+    const map = this.texture('steam', 32, 32, (ctx) => {
+      const g = ctx.createRadialGradient(16, 16, 1, 16, 16, 15);
+      g.addColorStop(0, 'rgba(255,255,255,0.9)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 32, 32);
+    });
+    for (let i = 0; i < FOE_FX.steam.count; i++) {
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map, transparent: true, depthTest: false, opacity: 0.7 }));
+      sprite.renderOrder = 14;
+      sprite.scale.setScalar(FOE_FX.steam.size);
+      sprite.position.set(at.x, 0.3, at.y);
+      this.scene.add(sprite);
+      this.puffs.push({ sprite, at, start: performance.now() + i * 90, drift: (i - (FOE_FX.steam.count - 1) / 2) * 0.18 });
+    }
+  }
+
+  /** 水蒸気の粒を動かし、消えたものを片付ける */
+  private updatePuffs(now: number) {
+    for (let k = this.puffs.length - 1; k >= 0; k--) {
+      const { sprite, at, start, drift } = this.puffs[k]!;
+      const t = (now - start) / FOE_FX.steam.ms;
+      if (t < 0) continue;
+      if (t >= 1) {
+        this.scene.remove(sprite);
+        sprite.material.dispose();
+        this.puffs.splice(k, 1);
+        continue;
+      }
+      sprite.position.set(at.x + drift * t, 0.3 + FOE_FX.steam.rise * t, at.y);
+      sprite.material.opacity = 0.7 * (1 - t);
+      sprite.scale.setScalar(FOE_FX.steam.size * (0.6 + 0.8 * t));
+    }
+  }
+
+  /** 床の跡の板：燃える床はオレンジの炎、霜の床は青白い氷。最後の1ターンは薄くする */
+  private fieldMaterials() {
+    if (this.fieldMats) return this.fieldMats;
+    const make = (key: string, draw: (ctx: CanvasRenderingContext2D) => void, additive: boolean, opacity: number) => {
+      const mat = new THREE.MeshBasicMaterial({ map: this.texture(key, 64, 64, draw), transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+      if (additive) mat.blending = THREE.AdditiveBlending;
+      return mat;
+    };
+    const fire = (ctx: CanvasRenderingContext2D) => {
+      const g = ctx.createRadialGradient(32, 32, 4, 32, 32, 31);
+      g.addColorStop(0, 'rgba(255,224,120,0.95)');
+      g.addColorStop(0.55, 'rgba(255,110,30,0.75)');
+      g.addColorStop(1, 'rgba(160,30,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 64, 64);
+      // 小さな炎の舌（決まった並び）
+      ctx.fillStyle = 'rgba(255,240,170,0.8)';
+      for (let i = 0; i < 14; i++) {
+        const a = i * 2.4;
+        const r = 6 + ((i * 7) % 18);
+        ctx.fillRect(32 + Math.cos(a) * r - 1, 32 + Math.sin(a) * r - 2, 3, 5);
+      }
+    };
+    const frost = (ctx: CanvasRenderingContext2D) => {
+      const g = ctx.createRadialGradient(32, 32, 4, 32, 32, 31);
+      g.addColorStop(0, 'rgba(235,250,255,0.9)');
+      g.addColorStop(0.6, 'rgba(150,210,245,0.75)');
+      g.addColorStop(1, 'rgba(110,170,230,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 64, 64);
+      // 氷の筋（雪の結晶のような6本）
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3 + 0.3;
+        ctx.beginPath();
+        ctx.moveTo(32, 32);
+        ctx.lineTo(32 + Math.cos(a) * 24, 32 + Math.sin(a) * 24);
+        ctx.stroke();
+      }
+    };
+    const f = FOE_FX.field;
+    this.fieldMats = {
+      fire: make('field:fire', fire, true, f.fireOpacity),
+      fireLast: make('field:fire', fire, true, f.fireOpacity * f.lastTurn),
+      frost: make('field:frost', frost, false, f.frostOpacity),
+      frostLast: make('field:frost', frost, false, f.frostOpacity * f.lastTurn),
+    };
+    return this.fieldMats;
+  }
+
+  /** 状態が変わったとき、見えているマスの床の跡を板で並べ直す */
+  private updateFields(frame: Frame) {
+    this.fieldGroup.clear();
+    const { fields, map } = frame.state;
+    if (fields.length === 0) return;
+    const mats = this.fieldMaterials();
+    for (const f of fields) {
+      if (!frame.visible.has(f.pos.y * map.width + f.pos.x)) continue;
+      const mesh = new THREE.Mesh(this.shared.fieldPlate, mats[`${f.kind}${f.turns <= 1 ? 'Last' : ''}` as keyof typeof mats]);
+      mesh.position.set(f.pos.x, FOE_FX.field.y, f.pos.y);
+      mesh.renderOrder = 2;
+      this.fieldGroup.add(mesh);
+    }
+  }
+
+  /** 燃える床は、炎のようにちらつかせる（「動きを減らす」設定では止める） */
+  private updateFieldLook(now: number) {
+    const mats = this.fieldMats;
+    if (!mats || this.fieldGroup.children.length === 0 || this.reduceMotion) return;
+    const f = FOE_FX.field;
+    const wave = Math.sin(now / 110) * 0.6 + Math.sin(now / 47 + 1.3) * 0.4;
+    mats.fire.opacity = f.fireOpacity * (1 + f.flicker * wave);
+    mats.fireLast.opacity = f.fireOpacity * f.lastTurn * (1 + f.flicker * wave);
   }
 
   /** 飛んでいる矢を動かし、当たったものを片付ける */

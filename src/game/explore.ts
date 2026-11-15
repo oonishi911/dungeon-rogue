@@ -19,10 +19,12 @@ import {
   type ExploreResult,
   type ExploreState,
   type FloorMemory,
+  type Field,
   type HitEvent,
 } from './exploreTypes';
 import { chargeRun, guardsAgainst, minionTile, retreatStep, stepDir, straightLine, weakestOf } from './enemyBehavior';
 import { canSee, samePos, visibleTiles } from './exploreSight';
+import { around9, FIELD_CONFIG, fieldAt, immuneToField, placeField, tickFields, type FieldKind } from './fields';
 import type { DungeonFile, RoomSettings } from './genMaster';
 import { spellAffinity, spellDamage, startMagic } from './magic';
 import {
@@ -103,6 +105,7 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     visited: {},
     hits: [],
     foes: [],
+    fields: [],
   };
   return enterFloor(state, 0, state.map);
 }
@@ -121,6 +124,7 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
   state = { ...state, hits: [], foes: [], cast: null };
 
   let next: ExploreState;
+  let slowed = false; // 霜の床から歩き出すと、その1歩に2ターンかかる
   switch (action.kind) {
     case 'move': {
       const d = DIR_DELTA[action.dir];
@@ -130,6 +134,7 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
       if (target) {
         next = playerAttack(state, target);
       } else {
+        slowed = fieldAt(state.fields, state.player)?.kind === 'frost';
         next = backAttacks(state, to);
         if (next.outcome !== 'ongoing') return ok({ ...next, turn: next.turn + 1 });
         next = openChest(reveal({ ...next, player: to }));
@@ -182,11 +187,20 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
     }
   }
 
-  next = spendAction(next);
-  if (next.outcome !== 'ongoing') return ok(next);
-  next = bleedTurn(next, next.cast?.bleeding ?? []);
-  if (next.outcome !== 'ongoing') return ok(next);
-  return ok(enemiesTurn(next));
+  next = passTurn(next, next.cast?.bleeding ?? []);
+  if (slowed && next.outcome === 'ongoing') next = passTurn(next, []);
+  return ok(next);
+}
+
+/** 1ターン進める：満腹度・出血・敵の動き・床の跡の順 */
+function passTurn(state: ExploreState, bleeding: readonly Pos[]): ExploreState {
+  let s = spendAction(state);
+  if (s.outcome !== 'ongoing') return s;
+  s = bleedTurn(s, bleeding);
+  if (s.outcome !== 'ongoing') return s;
+  s = enemiesTurn(s);
+  if (s.outcome !== 'ongoing') return s;
+  return fieldsTurn(s);
 }
 
 // ===== 階の移動 =====
@@ -215,7 +229,7 @@ function leaveFloor(state: ExploreState): ExploreState {
 function returnToFloor(state: ExploreState, floor: number, memory: FloorMemory, at: Pos, message: string): ExploreState {
   const visited = { ...state.visited };
   delete visited[floor]; // 今いる階は覚えておく一覧に入れない
-  const enemies = memory.enemies.map(({ stun: _stun, bleed: _bleed, ...e }) => ({ ...e, mode: 'wander' as const, justNoticed: false, lastSeen: null, searchTurns: 0 }));
+  const enemies = memory.enemies.map(({ stun: _stun, bleed: _bleed, chilled: _chilled, ...e }) => ({ ...e, mode: 'wander' as const, justNoticed: false, lastSeen: null, searchTurns: 0 }));
   return reveal({
     ...state,
     floor,
@@ -224,6 +238,7 @@ function returnToFloor(state: ExploreState, floor: number, memory: FloorMemory, 
     enemies,
     chests: memory.chests,
     seen: memory.seen,
+    fields: [],
     visited,
     log: [...state.log, message],
   });
@@ -246,6 +261,7 @@ function enterFloor(state: ExploreState, floor: number, map: FloorMap): ExploreS
       player: map.start,
       enemies: [boss, ...minions.enemies],
       chests: [],
+      fields: [],
       nextUid: state.nextUid + 1 + minions.enemies.length,
       rngState: minions.rngState,
       seen,
@@ -262,6 +278,7 @@ function enterFloor(state: ExploreState, floor: number, map: FloorMap): ExploreS
     player: map.start,
     enemies: spawned.enemies,
     chests: filled.chests,
+    fields: [],
     nextUid: state.nextUid + spawned.enemies.length,
     rngState: filled.rngState,
     seen,
@@ -431,6 +448,10 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
       }
       if (targets.length === 0) s = { ...s, log: [...s.log, '何にも当たらなかった'] };
       if (def.effect.kind === 'bolt' && targets[0]) event.affinity = spellAffinity(spell, enemyDef(targets[0]));
+      // 炎・氷の矢は、当たった敵の足元に燃える床・霜の床を残す（連矢は、まわり8マスにも）
+      const fieldKind = def.effect.kind === 'bolt' ? fieldOfElement(def.effect.element) : null;
+      const hitAt = def.effect.kind === 'bolt' ? targets[0]?.pos : undefined;
+      if (fieldKind && hitAt) s = addFields(s, def.effect.kind === 'bolt' && def.effect.splash ? around9(hitAt) : [hitAt], fieldKind);
       // 連矢：最初に当たった敵のまわり8マスの敵にも、その敵に与えるダメージの一部（splash の割合）を与える
       const center = def.effect.kind === 'bolt' && def.effect.splash ? targets[0] : undefined;
       const around = center ? s.enemies.filter((e) => e.uid !== center.uid && Math.max(Math.abs(e.pos.x - center.pos.x), Math.abs(e.pos.y - center.pos.y)) === 1) : [];
@@ -512,12 +533,12 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
 }
 
 /** 敵に魔法などでダメージを与える。倒したら報酬（ボスなら踏破）、倒れなければこちらに気付く */
-function hurtEnemy(state: ExploreState, uid: number, dmg: number, slip = false): ExploreState {
+function hurtEnemy(state: ExploreState, uid: number, dmg: number, slip: boolean | 'burn' = false): ExploreState {
   const target = state.enemies.find((e) => e.uid === uid);
   if (!target || state.outcome !== 'ongoing') return state;
   const def = enemyDef(target);
   const hp = target.hp - dmg;
-  const log = [...state.log, slip ? `${def.name}は出血で${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`];
+  const log = [...state.log, slip ? `${def.name}は${slip === 'burn' ? '燃える床' : '出血'}で${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`];
   state = { ...state, hits: [...state.hits, slip ? { kind: 'dealt', at: target.pos, amount: dmg, slip: true } : { kind: 'dealt', at: target.pos, amount: dmg }] };
   if (hp <= 0) {
     log.push(`${def.name}を倒した`);
@@ -642,8 +663,10 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
     foes: guarded ? [...state.foes, { kind: 'block', at: target.pos }] : state.foes,
   };
 
-  // 属性付与はダメージを計算したあとで1回減らし、0回になると消える
+  // 属性付与はダメージを計算したあとで1回減らし、0回になると消える。炎・氷の力を宿した武器で当てると、敵の足元に床が残る
   let stats = state.stats;
+  const enchantField = stats.enchant ? fieldOfElement(stats.enchant.element) : null;
+  if (enchantField) state = addFields(state, [target.pos], enchantField);
   if (stats.enchant) {
     const hits = stats.enchant.hits - 1;
     if (hits <= 0) log.push(`武器から${TRAITS[stats.enchant.element].name}の力が消えた`);
@@ -829,6 +852,12 @@ function enemiesTurn(state: ExploreState): ExploreState {
     // 強敵は持ち場を守る：ふだんは持ち場の近くをうろつき、気付いたら追うが、持ち場から離れすぎるところへは行かず、あきらめて戻る
     const home = e.elite && !def.boss ? (e.home ?? e.pos) : null; // 持ち場のない前の版の途中保存は、今いる場所を持ち場にする
     if (home && !e.home) e = { ...e, home };
+    // 霜の床の上では、歩き出すのに1ターン余計にかかる（霜の敵は影響を受けない）
+    if (fieldAt(s.fields, e.pos)?.kind === 'frost' && !immuneToField(def, 'frost') && !e.chilled) {
+      enemies[i] = { ...e, chilled: true };
+      continue;
+    }
+    if (e.chilled) e = { ...e, chilled: false };
     leave(key(e.pos));
     if (e.mode !== 'wander' && e.lastSeen && !samePos(e.pos, e.lastSeen)) {
       const nextPos = nextStepToward(s.map, e.pos, e.lastSeen, blocked);
@@ -852,6 +881,43 @@ function enemiesTurn(state: ExploreState): ExploreState {
   }
   enemies.push(...spawned);
   return { ...s, enemies };
+}
+
+// ===== 床に残る魔法の跡 =====
+
+/** 炎は燃える床、氷は霜の床を残す。光・闇は残さない */
+function fieldOfElement(element: string): FieldKind | null {
+  return element === 'fire' ? 'fire' : element === 'ice' ? 'frost' : null;
+}
+
+/** 床を置く（主人公のいるマスには置かない）。逆の床とぶつかると水蒸気になる */
+function addFields(state: ExploreState, at: readonly Pos[], kind: FieldKind): ExploreState {
+  let fields: Field[] = state.fields;
+  const foes = [...state.foes];
+  for (const pos of at) {
+    const placed = placeField(fields, state.map, pos, kind, state.player);
+    fields = placed.fields;
+    for (const p of placed.steam) foes.push({ kind: 'steam', at: p });
+  }
+  return { ...state, fields, foes };
+}
+
+/** ターンの終わりに、燃える床に乗っている主人公と敵がダメージを受け、床の残りターンが1つ減る */
+function fieldsTurn(state: ExploreState): ExploreState {
+  let s = state;
+  const fires = s.fields.filter((f) => f.kind === 'fire');
+  if (fires.some((f) => samePos(f.pos, s.player))) {
+    s = damagePlayer(s, FIELD_CONFIG.fireDamage, '燃える床', '燃える床');
+    if (s.outcome !== 'ongoing') return s;
+  }
+  for (const { uid, pos } of state.enemies) {
+    if (!fires.some((f) => samePos(f.pos, pos))) continue;
+    const e = s.enemies.find((x) => x.uid === uid);
+    if (!e || immuneToField(enemyDef(e), 'fire')) continue;
+    s = hurtEnemy(s, uid, FIELD_CONFIG.fireDamage, 'burn');
+    if (s.outcome !== 'ongoing') return s;
+  }
+  return { ...s, fields: tickFields(s.fields) };
 }
 
 function damagePlayer(state: ExploreState, dmg: number, message: string, by: string, enemy?: EnemyId, ranged = false): ExploreState {

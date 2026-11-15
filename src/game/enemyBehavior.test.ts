@@ -1,51 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { enemyHitDamage, playerHitDamage } from './combat';
-import { ENEMY_CONFIG, enemyDef, key, type MapEnemy } from './enemies';
+import { ENEMY_CONFIG, enemyDef, key } from './enemies';
 import { chargeRun, guardsAgainst, minionTile, retreatStep, stepDir, straightLine, weakestOf } from './enemyBehavior';
-import { startExplore, step } from './explore';
-import { type ExploreAction, type ExploreState } from './exploreTypes';
-import type { FloorMap, Pos } from './map';
-import type { EnemyId, Result } from './types';
+import type { ExploreState } from './exploreTypes';
+import { act, arena, foe, mapOf, ROOM, WAIT } from './testArena';
 
 // テストデータ（src/game/testdata/）で、遠距離は火の小鬼、突進は炎の猟犬、盾持ちは聖騎士、召喚は呪術師（遠距離と召喚の両方）
-
-function unwrap<T>(result: Result<T>): T {
-  if (!result.ok) throw new Error(result.error);
-  return result.value;
-}
-
-function act(state: ExploreState, ...actions: ExploreAction[]): ExploreState {
-  return actions.reduce((s, a) => unwrap(step(s, a)), state);
-}
-
-const WAIT: ExploreAction = { kind: 'wait' };
-
-function foe(id: EnemyId, pos: Pos, overrides: Partial<MapEnemy> = {}): MapEnemy {
-  return { uid: 0, id, elite: false, pos, hp: enemyDef({ id, elite: false }).hp, mode: 'chase', justNoticed: false, lastSeen: pos, searchTurns: 0, ...overrides };
-}
-
-function mapOf(rows: string[]): FloorMap {
-  return {
-    width: rows[0]!.length,
-    height: rows.length,
-    tiles: rows.join('').split('').map((c) => (c === '#' ? 'wall' : 'floor')),
-    rooms: [],
-    start: { x: 1, y: 1 },
-    stairs: { x: 1, y: 1 },
-    boss: null,
-    mainPath: [],
-    features: [],
-  };
-}
-
-function arena(rows: string[], player: Pos, enemies: MapEnemy[]): ExploreState {
-  const base = startExplore(1, { enemyDensity: 0 });
-  const map = mapOf(rows);
-  return { ...base, map, player, enemies: enemies.map((e, i) => ({ ...e, uid: i })), seen: new Array<boolean>(map.tiles.length).fill(true) };
-}
-
-// 横11マス×縦3マスの部屋
-const ROOM = ['###########', '#.........#', '#.........#', '#.........#', '###########'];
 
 describe('判定の計算（enemyBehavior.ts）', () => {
   const map = mapOf(ROOM);
