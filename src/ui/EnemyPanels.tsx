@@ -4,7 +4,6 @@
 
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { BODY_NAMES } from '../game/data';
-import { ENEMY_CONFIG } from '../game/enemies';
 import { addEnemy, BODIES, ELEMENTS, enemyIds, LIMITS, RATE_LABELS, REWARD_LABELS, TRAIT_LABELS, type EnemyLook, type EnemyMaster, type EnemyRecord } from '../game/enemyMaster';
 import { Sprite } from '../sprites/Sprite';
 import type { Body, Element, EnemyId } from '../game/types';
@@ -41,7 +40,7 @@ export function EnemiesPanel({
     <section className="admin__section" role="tabpanel" id="admin-enemies-panel" aria-labelledby="admin-enemies-tab">
       <h2 className="admin__heading">敵</h2>
       <p className="admin__note">
-        ボス以外の敵は、ゲームの中ではHPと攻撃が{ENEMY_CONFIG.strengthRate === 0.5 ? '半分' : `${ENEMY_CONFIG.strengthRate}倍`}になります（「ゲーム内」の数字）。
+        HP・攻撃・防御は、ゲームの中でもこの数字のとおりです（強敵だけ、HPと攻撃が上がります）。
         物理・魔法は、武器で殴られたとき・呪文を受けたときのダメージの倍率です（1：ふつう。1.5：弱点で、1.5倍。0.5：強く、半分。体質や属性の相性とは別に、さらに掛けます）。
         金貨・経験値・落とす%は倒したときの報酬です（落とす%：回復薬か食料を落とす確率）。強敵は、金貨と経験値がダンジョンごとの倍率（「レベルと強敵の報酬」のタブ）で増え、必ず宝箱を落とします。
       </p>
@@ -81,7 +80,6 @@ export function EnemiesPanel({
                 reward: { gold: -1, exp: -1, drop: -1 },
               };
               const added = !(id in base.enemies);
-              const weak = !e.boss;
               const bossOf = bossUsesOf(id);
               const lookKey = JSON.stringify(e.look);
               return (
@@ -112,7 +110,6 @@ export function EnemiesPanel({
                         label={`${e.name}の${{ hp: 'HP', atk: '攻撃', def: '防御' }[key]}`}
                         onChange={(v) => setEnemy(id, { [key]: v })}
                       />
-                      {weak && key !== 'def' && <span className="admin__ingame">ゲーム内 {Math.round(e[key] * ENEMY_CONFIG.strengthRate)}</span>}
                     </td>
                   ))}
                   <td>
