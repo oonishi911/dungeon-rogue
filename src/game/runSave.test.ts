@@ -64,6 +64,13 @@ describe('packRun / parseRun', () => {
     expect(run!.state).toEqual({ ...state, hits: [], cast: null });
   });
 
+  it('魔力の欄ができる前の中断データ（mag がない）は、0として読む', () => {
+    const state = start();
+    const old = edited(state, (run) => void delete (run.state.stats as Partial<typeof run.state.stats>).mag);
+    expect(parseRun(old)!.state.stats.mag).toBe(0);
+    expect(parseRun(edited(state, (run) => void ((run.state.stats as { mag: unknown }).mag = 'x')))).toBeNull();
+  });
+
   it('始まったばかりの状態も保存できる', () => {
     const state = start();
     expect(parseRun(saved(state))!.state).toEqual(state);

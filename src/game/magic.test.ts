@@ -79,6 +79,13 @@ describe('魔力と呪文書', () => {
     expect(startExplore(1, { loadout: ['staff_5', 'book_heal'] }).maxMp).toBe(GEN.magic.maxMp + GEN.magic.staffMp);
   });
 
+  it('レベルで増えた魔力も、魔法の強さに足される（武器の魔力と合わせて。杖なら合計に倍率）', () => {
+    const lv = (id: ItemId, levels: number) => ({ ...buildPlayer([id]), mag: GEN.growth.magPerLevel * levels });
+    expect(magicPower(lv('sword', 3), GEN.magic)).toBe(GEN.magic.power + GEN.growth.magPerLevel * 3);
+    expect(magicPower(lv('staff_5', 3), GEN.magic)).toBe((GEN.magic.power + 4 + GEN.growth.magPerLevel * 3) * GEN.magic.staffPower);
+    expect(buildPlayer(['staff']).mag).toBe(0); // 最初は0
+  });
+
   it('魔力の高い武器を持つと、呪文のダメージが上がる', () => {
     const foe = enemyDef(enemy({ x: 5, y: 2 }));
     const damage = (weapon: ItemId) => spellDamage(buildPlayer([weapon]), 'fire_bolt', foe, GEN);

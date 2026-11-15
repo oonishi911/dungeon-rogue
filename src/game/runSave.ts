@@ -147,6 +147,7 @@ function unpackFloor(map: FloorMap, v: unknown): FloorMemory | null {
 
 function isStats(v: unknown): v is ExploreState['stats'] {
   if (!isObject(v) || !isCount(v.hp, 1) || !isCount(v.maxHp, 1) || !isNumber(v.atk) || !isNumber(v.def) || !isCount(v.poisonTurns)) return false;
+  if (v.mag !== undefined && !isNumber(v.mag)) return false; // 魔力の欄ができる前の中断データには、ない（0として読む）
   if (!isItemOrNull(v.weapon) || !isItemOrNull(v.armor) || !Array.isArray(v.items) || !v.items.every(isItem)) return false;
   const e = v.enchant;
   return e === null || (isObject(e) && TRAIT_IDS.includes(e.element as TraitId) && isCount(e.hits));
@@ -219,7 +220,7 @@ export function parseRun(text: string | null): ResumedRun | null {
     enemyDensity: s.enemyDensity,
     map: current.map,
     player: { x: s.player.x, y: s.player.y },
-    stats: s.stats,
+    stats: { ...s.stats, mag: s.stats.mag ?? 0 },
     satiety: s.satiety,
     maxSatiety: s.maxSatiety,
     spells: s.spells as SpellId[],

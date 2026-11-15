@@ -126,6 +126,7 @@ export interface PlayerStats {
   maxHp: number;
   atk: number;
   def: number;
+  mag: number; // レベルが上がって増えた魔力（魔法の強さに足される。武器の魔力とは別。最初は0）
   poisonTurns: number; // 毒の残りターン（仕組みだけ残している。今は毒を与える敵はいない）
   weapon: ItemId | null;
   armor: ItemId | null;

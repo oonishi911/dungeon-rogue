@@ -26,6 +26,7 @@
     "expStep": 20,
     "hpPerLevel": 5,
     "atkPerLevel": 3,
+    "magPerLevel": 2,
     "maxLevel": 99,
     "eliteRate": 3
   },

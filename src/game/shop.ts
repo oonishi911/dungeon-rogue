@@ -178,7 +178,7 @@ export function fitKit(save: SaveData): SaveData {
 /** その属性の攻撃を受けたときの、防具ごとの受けるダメージの割合（1段目の防具で比べる。守り（def）は入れない） */
 function guardRate(armor: ItemId, element: Element): number {
   const probe = { id: 'probe', name: '', hp: 1, atk: 100, def: 0, element, body: 'normal' } as EnemyDef;
-  const player = { hp: 1, maxHp: 1, atk: 0, def: 0, poisonTurns: 0, weapon: null, armor, items: [], enchant: null };
+  const player = { hp: 1, maxHp: 1, atk: 0, def: 0, mag: 0, poisonTurns: 0, weapon: null, armor, items: [], enchant: null };
   return enemyHitDamage(player, probe) / 100;
 }
 

@@ -611,8 +611,9 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
       maxHp: stats.maxHp + growth.hpPerLevel,
       hp: stats.hp + growth.hpPerLevel,
       atk: stats.atk + growth.atkPerLevel,
+      mag: stats.mag + growth.magPerLevel,
     };
-    log.push(`レベル${level}に上がった（最大HP+${growth.hpPerLevel}、攻撃+${growth.atkPerLevel}）`);
+    log.push(`レベル${level}に上がった（最大HP+${growth.hpPerLevel}、攻撃+${growth.atkPerLevel}${growth.magPerLevel > 0 ? `、魔力+${growth.magPerLevel}` : ''}）`);
   }
   if (level >= growth.maxLevel) exp = 0;
 

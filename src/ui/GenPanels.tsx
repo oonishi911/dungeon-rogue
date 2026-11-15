@@ -264,6 +264,7 @@ export function GrowthPanel({ base, draft, setDraft }: GenPanelProps) {
             ['expStep', 'レベルが上がるたびに、次のレベルに要る経験値が、これだけ増えます。', '最初が10で、増える分が5なら、1→2は10、2→3は15、3→4は20。下の表でも確かめられます。'],
             ['hpPerLevel', '1レベル上がるごとに増える最大HPです。上がった分だけ、HPも回復します。', '2なら、レベル3で最大HPが4増えます（2×2レベル分）。'],
             ['atkPerLevel', '1レベル上がるごとに増える攻撃です。敵に与えるダメージ（攻撃−敵の防御）が、その分だけ増えます。', '1なら、レベル3で攻撃が2増え、毎回のダメージも2増えます。'],
+            ['magPerLevel', '1レベル上がるごとに増える魔力です。魔法の強さに足されるので、呪文のダメージが、その分だけ（呪文の倍率を掛けて）増えます。', '1なら、レベル3で魔力が2増え、倍率1.5の呪文のダメージは3増えます。'],
             ['maxLevel', 'このレベルより上には、上がりません。', '10なら、レベル10が上限です。'],
             ['eliteRate', '強敵を倒したときに得る金貨と経験値が、通常の敵の何倍になるかです。強敵は、必ず宝箱（金貨と良い道具）も落とします。', '2なら、通常の敵が金貨10・経験値5のとき、強敵は金貨20・経験値10。'],
           ] as const
@@ -359,11 +360,11 @@ export function PreviewSection(props: { settings: DungeonFile; onNewMap: () => v
 
 /** レベルごとの、上がるまでに要る経験値（合計）と、最大HP・攻撃の増え方。最初の数レベル分 */
 function LevelTable({ growth }: { growth: GrowthSettings }) {
-  const rows: { level: number; total: number; hp: number; atk: number }[] = [];
+  const rows: { level: number; total: number; hp: number; atk: number; mag: number }[] = [];
   let total = 0;
   for (let level = 2; level <= Math.min(growth.maxLevel, 6); level++) {
     total += growth.expBase + growth.expStep * (level - 2);
-    rows.push({ level, total, hp: growth.hpPerLevel * (level - 1), atk: growth.atkPerLevel * (level - 1) });
+    rows.push({ level, total, hp: growth.hpPerLevel * (level - 1), atk: growth.atkPerLevel * (level - 1), mag: growth.magPerLevel * (level - 1) });
   }
   if (!rows.length) return null;
   return (
@@ -375,6 +376,7 @@ function LevelTable({ growth }: { growth: GrowthSettings }) {
             <th scope="col">経験値の合計</th>
             <th scope="col">最大HP</th>
             <th scope="col">攻撃</th>
+            <th scope="col">魔力</th>
           </tr>
         </thead>
         <tbody>
@@ -384,6 +386,7 @@ function LevelTable({ growth }: { growth: GrowthSettings }) {
               <td>{r.total}</td>
               <td>+{r.hp}</td>
               <td>+{r.atk}</td>
+              <td>+{r.mag}</td>
             </tr>
           ))}
         </tbody>
