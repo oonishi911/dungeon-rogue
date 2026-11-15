@@ -333,22 +333,18 @@ describe('報酬とボス', () => {
 });
 
 describe('敵の強さ', () => {
-  it('通常の敵の HP・攻撃力は data.ts の値の半分（四捨五入）、防御力はそのまま', () => {
-    const def = enemyDef({ id: FIELD_ENEMY, elite: false });
-    const base = enemyBase(FIELD_ENEMY);
-    expect(def.hp).toBe(Math.round(base.hp * ENEMY_CONFIG.strengthRate));
-    expect(def.atk).toBe(Math.round(base.atk * ENEMY_CONFIG.strengthRate));
-    expect(def.def).toBe(base.def);
+  it('通常の敵の能力は、敵のマスターの値のまま', () => {
+    expect(enemyDef({ id: FIELD_ENEMY, elite: false })).toEqual(enemyBase(FIELD_ENEMY));
   });
 
-  it('強敵は、半分にした通常の敵の能力から上げる', () => {
+  it('強敵は、通常の敵の能力から上げる', () => {
     const normal = enemyDef({ id: FIELD_ENEMY, elite: false });
     const elite = enemyDef({ id: FIELD_ENEMY, elite: true });
     expect(elite.hp).toBe(Math.round(normal.hp * ENEMY_CONFIG.eliteHpRate));
     expect(elite.atk).toBe(Math.round(normal.atk * ENEMY_CONFIG.eliteAtkRate));
   });
 
-  it('ボスは data.ts の能力のまま', () => {
+  it('ボスは強敵でも、マスターの能力のまま', () => {
     expect(enemyDef({ id: BOSS_ENEMY, elite: true })).toEqual(enemyBase(BOSS_ENEMY));
   });
 });

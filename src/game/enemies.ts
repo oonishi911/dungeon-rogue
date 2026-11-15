@@ -10,7 +10,6 @@ import type { EnemyDef, EnemyId } from './types';
 // 数値はすべて仮。バランス調整で見直す
 export const ENEMY_CONFIG = {
   density: 0.0075, // 通路1マスあたりの通常の敵の数（40×40で6〜7体）
-  strengthRate: 0.5, // 通常の敵と強敵のHP・攻撃力は、data.ts の値の何倍か（ボスはそのまま）
   safeDistance: 8, // 入口からこのマス数以内には通常の敵を置かない
   sight: 5, // 敵の視界の半径
   loseTurns: 5, // 見失ってから、うろつきに戻るまでのターン数
@@ -47,20 +46,17 @@ export interface MapEnemy {
 }
 
 /**
- * 実際に戦うときの敵の能力。ボスは data.ts の能力のまま。
- * 通常の敵は HP・攻撃力を strengthRate 倍にし、強敵はさらにそこから能力を上げる（防御力はそのまま）
+ * 実際に戦うときの敵の能力。敵のマスター（enemies.json）の値のまま。
+ * 強敵だけ、HP・攻撃力を上げる（防御力はそのまま。ボスは上げない）
  */
 export function enemyDef(enemy: Pick<MapEnemy, 'id' | 'elite'>): EnemyDef {
   const base = enemyBase(enemy.id);
-  if (base.boss) return base;
-  const scale = (n: number) => Math.max(1, Math.round(n * ENEMY_CONFIG.strengthRate));
-  const normal = { ...base, hp: scale(base.hp), atk: scale(base.atk) };
-  if (!enemy.elite) return normal;
+  if (base.boss || !enemy.elite) return base;
   return {
-    ...normal,
+    ...base,
     name: `${base.name}（強敵）`,
-    hp: Math.round(normal.hp * ENEMY_CONFIG.eliteHpRate),
-    atk: Math.round(normal.atk * ENEMY_CONFIG.eliteAtkRate),
+    hp: Math.round(base.hp * ENEMY_CONFIG.eliteHpRate),
+    atk: Math.round(base.atk * ENEMY_CONFIG.eliteAtkRate),
   };
 }
 
