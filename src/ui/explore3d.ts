@@ -14,7 +14,7 @@ import { enemyDef, isAdjacent } from '../game/enemies';
 import { upStairs } from '../game/explore';
 import { type CastEvent, type Dir, type ExploreState } from '../game/exploreTypes';
 import { dirBetween } from '../game/exploreSight';
-import type { Pos } from '../game/map';
+import type { FloorMap, Pos } from '../game/map';
 import type { EnemyId, ItemId, TraitId, WeaponType } from '../game/types';
 import { drawSprite } from '../sprites/canvas';
 import type { SpriteId } from '../sprites/data';
@@ -26,8 +26,11 @@ import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
-import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEBRIS, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, RESOLUTION, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, type HitPulse } from './explore3dConfig';
+import { AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEBRIS, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, RESOLUTION, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
 import { applyFog, createFog, createGroundMist, litBillboard, worldMapped } from './explore3dKit';
+import { PostFx } from './postFx';
+import { Particles } from './particles';
+import { Sconces } from './sconces';
 
 
 interface Atlas {
@@ -77,6 +80,8 @@ export class DungeonView3D {
   private appliedAtlas: Atlas | null = null;
   private readonly props = new THREE.Group(); // 階段・宝箱・目印
   private readonly stairs: Stairs3D; // 特性ごとの階段の模型
+  private readonly sconces: Sconces; // 部屋の壁掛けたいまつ
+  private readonly particles: Particles; // 空気の粒と火の粉
   private readonly hero = new Hero3D(); // 主人公は立体の模型（敵や宝箱はドット絵の板のまま）
   private heroDir: Dir = 'down'; // 最後に歩いた向き。模型をこの向きへ回す
   private lastFrameAt = performance.now();
@@ -89,6 +94,8 @@ export class DungeonView3D {
   private knock: { uid: number; start: number; amount: number; dx: number; dz: number; base: THREE.Vector3 | null } | null = null;
   private spellDir: { dx: number; dz: number } = { dx: 0, dz: 1 }; // 最後に唱えた呪文の向き
   private readonly dying = new Map<number, number>(); // 呪文の矢が当たるまで残す、倒れた敵（uid → 消す時刻）
+  private readonly lunges = new Map<number, number>(); // 飛びかかっている敵（uid → 飛びかかり始めた時刻）
+  private readonly collapses = new Map<number, number>(); // 崩れ落ちている、倒れた敵（uid → 崩れ始めた時刻）
   private combatZoom = 1; // 戦闘中に寄せている倍率（なめらかに変わる）
   private lastCombatAt = -Infinity; // 最後に戦闘中だった時刻
   private readonly damagePops: { sprite: THREE.Sprite; start: number }[] = [];
@@ -96,11 +103,10 @@ export class DungeonView3D {
   // 霧：マスごとの「見えている」「一度見た」を1マス1ドットの小さな画像にして、描くときにピクセルごとになめらかに読む
   private readonly fog = createFog();
   // 地面をはう霧（?mist=off、または処理の弱い端末では出さない）
-  private readonly mist: THREE.Mesh | null =
-    new URLSearchParams(location.search).get('mist') !== 'off' && (navigator.hardwareConcurrency ?? 4) >= 4
-      ? createGroundMist(this.fog, DRAW_RANGE.x * 2 + 2, DRAW_RANGE.z * 2 + 2)
-      : null;
+  private readonly mist: THREE.Mesh | null = rich('mist') ? createGroundMist(this.fog, DRAW_RANGE.x * 2 + 2, DRAW_RANGE.z * 2 + 2) : null;
   private flickerTime = 0; // たいまつのゆらぎの時間（秒）
+  // 画面全体の仕上げ（光のにじみ・周辺減光・粒子感）。?post=off、処理の弱い端末では使わず、描くのが間に合わなくなったらやめる
+  private post: PostFx | null = rich('post') ? new PostFx() : null;
   private readonly enemies = new Map<
     number,
     {
@@ -126,6 +132,13 @@ export class DungeonView3D {
     chestLid: new THREE.CylinderGeometry(CHEST.depth / 2, CHEST.depth / 2, CHEST.width, 16, 1, false, 0, Math.PI)
       .rotateZ(Math.PI / 2) // 円柱の軸を左右（x）に向け、半分の丸みが上に来るようにする
       .translate(0, CHEST.height, 0),
+    // 宝箱の鉄の帯（本体の前・上・後ろを巻く、少し大きい薄い箱の側面）と、ふたの丸みに沿った帯、錠前、鍵穴
+    chestBand: new THREE.BoxGeometry(0.035, CHEST.height + 0.006, CHEST.depth + 0.012).translate(0, CHEST.height / 2, 0),
+    chestLidBand: new THREE.CylinderGeometry(CHEST.depth / 2 + 0.006, CHEST.depth / 2 + 0.006, 0.035, 16, 1, false, 0, Math.PI)
+      .rotateZ(Math.PI / 2)
+      .translate(0, CHEST.height, 0),
+    chestLock: new THREE.BoxGeometry(0.075, 0.085, 0.014),
+    chestKeyhole: new THREE.BoxGeometry(0.016, 0.034, 0.004),
     ring: new THREE.RingGeometry(0.4, 0.48, 24).rotateX(-Math.PI / 2),
     targetRing: new THREE.RingGeometry(0.32, 0.42, 24).rotateX(-Math.PI / 2),
     // 宝箱の素材。テクスチャ（public/textures/chest/）を読み込むまでは金色で描く
@@ -138,6 +151,9 @@ export class DungeonView3D {
     // 開けたふたの裏（ふたはかまぼこ形で裏に面がないので、平たい板を張る）
     chestLidInside: new THREE.PlaneGeometry(CHEST.width, CHEST.depth).rotateX(Math.PI / 2).translate(0, CHEST.height, 0),
     chestLidInsideMat: new THREE.MeshLambertMaterial({ color: OPENED_CHEST.lidInside, side: THREE.DoubleSide }),
+    // 宝箱の鉄の金具：鋭く光る黒い鉄。鍵穴は真っ暗
+    ironMat: new THREE.MeshPhongMaterial({ color: 0x2a2826, shininess: 90, specular: 0x8a8578 }),
+    keyholeMat: new THREE.MeshBasicMaterial({ color: 0x050403 }),
     eliteMat: new THREE.MeshLambertMaterial({ color: 0xd9653b }),
     bossMat: new THREE.MeshLambertMaterial({ color: 0xb48d35 }),
     targetMat: new THREE.MeshBasicMaterial({ color: 0x9cc46a }),
@@ -145,6 +161,9 @@ export class DungeonView3D {
   private readonly target: THREE.Mesh;
   private readonly pathDots: THREE.InstancedMesh; // 歩く道筋の点
   private readonly debris: THREE.InstancedMesh; // 床の小石と、壁の根元の崩れた石
+  private readonly puddles: THREE.InstancedMesh; // 水たまり
+  private readonly moss: THREE.InstancedMesh; // 壁の根元のこけ（特性によって、すす・霜など）
+  private roomTiles: { map: unknown; tiles: Set<number> } = { map: null, tiles: new Set() }; // 部屋の床のマス（通路と描き分ける）
   private shownPath: Pos[] | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -213,9 +232,13 @@ export class DungeonView3D {
     // 影の帯は黒の半透明なので、霧の外では濃さを消す（まだ見ていない場所との境目で、背景より黒くならないように）
     this.wallShadows = new THREE.InstancedMesh(shadowGeo, applyFog(shadowMat, this.fog, 'fade-alpha'), DRAW_CAPACITY * SHADOW_SIDES.length);
     // 階段・宝箱・強敵の足元の輪も、床や壁と同じ霧をかける
-    const { chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat } = this.shared;
-    for (const mat of [chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat]) applyFog(mat, this.fog);
+    const { chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat, ironMat, keyholeMat } = this.shared;
+    for (const mat of [chestFront, chestSide, chestLidMat, chestInsideMat, chestLidInsideMat, eliteMat, bossMat, ironMat, keyholeMat]) applyFog(mat, this.fog);
     this.stairs = new Stairs3D((mat) => applyFog(mat, this.fog));
+    this.sconces = new Sconces((mat) => applyFog(mat, this.fog));
+    this.scene.add(this.sconces.root);
+    this.particles = new Particles(this.fog);
+    this.scene.add(this.particles.root);
     this.loadChestTextures();
     // 床の小石と、壁の根元の崩れた石（角ばった形。霧も床と同じくかける）
     const stoneGeo = new THREE.IcosahedronGeometry(1, 1).scale(1, 0.6, 1);
@@ -227,7 +250,22 @@ export class DungeonView3D {
       stonePos.setXYZ(i, stonePos.getX(i) * k, stonePos.getY(i) * k, stonePos.getZ(i) * k);
     }
     this.debris = new THREE.InstancedMesh(stoneGeo, applyFog(new THREE.MeshPhongMaterial({ flatShading: true, ...NO_GLOSS }), this.fog), DRAW_CAPACITY * DEBRIS.perTile);
-    for (const mesh of [...this.floors, ...this.walls, this.wallShadows, this.debris]) {
+    // 水たまりとこけ：ふちのぼけた平らなしみ（ふちの濃さは、しみの絵の明るさで決める）
+    const blot = this.blotTexture();
+    const patchGeo = new THREE.CircleGeometry(0.5, 20).rotateX(-Math.PI / 2);
+    const { puddle, moss } = FLOOR_LOOK;
+    this.puddles = new THREE.InstancedMesh(
+      patchGeo,
+      applyFog(new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: puddle.shininess, specular: puddle.specular, alphaMap: blot, transparent: true, opacity: puddle.opacity, depthWrite: false }), this.fog),
+      DRAW_CAPACITY,
+    );
+    this.moss = new THREE.InstancedMesh(
+      patchGeo,
+      applyFog(new THREE.MeshPhongMaterial({ color: 0xffffff, ...NO_GLOSS, alphaMap: blot, transparent: true, opacity: moss.opacity, depthWrite: false }), this.fog),
+      DRAW_CAPACITY * 2,
+    );
+    this.puddles.renderOrder = this.moss.renderOrder = 0.5; // 床のすぐあと（影の帯より前）
+    for (const mesh of [...this.floors, ...this.walls, this.wallShadows, this.debris, this.puddles, this.moss]) {
       // 中身を毎回入れ替えるので、最初の中身で計算された範囲で画面外と判定されないようにする
       mesh.frustumCulled = false;
       this.scene.add(mesh);
@@ -253,6 +291,7 @@ export class DungeonView3D {
   resize(width: number, height: number) {
     if (width <= 0 || height <= 0) return;
     this.renderer.setSize(width, height, false);
+    this.post?.setSize(width * this.pixelRatio, height * this.pixelRatio);
     // 主人公までの距離で1マスが TILE_PX に映る視野：画面の高さの半分 ÷（距離 × TILE_PX）= tan(視野の半分)
     const distance = Math.hypot(CAMERA.height, CAMERA.back);
     const fov = THREE.MathUtils.radToDeg(2 * Math.atan(height / 2 / (distance * TILE_PX)));
@@ -267,6 +306,8 @@ export class DungeonView3D {
     if (s !== this.shownState) {
       this.updateFog(frame);
       this.updateProps(frame);
+      this.sconces.update(s, frame.visible);
+      this.particles.setTrait(s.trait);
       this.updateEnemies(frame);
       this.hero.setCloak(cloakOf(s.stats.armor)); // マントは装備した防具の色。準備が当たったかが見た目でわかる
       this.hero.setWeapon(weaponOf(s.stats.weapon)); // 装備した武器を左手に持つ
@@ -293,6 +334,8 @@ export class DungeonView3D {
     this.torch.intensity = TORCH.intensity * (1 + TORCH_FLICKER.light * flicker);
     this.fog.update(p, dt, this.reduceMotion, TORCH_FLICKER.sight * flicker);
     this.mist?.position.set(p.x, GROUND_MIST.height, p.y);
+    this.sconces.tick(p, dt, this.reduceMotion);
+    this.particles.tick(this.sconces.flames, this.pixelRatio);
     this.updateDamagePops(now);
     this.spellFx.update(now);
     const zoom = this.updateCombatZoom(s, now, dt) * this.pulseZoom(now);
@@ -323,15 +366,26 @@ export class DungeonView3D {
         view.body.position.set(at.x, 0.5, at.y);
         view.body.quaternion.copy(this.camera.quaternion); // カメラの方を向ける
       }
+      // 飛びかかり：主人公の方へ、少し身を引いてから飛び出して戻る
+      const lunge = this.lungeOffset(e.uid, now);
+      if (lunge !== 0) {
+        const dx = s.player.x - e.pos.x;
+        const dz = s.player.y - e.pos.y;
+        const len = Math.hypot(dx, dz) || 1;
+        view.body.position.x += (dx / len) * lunge;
+        view.body.position.z += (dz / len) * lunge;
+      }
       view.mark.position.set(at.x, view.top + 0.15, at.y);
       view.hp.position.set(at.x, 0.06, at.y);
       view.ring?.position.set(at.x, 0.02, at.y);
     }
     this.updateKnock(now);
     this.updateDying(now);
+    this.updateCollapses(now);
     this.updateWalkTarget(frame.walkTarget);
     this.updateWalkPath(frame.walkPath);
-    this.renderer.render(this.scene, this.camera);
+    if (this.post) this.post.render(this.renderer, this.scene, this.camera, this.reduceMotion ? 0 : dt);
+    else this.renderer.render(this.scene, this.camera);
   }
 
   /** 描くのが間に合わないコマが続いたら、描く解像度を下げる（RESOLUTION）。elapsed は前のコマからの時間（ms） */
@@ -341,6 +395,9 @@ export class DungeonView3D {
     if (this.slowFrames < RESOLUTION.frames) return;
     this.pixelRatio = RESOLUTION.low;
     this.renderer.setPixelRatio(this.pixelRatio);
+    // 仕上げもやめて、描く量を減らす
+    this.post?.dispose();
+    this.post = null;
   }
 
   /** 主人公をその向きに向ける（壁にぶつかって歩けなかったときも向く。向きのある呪文は、この向きに唱える） */
@@ -402,12 +459,72 @@ export class DungeonView3D {
     else view.body.position.set(view.body.position.x + k.dx * off, view.body.position.y, view.body.position.z + k.dz * off);
   }
 
-  /** 矢が当たるまで残していた、倒れた敵を消す */
+  /** 矢が当たるまで残していた、倒れた敵を崩れ落ちさせる */
   private updateDying(now: number) {
     for (const [uid, until] of this.dying) {
       if (now < until) continue;
       this.dying.delete(uid);
-      if (!this.shownState?.enemies.some((e) => e.uid === uid)) this.removeEnemyView(uid);
+      if (!this.shownState?.enemies.some((e) => e.uid === uid)) this.collapseEnemy(uid);
+    }
+  }
+
+  /** 敵が主人公を攻撃したとき：その種類の、主人公の隣にいる敵を飛びかからせる（同じ種類が何体もいれば、まだ飛びかかっていない敵から） */
+  enemyAttack(by: EnemyId) {
+    const s = this.shownState;
+    if (!s || this.reduceMotion) return;
+    const now = performance.now();
+    const next = s.enemies.find(
+      (e) => e.id === by && Math.abs(e.pos.x - s.player.x) + Math.abs(e.pos.y - s.player.y) === 1 && now - (this.lunges.get(e.uid) ?? -1e9) > ENEMY_MOTION.lunge.ms,
+    );
+    if (next) this.lunges.set(next.uid, now);
+  }
+
+  /** 飛びかかりの、主人公の方へずらす長さ（マス。マイナスは身を引く） */
+  private lungeOffset(uid: number, now: number): number {
+    const start = this.lunges.get(uid);
+    if (start === undefined) return 0;
+    const { windUp, reach, ms } = ENEMY_MOTION.lunge;
+    const u = (now - start) / ms;
+    if (u >= 1) {
+      this.lunges.delete(uid);
+      return 0;
+    }
+    if (u < 0.3) return -windUp * (u / 0.3);
+    if (u < 0.5) return -windUp + (reach + windUp) * ((u - 0.3) / 0.2) ** 2;
+    return reach * (1 - (u - 0.5) / 0.5) ** 2;
+  }
+
+  /** 倒れた敵を、その場で崩れ落ちさせる（終わったら消す）。動きを減らす設定では、すぐ消す */
+  private collapseEnemy(uid: number) {
+    const view = this.enemies.get(uid);
+    if (!view || !view.body.visible || this.reduceMotion) {
+      this.removeEnemyView(uid);
+      return;
+    }
+    view.mark.visible = view.hp.visible = false;
+    if (view.ring) view.ring.visible = false;
+    this.collapses.set(uid, performance.now());
+  }
+
+  /** 崩れ落ちる動き：つぶれながら横へ倒れ、床に沈む */
+  private updateCollapses(now: number) {
+    for (const [uid, start] of this.collapses) {
+      const view = this.enemies.get(uid);
+      const u = (now - start) / ENEMY_MOTION.collapse.ms;
+      if (!view || u >= 1) {
+        this.collapses.delete(uid);
+        this.removeEnemyView(uid);
+        continue;
+      }
+      const e = u * u * (3 - 2 * u);
+      if (view.model) {
+        view.body.scale.set(1 + 0.3 * e, Math.max(0.05, 1 - 0.9 * e), 1 + 0.3 * e);
+        view.body.rotation.z = 0.35 * e * (uid % 2 === 0 ? 1 : -1);
+        view.body.position.y = -0.05 * e;
+      } else {
+        view.body.scale.set(1, Math.max(0.05, 1 - 0.9 * e), 1);
+        view.body.position.y = 0.5 * Math.max(0.05, 1 - 0.9 * e);
+      }
     }
   }
 
@@ -561,6 +678,9 @@ export class DungeonView3D {
     for (const m of this.litMaterials.values()) m.dispose();
     this.billboard.dispose();
     this.fog.dispose();
+    this.sconces.dispose();
+    this.particles.dispose();
+    this.post?.dispose();
     if (this.mist) {
       this.mist.geometry.dispose();
       (this.mist.material as THREE.Material).dispose();
@@ -591,9 +711,15 @@ export class DungeonView3D {
     const wallCounts = this.walls.map(() => 0);
     let shadows = 0;
     let stones = 0;
+    let puddles = 0;
+    let mosses = 0;
+    const roomTiles = this.roomTilesOf(map);
+    const mossColor = new THREE.Color(FLOOR_LOOK.moss.colors[trait]);
+    const puddleColor = new THREE.Color(FLOOR_LOOK.puddle.color);
     const stoneColor = new THREE.Color(colors.wall).multiplyScalar(DEBRIS.darken);
     const e = new THREE.Euler();
     const size = new THREE.Vector3();
+    const size3 = new THREE.Vector3();
     this.fog.setTargets(frame.state, frame.visible);
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
@@ -621,7 +747,8 @@ export class DungeonView3D {
           const k = floorVariant(x, z) % FLOOR_KINDS;
           const variety = atlas ? 1 : 0.9 + k * 0.05;
           this.floors[k]!.setMatrixAt(floorCounts[k]!, m.makeTranslation(x, 0, z));
-          this.floors[k]!.setColorAt(floorCounts[k]!++, c.copy(floorBase).multiplyScalar(variety));
+          // 通路の床は、部屋の床より少し暗く
+          this.floors[k]!.setColorAt(floorCounts[k]!++, c.copy(floorBase).multiplyScalar(variety * (roomTiles.has(i) ? 1 : FLOOR_LOOK.corridor)));
           // 小石と崩れた石：マスの位置で決まる乱数で置く（歩いても変わらない）
           const walls = SHADOW_SIDES.filter((side) => seenWall(x + side.dx, z + side.dz));
           const r = (n: number) => tileRandom(x, z, n);
@@ -639,6 +766,27 @@ export class DungeonView3D {
             this.debris.setMatrixAt(stones, m.compose(at, q, size.set(s * (0.8 + r(90 + n) * 0.5), s, s * (0.8 + r(95 + n) * 0.5))));
             this.debris.setColorAt(stones++, c.copy(stoneColor).multiplyScalar(0.8 + r(99 + n) * 0.4));
           }
+          // 水たまり（炎のダンジョンには置かない）
+          if (trait !== 'fire' && r(200) < FLOOR_LOOK.puddle.chance) {
+            const [lo, hi] = FLOOR_LOOK.puddle.size;
+            const size = (lo + (hi - lo) * r(201)) * 2;
+            at.set(x + (r(202) - 0.5) * 0.4, 0.006, z + (r(203) - 0.5) * 0.4);
+            q.setFromAxisAngle(up, r(204) * Math.PI);
+            this.puddles.setMatrixAt(puddles, m.compose(at, q, size3.set(size, 1, size * (0.55 + r(205) * 0.4))));
+            this.puddles.setColorAt(puddles++, puddleColor);
+          }
+          // 壁の根元のこけ：壁に沿って細長く
+          for (const [n, wall] of walls.entries()) {
+            if (mosses >= DRAW_CAPACITY * 2 || r(300 + n) >= FLOOR_LOOK.moss.chance) continue;
+            const { length, width } = FLOOR_LOOK.moss;
+            const len = length[0] + (length[1] - length[0]) * r(310 + n);
+            const wid = width[0] + (width[1] - width[0]) * r(320 + n);
+            const along = (r(330 + n) - 0.5) * (1 - len);
+            at.set(x + wall.dx * (0.5 - wid / 2) + (wall.dx === 0 ? along : 0), 0.007, z + wall.dz * (0.5 - wid / 2) + (wall.dz === 0 ? along : 0));
+            q.identity();
+            this.moss.setMatrixAt(mosses, m.compose(at, q, wall.dx === 0 ? size3.set(len, 1, wid * 2) : size3.set(wid * 2, 1, len)));
+            this.moss.setColorAt(mosses++, c.copy(mossColor).multiplyScalar(0.85 + r(340 + n) * 0.3));
+          }
           // 壁に接する辺に、影の帯を壁側へ寄せて敷く
           for (const side of SHADOW_SIDES) {
             if (!seenWall(x + side.dx, z + side.dz)) continue;
@@ -654,6 +802,8 @@ export class DungeonView3D {
       ...this.walls.map((mesh, k) => [mesh, wallCounts[k]!] as const),
       [this.wallShadows, shadows] as const,
       [this.debris, stones] as const,
+      [this.puddles, puddles] as const,
+      [this.moss, mosses] as const,
     ];
     for (const [mesh, count] of counts) {
       mesh.count = count;
@@ -692,7 +842,7 @@ export class DungeonView3D {
   /** 床と壁のツヤを、ダンジョンの特性に合わせる */
   private applyGloss(trait: TraitId) {
     this.glossTrait = trait;
-    const { shininess, specular } = TRAIT_GLOSS[trait] ?? NO_GLOSS;
+    const { shininess, specular } = TRAIT_GLOSS[trait] ?? WET_STONE;
     const mats = [...this.floors.map((f) => f.material as THREE.MeshPhongMaterial), ...this.wallMaterials.flatMap(({ top, side }) => [top, side])];
     for (const m of mats) {
       m.shininess = shininess;
@@ -739,14 +889,15 @@ export class DungeonView3D {
       mat.map = atlas?.floor ?? null;
       // テクスチャの明るさを高さとみなして、石の継ぎ目やひびに陰を付ける
       mat.bumpMap = mat.map;
+      mat.specularMap = mat.map; // 石の面は照り返し、継ぎ目やひびは照り返さない
       mat.bumpScale = SURFACE_BUMP.floor;
       mat.needsUpdate = true;
     });
     for (const { top, side } of this.wallMaterials) {
       top.map = atlas?.top ?? null;
       side.map = atlas?.side ?? null;
-      top.bumpMap = top.map;
-      side.bumpMap = side.map;
+      top.bumpMap = top.specularMap = top.map;
+      side.bumpMap = side.specularMap = side.map;
       top.bumpScale = SURFACE_BUMP.top;
       side.bumpScale = SURFACE_BUMP.side;
       top.needsUpdate = true;
@@ -805,6 +956,21 @@ export class DungeonView3D {
         part.castShadow = true;
         part.receiveShadow = true;
       }
+      // 鉄の帯と錠前：本体の前・上・後ろを巻く2本の帯と、正面の錠前と鍵穴。ふたの帯はふたと一緒に動く
+      const { chestBand, chestLidBand, chestLock, chestKeyhole, ironMat, keyholeMat } = this.shared;
+      for (const bx of [-CHEST.width * 0.3, CHEST.width * 0.3]) {
+        const band = new THREE.Mesh(chestBand, ironMat);
+        band.position.set(bx, 0, 0);
+        body.add(band);
+        const lidBand = new THREE.Mesh(chestLidBand, ironMat);
+        lidBand.position.set(bx, 0, 0);
+        lid.add(lidBand);
+      }
+      const lock = new THREE.Mesh(chestLock, ironMat);
+      lock.position.set(0, CHEST.height * 0.82, CHEST.depth / 2 + 0.006);
+      const keyhole = new THREE.Mesh(chestKeyhole, keyholeMat);
+      keyhole.position.set(0, CHEST.height * 0.8, CHEST.depth / 2 + 0.013);
+      body.add(lock, keyhole);
       for (const part of parts) this.props.add(part);
     }
   }
@@ -879,7 +1045,9 @@ export class DungeonView3D {
       if (!alive.has(uid)) {
         // 呪文の矢で倒した敵は、矢が当たるまで残す（頭上のマークと体力の棒は消す）
         if ((this.dying.get(uid) ?? 0) > performance.now()) view.mark.visible = view.hp.visible = false;
-        else this.removeEnemyView(uid);
+        // 同じ階で倒した敵は崩れ落ちさせる（階を移ったときは、前の階の敵をすぐ消す）
+        else if (this.shownState?.map !== state.map) this.removeEnemyView(uid);
+        else if (!this.collapses.has(uid)) this.collapseEnemy(uid);
       }
       else {
         view.body.visible = view.mark.visible = view.hp.visible = false;
@@ -955,6 +1123,41 @@ export class DungeonView3D {
     return mat;
   }
 
+  /** 部屋の床のマス（マップごとに1度だけ数える） */
+  private roomTilesOf(map: FloorMap): Set<number> {
+    if (this.roomTiles.map !== map) {
+      const tiles = new Set<number>();
+      for (const room of map.rooms) {
+        for (let y = room.y; y < room.y + room.height; y++) for (let x = room.x; x < room.x + room.width; x++) tiles.add(y * map.width + x);
+      }
+      this.roomTiles = { map, tiles };
+    }
+    return this.roomTiles.tiles;
+  }
+
+  /** ふちのぼけた、少しいびつなしみの絵（水たまり・こけの濃さに使う。白いところほど濃い） */
+  private blotTexture(): THREE.Texture {
+    const tex = this.texture('blot', 64, 64, (ctx) => {
+      // 黒の上に白いぼかしを重ねる（濃さは明るさで読むので、透明ではなく黒にしておく）
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, 64, 64);
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2;
+        const cx = 32 + Math.cos(a) * 9 * tileRandom(i, 1, 2);
+        const cy = 32 + Math.sin(a) * 9 * tileRandom(i, 3, 4);
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 20);
+        g.addColorStop(0, 'rgba(110,110,110,1)');
+        g.addColorStop(1, 'rgba(0,0,0,1)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 64, 64);
+      }
+    });
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearFilter;
+    return tex;
+  }
+
   private texture(key: string, w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void): THREE.Texture {
     let tex = this.textures.get(key);
     if (!tex) {
@@ -994,4 +1197,15 @@ function tileRandom(x: number, z: number, n: number): number {
   let h = Math.imul(x * 374761393 + z * 668265263 + n * 2246822519, 1274126177);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/**
+ * 重い見た目（地面をはう霧・画面の仕上げなど）を使うか。?<名前>=off で切り、?<名前>=on で必ず使う。
+ * どちらもなければ、処理の弱い端末（コアが4つ未満）では使わない
+ */
+function rich(name: string): boolean {
+  const v = new URLSearchParams(location.search).get(name);
+  if (v === 'off') return false;
+  if (v === 'on') return true;
+  return (navigator.hardwareConcurrency ?? 4) >= 4;
 }

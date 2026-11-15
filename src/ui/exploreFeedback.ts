@@ -36,6 +36,8 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
   for (const hit of next.hits) {
     const show = () => {
       view3d?.hitPulse(hit.kind === 'dealt' ? 'attack' : 'hurt');
+      // 攻撃してきた敵は、主人公の方へ飛びかかる
+      if (hit.kind === 'taken' && hit.by) view3d?.enemyAttack(hit.by);
       view3d?.popDamage(hit.at, hit.amount, hit.kind);
       // スマホを震わせる（振動に対応したスマホだけ）。踏破したとき・力尽きたときは、長く震わせる
       if (hit.kind === 'dealt') vibrate(next.outcome === 'cleared' ? HAPTICS.cleared : HAPTICS.attack);
