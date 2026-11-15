@@ -536,19 +536,19 @@
   "spellbooks": {
     "book_shockwave": {
       "name": "衝撃波の呪文書",
-      "price": 50
+      "price": 300
     },
     "book_shockwave_strong": {
       "name": "強衝撃の呪文書",
-      "price": 100
+      "price": 700
     },
     "book_sweep": {
       "name": "なぎ払いの呪文書",
-      "price": 70
+      "price": 300
     },
     "book_sweep_bleed": {
       "name": "烈なぎ払いの呪文書",
-      "price": 140
+      "price": 700
     },
     "book_fire_bolt": {
       "name": "炎の矢の呪文書",
@@ -556,7 +556,7 @@
     },
     "book_fire_chain": {
       "name": "炎の連矢の呪文書",
-      "price": 200
+      "price": 1000
     },
     "book_ice_bolt": {
       "name": "氷の矢の呪文書",
@@ -564,7 +564,7 @@
     },
     "book_ice_chain": {
       "name": "氷の連矢の呪文書",
-      "price": 200
+      "price": 1000
     },
     "book_light_lance": {
       "name": "光の槍の呪文書",
@@ -572,7 +572,7 @@
     },
     "book_light_chain": {
       "name": "光の連槍の呪文書",
-      "price": 200
+      "price": 1000
     },
     "book_dark_bolt": {
       "name": "闇の矢の呪文書",
@@ -580,7 +580,7 @@
     },
     "book_dark_chain": {
       "name": "闇の連矢の呪文書",
-      "price": 200
+      "price": 1000
     },
     "book_heal": {
       "name": "癒しの呪文書",
