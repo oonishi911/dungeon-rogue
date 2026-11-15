@@ -72,6 +72,20 @@ describe('enemyHitDamage（防具と属性）', () => {
   });
 });
 
+describe('敵の物理の倍率（physical）', () => {
+  it('武器で殴ったダメージに掛かる。省略は1倍。体質の相性とは別にさらに掛かる', () => {
+    const p = buildPlayer(['sword']);
+    const base = target('normal');
+    const plain = playerHitDamage(p, base);
+    expect(playerHitDamage(p, { ...base, physical: 1 })).toBe(plain);
+    expect(playerHitDamage(p, { ...base, physical: 1.5 })).toBe(Math.round(plain * 1.5));
+    expect(playerHitDamage(p, { ...base, physical: 0.5 })).toBeLessThan(plain);
+    const soft = target('soft');
+    expect(playerHitDamage(p, { ...soft, physical: 1.5 })).toBeGreaterThan(playerHitDamage(p, soft)); // 剣はやわらかい体に1.5倍で、さらに掛かる
+    expect(playerHitDamage(p, { ...base, physical: 0.1 })).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe('playerHitDamage（武器と体質）', () => {
   // 武器ありの攻撃力9、防御0の敵なら基礎ダメージ9
   const dmg = (weapon: ItemId, body: EnemyDef['body']) => playerHitDamage(buildPlayer([weapon]), target(body));

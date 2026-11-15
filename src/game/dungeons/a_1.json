@@ -127,7 +127,8 @@
         "flame_hound",
         "lava_lizard",
         "goblin",
-        "lava_slime"
+        "lava_slime",
+        "fire_mage"
       ],
       "boss": "flame_beast"
     },
@@ -139,7 +140,8 @@
         "ice_beetle",
         "ice_beetle",
         "goblin",
-        "yeti"
+        "yeti",
+        "ice_statue"
       ],
       "boss": "ice_colossus"
     },
@@ -152,7 +154,9 @@
         "stone_golem",
         "stone_golem",
         "troll",
-        "iwao"
+        "iwao",
+        "animated_armor",
+        "goblin_mage"
       ],
       "boss": "ogre_chief"
     },
@@ -179,7 +183,9 @@
         "ice_imp",
         "giant_rat",
         "wraith",
-        "dark_knight"
+        "dark_knight",
+        "gargoyle",
+        "cultist"
       ],
       "boss": "dark_lord"
     }

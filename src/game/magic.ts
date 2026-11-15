@@ -27,10 +27,10 @@ export function isStaff(id: ItemId): boolean {
   return effect.kind === 'weapon' && effect.weapon === 'staff';
 }
 
-/** 呪文のダメージ（settings はダンジョンの設定の魔法と呪文。敵の防御は無視する。属性の矢は、属性の相性で増減する） */
+/** 呪文のダメージ（settings はダンジョンの設定の魔法と呪文。敵の防御は無視する。属性の矢は、属性の相性で増減する。敵の魔法の倍率（magic）でも増減する） */
 export function spellDamage(stats: PlayerStats, spell: SpellId, enemy: EnemyDef, settings: Pick<GenSettings, 'magic' | 'spells'>): number {
   const rate = settings.spells[spell].power ?? 1;
-  return Math.max(1, Math.round(magicPower(stats, settings.magic) * rate * spellElementRate(spell, enemy)));
+  return Math.max(1, Math.round(magicPower(stats, settings.magic) * rate * spellElementRate(spell, enemy) * (enemy.magic ?? 1)));
 }
 
 /** 属性の矢の、敵への相性の倍率（矢でなければ1） */

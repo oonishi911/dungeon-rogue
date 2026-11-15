@@ -154,6 +154,16 @@ describe('呪文の働き', () => {
     expect(s.cast!.splash).toEqual([{ x: 4, y: 2 }]);
   });
 
+  it('敵の魔法の倍率（magic）：呪文のダメージに掛かる（矢・なぎ払いなど）。連矢のまわりへのダメージと出血は、そのダメージから決まる', () => {
+    const base = enemyDef(enemy({ x: 3, y: 2 }));
+    const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 3, y: 2 })]);
+    const plain = spellDamage(s0.stats, 'fire_bolt', base, GEN);
+    expect(spellDamage(s0.stats, 'fire_bolt', { ...base, magic: 1 }, GEN)).toBe(plain);
+    expect(spellDamage(s0.stats, 'fire_bolt', { ...base, magic: 2 }, GEN)).toBe(plain * 2);
+    expect(spellDamage(s0.stats, 'sweep', { ...base, magic: 0.5 }, GEN)).toBeLessThan(spellDamage(s0.stats, 'sweep', base, GEN));
+    expect(spellDamage(s0.stats, 'fire_bolt', { ...base, magic: 0.1 }, GEN)).toBeGreaterThanOrEqual(1);
+  });
+
   it('強衝撃：衝撃波と同じに吹き飛ばし、さらに1ターン動けなくする（そのあいだは攻撃してこない）', () => {
     // 主人公の隣の敵(2,2)は、後ろの敵(3,2)にふさがれて吹き飛ばない
     const make = (spell: 'shockwave' | 'shockwave_strong') => {

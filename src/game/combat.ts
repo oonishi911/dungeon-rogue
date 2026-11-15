@@ -68,10 +68,10 @@ export function enemyHitDamage(player: PlayerStats, enemy: EnemyDef): number {
   return Math.max(1, Math.ceil(total));
 }
 
-/** プレイヤーの攻撃1回で敵が受けるダメージ。武器と体質、付けた属性と敵の属性の相性で増減する */
+/** プレイヤーの攻撃1回で敵が受けるダメージ。武器と体質、付けた属性と敵の属性の相性、敵の物理の倍率（physical）で増減する */
 export function playerHitDamage(player: PlayerStats, enemy: EnemyDef): number {
   const base = Math.max(1, player.atk - enemy.def);
-  return Math.max(1, Math.round(base * bodyMultiplier(player, enemy) * enchantMultiplier(player, enemy)));
+  return Math.max(1, Math.round(base * bodyMultiplier(player, enemy) * enchantMultiplier(player, enemy) * (enemy.physical ?? 1)));
 }
 
 export function bodyMultiplier(player: PlayerStats, enemy: EnemyDef): number {
