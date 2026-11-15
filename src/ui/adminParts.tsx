@@ -26,12 +26,14 @@ export function AdminTabs<T extends string>({
   tabs,
   current,
   onSelect,
+  wrap = false,
 }: {
   label: string;
   idPrefix: string;
   tabs: readonly { id: T; label: string; changed: boolean }[];
   current: T;
   onSelect: (id: T) => void;
+  wrap?: boolean; // タブが多いとき、横にスクロールさせず、折り返して全部見せる
 }) {
   const move = (from: number, step: number) => {
     const next = tabs[(from + step + tabs.length) % tabs.length]!;
@@ -48,7 +50,7 @@ export function AdminTabs<T extends string>({
     else if (left + tab.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = left + tab.offsetWidth - row.clientWidth;
   }, [idPrefix, current]);
   return (
-    <div className="admin__tabs" role="tablist" aria-label={label}>
+    <div className={cls("admin__tabs", wrap, "admin__tabs--wrap")} role="tablist" aria-label={label}>
       {tabs.map((t, i) => (
         <button
           key={t.id}
@@ -284,7 +286,7 @@ export function ResetMark({ show, label, onClick }: { show: boolean; label: stri
 
 /**
  * 数の入力欄。入力した直後に決まり（範囲・整数・奇数）を確かめ、合わなければ、欄の下に原因と正しい値の範囲を出す。
- * 欄の両側の「−」「＋」で、step ずつ動かせる（押し続けると連続して動く。決まりは fieldCheck.ts の nudge）。
+ * 欄の両側の「−」「＋」で、step（jump を渡せば jump）ずつ動かせる（押し続けると連続して動く。決まりは fieldCheck.ts の nudge）。
  * slider を付けると、欄の下に、指でなぞって決めるスライダーも出る（'narrow' なら、狭い画面だけ）。範囲の狭い値向け。
  * base（公開版の値）を渡すと、変えた欄に「戻す」ボタンが出る。
  * error は、ほかの欄との大小（最小は最大以下、など）のように、この欄だけでは決まらないエラー（欄の決まりに合っているときだけ出す）。
@@ -302,6 +304,7 @@ export function NumberField(props: {
   label: string;
   base?: number;
   slider?: boolean | 'narrow';
+  jump?: number; // 「−」「＋」で動かす幅（値段のように、刻み1では遅い欄向け。10の倍数にそろえて動かす）
   onChange: (v: number) => void;
 }) {
   const [text, setText] = useState(String(props.value));
@@ -321,7 +324,7 @@ export function NumberField(props: {
   const move = (dir: 1 | -1) => {
     const typed = Number(latest.current.text);
     const from = latest.current.text.trim() !== '' && Number.isFinite(typed) ? typed : latest.current.value;
-    set(nudge(from, dir, rule));
+    set(nudge(from, dir, props.jump ? { min: props.min, max: props.max, step: props.jump, anchor: 0 } : rule));
   };
   const shown = text.trim() !== '' && Number.isFinite(Number(text)) ? Number(text) : props.value;
   const base = props.base;

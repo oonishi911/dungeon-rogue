@@ -89,10 +89,11 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
         tabs={GROUPS.map((g) => ({ id: g.id, label: g.label, changed: changedGroup(g.id) }))}
         current={group}
         onSelect={setGroup}
+        wrap
       />
 
       <div className="admin__scroll">
-        <table className="admin__table">
+        <table className="admin__table admin__table--cards">
           <thead>
             <tr>
               <th scope="col">{isWeapon || isArmor ? '段階と名前' : group === 'information' ? '聞くこと' : '名前'}</th>
@@ -118,7 +119,7 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
                       </span>
                     </th>
                     {(isWeapon ? (['atk'] as const) : (['def', 'rate'] as const)).map((k) => (
-                      <td key={k}>
+                      <td key={k} data-label={{ atk: '攻撃力', def: '守り', rate: 'ダメージ（%）' }[k]} className={isWeapon ? 'admin__c3' : 'admin__c2'}>
                         <NumberField
                           value={rec[k] as number}
                           min={ITEM_LIMITS[k].min}
@@ -129,11 +130,12 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
                         />
                       </td>
                     ))}
-                    <td>
+                    <td data-label="値段（G）" className={isWeapon ? 'admin__c3' : 'admin__c2'}>
                       <NumberField
                         value={t.price}
                         min={ITEM_LIMITS.price.min}
                         max={ITEM_LIMITS.price.max}
+                        jump={10}
                         changed={t.price !== b?.price} base={b?.price as number | undefined}
                         label={`${t.name}の値段`}
                         onChange={(v) => setTier(g, i, { price: v })}
@@ -154,11 +156,12 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
                         <TextField value={t.name} rule={nameRule(t.name)} changed={t.name !== b?.name} label={`${id} の名前`} onChange={(v) => setPlain(group, id, { name: v })} />
                       </span>
                     </th>
-                    <td>
+                    <td data-label="値段（G）" className="admin__c6">
                       <NumberField
                         value={t.price}
                         min={ITEM_LIMITS.price.min}
                         max={ITEM_LIMITS.price.max}
+                        jump={10}
                         changed={t.price !== b?.price} base={b?.price}
                         label={`${t.name}の値段`}
                         onChange={(v) => setPlain(group, id, { price: v })}
@@ -171,11 +174,12 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
               INFO_TOPICS.map((t) => (
                 <tr key={t}>
                   <th scope="row">{INFO_LABELS[t]}</th>
-                  <td>
+                  <td data-label="情報料（G）" className="admin__c6">
                     <NumberField
                       value={draft.information[t]}
                       min={ITEM_LIMITS.info.min}
                       max={ITEM_LIMITS.info.max}
+                      jump={10}
                       changed={draft.information[t] !== base.information[t]} base={base.information[t]}
                       label={`${INFO_LABELS[t]}の情報料`}
                       onChange={(v) => setDraft((d) => ({ ...d, information: { ...d.information, [t]: v } }))}

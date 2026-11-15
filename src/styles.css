@@ -2571,3 +2571,14 @@ button {
 .gen__field:has(.admin__slider) .admin__error {
   grid-row: 3;
 }
+
+/* 品物のタブ：種類のタブは、横にスクロールさせず、折り返して全部見せる */
+.admin__tabs--wrap {
+  flex-wrap: wrap;
+  overflow-x: visible;
+  row-gap: 0;
+}
+
+.admin__tabs--wrap .admin__tab {
+  margin-bottom: 0;
+}
