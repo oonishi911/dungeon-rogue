@@ -19,6 +19,8 @@ export const ENEMY_CONFIG = {
   backAttackChance: 0.5, // 通常の敵から離れたとき、背後から攻撃される確率（強敵は必ず）
   eliteHpRate: 2, // 強敵の能力は、元の敵の何倍か
   eliteAtkRate: 1.5,
+  eliteRoam: 2, // 強敵が気付いていないとき、持ち場から何マスまでうろつくか（縦横それぞれ）
+  eliteLeash: 6, // 強敵が追うとき、持ち場から何マスまで離れるか（それより先へは行かず、あきらめて持ち場へ戻る）
   chaseSearchLimit: 40, // 追いかけるときの経路探索の最大距離
 } as const;
 
@@ -31,7 +33,7 @@ export type EnemyMode = 'wander' | 'chase' | 'search';
 export interface MapEnemy {
   uid: number;
   id: EnemyId;
-  elite: boolean; // 強敵（とボス）は、離れようとすると必ず背後から攻撃してくる。強敵は動かないが、ボスは歩いて追ってくる
+  elite: boolean; // 強敵（とボス）は、離れようとすると必ず背後から攻撃してくる。強敵は持ち場（home）の近くを守り、ボスは歩いて追ってくる
   pos: Pos;
   hp: number;
   mode: EnemyMode;
@@ -39,6 +41,7 @@ export interface MapEnemy {
   lastSeen: Pos | null; // 最後にプレイヤーを見た場所
   searchTurns: number; // search のとき、あと何ターン探すか
   room?: Room; // 気付くまでは、この部屋の中だけを歩く（部屋に置いた敵で、設定の stayInRoom がオンのとき）
+  home?: Pos; // 強敵の持ち場（置かれた場所）。この近くをうろつき、追っても離れすぎると持ち場へ戻る
 }
 
 /**
@@ -106,6 +109,7 @@ export function spawnEnemies(
       lastSeen: null,
       searchTurns: 0,
       ...(room ? { room: { ...room } } : {}),
+      ...(elite ? { home: { ...pos } } : {}),
     };
   };
 
@@ -320,4 +324,15 @@ function neighbors(p: Pos): Pos[] {
     { x: p.x, y: p.y + 1 },
     { x: p.x - 1, y: p.y },
   ];
+}
+
+/** 強敵が、気付いていないときにうろつく範囲（持ち場を中心にした四角） */
+export function eliteArea(home: Pos): Room {
+  const r = ENEMY_CONFIG.eliteRoam;
+  return { x: home.x - r, y: home.y - r, width: r * 2 + 1, height: r * 2 + 1 };
+}
+
+/** 持ち場からの距離（縦横の大きい方） */
+export function fromHome(home: Pos, p: Pos): number {
+  return Math.max(Math.abs(p.x - home.x), Math.abs(p.y - home.y));
 }
