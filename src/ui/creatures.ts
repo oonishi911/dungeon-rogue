@@ -1,12 +1,13 @@
 // すべての敵の、形も色もプログラムで組んだ立体の模型。
 // 組み立て方は敵ごとに creaturesDark.ts（闇のダンジョン）、creaturesWorld.ts（ほかのダンジョン）、
 // creaturesSheet.ts（以前は設定画から作っていた7体）、creaturesResist.ts（魔法に弱い敵・物理に弱い敵の6体）にあり、
-// 道具（形の部品、凹凸、光る目、素材）は creatureKit.ts。ここでは、組んだ模型を向かせ、動かす。
+// 強敵の専用の模型は creaturesElite.ts にある。// 道具（形の部品、凹凸、光る目、素材）は creatureKit.ts。ここでは、組んだ模型を向かせ、動かす。
 
 import * as THREE from 'three';
 import type { Dir } from '../game/exploreTypes';
 import { addKnee, type Builder, Kit, mergeStatic, type Rig, type Wrap } from './creatureKit';
 import { DARK_BUILDERS } from './creaturesDark';
+import { eliteDarkKnight, eliteHolyArmor, eliteIceStatue, eliteIwao, eliteLavaLizard, genericElite } from './creaturesElite';
 import { RESIST_BUILDERS } from './creaturesResist';
 import { SHEET_BUILDERS } from './creaturesSheet';
 import { WORLD_BUILDERS } from './creaturesWorld';
@@ -14,6 +15,17 @@ import { WORLD_BUILDERS } from './creaturesWorld';
 const BUILDERS = { ...DARK_BUILDERS, ...WORLD_BUILDERS, ...SHEET_BUILDERS, ...RESIST_BUILDERS } satisfies Record<string, Builder>;
 export type CreatureId = keyof typeof BUILDERS;
 export const CREATURE_IDS = Object.keys(BUILDERS) as CreatureId[];
+
+// 強敵専用の模型（元の敵の ID ごと）。ここにない敵が強敵になったときは、genericElite で描く
+const ELITE_BUILDERS: Partial<Record<CreatureId, Builder>> = {
+  lava_lizard: eliteLavaLizard(BUILDERS.lava_lizard),
+  ice_statue: eliteIceStatue(BUILDERS.ice_statue),
+  iwao: eliteIwao(BUILDERS.iwao),
+  holy_armor: eliteHolyArmor(BUILDERS.holy_armor),
+  dark_knight: eliteDarkKnight(BUILDERS.dark_knight),
+};
+/** 強敵専用の模型がある敵（ない敵は、強敵になっても大きくして飾りを足すだけ） */
+export const ELITE_MODEL_IDS = Object.keys(ELITE_BUILDERS) as CreatureId[];
 
 const FACING: Record<Dir, number> = { down: 0, right: Math.PI / 2, up: Math.PI, left: -Math.PI / 2 };
 const TURN_SPEED = 9;
@@ -35,9 +47,11 @@ export class Creature {
   private idle = 1; // 待っている度合い（0〜1）
   private readonly knees: { leg: THREE.Object3D; knee: THREE.Group; last: number }[] = [];
 
-  constructor(id: CreatureId, wrap: Wrap = (m) => m) {
+  /** elite が true なら、強敵の模型（ボスは強敵の模型にしない） */
+  constructor(id: CreatureId, wrap: Wrap = (m) => m, elite = false) {
     this.kit = new Kit(wrap);
-    this.rig = BUILDERS[id](this.kit, this.body);
+    const build: Builder = elite ? (ELITE_BUILDERS[id] ?? genericElite(BUILDERS[id])) : BUILDERS[id];
+    this.rig = build(this.kit, this.body);
     this.height = this.rig.height;
     // 脚にひざを作る（動かさない部品をまとめる前に、ひざから下を分けておく）
     for (const leg of this.rig.legs ?? []) {

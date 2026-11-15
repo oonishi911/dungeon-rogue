@@ -1192,7 +1192,7 @@ export class DungeonView3D {
     const def = enemyDef(e);
     // 強敵は赤い輪、ボスは金の輪を足元に置く
     const ring = e.elite ? new THREE.Mesh(this.shared.ring, def.boss ? this.shared.bossMat : this.shared.eliteMat) : null;
-    const model = this.makeEnemyModel(e.id);
+    const model = this.makeEnemyModel(e.id, e.elite && !def.boss);
     let body: THREE.Object3D;
     if (model) body = model.root;
     else {
@@ -1263,9 +1263,9 @@ export class DungeonView3D {
   }
 
   /** 立体の模型で描く敵なら、模型を作る（模型のない敵は null で、ドット絵の板で描く） */
-  private makeEnemyModel(id: EnemyId): EnemyModel | null {
+  private makeEnemyModel(id: EnemyId, elite: boolean): EnemyModel | null {
     if (!isCreature(id)) return null;
-    return new Creature(id, (m, name) => applyFog(m, this.fog, 'darken', name));
+    return new Creature(id, (m, name) => applyFog(m, this.fog, 'darken', name), elite);
   }
 
   // ===== 素材 =====
