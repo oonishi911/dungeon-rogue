@@ -46,7 +46,9 @@ const ENEMY_ATTACK_SOUNDS: Record<Body | 'boss', string> = {
 // 闇の矢は低くうなる濁った響き、癒しは上がっていく分散和音、再生はあたたかくふくらむ和音
 const SPELL_SOUNDS: Record<SpellId, string> = {
   shockwave: 'spell-shockwave.mp3',
+  shockwave_strong: 'spell-shockwave_strong.mp3',
   sweep: 'spell-sweep.mp3',
+  sweep_bleed: 'spell-sweep_bleed.mp3',
   fire_bolt: 'spell-fire_bolt.mp3',
   fire_chain: 'spell-fire_chain.mp3',
   ice_bolt: 'spell-ice_bolt.mp3',

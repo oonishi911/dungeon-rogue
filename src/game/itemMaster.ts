@@ -19,7 +19,9 @@ export const SUPPLY_IDS = ['potion', 'food', 'fire_whetstone', 'ice_whetstone', 
 export type SupplyId = (typeof SUPPLY_IDS)[number];
 export const SPELLBOOK_IDS = [
   'book_shockwave',
+  'book_shockwave_strong',
   'book_sweep',
+  'book_sweep_bleed',
   'book_fire_bolt',
   'book_fire_chain',
   'book_ice_bolt',
@@ -115,7 +117,9 @@ export const SUPPLY_INFO: Record<SupplyId, { effect: ItemEffect; text: string }>
 /** 呪文書の説明（持っていくと、探索で魔力を使ってその呪文を何度でも唱えられる） */
 export const SPELLBOOK_TEXT: Record<SpellbookId, string> = {
   book_shockwave: 'まわりの敵を吹き飛ばす。ダメージは控えめだが、壁や敵にぶつけると追加ダメージ',
+  book_shockwave_strong: 'まわりの敵を吹き飛ばし、1ターン動けなくする。ダメージは控えめだが、壁や敵にぶつけると追加ダメージ',
   book_sweep: '向いた方向の数マスを貫き、並んだ敵すべてに当たる',
+  book_sweep_bleed: '向いた方向の数マスを貫き、並んだ敵すべてに当たる。当たった敵は3ターン出血し、毎ターン、なぎ払いのダメージの2割を受ける',
   book_fire_bolt: '炎の矢を放つ。氷と闇の敵によく効く',
   book_fire_chain: '炎の矢を放ち、当たった敵のまわり8マスの敵にも、ダメージの半分を与える。氷と闇の敵によく効く',
   book_ice_chain: '氷の矢を放ち、当たった敵のまわり8マスの敵にも、ダメージの半分を与える。炎と光の敵によく効く',

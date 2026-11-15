@@ -31,7 +31,9 @@ export type ItemId =
   | 'lantern'
   | 'bag'
   | 'book_shockwave'
+  | 'book_shockwave_strong'
   | 'book_sweep'
+  | 'book_sweep_bleed'
   | 'book_fire_bolt'
   | 'book_fire_chain'
   | 'book_ice_bolt'
@@ -63,12 +65,12 @@ export type ItemEffect =
 
 // ===== 魔法 =====
 // 呪文は呪文書を持っていくと使える。強さと魔力の量は、ダンジョンごとの設定（src/game/dungeons/*.json の magic と spells。管理画面で変えられる）
-export type SpellId = 'shockwave' | 'sweep' | 'fire_bolt' | 'fire_chain' | 'ice_bolt' | 'ice_chain' | 'light_lance' | 'light_chain' | 'dark_bolt' | 'dark_chain' | 'heal' | 'regen';
+export type SpellId = 'shockwave' | 'shockwave_strong' | 'sweep' | 'sweep_bleed' | 'fire_bolt' | 'fire_chain' | 'ice_bolt' | 'ice_chain' | 'light_lance' | 'light_chain' | 'dark_bolt' | 'dark_chain' | 'heal' | 'regen';
 
 // 呪文の働き。aim は唱えるときに向きを選ぶかどうか
 export type SpellEffect =
-  | { kind: 'shockwave' } // まわり8マスの敵を、外へ吹き飛ばす（ダメージは控えめ。壁や敵にぶつかると追加ダメージ）
-  | { kind: 'sweep' } // 向いた方向の数マスを貫き、そこにいる敵すべてに当たる
+  | { kind: 'shockwave'; stun?: boolean } // まわり8マスの敵を、外へ吹き飛ばす（ダメージは控えめ。壁や敵にぶつかると追加ダメージ）。stun なら、吹き飛ばした敵を設定のターン数だけ動けなくする
+  | { kind: 'sweep'; bleed?: boolean } // 向いた方向の数マスを貫き、そこにいる敵すべてに当たる。bleed なら、当たった敵を出血させる（設定のターン数のあいだ、1ターンごとに、その敵に与えたダメージの設定の割合のダメージ）
   | { kind: 'bolt'; element: Element; splash?: boolean } // 向いた方向へ飛び、最初に当たった敵に属性のダメージ。splash なら、その敵のまわり8マスの敵にも、ダメージの一部（設定の splash の割合）を与える
   | { kind: 'heal' } // すぐにHPを回復する
   | { kind: 'regen' }; // 数ターンかけて、少しずつHPを回復する

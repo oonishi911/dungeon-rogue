@@ -1159,7 +1159,10 @@ export class DungeonView3D {
       if (from && (from.x !== e.pos.x || from.y !== e.pos.y)) view.facing = facingToward(from, e.pos);
       else if (e.mode !== 'wander') view.facing = facingToward(e.pos, state.player);
       // 頭上のマーク。気付いた瞬間の「！」だけ大きく強調する
-      view.mark.material = this.textMaterial(ENEMY_MARK[e.mode].mark, e.mode === 'wander' ? '#b9b29f' : '#e2c178');
+      // 動けない敵（強衝撃）は黄色い星、出血している敵（烈なぎ払い）は赤い丸
+      if ((e.stun ?? 0) > 0) view.mark.material = this.textMaterial('★', '#ffe27a');
+      else if (e.bleed) view.mark.material = this.textMaterial('●', '#e0384a');
+      else view.mark.material = this.textMaterial(ENEMY_MARK[e.mode].mark, e.mode === 'wander' ? '#b9b29f' : '#e2c178');
       view.mark.scale.setScalar(e.justNoticed ? 0.7 : 0.45);
       const def = enemyDef(e);
       view.hp.visible = e.hp < def.hp;

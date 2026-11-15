@@ -42,8 +42,8 @@ const BOLT_ELEMENT: Partial<Record<SpellId, Element>> = {
   dark_chain: 'dark',
 };
 
-// 強化版の呪文（連矢など）。ふつうの呪文より演出を派手にする（二重の魔法陣、大きな爆発、まわりへの光の筋）
-const STRONG_SPELLS: ReadonlySet<SpellId> = new Set<SpellId>(['fire_chain', 'ice_chain', 'light_chain', 'dark_chain']);
+// 強化版の呪文（連矢・強衝撃・烈なぎ払い）。ふつうの呪文より演出を派手にする（二重の魔法陣、大きな爆発や輪、画面の閃光と揺れ）
+const STRONG_SPELLS: ReadonlySet<SpellId> = new Set<SpellId>(['fire_chain', 'ice_chain', 'light_chain', 'dark_chain', 'shockwave_strong', 'sweep_bleed']);
 
 // 相性による強さ（大きさ・粒の数・揺れ・閃光に掛ける）。何にも当たらなかったときは miss
 const STRENGTH = { weak: 1.5, normal: 1, resist: 0.55, miss: 0.7 } as const;
@@ -54,6 +54,8 @@ const FX = {
   circle: { ms: 700, size: 1.7 }, // 唱える溜めの魔法陣
   bolt: { chargeMs: 180, tileMs: 60, minFlyMs: 170, lanceMs: 70 },
   chain: { delayMs: 110, gapMs: 45, size: 0.8, linkMs: 380 }, // 連矢：まわりの敵に当たるまでの間（ミリ秒）、敵ごとのずれ、演出の大きさの割合、光の筋が出ている時間
+  stun: { ms: 1100, stars: 4, height: 1.25, radius: 0.34, color: 0xfff0a0 }, // 強衝撃：動けなくなった敵の頭の上をまわる星
+  bleed: { ms: 520, width: 0.95, color: 0xd6283a, drops: 18 }, // 烈なぎ払い：出血の刃の太さ、血の色としぶきの数
   grand: { ms: 900, rings: 3, pillarHeight: 3.2, sparks: 40, flash: 0.45, shake: 0.5 }, // 強化版の、当たったときの大爆発
   shockwave: { ms: 520, radius: 2.1, color: 0xcfe6ff },
   sweep: { ms: 320, width: 0.55, color: 0xf2ecd8 },
@@ -172,11 +174,25 @@ export class SpellEffects {
     switch (cast.spell) {
       case 'shockwave':
         this.castCircle(now, from, FX.shockwave.color, 0.8);
-        this.shockwave(now, from);
+        this.shockwave(now, from, false);
+        break;
+      case 'shockwave_strong':
+        // 強化版：魔法陣が二重に開き、輪が4重に広がり、動けなくなった敵の頭の上に星がまわる
+        this.castCircle(now, from, FX.shockwave.color, 1.1);
+        this.later(now + 90, () => this.castCircle(performance.now(), from, 0xffffff, 1.7));
+        this.shockwave(now, from, true);
+        for (const p of cast.stunned) this.stunStars(now + 260, p);
         break;
       case 'sweep':
         this.castCircle(now, from, FX.sweep.color, 0.7);
-        this.sweep(now, from, cast.path);
+        this.sweep(now, from, cast.path, false);
+        break;
+      case 'sweep_bleed':
+        // 強化版：魔法陣が二重に開き、白い刃に赤い刃が重なって走り、当たった敵から血しぶきが上がる
+        this.castCircle(now, from, FX.bleed.color, 1);
+        this.later(now + 90, () => this.castCircle(performance.now(), from, 0xffffff, 1.4));
+        this.sweep(now, from, cast.path, true);
+        for (const p of cast.bleeding) this.bloodSplash(now + FX.sweep.ms * 0.35, p);
         break;
       case 'heal':
       case 'regen':
@@ -412,6 +428,37 @@ export class SpellEffects {
     this.lightUp(now, 800, color, 34, () => at.clone().setY(1.1), (t) => (1 - t) ** 1.4);
     this.flash(0xffffff, flash);
     this.shakeBy(shake);
+  }
+
+  /** 強衝撃：動けなくなった敵の頭の上を、星がまわる */
+  private stunStars(start: number, at: Pos) {
+    const { ms, stars, height, radius, color } = FX.stun;
+    const orbs = Array.from({ length: stars }, () => this.orb(color, 0.34, this.tex.star));
+    this.add(start, ms, orbs, (t) => {
+      const fade = t < 0.1 ? t / 0.1 : t > 0.75 ? Math.max(0, (1 - t) / 0.25) : 1;
+      orbs.forEach((o, i) => {
+        const a = (i / stars) * Math.PI * 2 + t * 14;
+        o.position.set(at.x + Math.cos(a) * radius, height + Math.sin(t * 9 + i) * 0.04, at.y + Math.sin(a) * radius * 0.9);
+        o.material.opacity = fade;
+        o.scale.setScalar(0.34 * (0.8 + 0.2 * Math.sin(t * 20 + i * 2)));
+      });
+    });
+  }
+
+  /** 烈なぎ払い：当たった敵から、血しぶきが上がり、床に血のしみが残る */
+  private bloodSplash(start: number, at: Pos) {
+    this.later(start, () => {
+      const p = new THREE.Vector3(at.x, FX.height, at.y);
+      this.emit({ at: p, count: FX.bleed.drops, color: () => pick([0xd6283a, 0xa81428, 0xff5a68]), speed: [1.2, 3.6], up: 1.8, gravity: 7, drag: 0.5, life: [450, 950], size: [0.2, 0.05], texture: 'spark', jitter: 0.12 });
+      const stain = this.floorPlane(this.tex.glow, 0x7a0f1c, 0.03, false);
+      stain.position.set(at.x, 0.03, at.y);
+      stain.scale.set(1.2, 1, 1.2);
+      this.add(performance.now(), 3200, [stain], (t) => {
+        outerMat(stain).opacity = 0.65 * (t < 0.08 ? t / 0.08 : 1 - (t - 0.08) / 0.92);
+      });
+      this.hitSpark(p, 1);
+      this.onImpact?.(at, 1, FX.bleed.color);
+    });
   }
 
   /** 連矢：最初に当たった敵から、まわりの敵へ走る光の筋 */
@@ -808,8 +855,9 @@ export class SpellEffects {
   // ===== そのほかの呪文 =====
 
   /** 床すれすれに広がる光の輪と、少し遅れて追いかける薄い輪。ちりが舞い、画面が揺れる */
-  private shockwave(now: number, at: Pos) {
-    const rings = [0, 0.18].map((delay) => {
+  private shockwave(now: number, at: Pos, strong: boolean) {
+    const radius = FX.shockwave.radius * (strong ? 1.35 : 1);
+    const rings = (strong ? [0, 0.14, 0.28, 0.42] : [0, 0.18]).map((delay) => {
       const mesh = new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 48), this.plainGlow(FX.shockwave.color));
       mesh.rotation.x = -Math.PI / 2;
       mesh.position.set(at.x, 0.08, at.y);
@@ -823,39 +871,65 @@ export class SpellEffects {
       (t) => {
         for (const { mesh, delay } of rings) {
           const u = Math.max(0, Math.min(1, (t - delay) / (1 - delay)));
-          const r = 0.2 + FX.shockwave.radius * (1 - (1 - u) ** 2);
+          const r = 0.2 + radius * (1 - (1 - u) ** 2);
           mesh.scale.set(r, r, r);
           (mesh.material as THREE.MeshBasicMaterial).opacity = u <= 0 ? 0 : (1 - u) * (delay ? 0.5 : 0.95);
         }
       },
     );
-    this.emit({ at: new THREE.Vector3(at.x, 0.1, at.y), count: 24, color: 0x9a9284, speed: [1.2, 2.6], flat: true, up: 0.5, gravity: 1.2, drag: 1.6, life: [500, 900], size: [0.3, 0.8], alpha: 0.4, jitter: 0.3, texture: 'smoke' });
-    this.flash(FX.shockwave.color, 0.2);
-    this.shakeBy(0.55);
+    this.emit({ at: new THREE.Vector3(at.x, 0.1, at.y), count: strong ? 44 : 24, color: 0x9a9284, speed: [1.2, strong ? 3.6 : 2.6], flat: true, up: 0.5, gravity: 1.2, drag: 1.6, life: [500, 900], size: [0.3, 0.8], alpha: 0.4, jitter: 0.3, texture: 'smoke' });
+    if (strong) {
+      // 外へ飛ぶ光の粒と、床を走る白い輪、中心の光の柱
+      this.emit({ at: new THREE.Vector3(at.x, 0.2, at.y), count: 48, color: () => pick([0xffffff, FX.shockwave.color, 0x9fd0ff]), speed: [2.4, 5.6], flat: true, up: 0.6, gravity: 2, drag: 0.9, life: [400, 900], size: [0.2, 0.04], additive: true, texture: 'spark', jitter: 0.1 });
+      const pillar = new THREE.Mesh(this.shared.column, this.glowMaterial(FX.shockwave.color, this.tex.column));
+      pillar.position.set(at.x, 0, at.y);
+      pillar.renderOrder = 15;
+      this.add(now, 520, [pillar], (t) => {
+        pillar.scale.set(1.1 * (1 - t * 0.6), FX.grand.pillarHeight * Math.min(1, t / 0.15), 1.1 * (1 - t * 0.6));
+        outerMat(pillar).opacity = 0.7 * Math.max(0, 1 - t * 1.2);
+      });
+      this.lightUp(now, 600, FX.shockwave.color, 30, () => new THREE.Vector3(at.x, 1, at.y), (t) => (1 - t) ** 1.4);
+    }
+    this.flash(strong ? 0xffffff : FX.shockwave.color, strong ? FX.grand.flash : 0.2);
+    this.shakeBy(strong ? 0.9 : 0.55);
   }
 
   /** 向いた方向へ、主人公から path の終わりまで光の筋が走り、消える */
-  private sweep(now: number, from: Pos, path: Pos[]) {
+  private sweep(now: number, from: Pos, path: Pos[], strong: boolean) {
     const end = path.at(-1);
     if (!end) return;
     const dist = Math.hypot(end.x - from.x, end.y - from.y);
     const dx = (end.x - from.x) / dist;
     const dz = (end.y - from.y) / dist;
     const full = dist + 0.2; // 主人公の少し前から、最後のマスの奥まで
-    const material = this.plainGlow(FX.sweep.color);
-    material.map = this.tex.streak;
-    const blade = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
-    blade.rotation.x = -Math.PI / 2;
-    blade.rotation.z = -Math.atan2(dz, dx);
-    blade.renderOrder = 15;
-    this.add(now, FX.sweep.ms, [blade], (t) => {
-      const len = full * Math.min(1, t / 0.35); // 前へ走って伸びる
-      const center = 0.3 + len / 2;
-      blade.position.set(from.x + dx * center, FX.height * 0.7, from.y + dz * center);
-      blade.scale.set(Math.max(0.001, len), FX.sweep.width * (1 - t * 0.6), 1);
-      (blade.material as THREE.MeshBasicMaterial).opacity = t < 0.35 ? 0.95 : 0.95 * (1 - (t - 0.35) / 0.65);
+    // 強化版は、赤い刃を、白い刃のすこし太く長く残るものとして重ねる
+    const blades = (strong ? [{ color: FX.sweep.color, width: FX.sweep.width, ms: FX.sweep.ms, y: 0.7 }, { color: FX.bleed.color, width: FX.bleed.width, ms: FX.bleed.ms, y: 0.55 }] : [{ color: FX.sweep.color, width: FX.sweep.width, ms: FX.sweep.ms, y: 0.7 }]).map((b) => {
+      const material = this.plainGlow(b.color);
+      material.map = this.tex.streak;
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.rotation.z = -Math.atan2(dz, dx);
+      mesh.renderOrder = 15;
+      return { ...b, mesh };
     });
-    this.shakeBy(0.2);
+    for (const b of blades) {
+      this.add(now, b.ms, [b.mesh], (t) => {
+        const len = full * Math.min(1, t / 0.35); // 前へ走って伸びる
+        const center = 0.3 + len / 2;
+        b.mesh.position.set(from.x + dx * center, FX.height * b.y, from.y + dz * center);
+        b.mesh.scale.set(Math.max(0.001, len), b.width * (1 - t * 0.6), 1);
+        (b.mesh.material as THREE.MeshBasicMaterial).opacity = t < 0.35 ? 0.95 : 0.95 * (1 - (t - 0.35) / 0.65);
+      });
+    }
+    if (strong) {
+      // 刃が通ったあとに、赤い火花が散る
+      for (let i = 0; i < path.length; i++) {
+        const p = path[i]!;
+        this.emit({ at: new THREE.Vector3(p.x, FX.height * 0.7, p.y), count: 6, color: () => pick([0xffffff, FX.bleed.color, 0xff8a8a]), speed: [0.6, 2.2], up: 0.6, gravity: 2.4, drag: 0.8, life: [300, 700], size: [0.16, 0.03], additive: true, texture: 'spark', jitter: 0.2 });
+      }
+      this.flash(0xff8a8a, 0.3);
+    }
+    this.shakeBy(strong ? 0.45 : 0.2);
   }
 
   /** 主人公のまわりから、光の粒が立ちのぼって消える */
