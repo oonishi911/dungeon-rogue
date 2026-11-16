@@ -1,6 +1,7 @@
 // 主人公の立体の模型。ドット絵（sprites/data.ts の hero）と同じ色・同じ形の要素で組み立てる：
-// フード付きのマント（装備した防具の色）、フードの前の開きから見える肌色の顔と焦げ茶色の長めの髪、
+// フード付きのマント（装備した防具の色）、フードの前の開きから見える焦げ茶色の長い髪、
 // マントの前の開きから見える服とベルト、開きから前へ出した腕（服の袖と手）、茶色の靴。
+// 痩せ型の、髪の長い少年。顔は、前髪が覆っていて、表情が見えない（ストーリー。docs/story.md）。
 // フォンシェーディング（MeshPhongMaterial）で、陰影をなめらかにし、うっすらツヤを出す（武器の金属は強く光る。weapon3d.ts）。
 //
 // 模型は足元が原点で、高さは約0.95マス。正面は +z（画面の手前）。歩いた向きへ体を回す。
@@ -70,8 +71,6 @@ const STRIDE = { leg: 0.7, arm: 0.55, weaponArm: 0.2 };
 const CLOAK_FLOW = { flare: 0.14, wave: 0.02, waveSpeed: 9, follow: 6, top: 0.55 };
 // 待っているあいだの息づかい：体がわずかに上下する（マス）。speed は1秒あたりの角度
 const BREATH = { height: 0.007, speed: 2.4 };
-// まばたき：period 秒ごとに、closeSec 秒かけて目を閉じて開く（目の高さを縮める）。shift は最初のずらし
-const BLINK = { period: 3.8, closeSec: 0.18, shift: 1.3, closed: 0.9 };
 // 防具の段階（1〜10）ごとの見た目の飾り。段階が上がるほど増えていく
 const ARMOR_TIER = { trim: 2, pauldron: 3, clasp: 4, pauldronBig: 5, pauldronSpike: 7, glow: 8, pauldronTwin: 9, top: 10 };
 // 肩当てと飾りの色（防具の種類ごと）。金属の光り方をする
@@ -84,11 +83,13 @@ const ARMOR_METAL: Record<CloakId, string> = {
   dark_robe: '#6a4a8a',
 };
 const GOLD = '#d9b14a';
+// 痩せ型にするための寸法（マス）。胴・マント・腕・脚を、細くする
+const SLIM = { tunicTop: 0.1, tunicBottom: 0.125, cloakTop: 0.12, cloakBottom: 0.17, shoulder: 0.095, hand: 0.115, hip: 0.055, arm: 0.03, leg: 0.034, boot: 0.08 };
 
 /** 2点のあいだをつなぐ円柱（腕など）。a の太さが ra、b の太さが rb */
-function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number): THREE.BufferGeometry {
+function limb(a: THREE.Vector3, b: THREE.Vector3, ra: number, rb: number, segments = 16): THREE.BufferGeometry {
   const dir = new THREE.Vector3().subVectors(b, a);
-  const geo = new THREE.CylinderGeometry(rb, ra, dir.length(), 16);
+  const geo = new THREE.CylinderGeometry(rb, ra, dir.length(), segments);
   // 円柱は y 軸向きなので、a から b の向きへ回して、真ん中に置く
   geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()));
   const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
@@ -139,7 +140,6 @@ export class Hero3D {
   private moving = 0; // 歩いている度合い（0〜1。歩き始め・止まりになめらかに変える）
   private time = 0;
   private readonly goldMat = asMetal(phong(GOLD)); // 金の飾り（ベルトの留め金など）
-  private readonly eyes = new THREE.Group(); // 白目とひとみ（まばたきで縦に縮める）
   private readonly trimMat = asCloth(phong(GOLD, THREE.DoubleSide)); // マントの前の開きの縁取り
   private readonly trims: THREE.Mesh[] = [];
   // 防具の段階の飾り（肩当てなど）の入れ物。段階や防具が変わるたびに作り直す
@@ -153,16 +153,12 @@ export class Hero3D {
   constructor() {
     const mats = {
       skin: phong(PALETTE.s!),
-      skinShade: phong(new THREE.Color(PALETTE.s!).multiplyScalar(0.82).getStyle()), // 鼻・ほおの影の色
-      white: phong('#f2efe8'), // 白目
-      mouth: phong('#8a4a44'),
       tunic: asCloth(phong(PALETTE.t!)), // 服とマントは布：つやを消し、織り目の凹凸（materialLook.ts）
       belt: phong(PALETTE.b!),
       boots: phong(PALETTE.B!),
       bootCuff: phong(new THREE.Color(PALETTE.B!).multiplyScalar(1.35).getStyle()),
       gold: this.goldMat,
-      eyes: phong(PALETTE.k!),
-      hair: phong(PALETTE.h!, THREE.DoubleSide), // ドット絵の前髪と同じ焦げ茶色
+      hair: phong(PALETTE.h!, THREE.DoubleSide), // 焦げ茶色の髪
       shadow: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
       hit: new THREE.MeshBasicMaterial({ visible: false }),
     };
@@ -190,25 +186,25 @@ export class Hero3D {
     // 脚：腰を軸にした入れ物に、ズボン（ベルトの色）と靴を入れる。歩くときに前後へ振る
     for (const side of [-1, 1]) {
       const hip = new THREE.Group();
-      hip.position.set(side * 0.07, 0.22, 0);
-      add(limb(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -0.15, 0.005), 0.045, 0.038), mats.belt, 0, 0, 0, hip);
-      add(new THREE.BoxGeometry(0.1, 0.08, 0.14), mats.boots, 0, -0.18, 0.02, hip);
+      hip.position.set(side * SLIM.hip, 0.22, 0);
+      add(limb(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -0.15, 0.005), SLIM.leg, SLIM.leg * 0.84), mats.belt, 0, 0, 0, hip);
+      add(new THREE.BoxGeometry(SLIM.boot, 0.08, 0.13), mats.boots, 0, -0.18, 0.02, hip);
       this.body.add(hip);
       this.legs.push(hip);
     }
 
     // 服（マントの内側）とベルト
-    add(new THREE.CylinderGeometry(0.13, 0.16, 0.3, 24), mats.tunic, 0, 0.36, 0); // 服は腰の下まで（その下に脚が見える）
-    add(new THREE.CylinderGeometry(0.155, 0.16, 0.04, 24), mats.belt, 0, 0.3, 0);
+    add(new THREE.CylinderGeometry(SLIM.tunicTop, SLIM.tunicBottom, 0.3, 24), mats.tunic, 0, 0.36, 0); // 服は腰の下まで（その下に脚が見える）
+    add(new THREE.CylinderGeometry(SLIM.tunicBottom - 0.004, SLIM.tunicBottom, 0.04, 24), mats.belt, 0, 0.3, 0);
 
     // マント：前（+z）を開けて、中の服が見えるようにする。裾は濃い色。
     // three.js の円柱は、角度0が +z の向き（x = sin、z = cos）なので、角度0を中心に開ける
     const gap = 0.9; // 前の開きの角度（ラジアン）
     // 裾がひるがえるよう、縦にも分けておき、毎フレーム頂点を動かす（flowCloak）
     // 裾は膝の上まで（脚と靴の動きが見えるように）
-    const cloakGeo = new THREE.CylinderGeometry(0.17, 0.25, 0.34, 30, 5, true, gap / 2, Math.PI * 2 - gap);
+    const cloakGeo = new THREE.CylinderGeometry(SLIM.cloakTop, SLIM.cloakBottom, 0.34, 30, 5, true, gap / 2, Math.PI * 2 - gap);
     add(cloakGeo, this.cloakMats.C, 0, 0.38, 0);
-    const hemGeo = new THREE.CylinderGeometry(0.25, 0.255, 0.05, 30, 1, true, gap / 2, Math.PI * 2 - gap);
+    const hemGeo = new THREE.CylinderGeometry(SLIM.cloakBottom, SLIM.cloakBottom + 0.005, 0.05, 30, 1, true, gap / 2, Math.PI * 2 - gap);
     add(hemGeo, this.cloakMats.c, 0, 0.235, 0);
     for (const [geo, y] of [[cloakGeo, 0.38], [hemGeo, 0.235]] as const) {
       const pos = geo.getAttribute('position') as THREE.BufferAttribute;
@@ -218,12 +214,12 @@ export class Hero3D {
     // 腕：肩からマントの前の開きを通って、体の前に手を出す（服の袖と、肌色の手）
     // 左腕（武器を持つ方）は肩を軸にした入れ物に入れ、攻撃のときに肩から回して振る
     for (const side of [-1, 1]) {
-      const shoulder = new THREE.Vector3(side * 0.12, 0.5, 0.02);
-      const hand = new THREE.Vector3(side * 0.14, 0.31, 0.19);
+      const shoulder = new THREE.Vector3(side * SLIM.shoulder, 0.5, 0.02);
+      const hand = new THREE.Vector3(side * SLIM.hand, 0.31, 0.17);
       const parent = side === 1 ? this.leftArm : this.rightArm;
       const origin = shoulder;
-      add(limb(shoulder.clone().sub(origin), hand.clone().sub(origin), 0.04, 0.035), mats.tunic, 0, 0, 0, parent);
-      add(new THREE.SphereGeometry(0.048, 16, 12), mats.skin, hand.x - origin.x, hand.y - origin.y, hand.z - origin.z, parent);
+      add(limb(shoulder.clone().sub(origin), hand.clone().sub(origin), SLIM.arm, SLIM.arm * 0.85), mats.tunic, 0, 0, 0, parent);
+      add(new THREE.SphereGeometry(0.04, 16, 12), mats.skin, hand.x - origin.x, hand.y - origin.y, hand.z - origin.z, parent);
       if (side === 1) {
         this.leftArm.position.copy(shoulder);
         this.leftHand.position.copy(hand).sub(shoulder);
@@ -239,51 +235,46 @@ export class Hero3D {
     // 頭とフード。フードは顔の前（+z）を開ける
     // （three.js の球は、横の角度 phi が π/2 のところが +z。phi 0.2π〜0.8π を開けると、顔の前が開く）
     add(new THREE.SphereGeometry(0.14, 26, 18), mats.skin, 0, 0.7, 0.01);
-    add(new THREE.SphereGeometry(0.175, 26, 18, Math.PI * 0.8, Math.PI * 1.4), this.cloakMats.H, 0, 0.72, -0.01);
+    add(new THREE.SphereGeometry(0.166, 26, 18, Math.PI * 0.8, Math.PI * 1.4), this.cloakMats.H, 0, 0.72, -0.01);
 
-    // 髪（長め）：フードの開きから見える前髪と、顔の両横から胸まで垂れる髪、フードの下から背中へ流れる髪
-    // 前髪：頭の球に少し大きい球の上の前側だけをかぶせる（目の上まで）
-    add(new THREE.SphereGeometry(0.148, 26, 14, Math.PI * 0.15, Math.PI * 0.7, 0, Math.PI * 0.42), mats.hair, 0, 0.7, 0.012);
+    // 髪（長い）：顔の前を覆う前髪と、顔の両横から胸まで垂れる髪、フードの下から背中へ流れる髪。
+    // 顔は前髪の下に隠れていて、目も口も見えない（表情を持たせない）
+    // 前髪：頭の球に少し大きい球をかぶせ、顔の前側をあごの近くまで覆う
+    add(new THREE.SphereGeometry(0.15, 28, 16, Math.PI * 0.1, Math.PI * 0.8, 0, Math.PI * 0.8), mats.hair, 0, 0.7, 0.01);
+    // 前髪の房：額からあごへ、髪の流れに沿って何本か重ねる（長さを不ぞろいにして、毛先を細く）
+    const FRINGE = [[-0.62, 0.8], [-0.38, 0.86], [-0.16, 0.78], [0.08, 0.88], [0.3, 0.8], [0.52, 0.86], [0.7, 0.78]] as const; // [横の角度（ラジアン）, 毛先の位置（球の上からの角度 / π）]
+    for (const [az, end] of FRINGE) {
+      const at = (t: number) => {
+        const th = Math.PI * t;
+        return new THREE.Vector3(0.158 * Math.sin(th) * Math.sin(az), 0.7 + 0.158 * Math.cos(th), 0.01 + 0.158 * Math.sin(th) * Math.cos(az));
+      };
+      const steps = 5;
+      for (let k = 0; k < steps; k++) {
+        const t0 = 0.12 + ((end - 0.12) * k) / steps;
+        const t1 = 0.12 + ((end - 0.12) * (k + 1)) / steps;
+        add(limb(at(t0), at(t1), 0.014 * (1 - k / (steps + 1)), 0.014 * (1 - (k + 1) / (steps + 1)), 6), mats.hair, 0, 0, 0);
+      }
+    }
     for (const side of [-1, 1]) {
       // 顔の横の髪：こめかみから、あごの下を通って胸まで
-      add(limb(new THREE.Vector3(side * 0.112, 0.74, 0.065), new THREE.Vector3(side * 0.125, 0.47, 0.11), 0.032, 0.022), mats.hair, 0, 0, 0);
+      add(limb(new THREE.Vector3(side * 0.112, 0.74, 0.065), new THREE.Vector3(side * 0.105, 0.45, 0.1), 0.03, 0.018), mats.hair, 0, 0, 0);
     }
-    // 背中の髪：フードの下から、マントに沿って背中へ流れる3つの房（毛先を細く、真ん中の房をいちばん長く）
-    for (const [x, end] of [[-0.055, 0.38], [0, 0.33], [0.055, 0.38]] as const) {
-      add(limb(new THREE.Vector3(x, 0.63, -0.15), new THREE.Vector3(x * 1.25, end, -0.205), 0.042, 0.016), mats.hair, 0, 0, 0);
+    // 背中の髪：フードの下から、マントに沿って背中へ流れる7つの房（毛先を細く、真ん中の房をいちばん長く）
+    for (const [x, end] of [[-0.09, 0.4], [-0.06, 0.36], [-0.03, 0.31], [0, 0.29], [0.03, 0.31], [0.06, 0.36], [0.09, 0.4]] as const) {
+      add(limb(new THREE.Vector3(x, 0.63, -0.14), new THREE.Vector3(x * 1.1, end, -0.172), 0.034, 0.014), mats.hair, 0, 0, 0);
     }
-    add(new THREE.CylinderGeometry(0.1, 0.17, 0.12, 28), this.cloakMats.H, 0, 0.57, 0); // 肩にかかるフードの裾
-
-    // 目：白目に、黒いひとみと小さな白いハイライト。まばたきのため、ひとまとめにして縦に縮められるようにする
-    this.eyes.position.set(0, 0.7, 0);
-    this.body.add(this.eyes);
-    const ball = (rx: number, ry: number, rz: number) => new THREE.SphereGeometry(1, 16, 12).scale(rx, ry, rz);
-    for (const side of [-1, 1]) {
-      add(ball(0.027, 0.03, 0.014), mats.white, side * 0.05, 0, 0.132, this.eyes);
-      add(ball(0.017, 0.024, 0.01), mats.eyes, side * 0.05 + side * -0.002, -0.002, 0.14, this.eyes);
-      add(ball(0.006, 0.006, 0.005), mats.white, side * 0.05 + 0.006, 0.01, 0.148, this.eyes);
-      // まゆ：前髪の下の、少し外が上がったまゆ
-      const brow = add(new THREE.BoxGeometry(0.04, 0.009, 0.012), mats.hair, side * 0.052, 0.034, 0.131, this.eyes);
-      brow.rotation.z = side * 0.1; // 外が少し上がった、引き締まった顔
-    }
-    add(ball(0.013, 0.015, 0.014), mats.skinShade, 0, -0.016, 0.148); // 鼻
-    add(new THREE.BoxGeometry(0.034, 0.006, 0.01), mats.mouth, 0, -0.045, 0.142); // 口
-    // 前髪の毛先：額に落ちる短い房
-    for (const [x, tilt] of [[-0.05, 0.2], [0, 0], [0.055, -0.25]] as const) {
-      const tuft = add(new THREE.ConeGeometry(0.02, 0.06, 8).rotateX(Math.PI), mats.hair, x, 0.738, 0.14);
-      tuft.rotation.z = tilt;
-    }
+    add(new THREE.CylinderGeometry(0.085, 0.13, 0.12, 28), this.cloakMats.H, 0, 0.57, 0); // 肩にかかるフードの裾
 
     // 腰の飾り：ベルトの留め金と、腰の右の小さな袋
-    add(new THREE.BoxGeometry(0.05, 0.034, 0.012), mats.gold, 0, 0.3, 0.162);
-    add(new THREE.BoxGeometry(0.03, 0.02, 0.014), mats.belt, 0, 0.3, 0.166);
-    add(new THREE.BoxGeometry(0.07, 0.07, 0.045), mats.boots, -0.155, 0.27, 0.07).rotation.y = -0.4;
+    add(new THREE.BoxGeometry(0.045, 0.032, 0.012), mats.gold, 0, 0.3, SLIM.tunicBottom + 0.003);
+    add(new THREE.BoxGeometry(0.026, 0.018, 0.014), mats.belt, 0, 0.3, SLIM.tunicBottom + 0.007);
+    add(new THREE.BoxGeometry(0.06, 0.06, 0.04), mats.boots, -0.125, 0.27, 0.06).rotation.y = -0.4;
     // 靴のふち（革の折り返し）
-    for (const hip of this.legs) add(new THREE.CylinderGeometry(0.047, 0.044, 0.026, 14), mats.bootCuff, 0, -0.135, 0.005, hip);
+    for (const hip of this.legs) add(new THREE.CylinderGeometry(SLIM.leg + 0.003, SLIM.leg, 0.026, 14), mats.bootCuff, 0, -0.135, 0.005, hip);
 
     // マントの縁取り（前の開きのふち）。防具の段階が上がると付く。裾と同じく、歩くとひるがえる
     for (const start of [gap / 2, Math.PI * 2 - gap / 2 - 0.13]) {
-      const trimGeo = new THREE.CylinderGeometry(0.1735, 0.2555, 0.34, 4, 5, true, start, 0.13);
+      const trimGeo = new THREE.CylinderGeometry(SLIM.cloakTop + 0.0035, SLIM.cloakBottom + 0.0055, 0.34, 4, 5, true, start, 0.13);
       const trim = add(trimGeo, this.trimMat, 0, 0.38, 0);
       trim.visible = false;
       this.trims.push(trim);
@@ -362,25 +353,25 @@ export class Hero3D {
       return mesh;
     };
     if (tier >= ARMOR_TIER.pauldron) {
-      const r = tier >= ARMOR_TIER.pauldronBig ? 0.068 : 0.054;
+      const r = tier >= ARMOR_TIER.pauldronBig ? 0.06 : 0.048;
       for (const side of [-1, 1] as const) {
         const arm = side === 1 ? this.gearLeft : this.gearRight; // 肩を軸にした腕の入れ物の中（腕を振ると一緒に動く）
-        part(arm, new THREE.SphereGeometry(r, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1, 0.72, 1.1), this.gearMats.metal, side * 0.035, 0.02, 0);
-        if (tier >= ARMOR_TIER.pauldronBig) part(arm, new THREE.TorusGeometry(r * 0.96, 0.0065, 6, 20).rotateX(Math.PI / 2), this.goldMat, side * 0.035, 0.02, 0);
+        part(arm, new THREE.SphereGeometry(r, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1, 0.72, 1.1), this.gearMats.metal, side * 0.03, 0.02, 0);
+        if (tier >= ARMOR_TIER.pauldronBig) part(arm, new THREE.TorusGeometry(r * 0.96, 0.0065, 6, 20).rotateX(Math.PI / 2), this.goldMat, side * 0.03, 0.02, 0);
         if (tier >= ARMOR_TIER.pauldronSpike) {
-          const spike = part(arm, new THREE.ConeGeometry(0.014, 0.07, 8), this.gearMats.metal, side * (0.035 + r * 0.8), 0.045 + r * 0.55, 0);
+          const spike = part(arm, new THREE.ConeGeometry(0.014, 0.07, 8), this.gearMats.metal, side * (0.03 + r * 0.8), 0.045 + r * 0.55, 0);
           spike.rotation.z = -side * 0.95;
         }
         if (tier >= ARMOR_TIER.pauldronTwin) {
-          const spike = part(arm, new THREE.ConeGeometry(0.011, 0.055, 8), this.gearMats.metal, side * 0.035, 0.06, r * 0.7);
+          const spike = part(arm, new THREE.ConeGeometry(0.011, 0.055, 8), this.gearMats.metal, side * 0.03, 0.06, r * 0.7);
           spike.rotation.x = 0.8;
         }
       }
     }
     if (tier >= ARMOR_TIER.clasp) {
       // 胸の留め具：金の輪に、防具の色の宝石
-      part(this.gearBody, new THREE.TorusGeometry(0.02, 0.006, 6, 16), this.goldMat, 0, 0.5, 0.134);
-      part(this.gearBody, new THREE.OctahedronGeometry(0.014).scale(1, 1.3, 0.8), gem, 0, 0.5, 0.138);
+      part(this.gearBody, new THREE.TorusGeometry(0.02, 0.006, 6, 16), this.goldMat, 0, 0.5, 0.112);
+      part(this.gearBody, new THREE.OctahedronGeometry(0.014).scale(1, 1.3, 0.8), gem, 0, 0.5, 0.116);
     }
   }
 
@@ -412,11 +403,6 @@ export class Hero3D {
     this.legs[1]!.rotation.x = stride * STRIDE.leg;
     this.rightArm.rotation.x = stride * STRIDE.arm;
     if (!reduceMotion) this.flowCloak();
-    // まばたき（動きを減らす設定では、目は開けたまま）
-    const phase2 = (this.time + BLINK.shift) % BLINK.period;
-    const closeAt = BLINK.period - BLINK.closeSec;
-    const closed = reduceMotion || phase2 < closeAt ? 0 : 1 - Math.abs((phase2 - closeAt - BLINK.closeSec / 2) / (BLINK.closeSec / 2));
-    this.eyes.scale.y = 1 - BLINK.closed * Math.max(0, closed);
 
     // 武器を振る動き（動きを減らす設定では振らない）
     let pose = REST_POSE;
