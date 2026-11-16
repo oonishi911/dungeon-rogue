@@ -2,10 +2,12 @@
 // 保存するのは「次が何回目の挑戦か」と、貯めた金貨・買った持ち物・道具の倉庫・前に選んだ持ち物。
 // 探索の途中の状態は、中断データ（runSave.ts）に別に保存する。
 // 読み込んだデータは壊れていたり古い形式だったりするので、形を確かめてから使う。
+// 取り戻した記憶（memories）・かけら（fragments）・注意書きを読んだか（noticeSeen）は、story.ts と同じ話。ない昔の記録は、空から始める。
 // 昔の記録にあった rank（ランク）・exp（踏破の経験）・carried（持ち越したカード）・bonusGold（持ち帰った金貨）は、今は使わない。
 // 残っていても読み飛ばす（次に保存するときに消える）。金貨・持ち物・倉庫がない昔の記録は、どれも空から始める。
 
 import { ITEMS } from './data';
+import { MEMORIES } from './story';
 import { itemSlot } from './combat';
 import type { ItemId } from './types';
 
@@ -26,12 +28,15 @@ export interface SaveData {
   owned: ItemId[]; // 買った武器・防具・呪文書（一度買えばずっと使える。同じものは1つ）
   stock: ItemId[]; // 道具の倉庫（使わずに持ち帰った道具も、ここに戻る）
   kit: Kit; // 前に選んだ持ち物（次に店を開いたとき、同じ選び方から始める）
+  memories: string[]; // 取り戻した記憶（倒したボスの ID。思い出した順。story.ts）
+  fragments: number; // 5つの記憶がそろったあとに見た、あの子のかけらの数
+  noticeSeen: boolean; // 最初の注意書きを読んだか
 }
 
 export const emptyKit = (): Kit => ({ weapon: null, armor: null, books: [], take: [] });
 
 export function newSave(): SaveData {
-  return { version: SAVE_VERSION, run: 1, gold: 0, owned: [], stock: [], kit: emptyKit() };
+  return { version: SAVE_VERSION, run: 1, gold: 0, owned: [], stock: [], kit: emptyKit(), memories: [], fragments: 0, noticeSeen: false };
 }
 
 const isItem = (v: unknown): v is ItemId => typeof v === 'string' && v in ITEMS;
@@ -55,7 +60,10 @@ export function parseSave(text: string | null): SaveData | null {
   const gold = typeof d.gold === 'number' && Number.isInteger(d.gold) && d.gold >= 0 ? d.gold : 0;
   const owned = [...new Set(items(d.owned).filter((id) => !slotIs(id, 'consumable')))];
   const stock = items(d.stock).filter((id) => slotIs(id, 'consumable'));
-  return { version: SAVE_VERSION, run: d.run, gold, owned, stock, kit: parseKit(d.kit, owned) };
+  // 記憶は、今ある記憶だけを、重ねずに残す。かけらの数は、0以上の整数だけ
+  const memories = Array.isArray(d.memories) ? [...new Set(d.memories.filter((id): id is string => typeof id === 'string' && id in MEMORIES))] : [];
+  const fragments = typeof d.fragments === 'number' && Number.isInteger(d.fragments) && d.fragments >= 0 ? d.fragments : 0;
+  return { version: SAVE_VERSION, run: d.run, gold, owned, stock, kit: parseKit(d.kit, owned), memories, fragments, noticeSeen: d.noticeSeen === true };
 }
 
 /**

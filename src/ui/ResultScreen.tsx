@@ -1,6 +1,7 @@
 import { TRAITS } from '../game/data';
 import { hasDungeon, dungeonOf } from '../game/dungeons';
 import type { ExploreResult } from '../game/exploreTypes';
+import { rewindLines } from '../game/story';
 import type { Departure } from '../game/types';
 import { ItemList } from './ItemIcon';
 
@@ -30,6 +31,14 @@ export function ResultScreen({ run, outcome, expedition, gold, onNextRun }: Resu
 
       {/* スマホでは、画面全体は動かさず、この枠の中だけを動かす（下のボタンは、いつも見えている） */}
       <section className="panel reveal screen__scroll" aria-labelledby="reveal-heading">
+        {/* 力尽きたとき：時が巻き戻る（ストーリー。終わらせたい気持ちは、ほのめかすだけ） */}
+        {expedition.outcome === 'defeated' && (
+          <div className="rewind">
+            {rewindLines(run).map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </div>
+        )}
         <h2 id="reveal-heading" className="panel__title">ダンジョンの正体</h2>
         <p className="reveal__trait">{TRAITS[outcome.trait].name}のダンジョンだった</p>
         <dl className="facts">

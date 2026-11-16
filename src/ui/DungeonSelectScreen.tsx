@@ -7,9 +7,10 @@ import { DUNGEON_IDS, dungeonOf } from '../game/dungeons';
 interface DungeonSelectScreenProps {
   run: number;
   onChoose: (dungeon: string) => void;
+  onNotice: () => void; // 注意書きと相談窓口を読む
 }
 
-export function DungeonSelectScreen({ run, onChoose }: DungeonSelectScreenProps) {
+export function DungeonSelectScreen({ run, onChoose, onNotice }: DungeonSelectScreenProps) {
   return (
     <main className="screen screen--narrow screen--fit">
       <header className="top">
@@ -58,6 +59,9 @@ export function DungeonSelectScreen({ run, onChoose }: DungeonSelectScreenProps)
         })}
       </ul>
       <p className="muted">ダンジョンの属性（炎・氷など）は、挑むたびに変わる。</p>
+      <button type="button" className="notice__link" onClick={onNotice}>
+        注意書きと相談窓口
+      </button>
     </main>
   );
 }
