@@ -1,6 +1,7 @@
 import { TRAITS } from '../game/data';
 import { hasDungeon, dungeonOf } from '../game/dungeons';
 import type { ExploreResult } from '../game/exploreTypes';
+import { rewindLine } from '../game/story';
 import type { Departure } from '../game/types';
 import { ItemList } from './ItemIcon';
 
@@ -25,6 +26,8 @@ export function ResultScreen({ run, outcome, expedition, gold, onNextRun }: Resu
             {run}回目の挑戦{dungeonName && ` ・ ${dungeonName}`}
           </p>
           <h1 className="top__title">{cleared ? 'ダンジョンを踏破した' : expedition.outcome === 'retired' ? `${where}でリタイアした` : `${where}で力尽きた`}</h1>
+          {/* 力尽きた・引き返したときは、時が巻き戻る（story.ts）。踏破したときは出さない */}
+          {!cleared && <p className="result__rewind">{rewindLine(run)}</p>}
         </div>
       </header>
 

@@ -3,13 +3,16 @@
 // ダンジョンごとに、階の数・広さ・満腹度を見せる（ダンジョンの属性は、選んだあとに決まる）
 
 import { DUNGEON_IDS, dungeonOf } from '../game/dungeons';
+import { STORY_CONFIG } from '../game/story';
 
 interface DungeonSelectScreenProps {
   run: number;
+  memories: number; // よみがえった記憶の数（1つ以上あれば、読み返すボタンを出す）
   onChoose: (dungeon: string) => void;
+  onRemember: () => void;
 }
 
-export function DungeonSelectScreen({ run, onChoose }: DungeonSelectScreenProps) {
+export function DungeonSelectScreen({ run, memories, onChoose, onRemember }: DungeonSelectScreenProps) {
   return (
     <main className="screen screen--narrow screen--fit">
       <header className="top">
@@ -58,6 +61,11 @@ export function DungeonSelectScreen({ run, onChoose }: DungeonSelectScreenProps)
         })}
       </ul>
       <p className="muted">ダンジョンの属性（炎・氷など）は、挑むたびに変わる。</p>
+      {memories > 0 && (
+        <button type="button" className="memory__open" onClick={onRemember}>
+          思い出した記憶を読む（{memories}／{STORY_CONFIG.memories}）
+        </button>
+      )}
     </main>
   );
 }

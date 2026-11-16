@@ -1,5 +1,5 @@
 // 周回をまたいで残す記録（セーブデータ）。
-// 保存するのは「次が何回目の挑戦か」と、貯めた金貨・買った持ち物・道具の倉庫・前に選んだ持ち物。
+// 保存するのは「次が何回目の挑戦か」と、貯めた金貨・買った持ち物・道具の倉庫・前に選んだ持ち物・よみがえった記憶の数。
 // 探索の途中の状態は、中断データ（runSave.ts）に別に保存する。
 // 読み込んだデータは壊れていたり古い形式だったりするので、形を確かめてから使う。
 // 昔の記録にあった rank（ランク）・exp（踏破の経験）・carried（持ち越したカード）・bonusGold（持ち帰った金貨）は、今は使わない。
@@ -7,6 +7,7 @@
 
 import { ITEMS } from './data';
 import { itemSlot } from './combat';
+import { STORY_CONFIG } from './story';
 import type { ItemId } from './types';
 
 export const SAVE_VERSION = 1;
@@ -26,12 +27,13 @@ export interface SaveData {
   owned: ItemId[]; // 買った武器・防具・呪文書（一度買えばずっと使える。同じものは1つ）
   stock: ItemId[]; // 道具の倉庫（使わずに持ち帰った道具も、ここに戻る）
   kit: Kit; // 前に選んだ持ち物（次に店を開いたとき、同じ選び方から始める）
+  memories: number; // よみがえった記憶の数（ボスを倒すたびに1つ増える。story.ts）
 }
 
 export const emptyKit = (): Kit => ({ weapon: null, armor: null, books: [], take: [] });
 
 export function newSave(): SaveData {
-  return { version: SAVE_VERSION, run: 1, gold: 0, owned: [], stock: [], kit: emptyKit() };
+  return { version: SAVE_VERSION, run: 1, gold: 0, owned: [], stock: [], kit: emptyKit(), memories: 0 };
 }
 
 const isItem = (v: unknown): v is ItemId => typeof v === 'string' && v in ITEMS;
@@ -55,7 +57,9 @@ export function parseSave(text: string | null): SaveData | null {
   const gold = typeof d.gold === 'number' && Number.isInteger(d.gold) && d.gold >= 0 ? d.gold : 0;
   const owned = [...new Set(items(d.owned).filter((id) => !slotIs(id, 'consumable')))];
   const stock = items(d.stock).filter((id) => slotIs(id, 'consumable'));
-  return { version: SAVE_VERSION, run: d.run, gold, owned, stock, kit: parseKit(d.kit, owned) };
+  // 記憶の数は、物語の長さまで。記録のない昔のデータや壊れた値は 0 から
+  const memories = typeof d.memories === 'number' && Number.isInteger(d.memories) && d.memories >= 0 ? Math.min(d.memories, STORY_CONFIG.memories) : 0;
+  return { version: SAVE_VERSION, run: d.run, gold, owned, stock, kit: parseKit(d.kit, owned), memories };
 }
 
 /**

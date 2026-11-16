@@ -3002,3 +3002,108 @@ button {
     justify-content: center;
   }
 }
+
+/* ストーリー：よみがえった記憶の画面（MemoryScreen）。暗い背景に、1行ずつ静かに浮かび上がる */
+.memory .memory__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 1.25rem 0.25rem;
+}
+
+.memory__line {
+  margin: 0;
+  font-size: var(--step-1);
+  line-height: 1.9;
+  color: #e6dccb;
+  opacity: 0;
+  animation: memory-in 1.4s ease-out forwards;
+}
+
+.memory__line--echo {
+  margin-top: 0.5rem;
+  font-size: var(--step-0);
+  color: #b8a98f;
+}
+
+.memory__line--gap {
+  min-height: 0.75rem;
+}
+
+.memory__ending {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 0.0625rem solid rgb(230 220 203 / 0.25);
+}
+
+@keyframes memory-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.375rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memory__line {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+.memory__open {
+  align-self: flex-start;
+  padding: 0.625rem 0.875rem;
+  min-height: 2.75rem;
+  font: inherit;
+  color: #d9ccb4;
+  background: transparent;
+  border: 0.0625rem solid rgb(217 204 180 / 0.4);
+  border-radius: 0.5rem;
+}
+
+.memory__item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 3rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  text-align: left;
+  color: #e6dccb;
+  background: transparent;
+  border: 0.0625rem solid rgb(230 220 203 / 0.35);
+  border-radius: 0.5rem;
+}
+
+.memory__item--locked {
+  color: #7d7466;
+  border-style: dashed;
+}
+
+.memory__item-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  border: 0.0625rem solid currentColor;
+  font-size: var(--step--1);
+}
+
+/* 結果の画面：力尽きたとき・引き返したときの、時が巻き戻る一文 */
+.result__rewind {
+  margin: 0.375rem 0 0;
+  font-size: var(--step--1);
+  color: #b8a98f;
+  font-style: italic;
+}
