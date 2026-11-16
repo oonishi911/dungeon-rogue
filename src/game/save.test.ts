@@ -45,4 +45,16 @@ describe('parseSave', () => {
     );
     expect(save).toEqual({ ...valid, gold: 120, owned: ['sword'], stock: ['potion'], kit: { weapon: null, armor: null, books: [], take: ['potion', 'potion'] } });
   });
+
+  it('取り戻した記憶・かけら・注意書きを読んだかを、そのまま読める。昔の記録は、空から始める', () => {
+    const story = { ...valid, memories: ['dark_lord', 'flame_beast'], fragments: 2, noticeSeen: true };
+    expect(parseSave(JSON.stringify(story))).toEqual(story);
+    expect(parseSave(JSON.stringify({ version: 1, run: 4 }))).toMatchObject({ memories: [], fragments: 0, noticeSeen: false });
+  });
+
+  it('読めない記憶・重なった記憶・壊れたかけらの数は、その分だけ捨てる', () => {
+    const save = parseSave(JSON.stringify({ ...valid, memories: ['flame_beast', 'no_such_boss', 'flame_beast', 3], fragments: -1, noticeSeen: 'yes' }));
+    expect(save).toMatchObject({ memories: ['flame_beast'], fragments: 0, noticeSeen: false });
+    expect(parseSave(JSON.stringify({ ...valid, fragments: 1.5 }))!.fragments).toBe(0);
+  });
 });

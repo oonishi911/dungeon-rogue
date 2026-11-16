@@ -11,7 +11,8 @@ import { startExplore, toResult, traitForSeed } from './game/explore';
 import { type ExploreResult, type ExploreState } from './game/exploreTypes';
 import { packRun } from './game/runSave';
 import { newSave, type SaveData } from './game/save';
-import { startInformant, type InformantState, type Intel } from './game/informant';
+import { bossOf, startInformant, type InformantState, type Intel } from './game/informant';
+import { recall, type Scene } from './game/story';
 import { departWith, fitKit, kitLoadout, returnWith } from './game/shop';
 import type { Departure, ItemId } from './game/types';
 import { clearRun, loadRun, loadSave, writeRun, writeSave } from './storage';
@@ -20,6 +21,8 @@ import { ExploreScreen } from './ui/ExploreScreen';
 import { ResultScreen } from './ui/ResultScreen';
 import { InformantScreen } from './ui/InformantScreen';
 import { LoadingScreen } from './ui/LoadingScreen';
+import { MemoryScreen } from './ui/MemoryScreen';
+import { NoticeScreen } from './ui/NoticeScreen';
 import { ShopScreen } from './ui/ShopScreen';
 
 type Stage =
@@ -27,13 +30,20 @@ type Stage =
   | { kind: 'informant'; talk: InformantState } // 情報屋との会話（ダンジョンの特性は、もう決まっている）
   | { kind: 'shop'; dungeon: string; seed: number; intel: readonly Intel[]; atEntry: readonly ItemId[] } // 出発の準備。intel：情報屋から聞いたこと、atEntry：店に入ったときに持っていたもの（店の並びを決める）
   | { kind: 'dungeon'; outcome: Departure; seed: number; resume?: ExploreState } // resume：前に中断した探索の続き
+  | { kind: 'memory'; scene: Scene; outcome: Departure; expedition: ExploreResult; next: SaveData } // ボスを倒した直後の記憶の画面（ストーリー。story.ts）
   | { kind: 'result'; outcome: Departure; expedition: ExploreResult; next: SaveData };
 
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 
-/** 探索が終わったあとのセーブデータ：次の挑戦へ進め、持ち帰った金貨と、使わなかった道具を倉庫に戻す */
-function saveAfter(save: SaveData, state: ExploreState): SaveData {
-  return returnWith({ ...save, run: save.run + 1 }, toResult(state).goldBrought, state.stats.items);
+/**
+ * 探索が終わったあとのセーブデータ：次の挑戦へ進め、持ち帰った金貨と、使わなかった道具を倉庫に戻す。
+ * ダンジョンを踏破したときは、倒したボスの記憶も戻る（出す場面も一緒に返す）。同じ入力からは、いつも同じ結果になる
+ */
+function saveAfter(save: SaveData, state: ExploreState, outcome: Departure): { save: SaveData; scene: Scene | null } {
+  const base = returnWith({ ...save, run: save.run + 1 }, toResult(state).goldBrought, state.stats.items);
+  if (state.outcome !== 'cleared') return { save: base, scene: null };
+  const got = recall(base, bossOf(outcome.dungeon, outcome.trait));
+  return { save: got.save, scene: got.scene };
 }
 
 /** 開いたときの始まり。探索の途中で閉じていれば（戻る・再読み込みなど）、その続きから始める */
@@ -49,13 +59,31 @@ export function App() {
   const [stage, setStage] = useState<Stage>(first.stage);
   // テクスチャと音をすべて読み込むまでは、読み込み画面を出す（preload.ts）
   const [loaded, setLoaded] = useState(false);
+  // 注意書き：最初に遊ぶときは必ず出す（読んだら進む）。あとからは、ダンジョンを選ぶ画面から読める
+  const [notice, setNotice] = useState(!first.save.noticeSeen);
   if (!loaded) return <LoadingScreen onDone={() => setLoaded(true)} />;
+  if (notice) {
+    return (
+      <NoticeScreen
+        first={!save.noticeSeen}
+        onClose={() => {
+          if (!save.noticeSeen) {
+            const seen = { ...save, noticeSeen: true };
+            setSave(seen);
+            writeSave(seen);
+          }
+          setNotice(false);
+        }}
+      />
+    );
+  }
 
   switch (stage.kind) {
     case 'choose':
       return (
         <DungeonSelectScreen
           run={save.run}
+          onNotice={() => setNotice(true)}
           onChoose={(dungeon) => {
             setSave(fitKit(save)); // 前の持ち物の選び方を、倉庫にある数に合わせる
             const seed = newSeed();
@@ -115,20 +143,23 @@ export function App() {
             if (state.outcome === 'ongoing') {
               writeRun(packRun(save, outcome, seed, state));
             } else {
-              writeSave(saveAfter(save, state));
+              writeSave(saveAfter(save, state, outcome).save);
               clearRun();
             }
           }}
           guardBack
           onFinish={(state) => {
-            const next = saveAfter(save, state);
+            const { save: next, scene } = saveAfter(save, state, outcome);
             writeSave(next);
             clearRun();
-            setStage({ kind: 'result', outcome, expedition: toResult(state), next });
+            const expedition = toResult(state);
+            setStage(scene ? { kind: 'memory', scene, outcome, expedition, next } : { kind: 'result', outcome, expedition, next });
           }}
         />
       );
     }
+    case 'memory':
+      return <MemoryScreen scene={stage.scene} onDone={() => setStage({ kind: 'result', outcome: stage.outcome, expedition: stage.expedition, next: stage.next })} />;
     case 'result':
       return (
         <ResultScreen
