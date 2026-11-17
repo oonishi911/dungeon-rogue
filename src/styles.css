@@ -3075,12 +3075,49 @@ button {
 /* 書きなぐった文字：一文字ずつ、傾き・ずれ・大きさが違う（scrawl.ts）。上から、もう一度なぞった文字が重なる */
 .scrawl {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.6rem;
   font-family: 'Yomogi', 'Zen Kurenaido', 'Hiragino Maru Gothic ProN', 'Yu Gothic', var(--sans);
   font-size: 1.55rem;
   font-weight: 900;
   line-height: 1.5;
-  filter: contrast(1.15);
+  /* 文字をそのまま見せず、墨で書いた絵にする：輪郭がゆがみ、かすれる（MemoryScreen.tsx の InkFilter） */
+  filter: url(#scrawl-ink);
+}
+
+.scrawl__defs {
+  position: absolute;
+}
+
+/* 画面全体を走る、赤い引っかき傷 */
+.scrawl {
+  position: relative;
+}
+
+.scrawl__scratches {
+  position: absolute;
+  inset: -8% -4%;
+  width: 108%;
+  height: 116%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.scrawl__scratches polyline {
+  fill: none;
+  stroke: #c9332d;
+  stroke-width: 3px;
+  stroke-linecap: round;
+  stroke-linejoin: bevel;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+  animation: scrawl-in 0.4s steps(4) forwards;
+  animation-delay: calc(2.5s + var(--i, 0) * 0.7s);
+}
+
+/* 一文字ごとに、同じ色の太い縁を付けて、筆でなぞったような太さにする */
+.scrawl__ch {
+  -webkit-text-stroke: 0.065em currentColor;
+  paint-order: stroke fill;
 }
 
 .scrawl__line {
@@ -3178,6 +3215,7 @@ button {
   .memory__quiet p,
   .memory__faint,
   .scrawl__line,
+  .scrawl__scratches polyline,
   .scrawl__black {
     animation-duration: 0.01s;
     animation-delay: 0s;

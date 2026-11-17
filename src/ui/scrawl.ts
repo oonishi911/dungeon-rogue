@@ -5,16 +5,30 @@
 import { nextRandom } from '../game/rng';
 
 export const SCRAWL_CONFIG = {
-  rot: 9, // 文字の傾き（度。±）
-  dx: 0.09, // 横のずれ（文字の幅に対する割合。±）
-  dy: 0.16, // 縦のずれ（±）
-  size: [0.88, 1.38] as const, // 文字の大きさ（ふつうの文字に対する倍率）
-  overwrite: 0.55, // 上から書き直す文字の割合（ずれた文字が、もう1つ重なる）
-  tilt: 2.4, // 1行の傾き（度。±）
-  shift: 6, // 1行の横のずれ（%。±）
-  black: [0.35, 0.8] as const, // 塗りつぶしの帯の長さ（幅に対する割合）
-  strikeZigzag: 7, // 取り消し線の折り返しの数
+  rot: 12, // 文字の傾き（度。±）
+  dx: 0.14, // 横のずれ（文字の幅に対する割合。±）
+  dy: 0.2, // 縦のずれ（±）
+  size: [0.85, 1.55] as const, // 文字の大きさ（ふつうの文字に対する倍率）
+  overwrite: 0.7, // 上から書き直す文字の割合（ずれた文字が重なる）
+  overwriteTwice: 0.25, // 書き直した文字のうち、さらにもう一度重ねる割合
+  tilt: 3.5, // 1行の傾き（度。±）
+  shift: 8, // 1行の横のずれ（%。±）
+  black: [0.4, 0.95] as const, // 塗りつぶしの帯の長さ（幅に対する割合）
+  strikeZigzag: 12,
+  scratches: 4, // 画面全体に走らせる、引っかき傷の数
+  scratchSteps: [6, 10] as const, // 引っかき傷の折れ曲がる数 // 取り消し線の折り返しの数
+  // 文字を「絵」に変える墨の加工（SVG のフィルタ。字の輪郭を揺らし、かすれをつくる）
+  ink: {
+    warpFreq: 0.06, // 輪郭を揺らす波の細かさ（大きいほど細かく揺れる）
+    warpScale: 10, // 輪郭の揺れの大きさ（px）
+    grainX: 0.04, // かすれの筋の、横方向の細かさ（小さいほど、横に長い筋になる）
+    grainY: 0.5, // かすれの筋の、縦方向の細かさ
+    grainCut: 0.36, // かすれの量（大きいほど、欠けが増える）
+  },
 } as const;
+
+/** 墨の加工をつけた SVG フィルタの ID */
+export const INK_FILTER = 'scrawl-ink';
 
 export interface Glyph {
   ch: string;
@@ -22,7 +36,7 @@ export interface Glyph {
   dx: number; // em
   dy: number; // em
   size: number; // 倍率
-  over: { rot: number; dx: number; dy: number } | null; // 重ね書き（なければ null）
+  over: { rot: number; dx: number; dy: number }[]; // 重ね書き（なければ空。多いと、何度もなぞった字になる）
 }
 
 export type ScrawlItem =
@@ -49,6 +63,13 @@ function rngOf(seed: string): { next: () => number; range: (lo: number, hi: numb
 
 type Rng = ReturnType<typeof rngOf>;
 
+function overs(r: Rng): Glyph['over'] {
+  const c = SCRAWL_CONFIG;
+  const one = () => ({ rot: r.sign(c.rot * 1.6), dx: r.sign(c.dx * 2.5), dy: r.sign(c.dy * 2) });
+  if (r.next() >= c.overwrite) return [];
+  return r.next() < c.overwriteTwice ? [one(), one()] : [one()];
+}
+
 function glyphsOf(text: string, r: Rng): Glyph[] {
   const c = SCRAWL_CONFIG;
   return [...text].map((ch) => ({
@@ -57,7 +78,7 @@ function glyphsOf(text: string, r: Rng): Glyph[] {
     dx: r.sign(c.dx),
     dy: r.sign(c.dy),
     size: r.range(c.size[0], c.size[1]),
-    over: r.next() < c.overwrite ? { rot: r.sign(c.rot * 1.6), dx: r.sign(c.dx * 2.5), dy: r.sign(c.dy * 2) } : null,
+    over: overs(r),
   }));
 }
 
@@ -93,4 +114,25 @@ export function scrawl(lines: readonly string[], crossed: string, seed: string):
   });
   items.push(black());
   return items;
+}
+
+/** 画面全体を走る、引っかき傷（赤い乱れた線）。点は 0〜100 の位置（% ）。同じシードなら同じ傷になる */
+export function scratches(seed: string): { points: [number, number][] }[] {
+  const c = SCRAWL_CONFIG;
+  const r = rngOf(seed + ':scratch');
+  return Array.from({ length: c.scratches }, () => {
+    const n = Math.round(r.range(c.scratchSteps[0], c.scratchSteps[1]));
+    // ほぼ端から端まで、ななめに走る（上下にも大きくぶれる）
+    const left = r.next() < 0.5;
+    const y0 = r.range(5, 95);
+    const slope = r.sign(45);
+    const points: [number, number][] = [];
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      const x = (left ? t : 1 - t) * 100 + r.sign(4);
+      const y = Math.min(100, Math.max(0, y0 + slope * (t - 0.5) + r.sign(12)));
+      points.push([x, y]);
+    }
+    return { points };
+  });
 }

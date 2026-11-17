@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MEMORIES } from '../game/story';
-import { SCRAWL_CONFIG, scrawl } from './scrawl';
+import { SCRAWL_CONFIG, scrawl, scratches } from './scrawl';
 
 describe('scrawl', () => {
   const m = MEMORIES.flame_beast!;
@@ -30,6 +30,13 @@ describe('scrawl', () => {
       expect(g.size).toBeGreaterThanOrEqual(c.size[0]);
       expect(g.size).toBeLessThanOrEqual(c.size[1]);
     }
-    expect(glyphs.some((g) => g.over)).toBe(true);
+    expect(glyphs.some((g) => g.over.length > 0)).toBe(true);
+  });
+
+  it('引っかき傷は、決めた数だけあり、画面の中に収まる。同じシードなら同じ傷', () => {
+    const sc = scratches('flame_beast');
+    expect(sc).toHaveLength(SCRAWL_CONFIG.scratches);
+    expect(scratches('flame_beast')).toEqual(sc);
+    for (const s of sc) for (const [, y] of s.points) expect(y >= 0 && y <= 100).toBe(true);
   });
 });
