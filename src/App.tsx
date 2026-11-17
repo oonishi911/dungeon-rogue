@@ -12,7 +12,7 @@ import { type ExploreResult, type ExploreState } from './game/exploreTypes';
 import { packRun } from './game/runSave';
 import { newSave, type SaveData } from './game/save';
 import { bossOf, startInformant, type InformantState, type Intel } from './game/informant';
-import { recall, type Scene } from './game/story';
+import { recall, toneOf, type Scene } from './game/story';
 import { departWith, fitKit, kitLoadout, returnWith } from './game/shop';
 import type { Departure, ItemId } from './game/types';
 import { clearRun, loadRun, loadSave, writeRun, writeSave } from './storage';
@@ -87,7 +87,7 @@ export function App() {
           onChoose={(dungeon) => {
             setSave(fitKit(save)); // 前の持ち物の選び方を、倉庫にある数に合わせる
             const seed = newSeed();
-            setStage({ kind: 'informant', talk: startInformant(dungeon, seed, traitForSeed(seed)) });
+            setStage({ kind: 'informant', talk: startInformant(dungeon, seed, traitForSeed(seed), toneOf(save.memories.length)) });
           }}
         />
       );

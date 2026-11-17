@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_DUNGEON_ID } from './dungeons';
 import { ENEMIES } from './data';
 import { newSave } from './save';
-import { ENDING, FRAGMENTS, HOTLINES, MEMORIES, MEMORY_COUNT, NOTICE, REWIND_LINES, recall, rewindLines, roomScene, ROOM_CHANGES, ROOM_FIRST, ROOM_WISH } from './story';
+import { ask, startInformant } from './informant';
+import { VOICES } from './informantVoice';
+import { ENDING, FRAGMENTS, HOTLINES, ROOM_STAGE_MAX, lost, LOST, roomStage, toneOf, MEMORIES, MEMORY_COUNT, NOTICE, REWIND_LINES, recall, rewindLines, roomScene, ROOM_CHANGES, ROOM_FIRST, ROOM_WISH } from './story';
 
 const BOSSES = Object.keys(MEMORIES);
 
@@ -95,5 +98,46 @@ describe('文章の約束（docs/story.md「表現の約束」）', () => {
 
   it('相談窓口は、電話番号の形をしている', () => {
     for (const h of HOTLINES) expect(/^0\d{2,3}-\d{2,3}-\d{3,4}$/.test(h.number)).toBe(true);
+  });
+});
+
+describe('店と情報屋（忘れ物・口調・部屋）', () => {
+  it('忘れ物は、◇ を付けて数える', () => {
+    expect(lost(30)).toBe('◇30');
+    expect(LOST.shop).toBe('忘れ物屋');
+  });
+
+  it('口調は、思い出した記憶の数で、0・1・2と進む', () => {
+    expect([0, 1, 2, 3, 4, 5].map(toneOf)).toEqual([0, 0, 1, 1, 2, 2]);
+  });
+
+  it('部屋の背景は、記憶とかけらの数で進み、上限で止まる', () => {
+    const at = (memories: number, fragments: number) => roomStage({ memories: BOSSES.slice(0, memories), fragments });
+    expect(at(0, 0)).toBe(0);
+    expect(at(3, 0)).toBe(3);
+    expect(at(5, 0)).toBe(5);
+    expect(at(5, 2)).toBe(7);
+    expect(at(5, 99)).toBe(ROOM_STAGE_MAX);
+  });
+
+  it('同じことを聞いても、口調で言い方は変わるが、店のメモ（内容）は変わらない', () => {
+    const answers = ([0, 1, 2] as const).map((tone) => {
+      let r = ask(startInformant(DEFAULT_DUNGEON_ID, 1234, 'fire', tone), { ...newSave(), gold: 999 }, 'trait', true);
+      if (!r.ok) throw new Error(r.error);
+      r = ask(r.value.state, r.value.save, 'boss', true);
+      if (!r.ok) throw new Error(r.error);
+      return r.value.state.heard;
+    });
+    expect(new Set(answers.map((h) => h[0]!.text)).size).toBe(3);
+    expect(new Set(answers.map((h) => h[1]!.text)).size).toBe(3);
+    for (const h of answers) expect(h.map((x) => x.memo)).toEqual(answers[0]!.map((x) => x.memo));
+  });
+
+  it('3つの口調のどれにも、全部の言い回しがある（空の文はない）', () => {
+    for (const tone of [0, 1, 2] as const) {
+      const v = VOICES[tone];
+      const all = [v.greeting('あそこ', 2), v.farewell, v.trait.clear('炎'), v.trait.vague('a', 'b'), v.body.clear('硬い', v.weak.magic), v.body.vague('a', 'b', 'c', 'd'), v.boss.clear('x', 'y', 'z'), v.boss.vague('a', 'b'), v.boss.unknown, v.weak.magic, v.weak.physical, v.weak.none];
+      for (const t of all) expect(t.length).toBeGreaterThan(0);
+    }
   });
 });

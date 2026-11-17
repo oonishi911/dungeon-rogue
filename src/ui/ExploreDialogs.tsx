@@ -22,7 +22,7 @@ export function RetireDialog({ onCancel, onRetire }: { onCancel: () => void; onR
     <div className="explore__ending explore__leave" role="alertdialog" aria-labelledby="explore-retire">
       <p id="explore-retire">リタイアしますか？</p>
       <p className="explore__leave-note">
-        探索をやめて、ダンジョンを出ます。踏破にはならず、手に入れた金貨は、力尽きたときと同じく半分だけ持ち帰ります。
+        探索をやめて、ダンジョンを出ます。踏破にはならず、拾った忘れ物は、力尽きたときと同じく半分だけ持ち帰ります。
       </p>
       <button type="button" className="primary" autoFocus onClick={onCancel}>
         探索に戻る

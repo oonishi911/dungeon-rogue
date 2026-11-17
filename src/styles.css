@@ -3278,3 +3278,89 @@ button {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* ===== 店と情報屋の背景：あの部屋（RoomBackdrop.tsx） ===== */
+.shop,
+.talk {
+  position: relative;
+  z-index: 1;
+}
+
+.roomback {
+  --gap: calc(1rem + var(--stage, 0) * 0.55rem); /* カーテンのすきまの幅 */
+  --glow: calc(0.06 + var(--stage, 0) * 0.025); /* 差しこむ光の強さ */
+  position: fixed;
+  inset: 0;
+  z-index: -1; /* 画面（.shop・.talk は重なりの単位）の中の、いちばん奥 */
+  overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(180deg, #17120f 0%, #0e0b0a 100%);
+}
+
+.roomback > i {
+  position: absolute;
+  display: block;
+}
+
+/* 窓の外：進むと、すきまの奥が、少しだけ明るくなる */
+.roomback__daylight {
+  inset: 0 calc(50% - var(--gap) / 2 - 1rem);
+  background: linear-gradient(180deg, rgba(235, 224, 190, 0) 0%, rgba(235, 224, 190, 0.22) 60%, rgba(235, 224, 190, 0) 100%);
+  opacity: 0;
+}
+
+.roomback[data-stage='5'] .roomback__daylight,
+.roomback[data-stage='6'] .roomback__daylight,
+.roomback[data-stage='7'] .roomback__daylight,
+.roomback[data-stage='8'] .roomback__daylight {
+  opacity: 1;
+}
+
+/* カーテン：左右から閉じていて、真ん中にすきまがある */
+.roomback__curtain {
+  top: 0;
+  bottom: 22%;
+  width: calc(50% - var(--gap) / 2);
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.28) 0 0.35rem, rgba(255, 255, 255, 0.025) 0.35rem 0.9rem),
+    linear-gradient(180deg, #2a2025 0%, #1d1519 100%);
+}
+
+.roomback__curtain--l {
+  left: 0;
+}
+
+.roomback__curtain--r {
+  right: 0;
+}
+
+/* すきまから、床へ細く差しこむ光 */
+.roomback__light {
+  left: calc(50% - var(--gap) / 2);
+  width: var(--gap);
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(255, 236, 190, calc(var(--glow) + 0.1)) 0%, rgba(255, 236, 190, var(--glow)) 55%, rgba(255, 236, 190, 0) 100%);
+  clip-path: polygon(0 0, 100% 0, 190% 100%, -90% 100%);
+}
+
+/* 机 */
+.roomback__desk {
+  left: 12%;
+  right: 12%;
+  bottom: 14%;
+  height: 0.5rem;
+  background: #261c17;
+  box-shadow: 0 0.5rem 0 -0.1rem #1b130f;
+}
+
+/* 机の上のコップ：水が入っている */
+.roomback__cup {
+  left: calc(50% + 4rem);
+  bottom: calc(14% + 0.5rem);
+  width: 1.1rem;
+  height: 1.4rem;
+  border-radius: 0.1rem 0.1rem 0.35rem 0.35rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0 25%, rgba(150, 190, 215, 0.35) 25% 100%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}

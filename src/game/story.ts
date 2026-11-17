@@ -149,3 +149,20 @@ export function recall(save: SaveData, boss: string): Recalled {
   const fragment = FRAGMENTS[Math.min(save.fragments, FRAGMENTS.length - 1)]!;
   return { save: { ...save, fragments: save.fragments + 1 }, scene: { kind: 'fragment', room: roomScene(MEMORY_COUNT + save.fragments), fragment } };
 }
+
+// ===== 店と情報屋（忘れ物・口調・部屋の背景） =====
+
+/**
+ * お金の呼び名：ダンジョンは忘れた記憶の迷路なので、拾ってくるものは「忘れ物」。
+ * 数や計算は金貨のときと同じ（内部の名前は gold のまま）。画面では ◇ を付けて数える
+ */
+export const LOST = { name: '忘れ物', shop: '忘れ物屋' } as const;
+export const lost = (n: number): string => `◇${n}`;
+
+/** 情報屋の口調：思い出した記憶の数で、ぶっきらぼう（0）→ 静か（1）→ やさしい（2）と変わる */
+export type Tone = 0 | 1 | 2;
+export const toneOf = (memories: number): Tone => (memories >= 4 ? 2 : memories >= 2 ? 1 : 0);
+
+/** 部屋の背景の進み具合（0〜8）：思い出した記憶の数 ＋ 5つそろったあとのかけらの数（3つまで） */
+export const ROOM_STAGE_MAX = MEMORY_COUNT + 3;
+export const roomStage = (save: Pick<SaveData, 'memories' | 'fragments'>): number => Math.min(ROOM_STAGE_MAX, save.memories.length + Math.min(3, save.fragments));
