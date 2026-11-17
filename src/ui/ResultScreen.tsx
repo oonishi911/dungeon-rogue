@@ -1,7 +1,7 @@
 import { TRAITS } from '../game/data';
 import { hasDungeon, dungeonOf } from '../game/dungeons';
 import type { ExploreResult } from '../game/exploreTypes';
-import { rewindLines } from '../game/story';
+import { LOST, lost, rewindLines } from '../game/story';
 import type { Departure } from '../game/types';
 import { ItemList } from './ItemIcon';
 
@@ -51,15 +51,15 @@ export function ResultScreen({ run, outcome, expedition, gold, onNextRun }: Resu
             <dd>{expedition.defeated}体</dd>
           </div>
           <div>
-            <dt>持ち帰った金貨</dt>
+            <dt>持ち帰った{LOST.name}</dt>
             <dd>
-              {expedition.goldBrought}G
-              {expedition.goldBrought < expedition.gold && `（手に入れた${expedition.gold}Gのうち）`}
+              {lost(expedition.goldBrought)}
+              {expedition.goldBrought < expedition.gold && `（拾った${lost(expedition.gold)}のうち）`}
             </dd>
           </div>
           <div>
-            <dt>貯めた金貨</dt>
-            <dd>{gold}G（次の店で使える。使わなかった道具は倉庫に戻った）</dd>
+            <dt>貯めた{LOST.name}</dt>
+            <dd>{lost(gold)}（次の{LOST.shop}で使える。使わなかった道具は倉庫に戻った）</dd>
           </div>
         </dl>
       </section>

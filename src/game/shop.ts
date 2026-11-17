@@ -71,7 +71,7 @@ export function buy(save: SaveData, id: ItemId, atEntry: readonly ItemId[] = sav
   const shelf = shelfOf(id);
   if (!onShelf(atEntry, id)) return err('まだ店に並んでいない');
   if (shelf !== 'supply' && save.owned.includes(id)) return err('もう持っている');
-  if (item.price > save.gold) return err('金貨が足りない');
+  if (item.price > save.gold) return err('忘れ物が足りない');
   const gold = save.gold - item.price;
   const kit = { ...save.kit };
   if (shelf === 'supply') {

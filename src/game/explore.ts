@@ -48,6 +48,7 @@ import { generateBossFloor, generateFloor, tileAt, type FloorMap, type Pos } fro
 import { floorParams } from './floorParams';
 import { nextInt, nextRandom, shuffle } from './rng';
 import type { EnemyId, ItemId, Result, SpellId, TraitId } from './types';
+import { lost } from './story';
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value });
 const err = <T>(error: string): Result<T> => ({ ok: false, error });
@@ -337,7 +338,7 @@ function openChest(state: ExploreState): ExploreState {
   let item = chest.item;
   if (chest.gold > 0) {
     gold += chest.gold;
-    log.push(`宝箱から金貨${chest.gold}Gを手に入れた`);
+    log.push(`宝箱から忘れ物を拾った（${lost(chest.gold)}）`);
   }
   if (item) {
     if (stats.items.length < state.maxItems) {
@@ -559,7 +560,7 @@ function hurtEnemy(state: ExploreState, uid: number, dmg: number, slip: boolean 
     const defeated = { ...state, enemies: state.enemies.filter((e) => e.uid !== uid), defeated: state.defeated + (target.summoned ? 0 : 1) };
     if (def.boss) {
       const reward = TREASURE_CONFIG.bossGold;
-      log.push(`報酬として金貨${reward}Gを手に入れた`, 'ダンジョンを踏破した');
+      log.push(`報酬として忘れ物を拾った（${lost(reward)}）`, 'ダンジョンを踏破した');
       return { ...defeated, gold: state.gold + reward, outcome: 'cleared', log };
     }
     return defeatReward({ ...defeated, log }, target);
@@ -611,7 +612,7 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
   let chests = state.chests;
 
   const gold = Math.round(reward.gold * rate);
-  if (gold > 0) log.push(`金貨${gold}Gを手に入れた`);
+  if (gold > 0) log.push(`忘れ物を拾った（${lost(gold)}）`);
 
   // 道具：強敵は必ず宝箱で、通常の敵は確率で落とす
   let item: ItemId | null = null;
@@ -689,7 +690,7 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
     const defeated = { ...state, stats, enemies: state.enemies.filter((e) => e.uid !== target.uid), defeated: state.defeated + (target.summoned ? 0 : 1) };
     if (def.boss) {
       const reward = TREASURE_CONFIG.bossGold;
-      log.push(`報酬として金貨${reward}Gを手に入れた`, 'ダンジョンを踏破した');
+      log.push(`報酬として忘れ物を拾った（${lost(reward)}）`, 'ダンジョンを踏破した');
       return { ...defeated, gold: state.gold + reward, outcome: 'cleared', log };
     }
     return defeatReward({ ...defeated, log }, target);

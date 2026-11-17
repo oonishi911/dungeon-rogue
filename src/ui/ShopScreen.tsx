@@ -5,6 +5,8 @@
 // 売り場は「武器・防具・道具・呪文書」のタブで切り替える。下の「持ち物」の欄は、たたんでおける（スマホで品物を多く見るため）。
 
 import { useMemo, useState } from 'react';
+import { LOST, lost } from '../game/story';
+import { RoomBackdrop } from './RoomBackdrop';
 import { ITEMS, LOADOUT_CONFIG } from '../game/data';
 import type { Intel } from '../game/informant';
 import type { SaveData } from '../game/save';
@@ -39,16 +41,17 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
 
   return (
     <main className="screen screen--narrow screen--fit shop">
+      <RoomBackdrop save={save} />
       <header className="top">
         <div>
           <p className="top__run">
-            {run}回目の挑戦 ・ {dungeonName}
+            {run}回目の挑戦 ・ {dungeonName} ・ 出発の準備
           </p>
-          <h1 className="top__title">出発の準備</h1>
+          <h1 className="top__title">{LOST.shop}</h1>
         </div>
         <p className="shop__gold" aria-live="polite">
-          <span className="shop__gold-label">所持金</span>
-          {save.gold}G
+          <span className="shop__gold-label">手持ちの{LOST.name}</span>
+          {lost(save.gold)}
         </p>
       </header>
 
@@ -154,7 +157,7 @@ function Deal({ id, shelf, save, atEntry, apply }: { id: ItemId; shelf: Shelf; s
   const short = price > save.gold;
   const buyButton = (
     <>
-      <span className="shop__price">{price}G</span>
+      <span className="shop__price">{lost(price)}</span>
       <button type="button" className={short ? 'shop__buy shop__buy--off' : 'primary shop__buy'} disabled={short} onClick={() => apply(buy(save, id, atEntry))}>
         {short ? '足りない' : '買う'}
       </button>

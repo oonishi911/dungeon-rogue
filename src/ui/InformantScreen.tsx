@@ -3,7 +3,10 @@
 
 import { useState, type ReactNode } from 'react';
 import { alreadyAsked, ask, canAskVaguely, INFORMANT_CONFIG, priceOf, questionsLeft, TOPICS, type InformantState, type Intel } from '../game/informant';
+import { VOICES } from '../game/informantVoice';
 import type { SaveData } from '../game/save';
+import { FRAGMENTS, LOST, MEMORY_COUNT, lost } from '../game/story';
+import { RoomBackdrop } from './RoomBackdrop';
 
 interface InformantScreenProps {
   run: number;
@@ -11,7 +14,7 @@ interface InformantScreenProps {
   state: InformantState;
   save: SaveData;
   onChange: (state: InformantState, save: SaveData) => void; // 聞いたたびに呼ぶ（払った金貨はすぐ保存する）
-  onLeave: () => void; // 店へ行く
+  onLeave: () => void; // 忘れ物屋へ行く
 }
 
 export function InformantScreen({ run, dungeonName, state, save, onChange, onLeave }: InformantScreenProps) {
@@ -28,6 +31,7 @@ export function InformantScreen({ run, dungeonName, state, save, onChange, onLea
 
   return (
     <main className="screen screen--narrow screen--fit talk">
+      <RoomBackdrop save={save} />
       <header className="top">
         <div>
           <p className="top__run">
@@ -36,20 +40,24 @@ export function InformantScreen({ run, dungeonName, state, save, onChange, onLea
           <h1 className="top__title">情報屋</h1>
         </div>
         <p className="shop__gold" aria-live="polite">
-          <span className="shop__gold-label">所持金</span>
-          {save.gold}G
+          <span className="shop__gold-label">手持ちの{LOST.name}</span>
+          {lost(save.gold)}
         </p>
       </header>
 
       {/* 会話：情報屋のあいさつと、聞いたことの答え。スマホでは、この枠の中だけを動かす */}
       <ol className="talk__log screen__scroll" aria-label="会話" aria-live="polite">
         <Line who="informant">
-          {dungeonName}に潜るのか。話せるのは、ダンジョンの属性、多い魔物、奥のボスのことだ。ただし、今日話すのは{INFORMANT_CONFIG.questions}つまで。1つ目だけなら、それとなく、ただで話してやってもいい。はっきり知りたけりゃ、金を払いな。
+          {VOICES[state.tone ?? 0].greeting(dungeonName, INFORMANT_CONFIG.questions)}
         </Line>
         {state.heard.map((h, i) => (
           <Exchange key={i} intel={h} />
         ))}
-        {left <= 0 && <Line who="informant">今日はここまでだ。うまくやれよ。</Line>}
+        {left <= 0 && <Line who="informant">{VOICES[state.tone ?? 0].farewell}</Line>}
+        {/* 5つの記憶がそろったあとは、帰り際に、あの子のかけらをこぼす */}
+        {left <= 0 && save.memories.length >= MEMORY_COUNT && save.fragments > 0 && (
+          <Line who="informant">{FRAGMENTS[Math.min(save.fragments, FRAGMENTS.length) - 1]}</Line>
+        )}
       </ol>
 
       <p className="error talk__error" role="alert">
@@ -76,7 +84,7 @@ export function InformantScreen({ run, dungeonName, state, save, onChange, onLea
                       </button>
                     )}
                     <button type="button" className={done || short ? 'talk__btn talk__btn--off' : 'primary talk__btn'} disabled={done || short} onClick={() => go(t.id, true)}>
-                      {done ? '聞いた' : short ? `はっきり ${price}G（足りない）` : `はっきり ${price}G`}
+                      {done ? '聞いた' : short ? `はっきり ${lost(price)}（足りない）` : `はっきり ${lost(price)}`}
                     </button>
                   </span>
                 </li>
@@ -84,10 +92,10 @@ export function InformantScreen({ run, dungeonName, state, save, onChange, onLea
             })}
           </ul>
         ) : (
-          <p className="muted">今日はもう聞けない。聞いたことは、店の画面にメモとして残る。</p>
+          <p className="muted">今日はもう聞けない。聞いたことは、{LOST.shop}の画面にメモとして残る。</p>
         )}
         <button type="button" className="primary shop__go" onClick={onLeave}>
-          店へ行く
+          {LOST.shop}へ行く
         </button>
       </section>
     </main>
@@ -99,7 +107,7 @@ function Exchange({ intel }: { intel: Intel }) {
   return (
     <>
       <Line who="hero">
-        {intel.vague ? '（それとなく）' : '（金貨を渡して）'}
+        {intel.vague ? '（それとなく）' : `（${LOST.name}を渡して）`}
         {topic.ask}
       </Line>
       <Line who="informant">{intel.text}</Line>

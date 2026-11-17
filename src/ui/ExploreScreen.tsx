@@ -21,6 +21,7 @@ import type { ItemId, SpellId } from '../game/types';
 import { useBackGuard } from './backGuard';
 import { drawMinimap, MINI_CELL, motionOf, readColors, type Frame, type Motion } from './exploreRender';
 import { DungeonView3D, webglAvailable } from './explore3d';
+import { LOST, lost } from '../game/story';
 import { INTRO_FX } from './explore3dConfig';
 import { devBestHref } from './exploreDev';
 import { EndingPanel, LeaveDialog, RetireDialog } from './ExploreDialogs';
@@ -485,8 +486,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
                 <a href={devBestHref(!devBest, state.trait)}>{devBest ? 'ふつうの装備に戻す' : 'いちばん強い装備で試す'}</a>）
               </>
             )}{' '}
-            ・ {dungeon.name} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体 ・ 金貨{' '}
-            {state.gold}G
+            ・ {dungeon.name} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体 ・ {LOST.name}{' '}
+            {lost(state.gold)}
           </p>
           <h1 className="top__title">{floorName}</h1>
         </div>

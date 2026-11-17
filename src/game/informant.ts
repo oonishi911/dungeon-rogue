@@ -9,7 +9,9 @@
 import { BODY_NAMES, ENEMIES, ITEM_MASTER, TRAITS, TRAIT_IDS } from './data';
 import { dungeonOf } from './dungeons';
 import { nextInt } from './rng';
+import { VOICES, type Voice } from './informantVoice';
 import type { SaveData } from './save';
+import type { Tone } from './story';
 import type { Body, Element, EnemyId, Result, TraitId } from './types';
 
 export const INFORMANT_CONFIG = {
@@ -45,13 +47,14 @@ export interface InformantState {
   seed: number;
   trait: TraitId; // 本当の属性（画面には出さない）
   heard: Intel[];
+  tone: Tone; // 情報屋の口調（思い出した記憶の数で変わる。story.ts の toneOf）
 }
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value });
 const err = <T>(error: string): Result<T> => ({ ok: false, error });
 
-export function startInformant(dungeon: string, seed: number, trait: TraitId): InformantState {
-  return { dungeon, seed, trait, heard: [] };
+export function startInformant(dungeon: string, seed: number, trait: TraitId, tone: Tone = 0): InformantState {
+  return { dungeon, seed, trait, heard: [], tone };
 }
 
 /** はっきり聞くときの情報料 */
@@ -72,7 +75,7 @@ export function ask(s: InformantState, save: SaveData, topic: Topic, clear: bool
   if (alreadyAsked(s, topic)) return err('それはもう話した');
   if (!clear && !canAskVaguely(s)) return err('ただで話すのは1つだけだ');
   const price = clear ? priceOf(topic) : 0;
-  if (price > save.gold) return err('金貨が足りない');
+  if (price > save.gold) return err('忘れ物が足りない');
   const intel = answer(s, topic, !clear);
   return ok({ state: { ...s, heard: [...s.heard, intel] }, save: { ...save, gold: save.gold - price } });
 }
@@ -138,23 +141,24 @@ export function bossOf(dungeon: string, trait: TraitId): EnemyId {
 const bodyText = (b: Body) => (b === 'spirit' ? BODY_NAMES[b] : b === 'normal' ? `${BODY_NAMES[b]}の体` : `${BODY_NAMES[b]}体`);
 const elementText = (e: Element) => TRAITS[e].name;
 
-/** 弱点の偏りの、はっきりした言い方と、うわさでの言い方 */
-const WEAK_TEXT: Record<Weakness, { clear: string; rumor: string; memo: string }> = {
-  magic: { clear: '魔法がよく効く奴が多いな。殴るより、呪文のほうが通る。', rumor: '魔法に弱い奴が多い', memo: '魔法に弱い魔物が多い' },
-  physical: { clear: '殴ればすぐ倒れる奴が多いな。呪文はあまり通らねえ。', rumor: '武器で殴れば倒れる奴が多い', memo: '物理に弱い魔物が多い' },
-  none: { clear: '魔法が効く奴も、殴って倒せる奴も、特に偏っちゃいねえ。', rumor: '魔法にも物理にも、偏りはない', memo: '魔法・物理の偏りはない' },
+/** 弱点の偏りの、うわさでの言い方と、店のメモ（はっきりした言い方は、口調ごとに informantVoice.ts にある） */
+const WEAK_TEXT: Record<Weakness, { rumor: string; memo: string }> = {
+  magic: { rumor: '魔法に弱い奴が多い', memo: '魔法に弱い魔物が多い' },
+  physical: { rumor: '武器で殴れば倒れる奴が多い', memo: '物理に弱い魔物が多い' },
+  none: { rumor: '魔法にも物理にも、偏りはない', memo: '魔法・物理の偏りはない' },
 };
 
 function answer(s: InformantState, topic: Topic, vague: boolean): Intel {
+  const v: Voice = VOICES[s.tone ?? 0];
   switch (topic) {
     case 'trait': {
       const name = TRAITS[s.trait].name;
-      if (!vague) return { topic, vague, text: `あそこは${name}のダンジョンだ。間違いない。`, memo: `属性：${name}`, element: s.trait };
+      if (!vague) return { topic, vague, text: v.trait.clear(name), memo: `属性：${name}`, element: s.trait };
       const [a, b] = mix(s.seed, 0x11, s.trait, TRAIT_IDS);
       return {
         topic,
         vague,
-        text: `入った奴の話じゃ「${TRAIT_RUMOR[a]}」とも「${TRAIT_RUMOR[b]}」とも聞く。どっちが本当かは知らねえ。`,
+        text: v.trait.vague(TRAIT_RUMOR[a], TRAIT_RUMOR[b]),
         memo: `属性：${TRAITS[a].name}か${TRAITS[b].name}（うわさ）`,
       };
     }
@@ -162,32 +166,32 @@ function answer(s: InformantState, topic: Topic, vague: boolean): Intel {
       const body = commonBody(s.dungeon, s.trait);
       const weak = commonWeakness(s.dungeon, s.trait);
       if (!vague) {
-        return { topic, vague, text: `多いのは${bodyText(body)}の魔物だ。それと、${WEAK_TEXT[weak].clear}`, memo: `多い魔物：${bodyText(body)}。${WEAK_TEXT[weak].memo}`, body, weakness: weak };
+        return { topic, vague, text: v.body.clear(bodyText(body), v.weak[weak]), memo: `多い魔物：${bodyText(body)}。${WEAK_TEXT[weak].memo}`, body, weakness: weak };
       }
       const [a, b] = mix(s.seed, 0x22, body, BODY_IDS);
       const [wa, wb] = mix(s.seed, 0x44, weak, WEAKNESSES);
       return {
         topic,
         vague,
-        text: `${bodyText(a)}の魔物か、${bodyText(b)}の魔物が多いらしいぜ。それと、「${WEAK_TEXT[wa].rumor}」とも「${WEAK_TEXT[wb].rumor}」とも聞く。`,
+        text: v.body.vague(bodyText(a), bodyText(b), WEAK_TEXT[wa].rumor, WEAK_TEXT[wb].rumor),
         memo: `多い魔物：${bodyText(a)}か${bodyText(b)}。${WEAK_TEXT[wa].memo}か、${WEAK_TEXT[wb].memo}（うわさ）`,
       };
     }
     case 'boss': {
       const boss = ENEMIES[bossOf(s.dungeon, s.trait)];
-      if (!boss) return { topic, vague, text: 'ボスのことは、誰も知らねえ。', memo: 'ボス：不明' };
+      if (!boss) return { topic, vague, text: v.boss.unknown, memo: 'ボス：不明' };
       if (!vague) {
         return {
           topic,
           vague,
-          text: `奥にいるのは${boss.name}だ。${elementText(boss.element)}の力を持つ、${bodyText(boss.body)}の化け物さ。`,
+          text: v.boss.clear(boss.name, elementText(boss.element), bodyText(boss.body)),
           memo: `ボス：${boss.name}（${elementText(boss.element)}・${bodyText(boss.body)}）`,
           element: boss.element,
           body: boss.body,
         };
       }
       const [a, b] = mix(s.seed, 0x33, boss.element, TRAIT_IDS);
-      return { topic, vague, text: `ボスは${elementText(a)}か${elementText(b)}の力を使うと聞いた。姿までは知らねえ。`, memo: `ボス：${elementText(a)}か${elementText(b)}の力（うわさ）` };
+      return { topic, vague, text: v.boss.vague(elementText(a), elementText(b)), memo: `ボス：${elementText(a)}か${elementText(b)}の力（うわさ）` };
     }
   }
 }
