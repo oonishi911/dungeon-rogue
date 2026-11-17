@@ -3080,7 +3080,18 @@ button {
   font-size: 1.55rem;
   font-weight: 900;
   line-height: 1.5;
-  filter: contrast(1.15);
+  /* 文字をそのまま見せず、墨で書いた絵にする：輪郭がゆがみ、かすれる（MemoryScreen.tsx の InkFilter） */
+  filter: url(#scrawl-ink);
+}
+
+.scrawl__defs {
+  position: absolute;
+}
+
+/* 一文字ごとに、同じ色の太い縁を付けて、筆でなぞったような太さにする */
+.scrawl__ch {
+  -webkit-text-stroke: 0.05em currentColor;
+  paint-order: stroke fill;
 }
 
 .scrawl__line {

@@ -3,7 +3,7 @@
 // 最後の記憶のあとは、最後の場面。ひとつずつ、タップで進む。
 
 import { useState, type CSSProperties } from 'react';
-import { scrawl, type Glyph, type ScrawlItem } from './scrawl';
+import { INK_FILTER, SCRAWL_CONFIG, scrawl, type Glyph, type ScrawlItem } from './scrawl';
 import type { Scene } from '../game/story';
 
 interface MemoryScreenProps {
@@ -74,6 +74,25 @@ function ScrawlItemView({ item, index }: { item: ScrawlItem; index: number }) {
   );
 }
 
+/** 文字を「絵」に変える墨のフィルタ：輪郭をゆがめて筆の跡のようにし、粒状にかすれさせる（scrawl.css の .scrawl が使う） */
+function InkFilter() {
+  const ink = SCRAWL_CONFIG.ink;
+  return (
+    <svg className="scrawl__defs" width="0" height="0" aria-hidden="true" focusable="false">
+      <defs>
+        <filter id={INK_FILTER} x="-6%" y="-10%" width="112%" height="120%" colorInterpolationFilters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency={ink.warpFreq} numOctaves="2" seed="4" result="warp" />
+          <feDisplacementMap in="SourceGraphic" in2="warp" scale={ink.warpScale} xChannelSelector="R" yChannelSelector="G" result="wobbly" />
+          <feTurbulence type="fractalNoise" baseFrequency={`${ink.grainX} ${ink.grainY}`} numOctaves="2" seed="11" result="grain" />
+          {/* 粒のノイズを、白黒に近づけて、欠ける場所のマスクにする（赤の値が cut より小さいところが欠ける） */}
+          <feColorMatrix in="grain" type="matrix" values={`0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  9 0 0 0 ${-9 * ink.grainCut}`} result="mask" />
+          <feComposite in="wobbly" in2="mask" operator="in" />
+        </filter>
+      </defs>
+    </svg>
+  );
+}
+
 export function MemoryScreen({ scene, onDone }: MemoryScreenProps) {
   const [pages] = useState(() => pagesOf(scene));
   const [at, setAt] = useState(0);
@@ -102,6 +121,7 @@ export function MemoryScreen({ scene, onDone }: MemoryScreenProps) {
           <>
             {/* 文字は荒れているので、読み上げには、きれいな文章を渡す */}
             <p className="sr-only">{page.text}</p>
+            <InkFilter />
             <div className="scrawl">
               {page.items.map((item, i) => (
                 <ScrawlItemView key={i} item={item} index={i} />

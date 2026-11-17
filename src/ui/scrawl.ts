@@ -14,7 +14,18 @@ export const SCRAWL_CONFIG = {
   shift: 6, // 1行の横のずれ（%。±）
   black: [0.35, 0.8] as const, // 塗りつぶしの帯の長さ（幅に対する割合）
   strikeZigzag: 7, // 取り消し線の折り返しの数
+  // 文字を「絵」に変える墨の加工（SVG のフィルタ。字の輪郭を揺らし、かすれをつくる）
+  ink: {
+    warpFreq: 0.04, // 輪郭を揺らす波の細かさ（大きいほど細かく揺れる）
+    warpScale: 5, // 輪郭の揺れの大きさ（px）
+    grainX: 0.06, // かすれの筋の、横方向の細かさ（小さいほど、横に長い筋になる）
+    grainY: 0.45, // かすれの筋の、縦方向の細かさ
+    grainCut: 0.3, // かすれの量（大きいほど、欠けが増える）
+  },
 } as const;
+
+/** 墨の加工をつけた SVG フィルタの ID */
+export const INK_FILTER = 'scrawl-ink';
 
 export interface Glyph {
   ch: string;
