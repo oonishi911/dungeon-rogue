@@ -1,5 +1,5 @@
 // 主人公の立体の模型。ドット絵（sprites/data.ts の hero）と同じ色・同じ形の要素で組み立てる：
-// フード付きのマント（装備した防具の色）、フードの前の開きから見える焦げ茶色の長い髪、
+// フード付きのマント（装備した防具の色）、フードの前の開きから見える黒い長い髪、
 // マントの前の開きから見える服とベルト、開きから前へ出した腕（服の袖と手）、茶色の靴。
 // 痩せ型の、髪の長い少年。顔は、前髪が覆っていて、表情が見えない（ストーリー。docs/story.md）。
 // フォンシェーディング（MeshPhongMaterial）で、陰影をなめらかにし、うっすらツヤを出す（武器の金属は強く光る。weapon3d.ts）。
@@ -83,6 +83,7 @@ const ARMOR_METAL: Record<CloakId, string> = {
   dark_robe: '#6a4a8a',
 };
 const GOLD = '#d9b14a';
+const HAIR = '#15110f'; // 髪の色：黒（真っ黒だと光の当たりが見えなくなるので、ほんの少しだけ茶を足す）
 // 痩せ型にするための寸法（マス）。胴・マント・腕・脚を、細くする
 const SLIM = { tunicTop: 0.1, tunicBottom: 0.125, cloakTop: 0.12, cloakBottom: 0.17, shoulder: 0.095, hand: 0.115, hip: 0.055, arm: 0.03, leg: 0.034, boot: 0.08 };
 
@@ -158,7 +159,7 @@ export class Hero3D {
       boots: phong(PALETTE.B!),
       bootCuff: phong(new THREE.Color(PALETTE.B!).multiplyScalar(1.35).getStyle()),
       gold: this.goldMat,
-      hair: phong(PALETTE.h!, THREE.DoubleSide), // 焦げ茶色の髪
+      hair: phong(HAIR, THREE.DoubleSide), // 黒い髪
       shadow: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
       hit: new THREE.MeshBasicMaterial({ visible: false }),
     };
