@@ -29,7 +29,7 @@ interface ExploreSideProps {
 
 export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibleEnemies, recentLog, infoOpen, onCast, onSkill, onUseItem, onCloseInfo, onRetire }: ExploreSideProps) {
   const { stats } = state;
-  const skill = skillOf(stats.weapon); // 持っている武器の固有技（素手なら無い）
+  const skill = skillOf(stats.weapon, stats.echoes); // 持っている武器の固有技（素手なら無い）
   return (
     <aside className="explore__side">
       <div className="explore__status">

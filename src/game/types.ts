@@ -45,6 +45,9 @@ export type ItemId =
   | 'book_heal'
   | 'book_regen';
 
+// ===== 残響（刻印スロットにはめるもの。echoMaster.ts、docs/echo-spec.md） =====
+export type EchoId = 'fire' | 'ice' | 'light' | 'dark' | 'soft' | 'hard' | 'spirit' | 'plain' | 'warmth' | 'pulse';
+
 export type ItemSlot = 'weapon' | 'armor' | 'consumable' | 'spellbook';
 export type WeaponType = 'sword' | 'hammer' | 'staff';
 
@@ -96,6 +99,7 @@ export interface Departure {
   dungeon: string; // 遊ぶダンジョンの ID（src/game/dungeons/ の設定ファイル）
   trait: TraitId;
   loadout: ItemId[];
+  echoes?: EchoId[]; // 装備している刻印武器にはめた残響（ないときは、残響なし）
 }
 
 // ===== 敵 =====
@@ -142,6 +146,7 @@ export interface PlayerStats {
   armor: ItemId | null;
   items: ItemId[]; // 持っている道具（消耗品）
   enchant: Enchant | null;
+  echoes?: EchoId[]; // 刻印武器にはめた残響（ないときは、なし）
 }
 
 // 例外ではなく値でエラーを返す

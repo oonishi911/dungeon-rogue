@@ -3,9 +3,9 @@
 
 import { DEFAULT_DUNGEON_ID } from './dungeons';
 import { traitForSeed } from './explore';
-import type { Departure, ItemId } from './types';
+import type { Departure, EchoId, ItemId } from './types';
 
-/** 選んだダンジョン（dungeon は ID）に、loadout を持って出発する。特性は、階層の形と同じシードから決める */
-export function depart(seed: number, dungeon: string = DEFAULT_DUNGEON_ID, loadout: readonly ItemId[] = []): Departure {
-  return { dungeon, trait: traitForSeed(seed), loadout: [...loadout] };
+/** 選んだダンジョン（dungeon は ID）に、loadout を持って出発する（echoes：装備した刻印武器にはめた残響）。特性は、階層の形と同じシードから決める */
+export function depart(seed: number, dungeon: string = DEFAULT_DUNGEON_ID, loadout: readonly ItemId[] = [], echoes?: readonly EchoId[]): Departure {
+  return { dungeon, trait: traitForSeed(seed), loadout: [...loadout], ...(echoes?.length ? { echoes: [...echoes] } : {}) };
 }

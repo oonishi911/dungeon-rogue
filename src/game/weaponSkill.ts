@@ -1,6 +1,7 @@
 import { ITEMS } from './data';
+import { gaugeWithPulse } from './echo';
 import { gearOf } from './itemMaster';
-import type { ItemId, WeaponType } from './types';
+import type { EchoId, ItemId, WeaponType } from './types';
 
 /** 武器の固有技（技ゲージ）の数値（仮。遊んでみて調整する） */
 export const SKILL_CONFIG = {
@@ -31,9 +32,9 @@ export function gaugeMax(tier: number): number {
   return (SKILL_CONFIG.gauge.find((g) => tier <= g.upTo) ?? SKILL_CONFIG.gauge[SKILL_CONFIG.gauge.length - 1]!).max;
 }
 
-/** 持っている武器の固有技。武器がなければ null（素手には技がない） */
-export function skillOf(weapon: ItemId | null): { weapon: WeaponType; name: string; max: number } | null {
+/** 持っている武器の固有技。武器がなければ null（素手には技がない）。echoes：刻印武器にはめた残響（鼓動の残響で、満タンまでの回数が減る） */
+export function skillOf(weapon: ItemId | null, echoes?: readonly EchoId[]): { weapon: WeaponType; name: string; max: number } | null {
   const effect = weapon ? ITEMS[weapon].effect : null;
   if (!weapon || effect?.kind !== 'weapon') return null;
-  return { weapon: effect.weapon, name: SKILL_NAMES[effect.weapon], max: gaugeMax(gearOf(weapon)?.tier ?? 1) };
+  return { weapon: effect.weapon, name: SKILL_NAMES[effect.weapon], max: gaugeWithPulse(gaugeMax(gearOf(weapon)?.tier ?? 1), echoes) };
 }

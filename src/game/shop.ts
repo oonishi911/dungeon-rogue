@@ -74,6 +74,7 @@ export function buy(save: SaveData, id: ItemId, atEntry: readonly ItemId[] = sav
   if (item.price > save.gold) return err('忘れ物が足りない');
   const gold = save.gold - item.price;
   const kit = { ...save.kit };
+  if (shelf === 'weapon') delete kit.weaponGear; // 買った武器を装備する（刻印武器は外れる）
   if (shelf === 'supply') {
     if (canTake(kit.take, id)) kit.take = [...kit.take, id];
     return ok({ ...save, gold, stock: [...save.stock, id], kit });
@@ -87,7 +88,9 @@ export function buy(save: SaveData, id: ItemId, atEntry: readonly ItemId[] = sav
 /** 武器・防具を装備する（null で外す）。持っているものだけ */
 export function equip(save: SaveData, slot: 'weapon' | 'armor', id: ItemId | null): Result<SaveData> {
   if (id !== null && (!save.owned.includes(id) || shelfOf(id) !== slot)) return err('持っていない');
-  return ok({ ...save, kit: { ...save.kit, [slot]: id } });
+  // ふつうの武器を選ぶ（外す）と、刻印武器は外れる
+  const { weaponGear: _gear, ...rest } = save.kit;
+  return ok({ ...save, kit: slot === 'weapon' ? { ...rest, weapon: id } : { ...save.kit, armor: id } });
 }
 
 /** 呪文書を持っていく・外す */

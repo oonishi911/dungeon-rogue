@@ -15,6 +15,7 @@ function testData(): Plugin {
   const swaps: { file: string; from: string; to: string }[] = [
     { file: '/src/game/data.ts', from: "'./enemies.json'", to: "'./testdata/enemies.json'" },
     { file: '/src/game/data.ts', from: "'./items.json'", to: "'./testdata/items.json'" },
+    { file: '/src/game/data.ts', from: "'./echoes.json'", to: "'./testdata/echoes.json'" },
     { file: '/src/game/dungeons.ts', from: "'./dungeons/*.json'", to: "'./testdata/dungeons/*.json'" },
   ];
   return {

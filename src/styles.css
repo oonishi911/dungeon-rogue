@@ -3364,3 +3364,73 @@ button {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0 25%, rgba(150, 190, 215, 0.35) 25% 100%);
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
+
+/* 忘れ物屋の「刻印」の売り場（刻印武器と、スロットにはめる残響） */
+.shop__engrave-title {
+  margin: 0.5rem 0 0.25rem;
+  font-size: var(--step-0);
+  color: var(--bone-dim);
+}
+
+.shop__engrave-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shop__engrave-empty {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.shop__about--static {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  text-align: left;
+}
+
+.shop__about--static .shop__desc {
+  white-space: normal;
+}
+
+.shop__slots-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.shop__slot {
+  min-height: 2rem;
+  padding: 0.125rem 0.625rem;
+  border: 1px dashed var(--pine-line);
+  border-radius: 999px;
+  background: transparent;
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+  cursor: pointer;
+}
+
+.shop__slot--filled {
+  border-style: solid;
+  background: var(--pine);
+  color: inherit;
+}
+
+.shop__slot--on {
+  outline: 2px solid var(--bone-dim);
+}
+
+.shop__pick-echo {
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 8px;
+}
+
+.shop__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}

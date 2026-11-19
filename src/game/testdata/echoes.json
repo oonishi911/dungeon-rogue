@@ -1,0 +1,66 @@
+{
+  "engraved": {
+    "drop": {
+      "normal": 0.3,
+      "elite": 3,
+      "boss": 10
+    },
+    "slots": {
+      "one": 90,
+      "two": 8,
+      "three": 2
+    },
+    "tierMin": 2,
+    "tierMax": 4
+  },
+  "echo": {
+    "drop": {
+      "normal": 2,
+      "elite": 10,
+      "boss": 50
+    },
+    "generalShare": 20
+  },
+  "effects": {
+    "fire": {
+      "name": "炎の残響",
+      "weapon": 0
+    },
+    "ice": {
+      "name": "氷の残響",
+      "weapon": 0
+    },
+    "light": {
+      "name": "光の残響",
+      "weapon": 0
+    },
+    "dark": {
+      "name": "闇の残響",
+      "weapon": 0
+    },
+    "soft": {
+      "name": "柔らかい残響",
+      "weapon": 25
+    },
+    "hard": {
+      "name": "硬い残響",
+      "weapon": 25
+    },
+    "spirit": {
+      "name": "霊体の残響",
+      "weapon": 25
+    },
+    "plain": {
+      "name": "ただの残響",
+      "weapon": 1
+    },
+    "warmth": {
+      "name": "ぬくもりの残響",
+      "weapon": 10
+    },
+    "pulse": {
+      "name": "鼓動の残響",
+      "weapon": 1
+    }
+  }
+}

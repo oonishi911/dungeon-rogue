@@ -13,6 +13,7 @@ import { packRun } from './game/runSave';
 import { newSave, type SaveData } from './game/save';
 import { bossOf, startInformant, type InformantState, type Intel } from './game/informant';
 import { recall, toneOf, type Scene } from './game/story';
+import { receiveLoot, kitEchoes } from './game/engrave';
 import { departWith, fitKit, kitLoadout, returnWith } from './game/shop';
 import type { Departure, ItemId } from './game/types';
 import { clearRun, loadRun, loadSave, writeRun, writeSave } from './storage';
@@ -40,7 +41,8 @@ const newSeed = () => Math.floor(Math.random() * 2 ** 31);
  * ダンジョンを踏破したときは、倒したボスの記憶も戻る（出す場面も一緒に返す）。同じ入力からは、いつも同じ結果になる
  */
 function saveAfter(save: SaveData, state: ExploreState, outcome: Departure): { save: SaveData; scene: Scene | null } {
-  const base = returnWith({ ...save, run: save.run + 1 }, toResult(state).goldBrought, state.stats.items);
+  // 拾った刻印武器と残響は、力尽きても、リタイアしても、倉庫に入る（失わない）
+  const base = receiveLoot(returnWith({ ...save, run: save.run + 1 }, toResult(state).goldBrought, state.stats.items), state.found);
   if (state.outcome !== 'cleared') return { save: base, scene: null };
   const got = recall(base, bossOf(outcome.dungeon, outcome.trait));
   return { save: got.save, scene: got.scene };
@@ -125,7 +127,7 @@ export function App() {
             const base = departWith(save);
             writeSave({ ...base, run: base.run + 1 });
             setSave(base);
-            setStage({ kind: 'dungeon', outcome: depart(stage.seed, stage.dungeon, kitLoadout(save)), seed: stage.seed });
+            setStage({ kind: 'dungeon', outcome: depart(stage.seed, stage.dungeon, kitLoadout(save), kitEchoes(save)), seed: stage.seed });
           }}
         />
       );
@@ -136,7 +138,7 @@ export function App() {
           key={`${save.run}-${seed}`}
           run={save.run}
           // 選んだダンジョンと、出発で決まった特性・持ち物で探索を始める。前に中断した探索があれば、その続きから
-          start={() => resume ?? startExplore(seed, { dungeon: outcome.dungeon, trait: outcome.trait, loadout: outcome.loadout })}
+          start={() => resume ?? startExplore(seed, { dungeon: outcome.dungeon, trait: outcome.trait, loadout: outcome.loadout, ...(outcome.echoes ? { echoes: outcome.echoes } : {}) })}
           // 1手ごとに途中の状態を保存する（戻る・再読み込み・ページが閉じられたときに、続きから遊べるように）。
           // 探索が終わったら、金貨と道具を戻した記録を保存して、途中の状態は消す（結果の画面へ進む前に閉じても、持ち帰った分が残るように）
           onProgress={(state) => {
