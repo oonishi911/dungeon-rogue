@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildPlayer, enemyHitDamage, playerHitDamage } from './combat';
 import { COMBAT_CONFIG, ITEMS } from './data';
 import { ARMORED_ENEMY } from './enemies.fixtures';
+import { elementGuards } from './itemMaster';
 import type { Element, EnemyDef, ItemId, PlayerStats } from './types';
 
 /** 属性だけを変えた、攻撃力11・防御0の敵（プレイヤーの防御1を引くと基礎ダメージ10） */
@@ -25,11 +26,21 @@ describe('buildPlayer', () => {
     expect(p.enchant).toBeNull();
   });
 
-  it('防具のカット率は、受けるダメージの倍率になる（カット率70%なら0.3倍）。説明にも「カット」と出る', () => {
-    const cloak = ITEMS.fire_cloak;
-    expect(cloak.effect.kind === 'armor' && cloak.effect.guard.rate).toBe(0.3);
-    expect(cloak.description).toContain('炎のダメージを70%カットする');
-    expect(ITEMS.light_robe.description).toContain('光の攻撃のダメージを70%カットする');
+  it('指輪の耐性は、受けるダメージの倍率になる（耐性30%なら0.7倍）。説明にも「カット」と出る', () => {
+    const ring = ITEMS.ring_fire_3;
+    expect(ring.effect.kind === 'ring' && ring.effect.cut).toBe(30);
+    expect(ring.effect.kind === 'ring' && ring.effect.guards[0]).toEqual({ kind: 'component', component: 'fire', rate: 0.7 });
+    expect(ring.description).toContain('炎のダメージを30%カットする');
+    expect(ring.description).toContain('氷のダメージが15%増える');
+    expect(ITEMS.ring_light_3.description).toContain('光の攻撃のダメージを30%カットする');
+    expect(ITEMS.ring_all_3.description).toContain('すべての属性のダメージを15%カットする');
+  });
+
+  it('指輪は指輪の枠、防具は防具の枠。何個でも付けられる（指の数は店で決まる）', () => {
+    const p = buildPlayer(['sword', 'plate', 'ring_fire_1', 'ring_light_2']);
+    expect(p.armor).toBe('plate');
+    expect(p.rings).toEqual(['ring_fire_1', 'ring_light_2']);
+    expect(buildPlayer(['sword', 'plate']).rings).toBeUndefined();
   });
 
   it('武器を持つと攻撃力が上がる', () => {
@@ -47,35 +58,77 @@ describe('enemyHitDamage（防具と属性）', () => {
     for (const e of ['fire', 'ice', 'neutral', 'light', 'dark'] as const) expect(hit([], e)).toBe(10);
   });
 
-  it('マントは対応する属性を大きく減らし、ほかの属性には効かない', () => {
-    expect(hit(['fire_cloak'], 'fire')).toBe(3);
-    expect(hit(['fire_cloak'], 'ice')).toBe(10);
-    expect(hit(['ice_cloak'], 'ice')).toBe(3);
+  it('防具は守りだけで、属性は関係ない', () => {
+    for (const e of ['fire', 'ice', 'neutral', 'light', 'dark'] as const) expect(hit(['plate'], e)).toBe(10);
+    expect(hit(['plate_5'], 'fire')).toBeLessThan(10);
+    expect(hit(['plate_5'], 'fire')).toBe(hit(['plate_5'], 'dark'));
   });
 
-  it('複合属性には、成分の半分だけ効く', () => {
-    // 光＝炎5＋無属性5。耐火のマントは炎の5だけを0.3倍
-    expect(hit(['fire_cloak'], 'light')).toBe(Math.ceil(5 * 0.3 + 5));
-    expect(hit(['ice_cloak'], 'light')).toBe(10);
-    expect(hit(['ice_cloak'], 'dark')).toBe(Math.ceil(5 * 0.3 + 5));
+  it('炎の指輪は炎を減らし、逆の氷は増やす（耐性の半分）。ほかの属性は変わらない', () => {
+    expect(hit(['ring_fire_3'], 'fire')).toBe(7);
+    expect(hit(['ring_fire_3'], 'ice')).toBe(12); // 10 × 1.15 = 11.5 → 切り上げ
+    expect(hit(['ring_fire_3'], 'neutral')).toBe(10);
+    expect(hit(['ring_ice_3'], 'ice')).toBe(7);
+    expect(hit(['ring_ice_3'], 'fire')).toBe(12);
   });
 
-  it('鎧は無属性に弱めに効き、光と闇にも半分効く（保険）', () => {
-    expect(hit(['plate'], 'neutral')).toBe(6);
-    expect(hit(['plate'], 'light')).toBe(Math.ceil(5 + 5 * 0.6));
-    expect(hit(['plate'], 'dark')).toBe(Math.ceil(5 + 5 * 0.6));
-    expect(hit(['plate'], 'fire')).toBe(10);
+  it('複合属性には、成分の半分だけ効く（耐性も弱点も）', () => {
+    // 光＝炎5＋無属性5。炎の指輪は炎の5だけを0.7倍
+    expect(hit(['ring_fire_3'], 'light')).toBe(Math.ceil(5 * 0.7 + 5));
+    // 闇＝氷5＋無属性5。炎の指輪の弱点は、氷の5だけに掛かる（1.15倍）
+    expect(hit(['ring_fire_3'], 'dark')).toBe(Math.ceil(5 * 1.15 + 5));
+    expect(hit(['ring_ice_3'], 'dark')).toBe(Math.ceil(5 * 0.7 + 5));
+    expect(hit(['ring_ice_3'], 'light')).toBe(Math.ceil(5 * 1.15 + 5));
   });
 
-  it('専用防具はその属性を丸ごと減らし、ほかには効かない', () => {
-    expect(hit(['light_robe'], 'light')).toBe(3);
-    expect(hit(['light_robe'], 'fire')).toBe(10);
-    expect(hit(['dark_robe'], 'dark')).toBe(3);
-    expect(hit(['dark_robe'], 'neutral')).toBe(10);
+  it('無属性の指輪は無属性に効き、光と闇にも半分効く。弱点はない', () => {
+    expect(hit(['ring_neutral_3'], 'neutral')).toBe(7);
+    expect(hit(['ring_neutral_3'], 'light')).toBe(Math.ceil(5 + 5 * 0.7));
+    expect(hit(['ring_neutral_3'], 'dark')).toBe(Math.ceil(5 + 5 * 0.7));
+    expect(hit(['ring_neutral_3'], 'fire')).toBe(10);
+    expect(hit(['ring_neutral_3'], 'ice')).toBe(10);
+  });
+
+  it('光・闇の指輪は、その属性を丸ごと減らし、逆の属性を丸ごと増やす', () => {
+    expect(hit(['ring_light_3'], 'light')).toBe(7);
+    expect(hit(['ring_light_3'], 'dark')).toBe(12);
+    expect(hit(['ring_light_3'], 'fire')).toBe(10);
+    expect(hit(['ring_dark_3'], 'dark')).toBe(7);
+    expect(hit(['ring_dark_3'], 'light')).toBe(12);
+    expect(hit(['ring_dark_3'], 'neutral')).toBe(10);
+  });
+
+  it('万能の指輪は、すべての属性に少しずつ効く。弱点はない', () => {
+    for (const e of ['fire', 'ice', 'neutral', 'light', 'dark'] as const) expect(hit(['ring_all_3'], e)).toBe(9); // 10 × 0.85 = 8.5 → 切り上げ
+  });
+
+  it('二重耐性の指輪は、2つの属性にそれぞれ効く。弱点はない', () => {
+    expect(hit(['ring_dual_fire_ice_3'], 'fire')).toBe(7);
+    expect(hit(['ring_dual_fire_ice_3'], 'ice')).toBe(7);
+    expect(hit(['ring_dual_fire_ice_3'], 'neutral')).toBe(10);
+    expect(hit(['ring_dual_fire_light_3'], 'light')).toBe(Math.ceil((5 * 0.7 + 5) * 0.7)); // 光の指輪の分と、炎の分が掛かる
+    expect(hit(['ring_dual_light_dark_3'], 'dark')).toBe(7);
+    expect(hit(['ring_dual_light_dark_3'], 'light')).toBe(7);
+  });
+
+  it('ちがう指輪は掛け算になる（効かない指輪は、そのまま）', () => {
+    // 光（炎5＋無属性5）：炎の指輪で炎が0.7倍、光の指輪で全体が0.7倍
+    expect(hit(['ring_fire_3', 'ring_light_3'], 'light')).toBe(Math.ceil((5 * 0.7 + 5) * 0.7));
+    // 炎の指輪と氷の指輪：炎の攻撃は 0.7（耐性）× 1.15（氷の指輪の弱点）
+    expect(hit(['ring_fire_3', 'ring_ice_3'], 'fire')).toBe(Math.ceil(10 * 0.7 * 1.15));
+    expect(hit(['ring_fire_3', 'ring_ice_3'], 'neutral')).toBe(10);
+    expect(hit(['ring_fire_3', 'ring_all_3'], 'fire')).toBe(Math.ceil(10 * 0.7 * 0.85));
+  });
+
+  it('弱点の大きさは、耐性に比例する（耐性が大きいほど、弱点も大きい）', () => {
+    expect(hit(['ring_fire_1'], 'ice')).toBe(Math.ceil(10 * 1.05));
+    expect(hit(['ring_fire_5'], 'ice')).toBe(Math.ceil(10 * 1.25));
+    expect(elementGuards('fire', 30, 0)).toEqual([{ kind: 'component', component: 'fire', rate: 0.7 }]); // 弱点0なら、弱点はない
+    expect(elementGuards('neutral', 30, 50)).toHaveLength(1); // 無属性に逆はない
   });
 
   it('ダメージは最低1', () => {
-    expect(enemyHitDamage(buildPlayer(['fire_cloak']), { ...attacker('fire'), atk: 1 })).toBe(1);
+    expect(enemyHitDamage(buildPlayer(['ring_fire_5']), { ...attacker('fire'), atk: 1 })).toBe(1);
   });
 });
 

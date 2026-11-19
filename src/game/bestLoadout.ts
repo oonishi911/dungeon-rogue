@@ -2,7 +2,8 @@
 // 敵のデータ（enemies.json）と、ダンジョンの設定（出る敵・魔法）と、相性の表から計算するので、管理画面で変えても、それに合わせて選び直される。
 // 「強い」は、そのダンジョンのその属性の、道中の敵（出やすさの分だけ数える）とボス（BOSS_WEIGHT 体分として数える）に対して：
 // - 武器：与えるダメージの合計がいちばん多いもの
-// - 防具：受けるダメージの合計がいちばん少ないもの
+// - 防具：受けるダメージの合計がいちばん少ないもの（防具は守りだけ）
+// - 指輪：店で買える指輪から、受けるダメージの合計がいちばん減るものを、3つまで（同じ種類は重ねない。減らないなら付けない）
 // - 属性を付ける道具：付けたときに与えるダメージの合計がいちばん多いもの（同じものを2つ）
 // - 呪文書：属性の矢（強化版の連矢を含む。同じ属性なら強化版）のうちダメージの合計がいちばん多いもの、なぎ払い、癒しの3冊
 // - そのほかの道具：回復薬3つ、食料3つ（道具は全部で8つ）
@@ -10,10 +11,12 @@
 import { buildPlayer, enemyHitDamage, itemSlot, playerHitDamage } from './combat';
 import { ITEMS, LOADOUT_CONFIG, SPELLS } from './data';
 import { enemyDef } from './enemies';
+import { ringKey, ringOf } from './itemMaster';
 import { spellDamage } from './magic';
 import type { DungeonFile } from './genMaster';
 import type { EnemyDef, ItemId, PlayerStats, SpellId, TraitId } from './types';
 
+const MAX_RINGS = 3; // 付けられる指輪の数（記憶を4つ以上思い出したとき）
 const BOSS_WEIGHT = 3; // ボスは道中の敵の何体分として数えるか（最後に必ず戦うので重く見る）
 // 敵にダメージを与える呪文（有利な呪文書を選ぶ候補）。同じ系統（矢と、その強化版の連矢）は、強化版を先に書く。
 // 同じ点数なら先にあるものを選ぶので、強化版が選ばれる。同じ系統は2冊選ばない
@@ -59,6 +62,15 @@ export function bestLoadout(trait: TraitId, dungeon: DungeonFile): ItemId[] {
 
   const weapon = best(of('weapon'), (id) => total(playerHitDamage, buildPlayer([id])));
   const armor = best(of('armor'), (id) => -total(enemyHitDamage, buildPlayer([id])));
+  // 指輪：店で買える指輪から、受けるダメージがいちばん減るものを、指の数（3つ）まで重ねて選ぶ（種類は重ねない）
+  const rings: ItemId[] = [];
+  const shop = of('ring').filter((id) => ringOf(id)?.kind !== 'dual');
+  for (let i = 0; i < MAX_RINGS; i++) {
+    const open = shop.filter((id) => !rings.some((r) => ringKey(r) === ringKey(id)));
+    const pick = best(open, (id) => -total(enemyHitDamage, buildPlayer([armor, ...rings, id])));
+    if (total(enemyHitDamage, buildPlayer([armor, ...rings, pick])) >= total(enemyHitDamage, buildPlayer([armor, ...rings]))) break;
+    rings.push(pick);
+  }
   const enchants = all.filter((id) => ITEMS[id].effect.kind === 'enchant');
   const enchant = best(enchants, (id) => {
     const effect = ITEMS[id].effect;
@@ -69,5 +81,5 @@ export function bestLoadout(trait: TraitId, dungeon: DungeonFile): ItemId[] {
 
   const consumables: ItemId[] = [enchant, enchant, 'potion', 'potion', 'potion', 'food', 'food', 'food'].slice(0, LOADOUT_CONFIG.maxItems) as ItemId[];
   const books = [`book_${bolt}`, 'book_sweep_bleed', 'book_heal'].slice(0, LOADOUT_CONFIG.maxSpellbooks) as ItemId[];
-  return [weapon, armor, ...consumables, ...books];
+  return [weapon, armor, ...rings, ...consumables, ...books];
 }

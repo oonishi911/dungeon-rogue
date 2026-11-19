@@ -3,22 +3,26 @@
 // - 武器・防具・呪文書は、一度買えばずっと使える（owned）。出発のたびに、武器1つ・防具1つ・呪文書を選ぶ
 // - 道具（回復薬など）は倉庫（stock）に入り、出発のたびに持っていく数を選ぶ。使わずに残った道具は、持ち帰って倉庫に戻る
 // - 大きな袋を持っていくと、持っていける道具の数が増える（袋そのものは数えない。持っていけるのは1つ）
-// - 武器と防具は種類ごとに10段階。店に並ぶのは、店に入ったときに持っていたいちばん上の段階の2つ上まで（持っていなければ2段目まで）。
+// - 指輪は種類ごとに5段階（防具は属性の耐性を持たない。耐性は指輪だけ）。付けられる数は、思い出した記憶の数で増える（ring.ts）。
+//   二重耐性の指輪は店に並ばない（敵が落とす）
+// - 武器・防具・指輪は種類ごとに段階がある。店に並ぶのは、店に入ったときに持っていたいちばん上の段階の2つ上まで（持っていなければ2段目まで）。
 //   店で上の段階を買っても、並びはその場では広がらず、次に潜るときの店で広がる
 // ほかのロジックと同じく、状態を受け取り新しい状態を返す純粋関数でできている。
 
-import { enemyHitDamage, itemCapacity, itemSlot } from './combat';
+import { itemCapacity, itemSlot } from './combat';
 import { ENCHANT_VS_ELEMENT, ITEMS, LOADOUT_CONFIG, SPELLS, WEAPON_VS_BODY } from './data';
 import type { Intel } from './informant';
-import { ARMOR_BASES, GEAR_TIERS, gearId, gearOf, SPELLBOOK_IDS, SUPPLY_IDS, WEAPON_BASES } from './itemMaster';
+import { ARMOR_BASES, GEAR_TIERS, gearId, gearOf, pairElements, RING_KINDS, RING_LEVELS, ringId, ringOf, SPELLBOOK_IDS, SUPPLY_IDS, WEAPON_BASES } from './itemMaster';
+import { equipRing } from './ring';
 import type { SaveData } from './save';
-import type { Body, Element, EnemyDef, GearBaseId, ItemId, Result, SpellId } from './types';
+import type { Body, Element, GearBaseId, ItemId, Result, RingKind, SpellId } from './types';
 
-export type Shelf = 'weapon' | 'armor' | 'supply' | 'book';
+export type Shelf = 'weapon' | 'armor' | 'ring' | 'supply' | 'book';
 
 export const SHELVES: readonly { id: Shelf; name: string }[] = [
   { id: 'weapon', name: '武器' },
   { id: 'armor', name: '防具' },
+  { id: 'ring', name: '指輪' },
   { id: 'supply', name: '道具' },
   { id: 'book', name: '呪文書' },
 ];
@@ -43,13 +47,29 @@ export function bestTier(owned: readonly ItemId[], base: GearBaseId): number {
   }, 0);
 }
 
+/** その種類の指輪で持っている、いちばん上の段階（持っていなければ0）。二重耐性の指輪は数えない */
+export function bestRingLevel(owned: readonly ItemId[], kind: RingKind): number {
+  return owned.reduce((best, id) => {
+    const r = ringOf(id);
+    return r && r.kind === kind ? Math.max(best, r.level) : best;
+  }, 0);
+}
+
 /**
- * 売り場に並べる品物。武器と防具は、種類ごとに「持っているいちばん上の段階」と、その2つ上まで
+ * 売り場に並べる品物。武器・防具・指輪は、種類ごとに「持っているいちばん上の段階」と、その2つ上まで
  * （それより下の段階は、持っていても弱いだけなので並べない）
  */
 export function shelfItems(owned: readonly ItemId[], shelf: Shelf): ItemId[] {
   if (shelf === 'supply') return [...SUPPLY_IDS];
   if (shelf === 'book') return [...SPELLBOOK_IDS];
+  if (shelf === 'ring') {
+    return RING_KINDS.flatMap((kind) => {
+      const best = bestRingLevel(owned, kind);
+      const from = Math.max(1, best);
+      const to = Math.min(RING_LEVELS, best + SHOP_AHEAD);
+      return Array.from({ length: to - from + 1 }, (_, i) => ringId(kind, from + i));
+    });
+  }
   const bases: readonly GearBaseId[] = shelf === 'weapon' ? WEAPON_BASES : ARMOR_BASES;
   return bases.flatMap((base) => {
     const best = bestTier(owned, base);
@@ -81,6 +101,11 @@ export function buy(save: SaveData, id: ItemId, atEntry: readonly ItemId[] = sav
   }
   if (shelf === 'weapon') kit.weapon = id;
   if (shelf === 'armor') kit.armor = id;
+  if (shelf === 'ring') {
+    // 買った指輪は、付けられれば付ける（同じ種類の指輪は入れ替わる。指が空いていなければ、付けずに持っておく）
+    const next = equipRing({ ...save, owned: [...save.owned, id], kit }, id);
+    return ok({ ...save, gold, owned: [...save.owned, id], kit: next.ok ? next.value.kit : kit });
+  }
   if (shelf === 'book' && kit.books.length < LOADOUT_CONFIG.maxSpellbooks) kit.books = [...kit.books, id];
   return ok({ ...save, gold, owned: [...save.owned, id], kit });
 }
@@ -136,7 +161,7 @@ export function canTake(take: readonly ItemId[], id: ItemId): boolean {
 /** 持っていくもの（探索の持ち物） */
 export function kitLoadout(save: SaveData): ItemId[] {
   const { weapon, armor, books, take } = save.kit;
-  return [...(weapon ? [weapon] : []), ...(armor ? [armor] : []), ...books, ...take];
+  return [...(weapon ? [weapon] : []), ...(armor ? [armor] : []), ...(save.kit.rings ?? []), ...books, ...take];
 }
 
 /** 出発する：持っていく道具を倉庫から出す（選んだ持ち物は、次の店でも同じ選び方から始めるよう残す） */
@@ -178,16 +203,10 @@ export function fitKit(save: SaveData): SaveData {
 
 // ===== おすすめの印 =====
 
-/** その属性の攻撃を受けたときの、防具ごとの受けるダメージの割合（1段目の防具で比べる。守り（def）は入れない） */
-function guardRate(armor: ItemId, element: Element): number {
-  const probe = { id: 'probe', name: '', hp: 1, atk: 100, def: 0, element, body: 'normal' } as EnemyDef;
-  const player = { hp: 1, maxHp: 1, atk: 0, def: 0, mag: 0, poisonTurns: 0, weapon: null, armor, items: [], enchant: null };
-  return enemyHitDamage(player, probe) / 100;
-}
-
 /**
  * 情報屋からはっきり聞いたこと（うわさは使わない）から、店で「おすすめ」の印を付ける品物。
- * - 属性（ダンジョン・ボス）がわかれば：その属性の攻撃をいちばん減らす防具の種類（すべての段階）、その属性によく効く砥石・聖水・香油と、属性の矢の呪文書
+ * - 属性（ダンジョン・ボス）がわかれば：その属性の指輪（すべての段階。その属性を含む二重耐性の指輪も）、その属性によく効く砥石・聖水・香油と、属性の矢の呪文書
+ * - 属性がはっきりわかっていないとき（うわさだけのときも）：万能の指輪（弱点がないので、保険になる）
  * - 体（多い魔物・ボス）がわかれば：その体によく効く武器の種類（すべての段階）
  * - 多い魔物の弱点がわかれば：魔法に弱い魔物が多いなら、杖と、ダメージを与える呪文の呪文書。物理に弱い魔物が多いなら、剣と槌
  */
@@ -220,15 +239,19 @@ export function recommended(intel: readonly Intel[]): Set<ItemId> {
     for (const w of WEAPON_BASES) if (WEAPON_VS_BODY[w][body] > 1) allTiers(w);
   }
   for (const element of elements) {
-    const rates = ARMOR_BASES.map((a) => [a, guardRate(a, element)] as const);
-    const best = Math.min(...rates.map(([, r]) => r));
-    if (best < 1) for (const [a, r] of rates) if (r === best) allTiers(a);
+    for (let level = 1; level <= RING_LEVELS; level++) picks.add(ringId(element, level));
+    for (const id of Object.keys(ITEMS) as ItemId[]) {
+      const r = ringOf(id);
+      if (r?.kind === 'dual' && r.pair && pairElements(r.pair).includes(element)) picks.add(id);
+    }
     for (const id of [...SUPPLY_IDS, ...SPELLBOOK_IDS] as ItemId[]) {
       const effect = ITEMS[id].effect;
       const strike = effect.kind === 'enchant' ? effect.element : effect.kind === 'spellbook' ? boltElement(effect.spell) : null;
       if (strike && (ENCHANT_VS_ELEMENT[strike][element] ?? 1) > 1) picks.add(id);
     }
   }
+  // 属性がわからないときは、弱点のない万能の指輪
+  if (elements.size === 0) for (let level = 1; level <= RING_LEVELS; level++) picks.add(ringId('all', level));
   return picks;
 }
 

@@ -76,11 +76,7 @@ const ARMOR_TIER = { trim: 2, pauldron: 3, clasp: 4, pauldronBig: 5, pauldronSpi
 // 肩当てと飾りの色（防具の種類ごと）。金属の光り方をする
 const ARMOR_METAL: Record<CloakId, string> = {
   none: '#8a7a60',
-  fire_cloak: '#c8743c',
-  ice_cloak: '#bfe0f2',
   plate: '#aab2b8',
-  light_robe: '#e8c860',
-  dark_robe: '#6a4a8a',
 };
 const GOLD = '#d9b14a';
 const HAIR = '#15110f'; // 髪の色：黒（真っ黒だと光の当たりが見えなくなるので、ほんの少しだけ茶を足す）

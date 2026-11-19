@@ -160,6 +160,7 @@ function isStats(v: unknown): v is ExploreState['stats'] {
   if (v.mag !== undefined && !isNumber(v.mag)) return false; // 魔力の欄ができる前の中断データには、ない（0として読む）
   if (!isItemOrNull(v.weapon) || !isItemOrNull(v.armor) || !Array.isArray(v.items) || !v.items.every(isItem)) return false;
   if (!(v.echoes === undefined || isEchoList(v.echoes))) return false; // 残響の欄ができる前の中断データには、ない
+  if (!(v.rings === undefined || (Array.isArray(v.rings) && v.rings.every((id) => isItem(id) && ITEMS[id].effect.kind === 'ring')))) return false; // 指輪の欄ができる前の中断データには、ない
   const e = v.enchant;
   return e === null || (isObject(e) && TRAIT_IDS.includes(e.element as TraitId) && isCount(e.hits));
 }
@@ -170,7 +171,8 @@ const isEchoList = (v: unknown): v is EchoId[] => Array.isArray(v) && v.every((i
 function parseFound(v: unknown): Found {
   if (!isObject(v) || !isEchoList(v.echoes) || !Array.isArray(v.gear)) return noFound();
   const gear = v.gear.filter((g): g is Found['gear'][number] => isObject(g) && isItem(g.base) && isCount(g.slots, 1) && g.slots <= 3);
-  return { echoes: v.echoes, gear };
+  const rings = Array.isArray(v.rings) ? v.rings.filter((id): id is ItemId => isItem(id) && ITEMS[id].effect.kind === 'ring') : []; // 指輪ができる前の中断データには、ない
+  return { echoes: v.echoes, gear, rings };
 }
 
 /** 中断データのダンジョンの ID。ない・そのダンジョンがもうなければ null */

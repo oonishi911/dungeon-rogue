@@ -4,8 +4,8 @@
 
 import type { ReactElement } from 'react';
 import { ITEMS } from '../game/data';
-import { baseItemOf } from '../game/itemMaster';
-import type { ItemId, SpellId } from '../game/types';
+import { baseItemOf, pairElements, ringOf } from '../game/itemMaster';
+import type { ItemId, RingKind, SpellId } from '../game/types';
 
 const C = {
   steel: '#cfd6d4',
@@ -121,23 +121,39 @@ const place = (mark: ReactElement, x: number, y: number, size: number) => <g tra
 
 // ===== アイテムの形 =====
 
-const cloak = (fill: string, edge: string, mark: ReactElement) => (
-  <>
-    <path d="M9 3.5h6l1.2 3.2L20 20.5H4L7.8 6.7z" fill={fill} />
-    <path d="M9 3.5h6l1.2 3.2c-1.2.8-2.6 1.2-4.2 1.2s-3-.4-4.2-1.2z" fill={edge} />
-    <path d="M4 20.5h16" stroke={edge} strokeWidth="1.6" />
-    {place(mark, 12, 14, 8.5)}
-  </>
-);
+/** 指輪：金の輪に、宝石を置く。宝石の色と中の印は、属性で決まる（万能は白い宝石、二重耐性は2つの宝石） */
+const GEMS: Record<RingKind, { fill: string; mark: () => ReactElement }> = {
+  fire: { fill: '#c9482c', mark: () => flame(C.fireLight, '#fff1c9') },
+  ice: { fill: '#3d78a3', mark: () => snowflake(C.iceLight) },
+  neutral: { fill: '#8e948f', mark: () => <circle cx="12" cy="12" r="5" fill={C.steel} /> },
+  light: { fill: '#d9b84e', mark: () => sparkle('#fff6c8') },
+  dark: { fill: C.darkDeep, mark: () => moon('#c9b3f0') },
+  all: { fill: '#e8f1ef', mark: () => sparkle(C.lightDeep) },
+};
 
-const robe = (fill: string, trim: string, mark: ReactElement) => (
-  <>
-    <path d="M8 3.5 12 6l4-2.5 4.5 4-2.5 2.5-1.5-1V20.5h-9V9l-1.5 1L3.5 7.5z" fill={fill} />
-    <path d="M12 6v14.5" stroke={trim} strokeWidth="1.4" />
-    <path d="M7.5 20.5h9" stroke={trim} strokeWidth="1.6" />
-    {place(mark, 12, 13, 7.5)}
-  </>
-);
+const ringShape = (id: ItemId) => {
+  const info = ringOf(id);
+  const kinds: RingKind[] = info?.kind === 'dual' && info.pair ? (pairElements(info.pair) as RingKind[]) : [(info?.kind ?? 'all') as RingKind];
+  return (
+    <>
+      <circle cx="12" cy="14.5" r="6" fill="none" stroke="#c9a24a" strokeWidth="2.6" />
+      <circle cx="12" cy="14.5" r="6" fill="none" stroke="#f1d98a" strokeWidth="0.8" strokeDasharray="6 32" strokeLinecap="round" />
+      {kinds.length === 1 ? (
+        <>
+          <path d="M8.2 6.2 12 3l3.8 3.2L12 10z" fill={GEMS[kinds[0]!].fill} stroke="#7a5f22" strokeWidth="0.8" strokeLinejoin="round" />
+          {place(GEMS[kinds[0]!].mark(), 12, 6.6, 4.4)}
+        </>
+      ) : (
+        kinds.map((k, i) => (
+          <g key={k}>
+            <circle cx={i === 0 ? 8.6 : 15.4} cy="6.4" r="3" fill={GEMS[k].fill} stroke="#7a5f22" strokeWidth="0.8" />
+            {place(GEMS[k].mark(), i === 0 ? 8.6 : 15.4, 6.4, 3.8)}
+          </g>
+        ))
+      )}
+    </>
+  );
+};
 
 const whetstone = (mark: ReactElement) => (
   <>
@@ -194,8 +210,6 @@ const SHAPES: Partial<Record<ItemId, () => ReactElement>> = {
       <circle cx="16" cy="6" r="1.2" fill="#fff" opacity="0.8" />
     </>
   ),
-  fire_cloak: () => cloak('#a8402a', '#6e2a1c', flame(C.fireLight, '#fff1c9')),
-  ice_cloak: () => cloak('#3d78a3', '#24506f', snowflake(C.iceLight)),
   plate: () => (
     <>
       <path d="M6 4.5h3.5L12 6l2.5-1.5H18l3 3.5-2.5 2.5V19a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-8.5L3 8z" fill={C.steelDark} />
@@ -203,8 +217,6 @@ const SHAPES: Partial<Record<ItemId, () => ReactElement>> = {
       <path d="M12 6v14.5" stroke={C.ink} strokeOpacity="0.3" strokeWidth="1.2" />
     </>
   ),
-  light_robe: () => robe('#ece5d3', C.lightDeep, sparkle(C.lightDeep)),
-  dark_robe: () => robe(C.darkDeep, '#a98be6', moon('#c9b3f0')),
   potion: () => flask(C.heal, heart('#fff')),
   food: () => (
     <>
@@ -253,7 +265,7 @@ const SHAPES: Partial<Record<ItemId, () => ReactElement>> = {
 
 /** アイテムのアイコン。size は表示の大きさ（px） */
 export function ItemIcon({ id, size = 24, className }: { id: ItemId; size?: number; className?: string }) {
-  const shape = SHAPES[baseItemOf(id)];
+  const shape = ringOf(id) ? () => ringShape(id) : SHAPES[baseItemOf(id)];
   return (
     <svg className={className ? `item-icon ${className}` : 'item-icon'} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       {shape ? shape() : <circle cx="12" cy="12" r="8" fill={C.stone} />}

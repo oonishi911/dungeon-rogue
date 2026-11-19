@@ -1,4 +1,4 @@
-import { TRAITS } from '../game/data';
+import { ITEMS, TRAITS } from '../game/data';
 import { echoName, gearName } from '../game/echo';
 import { hasDungeon, dungeonOf } from '../game/dungeons';
 import type { ExploreResult } from '../game/exploreTypes';
@@ -64,6 +64,15 @@ export function ResultScreen({ run, outcome, expedition, gold, onNextRun }: Resu
               <dd>
                 {[...expedition.found.gear.map((g) => `${gearName(g.base)}（スロット${g.slots}）`), ...expedition.found.echoes.map(echoName)].join('、')}
                 （{LOST.shop}の「刻印」に届いた。失うことはない）
+              </dd>
+            </div>
+          )}
+          {expedition.found && expedition.found.rings.length > 0 && (
+            <div>
+              <dt>拾った指輪</dt>
+              <dd>
+                {expedition.found.rings.map((id) => ITEMS[id].name).join('、')}
+                （{LOST.shop}の「指輪」に届いた。失うことはない）
               </dd>
             </div>
           )}

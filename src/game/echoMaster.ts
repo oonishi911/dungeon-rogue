@@ -1,4 +1,4 @@
-// 残響と刻印武器の設定（src/game/echoes.json）を読み、正しい形かを確かめる。設計は docs/echo-spec.md。
+// 残響と刻印武器の設定（src/game/echoes.json）を読み、正しい形かを確かめる。設計は docs/echo-spec.md（指輪の指の数と二重耐性の指輪の落とし方は docs/ring-spec.md）。
 // 刻印武器は、買えない。敵がごく稀に落とす（スロットが1〜3個付いた武器。防具にスロットはない）。スロットにはめるのが残響で、これも敵が落とす。
 // echoes.json には、落とす確率、スロット数の割合、落とす装備の段階の範囲、残響ごとの効果の数字がある。
 // 残響の働き（炎の残響は武器に炎の力を付ける、など）はここではなくプログラムで決まっていて、数字だけを設定で変える。
@@ -24,6 +24,8 @@ export type EchoEffect = { name: string; weapon: number }; // weapon：武器に
 export type EchoMaster = {
   engraved: { drop: DropRates; slots: SlotWeights; tierMin: number; tierMax: number };
   echo: { drop: DropRates; generalShare: number };
+  /** 指輪：fingers は、指輪を付けられる数が増える記憶の数（two：2つ目の指、three：3つ目の指）。dual は、二重耐性の指輪の落とし方（落とす確率と、落とす段階の範囲。1〜5） */
+  ring: { fingers: { two: number; three: number }; dual: { drop: DropRates; tierMin: number; tierMax: number } };
   effects: Record<EchoId, EchoEffect>;
 };
 
@@ -34,6 +36,8 @@ export const ECHO_LIMITS = {
   tier: { min: 1, max: 10 },
   share: { min: 0, max: 100 },
   value: { min: 0, max: 100 },
+  memories: { min: 1, max: 5 }, // 指の数が増える記憶の数（ボスは5体）
+  ringTier: { min: 1, max: 5 },
 } as const;
 
 /** 満腹度の軽減の合計の上限（%） */
@@ -120,6 +124,20 @@ export function echoProblems(data: unknown): string[] {
     rates(echo.drop, '残響を落とす確率');
     if (!intIn(echo.generalShare, ECHO_LIMITS.share)) out.push(`ぬくもり・鼓動を落とす割合は${ECHO_LIMITS.share.min}〜${ECHO_LIMITS.share.max}%の整数にする`);
   }
+  const ring = data.ring;
+  if (!isObj(ring)) out.push('指輪の設定が読めない');
+  else {
+    const f = isObj(ring.fingers) ? ring.fingers : null;
+    if (!f || !intIn(f.two, ECHO_LIMITS.memories) || !intIn(f.three, ECHO_LIMITS.memories)) out.push(`指が増える記憶の数は${ECHO_LIMITS.memories.min}〜${ECHO_LIMITS.memories.max}の整数にする`);
+    else if ((f.two as number) > (f.three as number)) out.push('2つ目の指が増える記憶の数は、3つ目以下にする');
+    const dual = isObj(ring.dual) ? ring.dual : null;
+    if (!dual) out.push('二重耐性の指輪の設定が読めない');
+    else {
+      rates(dual.drop, '二重耐性の指輪を落とす確率');
+      if (!intIn(dual.tierMin, ECHO_LIMITS.ringTier) || !intIn(dual.tierMax, ECHO_LIMITS.ringTier)) out.push(`落とす二重耐性の指輪の段階は${ECHO_LIMITS.ringTier.min}〜${ECHO_LIMITS.ringTier.max}の整数にする`);
+      else if ((dual.tierMin as number) > (dual.tierMax as number)) out.push('落とす二重耐性の指輪の最小の段階は、最大の段階以下にする');
+    }
+  }
   const names = new Map<string, string>();
   for (const id of ECHO_IDS) {
     const v = isObj(data.effects) ? data.effects[id] : undefined;
@@ -159,6 +177,13 @@ export function describeEchoChanges(before: EchoMaster, after: EchoMaster): stri
   if (before.engraved.tierMin !== after.engraved.tierMin) out.push(`落とす装備の最小の段階：${before.engraved.tierMin} → ${after.engraved.tierMin}`);
   if (before.engraved.tierMax !== after.engraved.tierMax) out.push(`落とす装備の最大の段階：${before.engraved.tierMax} → ${after.engraved.tierMax}`);
   if (before.echo.generalShare !== after.echo.generalShare) out.push(`ぬくもり・鼓動を落とす割合：${before.echo.generalShare}% → ${after.echo.generalShare}%`);
+  for (const r of FOE_RANKS) {
+    if (before.ring.dual.drop[r] !== after.ring.dual.drop[r]) out.push(`二重耐性の指輪を落とす確率（${RANK_LABELS[r]}）：${before.ring.dual.drop[r]}% → ${after.ring.dual.drop[r]}%`);
+  }
+  if (before.ring.dual.tierMin !== after.ring.dual.tierMin) out.push(`落とす二重耐性の指輪の最小の段階：${before.ring.dual.tierMin} → ${after.ring.dual.tierMin}`);
+  if (before.ring.dual.tierMax !== after.ring.dual.tierMax) out.push(`落とす二重耐性の指輪の最大の段階：${before.ring.dual.tierMax} → ${after.ring.dual.tierMax}`);
+  if (before.ring.fingers.two !== after.ring.fingers.two) out.push(`2つ目の指が増える記憶の数：${before.ring.fingers.two} → ${after.ring.fingers.two}`);
+  if (before.ring.fingers.three !== after.ring.fingers.three) out.push(`3つ目の指が増える記憶の数：${before.ring.fingers.three} → ${after.ring.fingers.three}`);
   for (const id of ECHO_IDS) {
     const a = before.effects[id];
     const b = after.effects[id];

@@ -138,6 +138,8 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
             武器：{stats.weapon ? <ItemLabel id={stats.weapon} name={ITEMS[stats.weapon].name} /> : 'なし'}
             <br />
             防具：{stats.armor ? <ItemLabel id={stats.armor} name={ITEMS[stats.armor].name} /> : 'なし'}
+            <br />
+            指輪：{stats.rings?.length ? stats.rings.map((id) => <ItemLabel key={id} id={id} name={ITEMS[id].name} />) : 'なし'}
             {stats.enchant && (
               <>
                 <br />
