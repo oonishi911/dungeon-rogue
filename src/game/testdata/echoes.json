@@ -21,6 +21,21 @@
     },
     "generalShare": 20
   },
+  "ring": {
+    "fingers": {
+      "two": 2,
+      "three": 4
+    },
+    "dual": {
+      "drop": {
+        "normal": 0.3,
+        "elite": 3,
+        "boss": 10
+      },
+      "tierMin": 2,
+      "tierMax": 4
+    }
+  },
   "effects": {
     "fire": {
       "name": "炎の残響",

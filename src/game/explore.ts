@@ -399,6 +399,7 @@ function useItem(state: ExploreState, itemId: ItemId): Result<ExploreState> {
     }
     case 'weapon':
     case 'armor':
+    case 'ring':
       return err('装備品は道具として使えません');
     case 'spellbook':
       return err('呪文書は道具として使えません（呪文として唱える）');
@@ -671,9 +672,9 @@ function lootFrom(state: ExploreState, enemy: MapEnemy): ExploreState {
   if (enemy.summoned) return state;
   const def = enemyDef(enemy);
   const got = rollLoot(lootSeed(state, enemy.uid), def, def.boss ? 'boss' : enemy.elite ? 'elite' : 'normal');
-  if (!got.gear && !got.echo) return state;
+  if (!got.gear && !got.echo && !got.ring) return state;
   const log = [...state.log];
-  const found = { echoes: [...state.found.echoes], gear: [...state.found.gear] };
+  const found = { echoes: [...state.found.echoes], gear: [...state.found.gear], rings: [...state.found.rings] };
   if (got.gear) {
     found.gear.push(got.gear);
     log.push(`${gearName(got.gear.base)}を拾った（刻印スロット${got.gear.slots}つ）。倉庫に送った`);
@@ -681,6 +682,10 @@ function lootFrom(state: ExploreState, enemy: MapEnemy): ExploreState {
   if (got.echo) {
     found.echoes.push(got.echo);
     log.push(`${echoName(got.echo)}を拾った。倉庫に送った`);
+  }
+  if (got.ring) {
+    found.rings.push(got.ring);
+    log.push(`${ITEMS[got.ring].name}を拾った。倉庫に送った`);
   }
   return { ...state, found, log };
 }

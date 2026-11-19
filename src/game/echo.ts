@@ -6,7 +6,7 @@
 
 import { ECHO_MASTER, ITEMS } from './data';
 import { ECHO_CAPS, PULSE_FLOOR, ECHO_INFO, type FoeRank } from './echoMaster';
-import { gearId } from './itemMaster';
+import { DUAL_PAIRS, dualRingId, gearId } from './itemMaster';
 import { nextInt, nextRandom } from './rng';
 import type { Body, EchoId, Element, EnemyDef, GearBaseId, ItemId } from './types';
 
@@ -59,9 +59,10 @@ export interface DroppedGear {
 export interface Found {
   echoes: EchoId[];
   gear: DroppedGear[];
+  rings: ItemId[]; // 二重耐性の指輪
 }
 
-export const noFound = (): Found => ({ echoes: [], gear: [] });
+export const noFound = (): Found => ({ echoes: [], gear: [], rings: [] });
 
 /** 刻印武器の名前 */
 export const gearName = (base: ItemId): string => `刻まれた${ITEMS[base].name}`;
@@ -82,11 +83,12 @@ export function lootSeed(state: { seed: number; floor: number; turn: number }, e
 export interface Loot {
   gear: DroppedGear | null;
   echo: EchoId | null;
+  ring: ItemId | null; // 二重耐性の指輪
 }
 
 /** 倒した敵が落とすもの（刻印武器と残響。どちらも落とさないこともあれば、両方落とすこともある） */
 export function rollLoot(seed: number, enemy: Pick<EnemyDef, 'element' | 'body'>, rank: FoeRank): Loot {
-  const { engraved, echo } = ECHO_MASTER;
+  const { engraved, echo, ring } = ECHO_MASTER;
   let state = seed;
   const roll = () => {
     const r = nextRandom(state);
@@ -114,5 +116,14 @@ export function rollLoot(seed: number, enemy: Pick<EnemyDef, 'element' | 'body'>
   if (roll() * 100 < echo.drop[rank]) {
     found = roll() * 100 < echo.generalShare ? pick<EchoId>(['warmth', 'pulse']) : pick<EchoId>(echoesFor(enemy));
   }
-  return { gear, echo: found };
+
+  // 二重耐性の指輪：倒した敵の属性と、もう1つの属性（くじ）の組み合わせ。ここは最後に引く（前のくじの結果を変えないため）
+  let dual: ItemId | null = null;
+  if (roll() * 100 < ring.dual.drop[rank]) {
+    const other = pick(DUAL_PAIRS.filter((p) => p.split('_').includes(enemy.element)));
+    const t = nextInt(state, ring.dual.tierMax - ring.dual.tierMin + 1);
+    state = t.state;
+    dual = dualRingId(other, ring.dual.tierMin + t.value);
+  }
+  return { gear, echo: found, ring: dual };
 }

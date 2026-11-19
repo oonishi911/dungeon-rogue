@@ -265,6 +265,20 @@ describe('残響の設定の公開', () => {
     expect(ADMIN_TABS.filter((t) => tabChanged(t.id, BASE, draft)).map((t) => t.id)).toEqual(['echoes']);
   });
 
+  it('指の数の記憶と二重耐性の指輪の落とし方を変えると、変えた内容に出る。正しくない値は、直すところに出る', () => {
+    const draft = edited((d) => {
+      d.echoes.ring.fingers.three = 5;
+      d.echoes.ring.dual.drop.boss = 20;
+      d.echoes.ring.dual.tierMax = 5;
+    });
+    const plan = planPublish(BASE, draft);
+    expect(plan.changes).toEqual(['残響：二重耐性の指輪を落とす確率（ボス）：10% → 20%', '残響：落とす二重耐性の指輪の最大の段階：4 → 5', '残響：3つ目の指が増える記憶の数：4 → 5']);
+    expect(plan.problems).toEqual([]);
+    expect(planPublish(BASE, edited((d) => void (d.echoes.ring.fingers.two = 5))).problems.length).toBe(1); // 2本目が3本目より遅い
+    expect(planPublish(BASE, edited((d) => void (d.echoes.ring.dual.tierMin = 5))).problems.length).toBe(1); // 最小が最大より高い
+    expect(planPublish(BASE, edited((d) => void (d.echoes.ring.dual.drop.normal = 101))).problems.length).toBe(1);
+  });
+
   it('正しくない値（段階の大小・名前の重なり）は、直すところに出る', () => {
     const draft = edited((d) => {
       d.echoes.engraved.tierMin = 5;
@@ -297,16 +311,34 @@ describe('品物の設定の公開', () => {
     expect(planPublish(BASE, bad).problems.some((p) => p.includes('剣の1段目') && p.includes('魔力'))).toBe(true);
   });
 
-  it('防具のカット率を変えると、変えた内容に出る。上の段階より低い・範囲の外・小数は、直すところに出る', () => {
-    const draft = edited((d) => void (d.items.armors.plate[9]!.cut = 80));
-    expect(planPublish(BASE, draft).changes).toEqual(['品物：鎧+9（10段目）：カット率 58 → 80']);
+  it('指輪の耐性を変えると、変えた内容に出る。上の段階より低い・範囲の外・小数は、直すところに出る', () => {
+    const draft = edited((d) => void (d.items.rings.kinds.fire[4]!.cut = 80));
+    expect(planPublish(BASE, draft).changes).toEqual(['品物：炎の指輪+4（5段目）：耐性 50 → 80']);
     expect(planPublish(BASE, draft).problems).toEqual([]);
-    const low = edited((d) => void (d.items.armors.plate[3]!.cut = 0));
-    expect(planPublish(BASE, low).problems.some((p) => p.includes('鎧の4段目') && p.includes('カット率'))).toBe(true);
-    const over = edited((d) => void (d.items.armors.plate[9]!.cut = 101));
-    expect(planPublish(BASE, over).problems.some((p) => p.includes('鎧の10段目') && p.includes('カット率'))).toBe(true);
-    const frac = edited((d) => void (d.items.armors.fire_cloak[0]!.cut = 70.5));
-    expect(planPublish(BASE, frac).problems.some((p) => p.includes('耐火のマントの1段目') && p.includes('カット率'))).toBe(true);
+    const low = edited((d) => void (d.items.rings.kinds.ice[3]!.cut = 0));
+    expect(planPublish(BASE, low).problems.some((p) => p.includes('氷の指輪の4段目') && p.includes('耐性'))).toBe(true);
+    const over = edited((d) => void (d.items.rings.kinds.all[4]!.cut = 101));
+    expect(planPublish(BASE, over).problems.some((p) => p.includes('万能の指輪の5段目') && p.includes('耐性'))).toBe(true);
+    const frac = edited((d) => void (d.items.rings.kinds.light[0]!.cut = 70.5));
+    expect(planPublish(BASE, frac).problems.some((p) => p.includes('光の指輪の1段目') && p.includes('耐性'))).toBe(true);
+  });
+
+  it('指輪の弱点の大きさと二重耐性の耐性を変えると、変えた内容に出る。範囲の外は直すところに出る', () => {
+    const draft = edited((d) => {
+      d.items.rings.weak = 80;
+      d.items.rings.dualCut[2] = 35;
+    });
+    expect(planPublish(BASE, draft).changes).toEqual(['品物：二重耐性の指輪（3段目）：耐性 30 → 35', '品物：指輪の弱点の大きさ：50 → 80']);
+    expect(planPublish(BASE, draft).problems).toEqual([]);
+    const over = edited((d) => void (d.items.rings.weak = 201));
+    expect(planPublish(BASE, over).problems.some((p) => p.includes('指輪の弱点'))).toBe(true);
+    const low = edited((d) => void (d.items.rings.dualCut[3] = 10));
+    expect(planPublish(BASE, low).problems.some((p) => p.includes('二重耐性の指輪の4段目') && p.includes('耐性'))).toBe(true);
+  });
+
+  it('防具の守りを変えると、変えた内容に出る', () => {
+    const draft = edited((d) => void (d.items.armors.plate[9]!.def = 12));
+    expect(planPublish(BASE, draft).changes).toEqual(['品物：鎧+9（10段目）：守り 9 → 12']);
   });
 
   it('上の段階より高い・強い段は、直すところに出る', () => {

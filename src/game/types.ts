@@ -15,13 +15,21 @@ export interface TraitDef {
 }
 
 // ===== アイテム =====
-/** 武器と防具の種類（1段目の ID）。それぞれ10段階あり、2段目からは `sword_2` のような ID になる */
-export type GearBaseId = 'sword' | 'hammer' | 'staff' | 'fire_cloak' | 'ice_cloak' | 'plate' | 'light_robe' | 'dark_robe';
+/** 武器と防具の種類（1段目の ID）。それぞれ10段階あり、2段目からは `sword_2` のような ID になる。防具は鎧1系統（守りだけ。属性の耐性は指輪） */
+export type GearBaseId = 'sword' | 'hammer' | 'staff' | 'plate';
 export type GearTier = 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 export type GearId = GearBaseId | `${GearBaseId}_${GearTier}`;
 
+// 指輪（docs/ring-spec.md）。ring_fire_3（炎の指輪の3段目）、ring_all_2（万能の指輪の2段目）、ring_dual_fire_ice_3（二重耐性の指輪。炎と氷の3段目）
+export type RingKind = Element | 'all';
+export type RingLevel = 1 | 2 | 3 | 4 | 5;
+/** 二重耐性の指輪の属性の組み合わせ（Element の並び順で、小さいほうが先） */
+export type DualPair = 'fire_ice' | 'fire_neutral' | 'fire_light' | 'fire_dark' | 'ice_neutral' | 'ice_light' | 'ice_dark' | 'neutral_light' | 'neutral_dark' | 'light_dark';
+export type RingId = `ring_${RingKind}_${RingLevel}` | `ring_dual_${DualPair}_${RingLevel}`;
+
 export type ItemId =
   | GearId
+  | RingId
   | 'potion'
   | 'food'
   | 'fire_whetstone'
@@ -48,17 +56,20 @@ export type ItemId =
 // ===== 残響（刻印スロットにはめるもの。echoMaster.ts、docs/echo-spec.md） =====
 export type EchoId = 'fire' | 'ice' | 'light' | 'dark' | 'soft' | 'hard' | 'spirit' | 'plain' | 'warmth' | 'pulse';
 
-export type ItemSlot = 'weapon' | 'armor' | 'consumable' | 'spellbook';
+export type ItemSlot = 'weapon' | 'armor' | 'ring' | 'consumable' | 'spellbook';
 export type WeaponType = 'sword' | 'hammer' | 'staff';
 
-// 防具の守り方。成分ごとに効くもの（マント・鎧）と、複合属性を丸ごと防ぐもの（専用防具）がある
-export type ArmorGuard =
+// 指輪の守り方。rate は受けるダメージの倍率（1より小さいと耐性、大きいと弱点）。
+// 成分ごとに効くもの（炎・氷・無属性の指輪）、複合属性を丸ごと防ぐもの（光・闇の指輪）、すべてに効くもの（万能の指輪）がある
+export type Guard =
   | { kind: 'component'; component: ElementComponent; rate: number }
-  | { kind: 'whole'; element: 'light' | 'dark'; rate: number };
+  | { kind: 'whole'; element: 'light' | 'dark'; rate: number }
+  | { kind: 'all'; rate: number };
 
 export type ItemEffect =
   | { kind: 'weapon'; weapon: WeaponType; atk: number; mag: number } // atk：持つと上がる攻撃力、mag：持つと上がる魔力（魔法の強さに足される。どちらも段階が上がるほど大きい）
-  | { kind: 'armor'; guard: ArmorGuard; def: number } // def：持つと上がる守り（段階が上がるほど大きい。1段目は0）
+  | { kind: 'armor'; def: number } // def：持つと上がる守り（段階が上がるほど大きい）。属性の耐性は付かない（指輪の役目）
+  | { kind: 'ring'; guards: Guard[]; cut: number } // 指輪。guards：属性ごとの守り（逆の属性の弱点も入る）、cut：耐性（%。表示用）
   | { kind: 'heal'; hp: number }
   | { kind: 'food'; satiety: number }
   | { kind: 'enchant'; element: Element; hits: number } // 武器に一時的に属性を付ける
@@ -144,6 +155,7 @@ export interface PlayerStats {
   poisonTurns: number; // 毒の残りターン（仕組みだけ残している。今は毒を与える敵はいない）
   weapon: ItemId | null;
   armor: ItemId | null;
+  rings?: ItemId[]; // 付けている指輪（ないときは、なし）
   items: ItemId[]; // 持っている道具（消耗品）
   enchant: Enchant | null;
   echoes?: EchoId[]; // 刻印武器にはめた残響（ないときは、なし）

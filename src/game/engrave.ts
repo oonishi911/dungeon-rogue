@@ -14,12 +14,15 @@ const err = <T>(error: string): Result<T> => ({ ok: false, error });
 
 export const SLOT_MAX = 3;
 
-/** 拾ったものを倉庫に入れる。刻印武器には、新しい番号を付ける */
+/** 拾ったものを倉庫に入れる。刻印武器には、新しい番号を付ける。二重耐性の指輪は、持ち物（owned）に入る */
 export function receiveLoot(save: SaveData, found: Found | undefined): SaveData {
-  if (!found || (found.echoes.length === 0 && found.gear.length === 0)) return save;
+  if (!found || (found.echoes.length === 0 && found.gear.length === 0 && found.rings.length === 0)) return save;
   let uid = save.engraved.reduce((top, g) => Math.max(top, g.uid), 0);
   const gear: EngravedGear[] = found.gear.map((g) => ({ uid: ++uid, base: g.base, slots: Array.from({ length: g.slots }, () => null) }));
-  return { ...save, engraved: [...save.engraved, ...gear], echoes: [...save.echoes, ...found.echoes] };
+  // 二重耐性の指輪は、同じものを持っていれば重ならない（同じ組み合わせ・段階は1つ。段階がちがえば別のもの）
+  const owned = [...save.owned];
+  for (const id of found.rings) if (!owned.includes(id)) owned.push(id);
+  return { ...save, owned, engraved: [...save.engraved, ...gear], echoes: [...save.echoes, ...found.echoes] };
 }
 
 export const engravedName = (g: Pick<EngravedGear, 'base'>): string => gearName(g.base);

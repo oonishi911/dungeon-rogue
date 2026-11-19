@@ -106,7 +106,7 @@ export const ENCHANT_VS_ELEMENT: Record<Element, Partial<Record<Element, number>
 // 敵のマスターデータは src/game/enemies.json にある（開発用の管理画面 ?view=admin から書き換えて公開できる）。
 // 攻撃力は自動プレイのバランステスト（balance.test.ts）を満たすように調整している。
 // ボス：ダンジョンの属性と体質の傾向に合わせる。動かない。正しい準備で挑んだとき、ボス戦で受ける合計ダメージが
-// どのボスでも40前後になるようにそろえている。光のダンジョンは、光の衣で防げない炎・無属性の敵も混ざり道中で消耗するので、
+// どのボスでも40前後になるようにそろえている。光のダンジョンは、光の指輪で防げない炎・無属性の敵も混ざり道中で消耗するので、
 // ボスを少し弱くしている
 export const ENEMY_MASTER = parseEnemyMaster(enemyMasterJson);
 export const ENEMIES: Record<EnemyId, EnemyDef> = enemyDefs(ENEMY_MASTER);
@@ -125,15 +125,15 @@ export function enemyBase(id: EnemyId): EnemyDef {
 }
 
 /**
- * ダンジョンごとの有利な装備：その属性に効く防具と、出やすい体質の敵に効く武器。
+ * ダンジョンごとの有利な装備：その属性に効く指輪（防具は、どれも鎧。耐性は指輪だけ）と、出やすい体質の敵に効く武器。
  * バランステストの「正しい準備」と、開発用画面の ?best=1 で使う（ゲームでは、持ち物は店で買って選ぶ）
  */
 export const FAVORABLE_GEAR: Record<TraitId, readonly ItemId[]> = {
-  fire: ['sword', 'fire_cloak'],
-  ice: ['hammer', 'ice_cloak'],
-  neutral: ['hammer', 'plate'],
-  light: ['hammer', 'light_robe'],
-  dark: ['staff', 'dark_robe'],
+  fire: ['sword', 'plate', 'ring_fire_1'],
+  ice: ['hammer', 'plate', 'ring_ice_1'],
+  neutral: ['hammer', 'plate', 'ring_neutral_1'],
+  light: ['hammer', 'plate', 'ring_light_1'],
+  dark: ['staff', 'plate', 'ring_dark_1'],
 };
 
 /** バランステストの「正しい準備」で、有利な装備に足して持たせる道具 */

@@ -16,7 +16,17 @@ const priceOfAll = (ids: ItemId[]) => ids.reduce((sum, id) => sum + ITEMS[id].pr
 describe('店に並ぶもの', () => {
   it('何も持っていなければ、武器・防具は種類ごとに2段目まで', () => {
     expect(shelfItems([], 'weapon')).toEqual(['sword', 'sword_2', 'hammer', 'hammer_2', 'staff', 'staff_2']);
-    expect(shelfItems([], 'armor')).toHaveLength(10);
+    expect(shelfItems([], 'armor')).toHaveLength(2); // 防具は鎧1つだけ（守りだけ。属性は指輪）
+    // 指輪は、6種類（炎・氷・無属性・光・闇・万能）を、1段目と2段目まで。二重耐性の指輪は並ばない
+    expect(shelfItems([], 'ring')).toHaveLength(12);
+    expect(shelfItems([], 'ring')).toContain('ring_all_2');
+    expect(shelfItems([], 'ring').some((id) => id.startsWith('ring_dual'))).toBe(false);
+  });
+
+  it('指輪も、持っているいちばん上の段階と、その2つ上まで（5段階が上限）', () => {
+    expect(shelfItems(['ring_fire_2'], 'ring').filter((id) => id.startsWith('ring_fire'))).toEqual(['ring_fire_2', 'ring_fire_3', 'ring_fire_4']);
+    expect(shelfItems(['ring_fire_4'], 'ring').filter((id) => id.startsWith('ring_fire'))).toEqual(['ring_fire_4', 'ring_fire_5']);
+    expect(shelfItems(['ring_fire_4'], 'ring').filter((id) => id.startsWith('ring_ice'))).toEqual(['ring_ice_1', 'ring_ice_2']);
   });
 
   it('持っているいちばん上の段階と、その2つ上まで（下の段階は並べない）', () => {
@@ -131,22 +141,34 @@ describe('出発と帰り', () => {
 describe('おすすめの印', () => {
   const clear = (topic: 'trait' | 'body' | 'boss', facts: { element?: 'fire' | 'ice' | 'neutral' | 'light' | 'dark'; body?: 'normal' | 'soft' | 'hard' | 'spirit'; weakness?: 'magic' | 'physical' | 'none' }) => ({ topic, vague: false, text: '', memo: '', ...facts });
 
-  it('何も聞いていない・うわさだけなら、印は付かない', () => {
-    expect(recommended([]).size).toBe(0);
-    expect(recommended([{ topic: 'trait', vague: true, text: '', memo: '' }]).size).toBe(0);
+  const ringPicks = (p: Set<ItemId>) => [...p].filter((id) => id.startsWith('ring_'));
+
+  it('何も聞いていない・うわさだけなら、武器・砥石・呪文書の印は付かず、万能の指輪だけに付く', () => {
+    for (const p of [recommended([]), recommended([{ topic: 'trait', vague: true, text: '', memo: '' }])]) {
+      expect(ringPicks(p).sort()).toEqual([1, 2, 3, 4, 5].map((l) => `ring_all_${l}`));
+      expect([...p].filter((id) => !id.startsWith('ring_'))).toEqual([]);
+    }
   });
 
-  it('属性がはっきりわかれば、その属性を防ぐ防具（すべての段階）と、よく効く砥石・矢の呪文書に付く', () => {
+  it('属性がはっきりわかれば、その属性の指輪（すべての段階と、その属性を含む二重耐性の指輪）と、よく効く砥石・矢の呪文書に付く', () => {
     const p = recommended([clear('trait', { element: 'fire' })]);
-    expect(p.has('fire_cloak')).toBe(true);
-    expect(p.has('fire_cloak_10')).toBe(true);
-    expect(p.has('ice_cloak')).toBe(false);
+    expect(p.has('ring_fire_1')).toBe(true);
+    expect(p.has('ring_fire_5')).toBe(true);
+    expect(p.has('ring_ice_1')).toBe(false); // 逆の属性の指輪は、弱点になる
+    expect(p.has('ring_all_1')).toBe(false); // 属性がわかったので、万能の指輪の保険はいらない
+    expect(p.has('ring_dual_fire_ice_3')).toBe(true);
+    expect(p.has('ring_dual_fire_dark_2')).toBe(true);
+    expect(p.has('ring_dual_ice_light_3')).toBe(false);
     expect(p.has('ice_whetstone')).toBe(true);
     expect(p.has('fire_whetstone')).toBe(false);
     expect(p.has('book_ice_bolt')).toBe(true);
     expect(p.has('book_fire_bolt')).toBe(false);
-    // 光は、光の衣がいちばん防ぐ
-    expect(recommended([clear('trait', { element: 'light' })]).has('light_robe')).toBe(true);
+    expect(recommended([clear('trait', { element: 'light' })]).has('ring_light_2')).toBe(true);
+    expect(recommended([clear('trait', { element: 'neutral' })]).has('ring_neutral_1')).toBe(true);
+  });
+
+  it('体だけがわかったとき（属性は聞いていない）は、万能の指輪に付く', () => {
+    expect(recommended([clear('body', { body: 'hard' })]).has('ring_all_3')).toBe(true);
   });
 
   it('体がはっきりわかれば、その体によく効く武器（すべての段階）に付く。普通の体なら付かない', () => {
@@ -177,8 +199,8 @@ describe('おすすめの印（魔法・物理の弱点）', () => {
     expect(p.has('hammer')).toBe(true);
     expect(p.has('staff')).toBe(false);
     expect(p.has('book_fire_bolt')).toBe(false);
-    expect(recommended([heard('none')]).size).toBe(0);
-    expect(recommended([{ ...heard('magic'), vague: true }]).size).toBe(0);
+    expect([...recommended([heard('none')])].filter((id) => !id.startsWith('ring_'))).toEqual([]);
+    expect([...recommended([{ ...heard('magic'), vague: true }])].filter((id) => !id.startsWith('ring_'))).toEqual([]);
   });
 });
 

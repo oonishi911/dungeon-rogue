@@ -2,7 +2,7 @@
 // ルールはすべて src/game/shop.ts にあり、ここでは呼び出して表示するだけ。
 // ダンジョンの属性は出さず、情報屋から聞いたことだけを、上にメモとして出す。
 // はっきり聞いたこと（うわさでない）があれば、それに合う品物に「おすすめ」の印を付ける（shop.ts の recommended）。
-// 売り場は「武器・防具・道具・呪文書」のタブで切り替える。下の「持ち物」の欄は、たたんでおける（スマホで品物を多く見るため）。
+// 売り場は「武器・防具・指輪・道具・呪文書」のタブで切り替える（指輪の売り場には、敵が落とした二重耐性の指輪も並ぶ）。下の「持ち物」の欄は、たたんでおける（スマホで品物を多く見るため）。
 
 import { useMemo, useState } from 'react';
 import { LOST, lost } from '../game/story';
@@ -15,6 +15,8 @@ import type { ItemId, Result } from '../game/types';
 import { ItemIcon } from './ItemIcon';
 import { EngravePanel } from './EngravePanel';
 import { engravedName } from '../game/engrave';
+import { ringOf } from '../game/itemMaster';
+import { equipRing, fingers, kitRings, unequipRing } from '../game/ring';
 
 interface ShopScreenProps {
   run: number;
@@ -33,6 +35,8 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<ItemId | null>(null); // 説明を全部出している品物
   const { kit } = save;
+  const rings = kitRings(save);
+  const fingerCount = fingers(save.memories.length);
   // 情報屋からはっきり聞いたことに合う品物（うわさだけでは付けない）
   const picks = useMemo(() => recommended(intel), [intel]);
 
@@ -84,7 +88,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
       {tab === 'engrave' && <EngravePanel save={save} apply={apply} />}
       {tab !== 'engrave' && (
       <ul className="shop__list screen__scroll" aria-label={SHELVES.find((s) => s.id === shelf)!.name}>
-        {shelfItems(atEntry, shelf).map((id) => (
+        {[...shelfItems(atEntry, shelf), ...(shelf === 'ring' ? save.owned.filter((id) => ringOf(id)?.kind === 'dual') : [])].map((id) => (
           <li key={id} className="shop__row">
             <ItemIcon id={id} size={28} className="shop__icon" />
             {/* 説明は1行に切ってある。押すと全文を出す */}
@@ -112,7 +116,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
           <button type="button" className="shop__bag-toggle" aria-expanded={bagOpen} aria-controls="shop-slots" onClick={() => setBagOpen((o) => !o)}>
             <span>持っていくもの</span>
             <span className="shop__bag-sum">
-              道具 {takeCount(kit.take)}/{takeLimit(kit.take)}・呪文書 {kit.books.length}/{LOADOUT_CONFIG.maxSpellbooks}
+              指輪 {rings.length}/{fingerCount}・道具 {takeCount(kit.take)}/{takeLimit(kit.take)}・呪文書 {kit.books.length}/{LOADOUT_CONFIG.maxSpellbooks}
             </span>
             <span className="shop__bag-arrow" aria-hidden="true">
               {bagOpen ? '▼' : '▲'}
@@ -128,6 +132,16 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
             <div>
               <dt>防具</dt>
               <dd>{kit.armor ? <Chip id={kit.armor} title="外す" onClick={() => apply(equip(save, 'armor', null))} /> : <span className="shop__none">なし</span>}</dd>
+            </div>
+            <div>
+              <dt>指輪</dt>
+              <dd>
+                {rings.map((id) => (
+                  <Chip key={id} id={id} title="外す" onClick={() => apply(unequipRing(save, id))} />
+                ))}
+                {rings.length === 0 && <span className="shop__none">なし</span>}
+                <span className="muted">（指{fingerCount}本まで。思い出した記憶で増える）</span>
+              </dd>
             </div>
             <div>
               <dt>道具</dt>
@@ -205,6 +219,17 @@ function Deal({ id, shelf, save, atEntry, apply }: { id: ItemId; shelf: Shelf; s
         <span className="shop__owned">持っている</span>
         <button type="button" className={taking ? 'shop__buy shop__buy--off' : 'primary shop__buy'} onClick={() => apply(toggleBook(save, id))}>
           {taking ? '外す' : '持っていく'}
+        </button>
+      </>
+    );
+  }
+  if (shelf === 'ring') {
+    const wearing = kitRings(save).includes(id);
+    return (
+      <>
+        <span className="shop__owned">持っている</span>
+        <button type="button" className={wearing ? 'shop__buy shop__buy--off' : 'primary shop__buy'} onClick={() => apply(wearing ? unequipRing(save, id) : equipRing(save, id))}>
+          {wearing ? '外す' : '付ける'}
         </button>
       </>
     );

@@ -4,7 +4,7 @@
 
 import { COMBAT_CONFIG as C, ELEMENT_COMPONENTS, ENCHANT_VS_ELEMENT, ITEMS, LOADOUT_CONFIG, WEAPON_VS_BODY } from './data';
 import { bodyDamageRate, echoAtk, imbuedElement } from './echo';
-import type { EchoId, ElementComponent, EnemyDef, ItemDef, ItemId, ItemSlot, PlayerStats } from './types';
+import type { EchoId, ElementComponent, EnemyDef, Guard, ItemDef, ItemId, ItemSlot, PlayerStats } from './types';
 
 export function itemSlot(item: ItemDef): ItemSlot {
   switch (item.effect.kind) {
@@ -12,6 +12,8 @@ export function itemSlot(item: ItemDef): ItemSlot {
       return 'weapon';
     case 'armor':
       return 'armor';
+    case 'ring':
+      return 'ring';
     case 'heal':
     case 'food':
     case 'enchant':
@@ -27,12 +29,13 @@ export function itemSlot(item: ItemDef): ItemSlot {
   }
 }
 
-/** 持ち込んだアイテムからプレイヤーの能力を作る。武器・防具は1つずつ装備する。echoes：装備した刻印武器にはめた残響（ない・空なら、残響なし） */
+/** 持ち込んだアイテムからプレイヤーの能力を作る。武器・防具は1つずつ、指輪は付けた分だけ装備する。echoes：装備した刻印武器にはめた残響（ない・空なら、残響なし） */
 export function buildPlayer(loadout: readonly ItemId[], echoes?: readonly EchoId[]): PlayerStats {
   const weapon = loadout.find((id) => itemSlot(ITEMS[id]) === 'weapon') ?? null;
   const armor = loadout.find((id) => itemSlot(ITEMS[id]) === 'armor') ?? null;
   const w = weapon ? ITEMS[weapon].effect : null;
   const a = armor ? ITEMS[armor].effect : null;
+  const rings = loadout.filter((id) => itemSlot(ITEMS[id]) === 'ring');
   return {
     hp: C.playerHp,
     maxHp: C.playerHp,
@@ -43,6 +46,7 @@ export function buildPlayer(loadout: readonly ItemId[], echoes?: readonly EchoId
     poisonTurns: 0,
     weapon,
     armor,
+    ...(rings.length ? { rings } : {}),
     // 持っていくだけで効く道具（ランタン・大きな袋）は、ダンジョンでは使わないので持ち物に入れない（持ち帰らず、なくなる）
     items: loadout.filter((id) => itemSlot(ITEMS[id]) === 'consumable' && !isPassive(id)),
     enchant: null,
@@ -51,24 +55,31 @@ export function buildPlayer(loadout: readonly ItemId[], echoes?: readonly EchoId
 }
 
 /**
- * 敵の攻撃1回でプレイヤーが受けるダメージ。
- * 複合属性（光・闇）は成分ごとに半分ずつ分け、防具はそれぞれの成分に別々に効く。
- * 専用防具（光の衣・闇の衣）は、その属性の攻撃を丸ごと軽減する。
+ * 敵の攻撃1回でプレイヤーが受けるダメージ。守り（def）を引いたあと、指輪の耐性と弱点を掛ける。
+ * 複合属性（光・闇）は成分ごとに半分ずつ分け、炎・氷・無属性の指輪はそれぞれの成分に別々に効く。
+ * 光の指輪・闇の指輪は、その属性の攻撃を丸ごと軽減し（逆の属性の攻撃は丸ごと増える）、万能の指輪はすべてに効く。
+ * 指輪が何個あっても、効く指輪の倍率はすべて掛け算
  */
 export function enemyHitDamage(player: PlayerStats, enemy: EnemyDef): number {
   const base = Math.max(1, enemy.atk - player.def);
-  const effect = player.armor ? ITEMS[player.armor].effect : null;
-  const guard = effect?.kind === 'armor' ? effect.guard : null;
-
-  if (guard?.kind === 'whole') {
-    return Math.max(1, Math.ceil(base * (guard.element === enemy.element ? guard.rate : 1)));
+  const guards: Guard[] = [];
+  for (const id of player.rings ?? []) {
+    const effect = ITEMS[id]?.effect;
+    if (effect?.kind === 'ring') guards.push(...effect.guards);
+  }
+  if (!guards.length) return base;
+  // 丸ごと効くもの（光・闇の指輪、万能の指輪）は、全体に掛ける
+  let whole = 1;
+  for (const g of guards) {
+    if (g.kind === 'all' || (g.kind === 'whole' && g.element === enemy.element)) whole *= g.rate;
   }
   let total = 0;
   for (const [component, share] of Object.entries(ELEMENT_COMPONENTS[enemy.element]) as [ElementComponent, number][]) {
-    const rate = guard?.kind === 'component' && guard.component === component ? guard.rate : 1;
+    let rate = 1;
+    for (const g of guards) if (g.kind === 'component' && g.component === component) rate *= g.rate;
     total += base * share * rate;
   }
-  return Math.max(1, Math.ceil(total));
+  return Math.max(1, Math.ceil(total * whole - 1e-9));
 }
 
 /** プレイヤーの攻撃1回で敵が受けるダメージ。武器と体質、付けた属性と敵の属性の相性、敵の物理の倍率（physical）で増減する */
