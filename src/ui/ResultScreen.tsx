@@ -1,4 +1,5 @@
 import { TRAITS } from '../game/data';
+import { echoName, gearName } from '../game/echo';
 import { hasDungeon, dungeonOf } from '../game/dungeons';
 import type { ExploreResult } from '../game/exploreTypes';
 import { LOST, lost, rewindLines } from '../game/story';
@@ -57,6 +58,15 @@ export function ResultScreen({ run, outcome, expedition, gold, onNextRun }: Resu
               {expedition.goldBrought < expedition.gold && `（拾った${lost(expedition.gold)}のうち）`}
             </dd>
           </div>
+          {expedition.found && (expedition.found.gear.length > 0 || expedition.found.echoes.length > 0) && (
+            <div>
+              <dt>拾った刻印武器と残響</dt>
+              <dd>
+                {[...expedition.found.gear.map((g) => `${gearName(g.base)}（スロット${g.slots}）`), ...expedition.found.echoes.map(echoName)].join('、')}
+                （{LOST.shop}の「刻印」に届いた。失うことはない）
+              </dd>
+            </div>
+          )}
           <div>
             <dt>貯めた{LOST.name}</dt>
             <dd>{lost(gold)}（次の{LOST.shop}で使える。使わなかった道具は倉庫に戻った）</dd>

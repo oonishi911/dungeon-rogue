@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ITEM_MASTER } from './data';
+import { ECHO_MASTER, ITEM_MASTER } from './data';
+import { serializeEchoMaster } from './echoMaster';
 import { serializeItemMaster } from './itemMaster';
 import {
   ADMIN_TABS,
@@ -14,6 +15,7 @@ import {
   dungeonStatus,
   duplicateDungeon,
   ENEMY_FILE,
+  ECHO_FILE,
   ITEM_FILE,
   isDungeonTab,
   planPublish,
@@ -58,6 +60,7 @@ const dungeon = (name: string): DungeonFile => ({ name, description: `${name}の
 const BASE: AdminData = {
   enemies: { enemies: copyJson(sample.enemies) } as EnemyMaster,
   items: copyJson(ITEM_MASTER),
+  echoes: copyJson(ECHO_MASTER),
   dungeons: { standard: dungeon('標準'), cave: dungeon('ほら穴') },
 };
 const edited = (change: (d: AdminData) => void): AdminData => {
@@ -174,7 +177,7 @@ describe('管理画面の公開（敵のデータと、いくつものダンジ�
 
 describe('管理画面のタブ', () => {
   it('敵のデータと品物の設定の2つと、ダンジョンの設定の7つがある', () => {
-    expect(ADMIN_TABS.map((t) => t.id)).toEqual(['enemies', 'items', 'about', 'pool', 'floors', 'rooms', 'placement', 'growth', 'magic']);
+    expect(ADMIN_TABS.map((t) => t.id)).toEqual(['enemies', 'items', 'echoes', 'about', 'pool', 'floors', 'rooms', 'placement', 'growth', 'magic']);
     expect(ADMIN_TABS.filter((t) => isDungeonTab(t.id)).map((t) => t.id)).toEqual(['about', 'pool', 'floors', 'rooms', 'placement', 'growth', 'magic']);
   });
 
@@ -246,6 +249,28 @@ describe('管理画面のタブ', () => {
     });
     expect(ADMIN_TABS.filter((t) => tabChanged(t.id, BASE, draft))).toEqual([]);
     expect(planPublish(BASE, draft).changes).toEqual([]);
+  });
+});
+
+describe('残響の設定の公開', () => {
+  it('確率や数字を変えると、残響の設定ファイルを保存し、残響のタブに変えた印が付く', () => {
+    const draft = edited((d) => {
+      d.echoes.echo.drop.elite = 12;
+      d.echoes.effects.hard.weapon = 30;
+    });
+    const plan = planPublish(BASE, draft);
+    expect(plan.files).toEqual([{ path: ECHO_FILE, text: serializeEchoMaster(draft.echoes), base: serializeEchoMaster(BASE.echoes) }]);
+    expect(plan.changes).toEqual(['残響：残響を落とす確率（強敵）：10% → 12%', '残響：硬い残響：数字 25 → 30']);
+    expect(plan.problems).toEqual([]);
+    expect(ADMIN_TABS.filter((t) => tabChanged(t.id, BASE, draft)).map((t) => t.id)).toEqual(['echoes']);
+  });
+
+  it('正しくない値（段階の大小・名前の重なり）は、直すところに出る', () => {
+    const draft = edited((d) => {
+      d.echoes.engraved.tierMin = 5;
+      d.echoes.effects.ice.name = d.echoes.effects.fire.name;
+    });
+    expect(planPublish(BASE, draft).problems.length).toBe(2);
   });
 });
 

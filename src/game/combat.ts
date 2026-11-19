@@ -3,7 +3,8 @@
 // 戦闘の進行（誰がいつ攻撃するか）は explore.ts にある。
 
 import { COMBAT_CONFIG as C, ELEMENT_COMPONENTS, ENCHANT_VS_ELEMENT, ITEMS, LOADOUT_CONFIG, WEAPON_VS_BODY } from './data';
-import type { ElementComponent, EnemyDef, ItemDef, ItemId, ItemSlot, PlayerStats } from './types';
+import { bodyDamageRate, echoAtk, imbuedElement } from './echo';
+import type { EchoId, ElementComponent, EnemyDef, ItemDef, ItemId, ItemSlot, PlayerStats } from './types';
 
 export function itemSlot(item: ItemDef): ItemSlot {
   switch (item.effect.kind) {
@@ -26,8 +27,8 @@ export function itemSlot(item: ItemDef): ItemSlot {
   }
 }
 
-/** 持ち込んだアイテムからプレイヤーの能力を作る。武器・防具は1つずつ装備する */
-export function buildPlayer(loadout: readonly ItemId[]): PlayerStats {
+/** 持ち込んだアイテムからプレイヤーの能力を作る。武器・防具は1つずつ装備する。echoes：装備した刻印武器にはめた残響（ない・空なら、残響なし） */
+export function buildPlayer(loadout: readonly ItemId[], echoes?: readonly EchoId[]): PlayerStats {
   const weapon = loadout.find((id) => itemSlot(ITEMS[id]) === 'weapon') ?? null;
   const armor = loadout.find((id) => itemSlot(ITEMS[id]) === 'armor') ?? null;
   const w = weapon ? ITEMS[weapon].effect : null;
@@ -36,7 +37,7 @@ export function buildPlayer(loadout: readonly ItemId[]): PlayerStats {
     hp: C.playerHp,
     maxHp: C.playerHp,
     // 武器は攻撃力を、防具は守りを上げる（段階が上がるほど大きい。品物の設定 items.json）
-    atk: C.playerAtk + (w?.kind === 'weapon' ? w.atk : 0),
+    atk: C.playerAtk + (w?.kind === 'weapon' ? w.atk : 0) + (weapon ? echoAtk(echoes) : 0),
     def: C.playerDef + (a?.kind === 'armor' ? a.def : 0),
     mag: 0,
     poisonTurns: 0,
@@ -45,6 +46,7 @@ export function buildPlayer(loadout: readonly ItemId[]): PlayerStats {
     // 持っていくだけで効く道具（ランタン・大きな袋）は、ダンジョンでは使わないので持ち物に入れない（持ち帰らず、なくなる）
     items: loadout.filter((id) => itemSlot(ITEMS[id]) === 'consumable' && !isPassive(id)),
     enchant: null,
+    ...(weapon && echoes?.length ? { echoes: [...echoes] } : {}),
   };
 }
 
@@ -72,7 +74,7 @@ export function enemyHitDamage(player: PlayerStats, enemy: EnemyDef): number {
 /** プレイヤーの攻撃1回で敵が受けるダメージ。武器と体質、付けた属性と敵の属性の相性、敵の物理の倍率（physical）で増減する */
 export function playerHitDamage(player: PlayerStats, enemy: EnemyDef): number {
   const base = Math.max(1, player.atk - enemy.def);
-  return Math.max(1, Math.round(base * bodyMultiplier(player, enemy) * enchantMultiplier(player, enemy) * (enemy.physical ?? 1)));
+  return Math.max(1, Math.round(base * bodyMultiplier(player, enemy) * enchantMultiplier(player, enemy) * bodyDamageRate(player.echoes, enemy.body) * (enemy.physical ?? 1)));
 }
 
 export function bodyMultiplier(player: PlayerStats, enemy: EnemyDef): number {
@@ -80,9 +82,11 @@ export function bodyMultiplier(player: PlayerStats, enemy: EnemyDef): number {
   return effect?.kind === 'weapon' ? WEAPON_VS_BODY[effect.weapon][enemy.body] : 1;
 }
 
+/** 付けた属性と、敵の属性の相性。砥石などの力が付いていればそちらが先、なければ残響の属性（通常攻撃に付く） */
 export function enchantMultiplier(player: PlayerStats, enemy: EnemyDef): number {
-  if (!player.enchant) return 1;
-  return ENCHANT_VS_ELEMENT[player.enchant.element][enemy.element] ?? 1;
+  const element = player.enchant?.element ?? imbuedElement(player.echoes);
+  if (!element) return 1;
+  return ENCHANT_VS_ELEMENT[element][enemy.element] ?? 1;
 }
 
 /** 持っていくだけで効く道具か（遠見のランタン・大きな袋）。ダンジョンの持ち物には入らず、探索1回でなくなる */

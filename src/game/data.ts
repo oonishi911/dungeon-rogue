@@ -13,8 +13,10 @@ import type {
   WeaponType,
 } from './types';
 import enemyMasterJson from './enemies.json';
+import echoesJson from './echoes.json';
 import itemsJson from './items.json';
 import { itemDefs, parseItemMaster, type ItemMaster } from './itemMaster';
+import { parseEchoMaster, type EchoMaster } from './echoMaster';
 import { enemyDefs, enemyRewards, parseEnemyMaster, type EnemyReward } from './enemyMaster';
 import type { GrowthSettings } from './genMaster';
 
@@ -73,6 +75,9 @@ export const SPELLS: Record<SpellId, SpellDef> = {
 // 品物の働き（回復薬の回復量など）と説明は itemMaster.ts
 export const ITEM_MASTER: ItemMaster = parseItemMaster(itemsJson);
 export const ITEMS: Record<ItemId, ItemDef> = itemDefs(ITEM_MASTER);
+
+// 残響と刻印装備の設定（src/game/echoes.json。管理画面の「残響」タブ）。働きは echo.ts
+export const ECHO_MASTER: EchoMaster = parseEchoMaster(echoesJson);
 
 // ===== 戦闘の設定値（仮） =====
 export const COMBAT_CONFIG = {

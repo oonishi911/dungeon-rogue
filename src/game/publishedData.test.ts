@@ -4,10 +4,12 @@
 // 値段や強さが遊びやすいかは見ない（それはバランスのテスト）。管理画面は正しくない設定を公開させないので、ふつうはここも落ちない。
 import { describe, expect, it } from 'vitest';
 import enemiesText from './enemies.json?raw';
+import echoesText from './echoes.json?raw';
 import itemsText from './items.json?raw';
 import { masterProblems, parseEnemyMaster, serializeEnemyMaster } from './enemyMaster';
 import { dungeonProblems, parseDungeon, serializeDungeon } from './genMaster';
 import { DEFAULT_DUNGEON_ID } from './dungeons';
+import { echoProblems, parseEchoMaster, serializeEchoMaster } from './echoMaster';
 import { itemProblems, parseItemMaster, serializeItemMaster } from './itemMaster';
 
 const DUNGEON_TEXTS = import.meta.glob<string>('./dungeons/*.json', { eager: true, query: '?raw', import: 'default' });
@@ -17,6 +19,13 @@ describe('品物の設定（src/game/items.json）', () => {
   it('正しい形になっていて、書き出すと同じ中身になる', () => {
     expect(itemProblems(JSON.parse(itemsText))).toEqual([]);
     expect(serializeItemMaster(parseItemMaster(JSON.parse(itemsText)))).toBe(itemsText);
+  });
+});
+
+describe('残響の設定（src/game/echoes.json）', () => {
+  it('正しい形になっていて、書き出すと同じ中身になる', () => {
+    expect(echoProblems(JSON.parse(echoesText))).toEqual([]);
+    expect(serializeEchoMaster(parseEchoMaster(JSON.parse(echoesText)))).toBe(echoesText);
   });
 });
 

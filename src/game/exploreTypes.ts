@@ -2,7 +2,8 @@
 
 import type { MapEnemy } from './enemies';
 import type { FloorMap, Pos } from './map';
-import type { EnemyId, ItemId, PlayerStats, SpellId, TraitId, WeaponType } from './types';
+import type { Found } from './echo';
+import type { EchoId, EnemyId, ItemId, PlayerStats, SpellId, TraitId, WeaponType } from './types';
 
 // 数値はすべて仮。バランス調整で見直す
 export const EXPLORE_CONFIG = {
@@ -133,6 +134,7 @@ export interface ExploreState {
   foes: FoeEvent[]; // 直前の行動で起きた、敵の特別な行動や床の出来事（行動のたびに空からやり直す）
   skill: number; // 技ゲージ（通常攻撃を当てた回数。満タンは武器の段階で決まる。武器がなければ0）
   fields: Field[]; // 今いる階の床に残る魔法の跡（燃える床・霜の床）。階を離れると消える
+  found: Found; // この挑戦で拾った刻印武器と残響（終わったとき、力尽きても倉庫に入る。docs/echo-spec.md）
 }
 
 export interface ExploreOptions {
@@ -142,6 +144,7 @@ export interface ExploreOptions {
   maxSatiety?: number;
   trait?: TraitId; // 省略時はシードから決める
   loadout?: readonly ItemId[];
+  echoes?: readonly EchoId[]; // 装備した刻印武器にはめた残響
   enemyDensity?: number;
 }
 
@@ -154,4 +157,5 @@ export interface ExploreResult {
   defeated: number;
   gold: number; // 手に入れた金貨
   goldBrought: number; // 持ち帰った金貨。踏破すれば全額、力尽きたときとリタイアしたときは一部
+  found?: Found; // 拾った刻印武器と残響（全部、持ち帰る）
 }

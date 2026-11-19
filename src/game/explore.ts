@@ -7,6 +7,8 @@
 
 import { BOSS_CONFIG, phaseOf, phaseSow, PHASE_MAX } from './bossPhase';
 import { buildPlayer, enemyHitDamage, itemCapacity, playerHitDamage } from './combat';
+import { gearName, lootSeed, noFound, rollLoot, satietySaving, savesSatiety } from './echo';
+import { echoName } from './echo';
 import { COMBAT_CONFIG, enemyBase, enemyReward, expToNext, ITEMS, REWARD_CONFIG, SPELLS, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
 import { DEFAULT_DUNGEON_ID, dungeonOf } from './dungeons';
 import {
@@ -85,7 +87,7 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     enemyDensity: options.enemyDensity ?? params.enemyDensity,
     map: floorMap(seed, 0, mapSize, settings.rooms),
     player: { x: 0, y: 0 },
-    stats: buildPlayer(options.loadout ?? []),
+    stats: buildPlayer(options.loadout ?? [], options.echoes),
     satiety: maxSatiety,
     maxSatiety,
     ...startMagic(options.loadout ?? [], settings.magic),
@@ -110,6 +112,7 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     foes: [],
     skill: 0,
     fields: [],
+    found: noFound(),
   };
   return enterFloor(state, 0, state.map);
 }
@@ -561,7 +564,7 @@ function hurtEnemy(state: ExploreState, uid: number, dmg: number, slip: boolean 
     if (def.boss) {
       const reward = TREASURE_CONFIG.bossGold;
       log.push(`報酬として忘れ物を拾った（${lost(reward)}）`, 'ダンジョンを踏破した');
-      return { ...defeated, gold: state.gold + reward, outcome: 'cleared', log };
+      return lootFrom({ ...defeated, gold: state.gold + reward, outcome: 'cleared', log }, target);
     }
     return defeatReward({ ...defeated, log }, target);
   }
@@ -657,7 +660,29 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
   }
   if (level >= growth.maxLevel) exp = 0;
 
-  return { ...state, gold: state.gold + gold, stats, chests, level, exp, rngState: s, log };
+  return lootFrom({ ...state, gold: state.gold + gold, stats, chests, level, exp, rngState: s, log }, enemy);
+}
+
+/**
+ * 倒した敵が、刻印武器や残響を落とす（ごく稀）。拾ったものは、探索のあいだ持っていて、終わったとき（力尽きても）倉庫に入る。宝箱には入らない。
+ * くじは探索の乱数を使わない（lootSeed）。呼ばれた敵は、何も落とさない
+ */
+function lootFrom(state: ExploreState, enemy: MapEnemy): ExploreState {
+  if (enemy.summoned) return state;
+  const def = enemyDef(enemy);
+  const got = rollLoot(lootSeed(state, enemy.uid), def, def.boss ? 'boss' : enemy.elite ? 'elite' : 'normal');
+  if (!got.gear && !got.echo) return state;
+  const log = [...state.log];
+  const found = { echoes: [...state.found.echoes], gear: [...state.found.gear] };
+  if (got.gear) {
+    found.gear.push(got.gear);
+    log.push(`${gearName(got.gear.base)}を拾った（刻印スロット${got.gear.slots}つ）。倉庫に送った`);
+  }
+  if (got.echo) {
+    found.echoes.push(got.echo);
+    log.push(`${echoName(got.echo)}を拾った。倉庫に送った`);
+  }
+  return { ...state, found, log };
 }
 
 // ===== プレイヤーの攻撃 =====
@@ -691,7 +716,7 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
     if (def.boss) {
       const reward = TREASURE_CONFIG.bossGold;
       log.push(`報酬として忘れ物を拾った（${lost(reward)}）`, 'ダンジョンを踏破した');
-      return { ...defeated, gold: state.gold + reward, outcome: 'cleared', log };
+      return lootFrom({ ...defeated, gold: state.gold + reward, outcome: 'cleared', log }, target);
     }
     return defeatReward({ ...defeated, log }, target);
   }
@@ -944,7 +969,7 @@ function enemiesTurn(state: ExploreState): ExploreState {
 
 /** 通常攻撃を当てたら、技ゲージが1たまる（満タンまで。武器がなければたまらない） */
 function gaugeUp(state: ExploreState): number {
-  const skill = skillOf(state.stats.weapon);
+  const skill = skillOf(state.stats.weapon, state.stats.echoes);
   return skill ? Math.min(skill.max, state.skill + 1) : 0;
 }
 
@@ -966,7 +991,7 @@ function useEnchant(state: ExploreState, at: readonly Pos[]): { state: ExploreSt
 
 /** 武器の固有技を出す。技ゲージが満タンのときだけ（1ターン使い、ゲージは0に戻る）。敵に当たらないときは出せない */
 function useSkill(state: ExploreState, dir: Dir | null): Result<ExploreState> {
-  const skill = skillOf(state.stats.weapon);
+  const skill = skillOf(state.stats.weapon, state.stats.echoes);
   if (!skill) return err('武器を持っていない');
   if (state.skill < skill.max) return err('技ゲージがたまっていない');
   let s: ExploreState = { ...state, skill: 0 };
@@ -1095,7 +1120,9 @@ function spendAction(state: ExploreState): ExploreState {
   const turn = state.turn + 1;
   const { stats } = state;
   if (state.satiety > 0) {
-    const satiety = Math.max(0, state.satiety - EXPLORE_CONFIG.satietyPerAction);
+    // ぬくもりの残響：決まった間隔で、満腹度が減らない行動ができる
+    const spent = savesSatiety(satietySaving(stats.echoes), turn) ? 0 : EXPLORE_CONFIG.satietyPerAction;
+    const satiety = Math.max(0, state.satiety - spent);
     const log = satiety === 0 ? [...state.log, '空腹で力が出ない…'] : state.log;
     return { ...state, turn, satiety, log };
   }
@@ -1125,6 +1152,7 @@ export function toResult(state: ExploreState): ExploreResult {
     defeated: state.defeated,
     gold: state.gold,
     goldBrought: cleared ? state.gold : Math.floor(state.gold * TREASURE_CONFIG.keepOnDefeat),
+    found: state.found,
   };
 }
 

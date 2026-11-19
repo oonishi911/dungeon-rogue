@@ -13,6 +13,8 @@ import type { SaveData } from '../game/save';
 import { buy, canTake, count, equip, kitLoadout, recommended, shelfItems, SHELVES, takeCount, takeLimit, takeSupply, toggleBook, type Shelf } from '../game/shop';
 import type { ItemId, Result } from '../game/types';
 import { ItemIcon } from './ItemIcon';
+import { EngravePanel } from './EngravePanel';
+import { engravedName } from '../game/engrave';
 
 interface ShopScreenProps {
   run: number;
@@ -25,7 +27,8 @@ interface ShopScreenProps {
 }
 
 export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, onDepart }: ShopScreenProps) {
-  const [shelf, setShelf] = useState<Shelf>('weapon');
+  const [tab, setTab] = useState<Shelf | 'engrave'>('weapon');
+  const shelf: Shelf = tab === 'engrave' ? 'weapon' : tab;
   const [bagOpen, setBagOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<ItemId | null>(null); // 説明を全部出している品物
@@ -65,15 +68,21 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
             key={s.id}
             type="button"
             role="tab"
-            aria-selected={shelf === s.id}
-            className={`shop__tab${shelf === s.id ? ' shop__tab--on' : ''}`}
-            onClick={() => setShelf(s.id)}
+            aria-selected={tab === s.id}
+            className={`shop__tab${tab === s.id ? ' shop__tab--on' : ''}`}
+            onClick={() => setTab(s.id)}
           >
             {s.name}
           </button>
         ))}
+        {/* 刻印：敵が落とした刻印武器と残響。買えない。装備と付け替えをする（engrave.ts） */}
+        <button type="button" role="tab" aria-selected={tab === 'engrave'} className={`shop__tab${tab === 'engrave' ? ' shop__tab--on' : ''}`} onClick={() => setTab('engrave')}>
+          刻印
+        </button>
       </div>
 
+      {tab === 'engrave' && <EngravePanel save={save} apply={apply} />}
+      {tab !== 'engrave' && (
       <ul className="shop__list screen__scroll" aria-label={SHELVES.find((s) => s.id === shelf)!.name}>
         {shelfItems(atEntry, shelf).map((id) => (
           <li key={id} className="shop__row">
@@ -92,6 +101,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
           </li>
         ))}
       </ul>
+      )}
 
       <p className="error shop__error" role="alert">
         {error}
@@ -113,7 +123,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
           <dl id="shop-slots" className="shop__slots">
             <div>
               <dt>武器</dt>
-              <dd>{kit.weapon ? <Chip id={kit.weapon} title="外す" onClick={() => apply(equip(save, 'weapon', null))} /> : <span className="shop__none">なし</span>}</dd>
+              <dd>{kit.weapon ? <Chip id={kit.weapon} label={gearLabel(save)} title="外す" onClick={() => apply(equip(save, 'weapon', null))} /> : <span className="shop__none">なし</span>}</dd>
             </div>
             <div>
               <dt>防具</dt>
@@ -211,11 +221,17 @@ function Deal({ id, shelf, save, atEntry, apply }: { id: ItemId; shelf: Shelf; s
   );
 }
 
-function Chip({ id, title, onClick }: { id: ItemId; title: string; onClick: () => void }) {
+/** 装備している武器の名前（刻印武器なら、その名前とはめた残響の数） */
+function gearLabel(save: SaveData): string | undefined {
+  const g = save.engraved.find((x) => x.uid === save.kit.weaponGear);
+  return g ? `${engravedName(g)}（残響${g.slots.filter((s) => s).length}/${g.slots.length}）` : undefined;
+}
+
+function Chip({ id, title, label, onClick }: { id: ItemId; title: string; label?: string; onClick: () => void }) {
   return (
     <button type="button" className="shop__chip" onClick={onClick} title={`${ITEMS[id].name}を${title}`}>
       <ItemIcon id={id} size={20} />
-      {ITEMS[id].name.replace('の呪文書', '')}
+      {label ?? ITEMS[id].name.replace('の呪文書', '')}
     </button>
   );
 }

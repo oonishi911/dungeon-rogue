@@ -12,13 +12,15 @@
 
 import { PHASE_MAX } from './bossPhase';
 import { ENEMIES, ITEMS, LOADOUT_CONFIG, SPELLS, TRAIT_IDS } from './data';
+import { noFound, type Found } from './echo';
+import { ECHO_IDS } from './echoMaster';
 import { dungeonOf, hasDungeon } from './dungeons';
 import type { MapEnemy } from './enemies';
 import { mapOfFloor } from './explore';
 import { EXPLORE_CONFIG, type Chest, type ExploreState, type FloorMemory } from './exploreTypes';
 import type { FloorMap, Pos } from './map';
 import { parseSave, type SaveData } from './save';
-import type { Departure, ItemId, SpellId, TraitId } from './types';
+import type { Departure, EchoId, ItemId, SpellId, TraitId } from './types';
 
 export const RUN_SAVE_VERSION = 1;
 const LOG_KEEP = 200;
@@ -157,8 +159,18 @@ function isStats(v: unknown): v is ExploreState['stats'] {
   if (!isObject(v) || !isCount(v.hp, 1) || !isCount(v.maxHp, 1) || !isNumber(v.atk) || !isNumber(v.def) || !isCount(v.poisonTurns)) return false;
   if (v.mag !== undefined && !isNumber(v.mag)) return false; // 魔力の欄ができる前の中断データには、ない（0として読む）
   if (!isItemOrNull(v.weapon) || !isItemOrNull(v.armor) || !Array.isArray(v.items) || !v.items.every(isItem)) return false;
+  if (!(v.echoes === undefined || isEchoList(v.echoes))) return false; // 残響の欄ができる前の中断データには、ない
   const e = v.enchant;
   return e === null || (isObject(e) && TRAIT_IDS.includes(e.element as TraitId) && isCount(e.hits));
+}
+
+const isEchoList = (v: unknown): v is EchoId[] => Array.isArray(v) && v.every((id) => typeof id === 'string' && (ECHO_IDS as readonly string[]).includes(id));
+
+/** 拾った刻印武器と残響。ない（残響ができる前の）中断データ・読めないものは、空から続ける */
+function parseFound(v: unknown): Found {
+  if (!isObject(v) || !isEchoList(v.echoes) || !Array.isArray(v.gear)) return noFound();
+  const gear = v.gear.filter((g): g is Found['gear'][number] => isObject(g) && isItem(g.base) && isCount(g.slots, 1) && g.slots <= 3);
+  return { echoes: v.echoes, gear };
 }
 
 /** 中断データのダンジョンの ID。ない・そのダンジョンがもうなければ null */
@@ -172,7 +184,7 @@ function parseOutcome(v: unknown): Departure | null {
   const dungeon = dungeonIdOf(v.dungeon);
   if (!dungeon) return null;
   if (!Array.isArray(v.loadout) || !v.loadout.every(isItem)) return null;
-  return { dungeon, trait: v.trait as TraitId, loadout: v.loadout };
+  return { dungeon, trait: v.trait as TraitId, loadout: v.loadout, ...(isEchoList(v.echoes) && v.echoes.length ? { echoes: v.echoes } : {}) };
 }
 
 /** 文字列から中断データを読む。形が合わない・続きから遊べないときは null */
@@ -257,6 +269,7 @@ export function parseRun(text: string | null): ResumedRun | null {
     foes: [],
     skill: isCount(s.skill) ? s.skill : 0, // 技ゲージを持たない前の版の途中保存は、空から続ける
     fields: [], // 床の跡は数ターンで消えるので、保存しない
+    found: parseFound(s.found),
   };
   return { base, outcome, seed: raw.seed, state };
 }
