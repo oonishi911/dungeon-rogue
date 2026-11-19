@@ -12,7 +12,7 @@
     "maxSize": 5
   },
   "enemies": {
-    "amount": 2,
+    "amount": 1,
     "placement": "rooms",
     "roomWeight": 1,
     "nestChance": 0.5,

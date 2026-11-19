@@ -12,14 +12,14 @@
     "maxSize": 7
   },
   "enemies": {
-    "amount": 2,
+    "amount": 3,
     "placement": "mixed",
     "roomWeight": 1,
-    "nestChance": 0.5,
+    "nestChance": 1,
     "nestMin": 1,
-    "nestMax": 3,
+    "nestMax": 10,
     "stayInRoom": true,
-    "bossMinions": 3
+    "bossMinions": 10
   },
   "growth": {
     "expBase": 10,
