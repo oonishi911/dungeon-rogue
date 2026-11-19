@@ -12,20 +12,20 @@
     "maxSize": 11
   },
   "enemies": {
-    "amount": 2,
+    "amount": 3,
     "placement": "mixed",
     "roomWeight": 1,
-    "nestChance": 0.5,
+    "nestChance": 0.6,
     "nestMin": 3,
     "nestMax": 8,
     "stayInRoom": true,
-    "bossMinions": 5
+    "bossMinions": 3
   },
   "growth": {
-    "expBase": 10,
-    "expStep": 3,
-    "hpPerLevel": 2,
-    "atkPerLevel": 1,
+    "expBase": 6,
+    "expStep": 2,
+    "hpPerLevel": 14,
+    "atkPerLevel": 3,
     "magPerLevel": 1,
     "maxLevel": 99,
     "eliteRate": 3
@@ -128,8 +128,7 @@
         "flame_hound",
         "lava_lizard",
         "goblin",
-        "lava_slime",
-        "fire_mage"
+        "lava_slime"
       ],
       "boss": "flame_beast"
     },
@@ -142,20 +141,23 @@
         "ice_beetle",
         "goblin",
         "yeti",
-        "ice_statue"
+        "yeti",
+        "ice_statue",
+        "ice_statue",
+        "goblin_mage"
       ],
       "boss": "ice_colossus"
     },
     "neutral": {
       "pool": [
         "goblin",
-        "goblin",
-        "giant_rat",
         "giant_rat",
         "stone_golem",
         "stone_golem",
         "troll",
         "iwao",
+        "animated_armor",
+        "animated_armor",
         "animated_armor",
         "goblin_mage"
       ],
@@ -177,16 +179,15 @@
     "dark": {
       "pool": [
         "dark_bat",
+        "dark_bat",
         "shadow",
         "shadow",
-        "phantom",
         "phantom",
         "ice_imp",
         "giant_rat",
         "wraith",
-        "dark_knight",
         "gargoyle",
-        "cultist"
+        "gargoyle"
       ],
       "boss": "dark_lord"
     }
