@@ -312,6 +312,26 @@ describe('状態異常の設定の公開', () => {
   });
 });
 
+describe('敵にかける状態異常の公開', () => {
+  it('燃焼・凍結・コンボの数字を変えると、状態異常の設定ファイルに保存し、変更の説明に出る', () => {
+    const { foe } = BASE.statuses;
+    const draft = edited((d) => {
+      d.statuses.foe.burn.damage = foe.burn.damage + 1;
+      d.statuses.foe.smashPercent = 300;
+    });
+    const plan = planPublish(BASE, draft);
+    expect(plan.files.map((f) => f.path)).toEqual([STATUS_FILE]);
+    expect(plan.changes).toEqual([`状態異常：敵の燃焼の毎ターンのダメージ：${foe.burn.damage} → ${foe.burn.damage + 1}`, `状態異常：砕くときのダメージの倍率：${foe.smashPercent}% → 300%`]);
+    expect(plan.problems).toEqual([]);
+  });
+
+  it('正しくない値（範囲の外・小数）は、直すところに出る', () => {
+    expect(planPublish(BASE, edited((d) => void (d.statuses.foe.freeze.turns = 0))).problems.length).toBe(1);
+    expect(planPublish(BASE, edited((d) => void (d.statuses.foe.smashPercent = 50))).problems.length).toBe(1);
+    expect(planPublish(BASE, edited((d) => void (d.statuses.foe.weakBonus = 1.5))).problems.length).toBe(1);
+  });
+});
+
 describe('品物の設定の公開', () => {
   it('名前・値段・性能を変えると、品物の設定ファイルを保存する', () => {
     const draft = edited((d) => {

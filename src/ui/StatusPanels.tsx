@@ -1,8 +1,8 @@
-// 管理画面の「状態異常」タブ：毒・鈍足・空腹の、かかる確率と長さを変える（src/game/statuses.json。設計は docs/status-spec.md）。
+// 管理画面の「状態異常」タブ：毒・鈍足・空腹の、かかる確率と長さを変える。敵にかける燃焼・凍結とコンボの数字も（src/game/statuses.json。設計は docs/status-spec.md・docs/combat-fun-spec.md）。
 // どの敵が状態異常を与えるかは「敵」タブの「個性」欄（毒・鈍足・空腹）。万能薬の値段は「品物」タブ。
 
 import type { Dispatch, SetStateAction } from 'react';
-import { STATUS_IDS, STATUS_LABELS, STATUS_LIMITS, STATUS_TEXTS, type StatusMaster } from '../game/statusMaster';
+import { STATUS_IDS, STATUS_LABELS, STATUS_LIMITS, STATUS_TEXTS, type FoeMaster, type StatusMaster } from '../game/statusMaster';
 import { NumberField } from './adminParts';
 
 interface StatusPanelProps {
@@ -91,6 +91,76 @@ export function StatusPanel({ base, draft, setDraft }: StatusPanelProps) {
           </tbody>
         </table>
       </div>
+
+      <FoeSection base={base.foe} draft={draft.foe} setDraft={setDraft} />
     </section>
+  );
+}
+
+type FoeField = { id: string; label: string; unit: string; range: { min: number; max: number }; get: (f: FoeMaster) => number; set: (f: FoeMaster, v: number) => FoeMaster };
+
+const FOE_FIELDS: FoeField[] = [
+  { id: 'burnChance', label: '燃焼：砥石でかかる確率', unit: '%', range: STATUS_LIMITS.chance, get: (f) => f.burn.chance, set: (f, v) => ({ ...f, burn: { ...f.burn, chance: v } }) },
+  { id: 'burnTurns', label: '燃焼：ターン数', unit: 'ターン', range: STATUS_LIMITS.turns, get: (f) => f.burn.turns, set: (f, v) => ({ ...f, burn: { ...f.burn, turns: v } }) },
+  { id: 'burnDamage', label: '燃焼：毎ターンのダメージ', unit: '', range: STATUS_LIMITS.damage, get: (f) => f.burn.damage, set: (f, v) => ({ ...f, burn: { ...f.burn, damage: v } }) },
+  { id: 'freezeChance', label: '凍結：砥石でかかる確率', unit: '%', range: STATUS_LIMITS.chance, get: (f) => f.freeze.chance, set: (f, v) => ({ ...f, freeze: { ...f.freeze, chance: v } }) },
+  { id: 'freezeTurns', label: '凍結：動けないターン数', unit: 'ターン', range: STATUS_LIMITS.turns, get: (f) => f.freeze.turns, set: (f, v) => ({ ...f, freeze: { ...f.freeze, turns: v } }) },
+  { id: 'weakBonus', label: '弱点の属性で延びるターン数', unit: 'ターン', range: STATUS_LIMITS.weakBonus, get: (f) => f.weakBonus, set: (f, v) => ({ ...f, weakBonus: v }) },
+  { id: 'smash', label: 'ハンマー×凍結（砕く）の倍率', unit: '%', range: STATUS_LIMITS.percent, get: (f) => f.smashPercent, set: (f, v) => ({ ...f, smashPercent: v }) },
+  { id: 'spell', label: '杖の呪文×燃焼・凍結の倍率', unit: '%', range: STATUS_LIMITS.percent, get: (f) => f.spellPercent, set: (f, v) => ({ ...f, spellPercent: v }) },
+];
+
+/** 敵にかける状態異常（燃焼・凍結）と、コンボの数字 */
+function FoeSection({ base, draft, setDraft }: { base: FoeMaster; draft: FoeMaster; setDraft: Dispatch<SetStateAction<StatusMaster>> }) {
+  return (
+    <>
+      <h2 className="admin__heading">敵にかける状態異常（燃焼・凍結）とコンボ</h2>
+      <ul className="admin__notelist">
+        <li>
+          <b>かかるとき</b>：炎の矢・炎の連矢は敵を燃やし、氷の矢・氷の連矢は敵を凍らせます（呪文は必ずかかります）。炎の砥石・氷の砥石で殴ったときは、下の確率でかかります。
+        </li>
+        <li>
+          <b>かからない敵</b>：炎の敵は燃えません。氷の敵とボスは凍りません。弱点の属性（炎→氷の敵、氷→炎の敵）なら、ターンが「弱点で延びるターン数」だけ延びます。
+        </li>
+        <li>
+          <b>蒸気</b>：燃えている敵に氷、凍っている敵に炎が当たると、蒸気になって、どちらも消えます（新しくもかかりません）。
+        </li>
+        <li>
+          <b>コンボ</b>：ハンマーで凍った敵を殴ると「砕く」（ダメージが倍率になり、凍結が解ける）。剣で燃えている敵を斬ると「焼き斬り」（残りの燃焼ダメージを一度に与え、火が消える）。杖で唱えた呪文は、燃えている・凍っている敵に当てると倍率になります。
+          <span className="gen__example">例：砕くの倍率が200%なら、凍った敵へのハンマーのダメージは2倍です。</span>
+        </li>
+      </ul>
+      <div className="admin__scroll">
+        <table className="admin__table admin__table--cards">
+          <thead>
+            <tr>
+              <th scope="col">項目</th>
+              <th scope="col">値</th>
+            </tr>
+          </thead>
+          <tbody>
+            {FOE_FIELDS.map((f) => (
+              <tr key={f.id}>
+                <th scope="row">{f.label}</th>
+                <td data-label="値" className="admin__c2">
+                  <label className="admin__inline">
+                    <NumberField
+                      value={f.get(draft)}
+                      min={f.range.min}
+                      max={f.range.max}
+                      changed={f.get(draft) !== f.get(base)}
+                      base={f.get(base)}
+                      label={f.label}
+                      onChange={(v) => setDraft((d) => ({ ...d, foe: f.set(d.foe, v) }))}
+                    />
+                    <span className="muted">{f.unit}</span>
+                  </label>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

@@ -6,7 +6,7 @@
 // 型と数値は exploreTypes.ts、視界の計算は exploreSight.ts、魔法の計算（魔力・ダメージ・相性）は magic.ts にある。
 
 import { BOSS_CONFIG, phaseOf, phaseSow, PHASE_MAX } from './bossPhase';
-import { buildPlayer, enemyHitDamage, itemCapacity, playerHitDamage, swapWeapons } from './combat';
+import { buildPlayer, enemyHitDamage, itemCapacity, playerHitDamage, swapWeapons, weaponTypeOf } from './combat';
 import { gearName, lootSeed, noFound, rollLoot, satietySaving, savesSatiety } from './echo';
 import { echoName } from './echo';
 import { enemyBase, enemyReward, expToNext, ITEMS, REWARD_CONFIG, SPELLS, STATUS_MASTER, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
@@ -29,6 +29,7 @@ import { chargeRun, guardsAgainst, minionTile, retreatStep, stepDir, straightLin
 import { canSee, samePos, visibleTiles } from './exploreSight';
 import { SKILL_CONFIG, skillOf } from './weaponSkill';
 import { afflict, cureAll, statusNames } from './status';
+import { applyFoeStatus, burnRemaining, extinguish, foeImmune, foeKindOf, scaled, thaw, whetstoneChance, type ComboKind, type FoeStatusKind } from './foeStatus';
 import { around9, FIELD_CONFIG, fieldAt, immuneToField, placeField, tickFields, type FieldKind } from './fields';
 import type { DungeonFile, RoomSettings } from './genMaster';
 import { magicPower, spellAffinity, spellDamage, startMagic } from './magic';
@@ -50,7 +51,7 @@ import {
 import { generateBossFloor, generateFloor, tileAt, type FloorMap, type Pos } from './map';
 import { floorParams } from './floorParams';
 import { nextInt, nextRandom, shuffle } from './rng';
-import type { EnemyDef, EnemyId, ItemId, Result, SpellId, TraitId } from './types';
+import type { Element, EnemyDef, EnemyId, ItemId, Result, SpellId, TraitId } from './types';
 import { lost } from './story';
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value });
@@ -228,11 +229,14 @@ function stepChill(state: ExploreState): ExploreState {
   return { ...state, stats: left > 0 ? { ...rest, chillSteps: left } : rest, log: left > 0 ? state.log : [...state.log, '足が軽くなった'] };
 }
 
-/** 1ターン進める：満腹度・出血・敵の動き・床の跡の順 */
+/** 1ターン進める：満腹度・出血・燃焼・敵の動き・床の跡の順 */
 function passTurn(state: ExploreState, bleeding: readonly Pos[]): ExploreState {
   let s = spendAction(state);
   if (s.outcome !== 'ongoing') return s;
   s = bleedTurn(s, bleeding);
+  if (s.outcome !== 'ongoing') return s;
+  // 燃やしたターンは、まだ燃焼のダメージを受けない（出血と同じ）
+  s = burnTurn(s, s.foes.flatMap((f) => (f.kind === 'foe_status' && f.status === 'burn' ? [f.at] : [])));
   if (s.outcome !== 'ongoing') return s;
   s = phaseUp(s);
   s = enemiesTurn(s);
@@ -266,7 +270,7 @@ function leaveFloor(state: ExploreState): ExploreState {
 function returnToFloor(state: ExploreState, floor: number, memory: FloorMemory, at: Pos, message: string): ExploreState {
   const visited = { ...state.visited };
   delete visited[floor]; // 今いる階は覚えておく一覧に入れない
-  const enemies = memory.enemies.map(({ stun: _stun, bleed: _bleed, chilled: _chilled, ...e }) => ({ ...e, mode: 'wander' as const, justNoticed: false, lastSeen: null, searchTurns: 0 }));
+  const enemies = memory.enemies.map(({ stun: _stun, bleed: _bleed, burn: _burn, frozen: _frozen, chilled: _chilled, ...e }) => ({ ...e, mode: 'wander' as const, justNoticed: false, lastSeen: null, searchTurns: 0 }));
   return reveal({
     ...state,
     floor,
@@ -499,11 +503,22 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
       const center = def.effect.kind === 'bolt' && def.effect.splash ? targets[0] : undefined;
       const around = center ? s.enemies.filter((e) => e.uid !== center.uid && Math.max(Math.abs(e.pos.x - center.pos.x), Math.abs(e.pos.y - center.pos.y)) === 1) : [];
       const centerDamage = center ? spellDamage(s.stats, spell, enemyDef(center), settings) : 0;
-      for (const t of targets) s = hurtEnemy(s, t.uid, spellDamage(s.stats, spell, enemyDef(t), settings));
+      for (const t of targets) {
+        const b = staffBoost(s, t.uid, spellDamage(s.stats, spell, enemyDef(t), settings));
+        s = hurtEnemy(s, t.uid, b.dmg, false, b.combo);
+      }
       const splashDamage = centerDamage > 0 && (cfg.splash ?? 0) > 0 ? Math.max(1, Math.round(centerDamage * (cfg.splash ?? 0))) : 0;
       if (splashDamage > 0) {
         event.splash = around.map((e) => e.pos);
-        for (const e of around) s = hurtEnemy(s, e.uid, splashDamage);
+        for (const e of around) {
+          const b = staffBoost(s, e.uid, splashDamage);
+          s = hurtEnemy(s, e.uid, b.dmg, false, b.combo);
+        }
+      }
+      // 炎・氷の矢は、当たった（倒れなかった）敵を燃やす・凍らせる（必ずかかる）。燃えている敵に氷、凍っている敵に炎は、蒸気になって打ち消し合う
+      const foeKind = def.effect.kind === 'bolt' ? foeKindOf(def.effect.element) : null;
+      if (foeKind && def.effect.kind === 'bolt') {
+        for (const t of [...targets, ...around]) if (s.outcome === 'ongoing') s = inflict(s, t.uid, def.effect.element, foeKind, t === targets[0]);
       }
       // 烈なぎ払い：当たって倒れなかった敵が出血する（1ターンのダメージは、その敵に与えたダメージの割合。もう出血していれば、かけ直す）
       if (def.effect.kind === 'sweep' && def.effect.bleed && (cfg.bleedTurns ?? 0) > 0 && (cfg.bleedRate ?? 0) > 0) {
@@ -523,7 +538,8 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
       const around = s.enemies.filter((e) => Math.max(Math.abs(e.pos.x - s.player.x), Math.abs(e.pos.y - s.player.y)) === 1);
       if (around.length === 0) s = { ...s, log: [...s.log, 'まわりに敵はいなかった'] };
       for (const t of around) {
-        s = hurtEnemy(s, t.uid, spellDamage(s.stats, spell, enemyDef(t), settings));
+        const b = staffBoost(s, t.uid, spellDamage(s.stats, spell, enemyDef(t), settings));
+        s = hurtEnemy(s, t.uid, b.dmg, false, b.combo);
         const target = s.enemies.find((e) => e.uid === t.uid);
         if (!target || s.outcome !== 'ongoing' || enemyDef(target).boss) continue;
         const d = { x: Math.sign(target.pos.x - s.player.x), y: Math.sign(target.pos.y - s.player.y) };
@@ -576,13 +592,14 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
 }
 
 /** 敵に魔法などでダメージを与える。倒したら報酬（ボスなら踏破）、倒れなければこちらに気付く */
-function hurtEnemy(state: ExploreState, uid: number, dmg: number, slip: boolean | 'burn' = false): ExploreState {
+function hurtEnemy(state: ExploreState, uid: number, dmg: number, slip: boolean | 'burn' | 'flame' = false, combo?: ComboKind): ExploreState {
   const target = state.enemies.find((e) => e.uid === uid);
   if (!target || state.outcome !== 'ongoing') return state;
   const def = enemyDef(target);
   const hp = target.hp - dmg;
-  const log = [...state.log, slip ? `${def.name}は${slip === 'burn' ? '燃える床' : '出血'}で${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`];
-  state = { ...state, hits: [...state.hits, slip ? { kind: 'dealt', at: target.pos, amount: dmg, slip: true } : { kind: 'dealt', at: target.pos, amount: dmg }] };
+  const slipName = slip === 'burn' ? '燃える床' : slip === 'flame' ? '燃焼' : '出血';
+  const log = [...state.log, slip ? `${def.name}は${slipName}で${dmg}のダメージ` : combo ? `${COMBO_NAMES[combo]}！ ${def.name}に${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`];
+  state = { ...state, hits: [...state.hits, { kind: 'dealt', at: target.pos, amount: dmg, ...(slip ? { slip: true } : {}), ...(combo ? { combo } : {}) }], foes: combo ? [...state.foes, { kind: 'combo', at: target.pos, combo }] : state.foes };
   if (hp <= 0) {
     log.push(`${def.name}を倒した`);
     const defeated = { ...state, enemies: state.enemies.filter((e) => e.uid !== uid), defeated: state.defeated + (target.summoned ? 0 : 1) };
@@ -620,6 +637,50 @@ function bleedTurn(state: ExploreState, skip: readonly Pos[]): ExploreState {
     };
   }
   return s;
+}
+
+/** 燃えている敵が、1ターンにつき1回ダメージを受ける。残りのターンが0になれば火は消える（倒れたら、ふつうに倒したときと同じ報酬）。燃やしたターン（skip のマスにいる敵）は、まだダメージを受けない */
+function burnTurn(state: ExploreState, skip: readonly Pos[]): ExploreState {
+  let s = state;
+  for (const { uid } of state.enemies.filter((e) => e.burn)) {
+    const e = s.enemies.find((x) => x.uid === uid);
+    if (!e?.burn || skip.some((p) => samePos(p, e.pos))) continue;
+    const { amount, turns } = e.burn;
+    s = hurtEnemy(s, uid, amount, 'flame');
+    if (s.outcome !== 'ongoing') return s;
+    s = {
+      ...s,
+      enemies: s.enemies.map((x) => {
+        if (x.uid !== uid) return x;
+        const { burn: _burn, ...rest } = x;
+        return turns > 1 ? { ...rest, burn: { amount, turns: turns - 1 } } : rest;
+      }),
+    };
+  }
+  return s;
+}
+
+const COMBO_NAMES: Record<ComboKind, string> = { smash: '砕いた', sear: '焼き斬り', arcane: '杖が共鳴した' };
+
+/** 敵に燃焼・凍結をかける（かかった・蒸気で打ち消し合ったときは、ログと演出の出来事を足す。announce：かからない敵のとき、その旨をログに出す） */
+function inflict(state: ExploreState, uid: number, element: Element, kind: FoeStatusKind, announce: boolean): ExploreState {
+  const target = state.enemies.find((e) => e.uid === uid);
+  if (!target) return state;
+  const applied = applyFoeStatus(target, element, kind);
+  if (!applied) return announce ? { ...state, log: [...state.log, `${enemyDef(target).name}は${kind === 'burn' ? '燃えない' : '凍らない'}`] } : state;
+  return {
+    ...state,
+    enemies: state.enemies.map((e) => (e.uid === uid ? applied.enemy : e)),
+    log: [...state.log, applied.log],
+    foes: [...state.foes, applied.steam ? { kind: 'steam', at: target.pos } : { kind: 'foe_status', at: target.pos, status: kind }],
+  };
+}
+
+/** 杖の呪文は、燃えている・凍っている敵に当てるとダメージが増える（杖 × 燃焼・凍結） */
+function staffBoost(state: ExploreState, uid: number, dmg: number): { dmg: number; combo?: ComboKind } {
+  const e = state.enemies.find((x) => x.uid === uid);
+  if (!e || weaponTypeOf(state.stats.weapon) !== 'staff' || !(e.burn || e.frozen)) return { dmg };
+  return { dmg: scaled(dmg, STATUS_MASTER.foe.spellPercent), combo: 'arcane' };
 }
 
 // ===== 敵を倒したときの報酬 =====
@@ -723,14 +784,31 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
   // 盾持ちの敵は、向いている正面からの攻撃を大きく防ぐ（側面・背中からなら、そのまま通る）
   const guarded = behaviorsOf(def).includes('shield') && guardsAgainst(target, state.player);
   const raw = playerHitDamage(state.stats, def) * (surprise ? ENEMY_CONFIG.surpriseMultiplier : 1);
-  const dmg = guarded ? Math.max(1, Math.round(raw * (1 - ENEMY_CONFIG.shieldCut))) : raw;
+  let dmg = guarded ? Math.max(1, Math.round(raw * (1 - ENEMY_CONFIG.shieldCut))) : raw;
+  // コンボ：ハンマー × 凍結 ＝ 砕く（凍結は解ける）／ 剣 × 燃焼 ＝ 焼き斬り（残りの燃焼のダメージを一度に与え、火が消える）
+  const weapon = weaponTypeOf(state.stats.weapon);
+  let combo: ComboKind | undefined;
+  let victim = target;
+  if (weapon === 'hammer' && target.frozen) {
+    dmg = scaled(dmg, STATUS_MASTER.foe.smashPercent);
+    combo = 'smash';
+    victim = thaw(target);
+  } else if (weapon === 'sword' && target.burn) {
+    dmg += burnRemaining(target);
+    combo = 'sear';
+    victim = extinguish(target);
+  }
   const hp = target.hp - dmg;
-  const log = [...state.log, guarded ? `${def.name}の盾に防がれた（${dmg}のダメージ）` : surprise ? `${def.name}に不意打ち！ ${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`];
+  const log = [
+    ...state.log,
+    combo ? `${COMBO_NAMES[combo]}！ ${def.name}に${dmg}のダメージ` : guarded ? `${def.name}の盾に防がれた（${dmg}のダメージ）` : surprise ? `${def.name}に不意打ち！ ${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`,
+  ];
+  const enchantBefore = state.stats.enchant;
   state = {
     ...state,
     skill: gaugeUp(state),
-    hits: [...state.hits, guarded ? { kind: 'dealt', at: target.pos, amount: dmg, blocked: true } : { kind: 'dealt', at: target.pos, amount: dmg }],
-    foes: guarded ? [...state.foes, { kind: 'block', at: target.pos }] : state.foes,
+    hits: [...state.hits, { kind: 'dealt', at: target.pos, amount: dmg, ...(guarded ? { blocked: true } : {}), ...(combo ? { combo } : {}) }],
+    foes: [...(guarded ? [...state.foes, { kind: 'block' as const, at: target.pos }] : state.foes), ...(combo ? [{ kind: 'combo' as const, at: target.pos, combo }] : [])],
   };
 
   // 属性付与はダメージを計算したあとで1回減らし、0回になると消える。炎・氷の力を宿した武器で当てると、敵の足元に床が残る
@@ -750,8 +828,16 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
     return defeatReward({ ...defeated, log }, target);
   }
   // 攻撃された敵はこちらに気付く
-  const hit: MapEnemy = { ...target, hp, mode: 'chase', justNoticed: surprise, lastSeen: state.player };
-  return { ...state, stats, enemies: state.enemies.map((e) => (e.uid === target.uid ? hit : e)), log };
+  const hit: MapEnemy = { ...victim, hp, mode: 'chase', justNoticed: surprise, lastSeen: state.player };
+  state = { ...state, stats, enemies: state.enemies.map((e) => (e.uid === target.uid ? hit : e)), log };
+  // 炎・氷の砥石で殴ると、確率で燃える・凍る（かからない敵には、確率も引かない）
+  const kind = foeKindOf(enchantBefore?.element);
+  if (enchantBefore && kind && !foeImmune(hit, kind)) {
+    const roll = nextRandom(state.rngState);
+    state = { ...state, rngState: roll.state };
+    if (roll.value < whetstoneChance(kind)) state = inflict(state, hit.uid, enchantBefore.element, kind, false);
+  }
+  return state;
 }
 
 /** 隣にいる敵から離れると、背後から攻撃されることがある（強敵は必ず） */
@@ -841,8 +927,9 @@ function enemiesTurn(state: ExploreState): ExploreState {
     const current = enemies[i]!;
     // 動けない敵は、このターンは何もしない（気付くことも、動くことも、攻撃することも）。突進の構えも解ける
     if ((current.stun ?? 0) > 0) {
-      const { stun, charge: _charge, ...rest } = current;
-      enemies[i] = stun! > 1 ? { ...rest, stun: stun! - 1, justNoticed: false } : { ...rest, justNoticed: false };
+      const { stun, charge: _charge, frozen, ...rest } = current;
+      // 凍結は、動けないターン（stun）が切れると解ける
+      enemies[i] = stun! > 1 ? { ...rest, ...(frozen ? { frozen } : {}), stun: stun! - 1, justNoticed: false } : { ...rest, justNoticed: false };
       continue;
     }
     const def = enemyDef(current);

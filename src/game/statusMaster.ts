@@ -14,6 +14,22 @@ export type StatusMaster = {
   poison: { chance: number; turns: number; damage: number }; // chance：かかる確率（%）、turns：続くターン数、damage：毎ターンのダメージ（守りは関係ない）
   chill: { chance: number; steps: number }; // steps：鈍足でいる歩数（1歩に2ターンかかる）
   hunger: { chance: number; amount: number }; // amount：当たったときに、その場で減る満腹度
+  foe: FoeMaster; // 敵にかける燃焼・凍結（設計は docs/combat-fun-spec.md ①）
+};
+
+/**
+ * 敵にかける状態異常。炎・氷の呪文は必ず、炎・氷の砥石で殴ったときは確率（chance）でかかる
+ * burn：燃焼（turns ターン、毎ターン damage ダメージ。守りは関係ない）／freeze：凍結（turns ターン動けない）
+ * weakBonus：弱点の属性（炎→氷の敵、氷→炎の敵）のとき延びるターン数
+ * smashPercent：ハンマーで凍った敵を殴ったときのダメージの倍率（%。凍結は解ける）
+ * spellPercent：杖を持って、燃えている・凍っている敵に唱えたときの呪文のダメージの倍率（%）
+ */
+export type FoeMaster = {
+  burn: { chance: number; turns: number; damage: number };
+  freeze: { chance: number; turns: number };
+  weakBonus: number;
+  smashPercent: number;
+  spellPercent: number;
 };
 
 export const STATUS_LIMITS = {
@@ -22,6 +38,8 @@ export const STATUS_LIMITS = {
   damage: { min: 1, max: 20 },
   steps: { min: 1, max: 20 },
   amount: { min: 1, max: 50 },
+  weakBonus: { min: 0, max: 5 },
+  percent: { min: 100, max: 500 },
 } as const;
 
 /** 状態異常の説明（ゲーム内の表示と管理画面の説明に使う）。数字は設定から */
@@ -57,6 +75,31 @@ export function statusProblems(data: unknown): string[] {
   }
   if (isObj(data.chill)) field('chill', 'steps', STATUS_LIMITS.steps, '歩数');
   if (isObj(data.hunger)) field('hunger', 'amount', STATUS_LIMITS.amount, '減る満腹度');
+  const foe = isObj(data.foe) ? data.foe : null;
+  if (!foe) {
+    out.push('敵にかける状態異常の設定が読めない');
+    return out;
+  }
+  const sub = (key: 'burn' | 'freeze') => (isObj(foe[key]) ? (foe[key] as Record<string, unknown>) : null);
+  const check = (v: unknown, range: { min: number; max: number }, label: string) => {
+    if (!intIn(v, range)) out.push(`敵にかける状態異常：${label}は${range.min}〜${range.max}の整数にする`);
+  };
+  const burn = sub('burn');
+  const freeze = sub('freeze');
+  if (!burn) out.push('敵にかける状態異常：燃焼の設定が読めない');
+  else {
+    check(burn.chance, STATUS_LIMITS.chance, '燃焼の確率（%）');
+    check(burn.turns, STATUS_LIMITS.turns, '燃焼のターン数');
+    check(burn.damage, STATUS_LIMITS.damage, '燃焼の毎ターンのダメージ');
+  }
+  if (!freeze) out.push('敵にかける状態異常：凍結の設定が読めない');
+  else {
+    check(freeze.chance, STATUS_LIMITS.chance, '凍結の確率（%）');
+    check(freeze.turns, STATUS_LIMITS.turns, '凍結のターン数');
+  }
+  check(foe.weakBonus, STATUS_LIMITS.weakBonus, '弱点で延びるターン数');
+  check(foe.smashPercent, STATUS_LIMITS.percent, '砕くときのダメージの倍率（%）');
+  check(foe.spellPercent, STATUS_LIMITS.percent, '杖の呪文のダメージの倍率（%）');
   return out;
 }
 
@@ -81,5 +124,13 @@ export function describeStatusChanges(before: StatusMaster, after: StatusMaster)
   diff('毒の毎ターンのダメージ', before.poison.damage, after.poison.damage);
   diff('鈍足の歩数', before.chill.steps, after.chill.steps);
   diff('空腹で減る満腹度', before.hunger.amount, after.hunger.amount);
+  diff('敵の燃焼：砥石でかかる確率', before.foe.burn.chance, after.foe.burn.chance, '%');
+  diff('敵の燃焼のターン数', before.foe.burn.turns, after.foe.burn.turns);
+  diff('敵の燃焼の毎ターンのダメージ', before.foe.burn.damage, after.foe.burn.damage);
+  diff('敵の凍結：砥石でかかる確率', before.foe.freeze.chance, after.foe.freeze.chance, '%');
+  diff('敵の凍結のターン数', before.foe.freeze.turns, after.foe.freeze.turns);
+  diff('弱点で延びるターン数', before.foe.weakBonus, after.foe.weakBonus);
+  diff('砕くときのダメージの倍率', before.foe.smashPercent, after.foe.smashPercent, '%');
+  diff('杖の呪文のダメージの倍率', before.foe.spellPercent, after.foe.spellPercent, '%');
   return out;
 }

@@ -28,7 +28,7 @@ import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
-import { AFTERGLOW_FX, AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEATH_FX, DEBRIS, GLOW_FX, INTRO_FX, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, FOE_FX, SPLASH_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, QUALITY, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
+import { AFTERGLOW_FX, AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEATH_FX, DEBRIS, GLOW_FX, INTRO_FX, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, FOE_FX, FOE_STATUS_FX, SPLASH_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, QUALITY, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
 import { applyFog, createFog, createGroundMist, litBillboard, worldMapped } from './explore3dKit';
 import { asMetal } from './materialLook';
 import { PostFx } from './postFx';
@@ -94,6 +94,7 @@ export class DungeonView3D {
   private readonly slashes: { sprite: THREE.Sprite; start: number; ms?: number; size?: number; aspect?: number }[] = []; // 剣の斬撃の残光（通常攻撃の残光も）
   private readonly rings: { mesh: THREE.Mesh; start: number }[] = []; // 槌の地響きの輪
   private readonly puffs: { sprite: THREE.Sprite; at: Pos; start: number; drift: number }[] = []; // 立ち上る水蒸気
+  private readonly iceShells = new Map<number, THREE.Mesh>(); // 凍った敵を包む氷の殻（敵の uid ごと）
   private readonly stairs: Stairs3D; // 特性ごとの階段の模型
   private readonly sconces: Sconces; // 部屋の壁掛けたいまつ
   private readonly particles: Particles; // 空気の粒と火の粉
@@ -185,6 +186,8 @@ export class DungeonView3D {
     shotBall: new THREE.SphereGeometry(FOE_FX.shot.size, 12, 8),
     slamRing: new THREE.RingGeometry(0.92, 1, 36).rotateX(-Math.PI / 2),
     chip: new THREE.TetrahedronGeometry(0.07), // 破片・火花
+    iceShell: new THREE.BoxGeometry(FOE_STATUS_FX.shell.width, FOE_STATUS_FX.shell.height, FOE_STATUS_FX.shell.width), // 凍った敵の氷の殻
+    iceShellMat: new THREE.MeshBasicMaterial({ color: FOE_STATUS_FX.shell.color, transparent: true, opacity: FOE_STATUS_FX.shell.opacity, depthWrite: false }),
     glowPlane: new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), // 敵の足元の光
     fieldPlate: new THREE.PlaneGeometry(FOE_FX.field.size, FOE_FX.field.size).rotateX(-Math.PI / 2),
     targetRing: new THREE.RingGeometry(0.32, 0.42, 24).rotateX(-Math.PI / 2),
@@ -468,7 +471,9 @@ export class DungeonView3D {
         view.shield.position.set(at.x + d.x * FOE_FX.shield.reach, FOE_FX.shield.y, at.y + d.y * FOE_FX.shield.reach);
         view.shield.rotation.y = d.x !== 0 ? Math.PI / 2 : 0;
       }
+      this.updateFoeStatus(e, at, dt);
     }
+    this.pruneIceShells(s.enemies);
     this.updateKnock(now);
     this.updateDying(now);
     this.updateCollapses(now);
@@ -922,6 +927,8 @@ export class DungeonView3D {
         shotMs = FOE_FX.shot.ms;
       } else if (f.kind === 'skill') shotMs = Math.max(shotMs, this.playSkill(f));
       else if (f.kind === 'steam') this.puff(f.at);
+      else if (f.kind === 'foe_status') this.foeBurst(f.at, f.status);
+      else if (f.kind === 'combo') this.foeBurst(f.at, f.combo);
       else if (f.kind === 'bump') this.popText(f.at, '★', FOE_FX.marks.bump);
       else if (f.kind === 'summon') this.popText(f.at, '呼', FOE_FX.marks.summon);
       else if (f.kind === 'roar') this.roar(f.at, f.phase);
@@ -1697,8 +1704,10 @@ export class DungeonView3D {
       if (view.shield) view.facing = e.facing ?? 'down'; // 盾持ちは、盾を向けている向き（最後に歩いた向き）を向く
       // 頭上のマーク。気付いた瞬間の「！」だけ大きく強調する
       // 動けない敵（強衝撃）は黄色い星、出血している敵（烈なぎ払い）は赤い丸
-      if ((e.stun ?? 0) > 0) view.mark.material = this.textMaterial('★', '#ffe27a');
+      if (e.frozen) view.mark.material = this.textMaterial('氷', FOE_STATUS_FX.marks.freeze);
+      else if ((e.stun ?? 0) > 0) view.mark.material = this.textMaterial('★', '#ffe27a');
       else if (e.charge) view.mark.material = this.textMaterial('‼', FOE_FX.marks.charge); // 突進の構え
+      else if (e.burn) view.mark.material = this.textMaterial('炎', FOE_STATUS_FX.marks.burn);
       else if (e.bleed) view.mark.material = this.textMaterial('●', '#e0384a');
       else view.mark.material = this.textMaterial(ENEMY_MARK[e.mode].mark, e.mode === 'wander' ? '#b9b29f' : '#e2c178');
       view.mark.scale.setScalar(e.justNoticed || e.charge ? 0.7 : 0.45);
@@ -1835,6 +1844,42 @@ export class DungeonView3D {
     }
   }
 
+  /** 凍った敵に氷の殻をかぶせ、燃えている敵から火の粉を出す */
+  private updateFoeStatus(e: ExploreState['enemies'][number], at: { x: number; y: number }, dt: number) {
+    let shell = this.iceShells.get(e.uid);
+    if (e.frozen) {
+      if (!shell) {
+        shell = new THREE.Mesh(this.shared.iceShell, this.shared.iceShellMat);
+        shell.renderOrder = 13;
+        this.scene.add(shell);
+        this.iceShells.set(e.uid, shell);
+      }
+      shell.position.set(at.x, FOE_STATUS_FX.shell.y, at.y);
+    } else if (shell) {
+      this.scene.remove(shell);
+      this.iceShells.delete(e.uid);
+    }
+    if (e.burn && !this.reduceMotion && Math.random() < dt * FOE_STATUS_FX.flame.perSecond) {
+      const f = FOE_STATUS_FX.flame;
+      this.emitBits(new THREE.Vector3(at.x, f.y, at.y), { pieces: 1, speed: f.speed, up: f.up, gravity: f.gravity, size: f.size, color: f.color[Math.floor(Math.random() * f.color.length)]!, ms: f.ms, additive: true });
+    }
+  }
+
+  /** 見えなくなった・倒れた・解けた敵の氷の殻を外す */
+  private pruneIceShells(enemies: ExploreState['enemies']) {
+    for (const [uid, shell] of [...this.iceShells]) {
+      if (enemies.some((x) => x.uid === uid && x.frozen && this.enemies.get(uid)?.body.visible)) continue;
+      this.scene.remove(shell);
+      this.iceShells.delete(uid);
+    }
+  }
+
+  /** 状態異常・コンボが決まった瞬間の、破片と火花 */
+  private foeBurst(at: Pos, kind: 'burn' | 'freeze' | 'smash' | 'sear' | 'arcane') {
+    if (this.reduceMotion) return;
+    this.emitBits(new THREE.Vector3(at.x, 0.5, at.y), { ...FOE_STATUS_FX.burst[kind], additive: kind === 'burn' || kind === 'sear' || kind === 'arcane' });
+  }
+
   private removeEnemyView(uid: number) {
     const view = this.enemies.get(uid);
     if (!view) return;
@@ -1844,6 +1889,9 @@ export class DungeonView3D {
     if (view.glow) this.scene.remove(view.glow);
     view.model?.dispose();
     this.enemies.delete(uid);
+    const shell = this.iceShells.get(uid);
+    if (shell) this.scene.remove(shell);
+    this.iceShells.delete(uid);
   }
 
   /** 立体の模型で描く敵なら、模型を作る（模型のない敵は null で、ドット絵の板で描く） */

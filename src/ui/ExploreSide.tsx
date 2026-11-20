@@ -205,6 +205,13 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
                   </span>
                   {enemyDef(e).name}（{TRAITS[enemyDef(e).element].name}・{BODY_NAMES[enemyDef(e).body]}、HP {e.hp}）：
                   {ENEMY_MARK[e.mode].text}
+                  {(e.burn || e.frozen) && (
+                    // 敵の燃焼・凍結：残りのターン数つき
+                    <span className="explore__foe-states">
+                      {e.burn && <span className="explore__ailment explore__ailment--burn">燃焼 <span className="explore__ailment-left">{e.burn.turns}</span></span>}
+                      {e.frozen && <span className="explore__ailment explore__ailment--freeze">凍結 <span className="explore__ailment-left">{e.stun ?? 0}</span></span>}
+                    </span>
+                  )}
                   {other && (
                     // サブ武器があるときは、手に持っている武器と、持ち替えたときの1回のダメージを並べる（持ち替えを選ぶ目安）
                     <span className="explore__matchup">

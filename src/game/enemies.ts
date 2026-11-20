@@ -64,6 +64,8 @@ export interface MapEnemy {
   summonIn?: number; // 召喚まであと何ターン（ない敵は、召喚の間隔から数え始める）
   summoned?: boolean; // 召喚された敵（倒しても報酬はなく、倒した数にも入れない）
   summonedBy?: number; // 呼んだ敵の uid（同時に出していられる数を数えるため）
+  burn?: { turns: number; amount: number }; // 燃焼（炎の呪文・炎の砥石）。あと何ターン、1ターンにいくつのダメージを受けるか（foeStatus.ts）
+  frozen?: boolean; // 凍結（氷の呪文・氷の砥石）。動けないターンは stun で数える（stun が切れると解ける）。ハンマーで殴ると砕ける
   chilled?: boolean; // 霜の床の上で、次の1歩のために1ターン使った（次のターンに歩ける）
   phase?: number; // ボスの段階（1〜3。ない敵は1。bossPhase.ts）
 }

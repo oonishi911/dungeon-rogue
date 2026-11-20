@@ -1,6 +1,7 @@
 // 探索の状態・行動・出来事の型と、探索の数値。explore.ts が状態を進め、画面（src/ui）はこれを読む。
 
 import type { MapEnemy } from './enemies';
+import type { ComboKind } from './foeStatus';
 import type { FloorMap, Pos } from './map';
 import type { Found } from './echo';
 import type { EchoId, EnemyId, ItemId, PlayerStats, SpellId, TraitId, WeaponType } from './types';
@@ -52,6 +53,7 @@ export interface HitEvent {
   by?: EnemyId; // taken のとき、攻撃してきた敵（毒など、敵の攻撃でないときはない）
   slip?: boolean; // dealt のとき、出血のダメージ（主人公が武器を振った演出や、画面の拡大は出さない）
   blocked?: boolean; // dealt のとき、盾持ちの敵に正面から防がれた（ダメージが減っている）
+  combo?: ComboKind; // dealt のとき、決まったコンボ（砕く・焼き斬り・杖の共鳴）
   ranged?: boolean; // taken のとき、離れたところから撃たれた（敵が飛びかかる演出は出さない）
 }
 
@@ -63,7 +65,9 @@ export type FoeEvent =
   | { kind: 'bump'; at: Pos } // 突進が壁にぶつかった
   | { kind: 'summon'; at: Pos; from: Pos } // 敵が呼ばれた（from：呼んだ敵のいたマス）
   | { kind: 'block'; at: Pos } // 盾で防がれた
-  | { kind: 'steam'; at: Pos } // 燃える床と霜の床がぶつかって、水蒸気になった
+  | { kind: 'steam'; at: Pos } // 燃える床と霜の床、または敵の燃焼と凍結がぶつかって、水蒸気になった
+  | { kind: 'foe_status'; at: Pos; status: 'burn' | 'freeze' } // 敵が燃えた・凍った
+  | { kind: 'combo'; at: Pos; combo: ComboKind } // コンボが決まった（砕く・焼き斬り・杖の共鳴）
   | { kind: 'roar'; at: Pos; phase: number } // ボスが段階を上げて、咆哮した
   | { kind: 'sow'; at: Pos; to: Pos[]; field: Field['kind'] } // ボスが主人公のまわりに床をまいた
   | { kind: 'skill'; weapon: WeaponType; from: Pos; dir: Dir | null; path: Pos[] }; // 武器の固有技（path：当たったマス。魔力弾は、飛んだマスすべて）

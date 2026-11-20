@@ -81,6 +81,15 @@ describe('packRun / parseRun', () => {
     expect(parseRun(edited(withFoe, (r) => { (r.state.current.enemies[0] as { summoned: unknown }).summoned = 'yes'; }))).toBeNull();
   });
 
+  it('敵の燃焼・凍結も、保存して戻せる。壊れた値は null', () => {
+    const state = start();
+    const withStatus = { ...state, enemies: [{ ...state.enemies[0]!, burn: { turns: 2, amount: 2 }, frozen: true, stun: 2 }, ...state.enemies.slice(1)] };
+    expect(parseRun(saved(withStatus))!.state.enemies[0]).toMatchObject({ burn: { turns: 2, amount: 2 }, frozen: true, stun: 2 });
+    expect(parseRun(edited(withStatus, (r) => { (r.state.current.enemies[0] as { burn: unknown }).burn = { turns: 0, amount: 2 }; }))).toBeNull();
+    expect(parseRun(edited(withStatus, (r) => { (r.state.current.enemies[0] as { burn: unknown }).burn = 'hot'; }))).toBeNull();
+    expect(parseRun(edited(withStatus, (r) => { (r.state.current.enemies[0] as { frozen: unknown }).frozen = 1; }))).toBeNull();
+  });
+
   it('ボスの段階も、保存して戻せる。範囲外の値は null', () => {
     const state = start();
     const withPhase = { ...state, enemies: [{ ...state.enemies[0]!, phase: 3 }, ...state.enemies.slice(1)] };

@@ -259,7 +259,11 @@ describe('状態異常の設定の確かめ', () => {
     expect(bad((m) => void (m.poison.turns = 0))).toBe(1);
     expect(bad((m) => void (m.chill.steps = 2.5))).toBe(1);
     expect(bad((m) => void (m.hunger.amount = -1))).toBe(1);
-    expect(statusProblems({})).toHaveLength(STATUS_IDS.length);
+    expect(bad((m) => void (m.foe.burn.turns = 0))).toBe(1);
+    expect(bad((m) => void (m.foe.smashPercent = 99))).toBe(1);
+    expect(bad((m) => void (m.foe.weakBonus = 0.5))).toBe(1);
+    expect(bad((m) => void delete (m as Partial<typeof m>).foe)).toBe(1);
+    expect(statusProblems({})).toHaveLength(STATUS_IDS.length + 1); // 3つの状態異常と、敵にかける状態異常（foe）の欄
     expect(statusProblems(null)).toHaveLength(1);
   });
 });

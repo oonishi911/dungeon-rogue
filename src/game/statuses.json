@@ -11,5 +11,19 @@
   "hunger": {
     "chance": 30,
     "amount": 4
+  },
+  "foe": {
+    "burn": {
+      "chance": 50,
+      "turns": 3,
+      "damage": 2
+    },
+    "freeze": {
+      "chance": 50,
+      "turns": 2
+    },
+    "weakBonus": 1,
+    "smashPercent": 200,
+    "spellPercent": 150
   }
 }
