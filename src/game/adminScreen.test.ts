@@ -293,13 +293,14 @@ describe('残響の設定の公開', () => {
 
 describe('状態異常の設定の公開', () => {
   it('確率や長さを変えると、状態異常の設定ファイルを保存し、状態異常のタブに変えた印が付く', () => {
+    const { poison, chill } = BASE.statuses;
     const draft = edited((d) => {
-      d.statuses.poison.chance = 30;
-      d.statuses.chill.steps = 5;
+      d.statuses.poison.chance = poison.chance + 10;
+      d.statuses.chill.steps = chill.steps + 3;
     });
     const plan = planPublish(BASE, draft);
     expect(plan.files).toEqual([{ path: STATUS_FILE, text: serializeStatusMaster(draft.statuses), base: serializeStatusMaster(BASE.statuses) }]);
-    expect(plan.changes).toEqual(['状態異常：毒のかかる確率：50% → 30%', '状態異常：鈍足の歩数：3 → 5']);
+    expect(plan.changes).toEqual([`状態異常：毒のかかる確率：${poison.chance}% → ${poison.chance + 10}%`, `状態異常：鈍足の歩数：${chill.steps} → ${chill.steps + 3}`]);
     expect(plan.problems).toEqual([]);
     expect(ADMIN_TABS.filter((t) => tabChanged(t.id, BASE, draft)).map((t) => t.id)).toEqual(['statuses']);
   });
