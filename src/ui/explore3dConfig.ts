@@ -57,6 +57,19 @@ export const FOE_FX = {
   marks: { charge: '#ff5a4a', bump: '#ffe27a', summon: '#c08aff', blocked: '#9fb4c8' }, // 突進の構え・壁にぶつかった・召喚・盾に防がれたときの色
   phase: { colors: [0xb48d35, 0xe07a30, 0xd03030], grow: 0.08, ringGrow: 0.25, roarMs: 900, roarReach: 2.2, shake: 0.3 }, // ボスの段階：足元の輪の色（第1〜3段階）・体の大きくなり方・輪の大きくなり方・咆哮の輪の時間と広がり・揺れ
 } as const;
+// 敵の燃焼・凍結の見た目（2026-11-20）。凍った敵は氷の殻に包まれ、燃えている敵は火の粉を出し続ける
+export const FOE_STATUS_FX = {
+  shell: { color: 0xa6e4ff, opacity: 0.4, width: 0.78, height: 0.95, y: 0.48 }, // 氷の殻：色・濃さ・横の大きさ・高さ・床からの高さ（マス）
+  flame: { perSecond: 9, color: [0xffd060, 0xff8a2a, 0xff5a1a] as const, size: 0.2, speed: 0.25, up: 1.5, gravity: -1.2, ms: 560, y: 0.35 }, // 燃えている敵の火の粉：1秒に出す数・色・大きさ・広がり・上がる勢い・重力・消えるまで・高さ
+  burst: {
+    burn: { pieces: 14, speed: 1.6, up: 2.2, gravity: 4, size: 0.2, color: 0xff8a2a, ms: 650 }, // 燃え上がった瞬間
+    freeze: { pieces: 14, speed: 1.4, up: 1.6, gravity: 5, size: 0.22, color: 0xbfeaff, ms: 650 }, // 凍りついた瞬間
+    smash: { pieces: 26, speed: 3, up: 3.2, gravity: 9, size: 0.3, color: 0xe8f8ff, ms: 800 }, // 砕く：氷の破片
+    sear: { pieces: 20, speed: 2.4, up: 2.6, gravity: 5, size: 0.24, color: 0xffb040, ms: 650 }, // 焼き斬り：火の粉
+    arcane: { pieces: 16, speed: 1.8, up: 2.2, gravity: 2, size: 0.2, color: 0xc8a0ff, ms: 700 }, // 杖の共鳴：紫の光
+  },
+  marks: { burn: '#ff8a3c', freeze: '#bfeaff' }, // 頭上のマークの色
+} as const;
 export const REMEMBERED = 0.3; // 一度見たが今は見えていないマスの明るさ
 // 見える範囲の明るさ。主人公のそばは1で、視界の端へ向かってなめらかに edge まで暗くする。
 // マスの明るさは、見え始め・見えなくなるときに fade の速さ（1秒あたり）で少しずつ変える。

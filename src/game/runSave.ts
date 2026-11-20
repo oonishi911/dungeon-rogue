@@ -136,6 +136,9 @@ function isEnemy(map: FloorMap, v: unknown): v is MapEnemy {
   if (!(v.facing === undefined || isDir(v.facing)) || !(v.charge === undefined || isDir(v.charge))) return false;
   if (!(v.cool === undefined || isCount(v.cool)) || !(v.summonIn === undefined || isCount(v.summonIn))) return false;
   if (!(v.chilled === undefined || typeof v.chilled === 'boolean')) return false;
+  // 燃焼・凍結（できる前の中断データにはない）
+  if (!(v.burn === undefined || (isObject(v.burn) && isCount(v.burn.turns, 1) && isCount(v.burn.amount, 1)))) return false;
+  if (!(v.frozen === undefined || typeof v.frozen === 'boolean')) return false;
   if (!(v.phase === undefined || (isCount(v.phase, 1) && v.phase <= PHASE_MAX))) return false;
   if (!(v.summoned === undefined || typeof v.summoned === 'boolean') || !(v.summonedBy === undefined || isCount(v.summonedBy))) return false;
   const room = v.room;

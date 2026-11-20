@@ -533,6 +533,25 @@ button {
   color: #bfe3f2;
 }
 
+.explore__ailment--burn {
+  border-color: #e8914a;
+  color: #f7d2b0;
+}
+
+.explore__ailment--freeze {
+  border-color: #8fd0ee;
+  color: #d4f0fb;
+}
+
+/* 見えている敵の欄に出す、敵の燃焼・凍結のバッジ */
+.explore__foe-states {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+
 .explore__ailment-left {
   font-variant-numeric: tabular-nums;
   color: var(--bone-dim);
