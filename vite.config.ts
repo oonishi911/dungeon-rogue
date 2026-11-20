@@ -42,6 +42,8 @@ export default defineConfig(({ mode }) => ({
   test: {
     // テストのたびに、たまった通信を処理させる（src/test-setup.ts）
     setupFiles: ['src/test-setup.ts'],
+    // ふつう vitest は CSS を空にして読み込む。スマホ表示の決まりを確かめるテスト（src/ui/mobileLayout.test.ts）が styles.css の中身を読めるよう、このファイルだけは空にしない
+    css: { include: [/styles\.css/] },
     // バランスのテストは、一旦外している（ダンジョンの設定を自由に試せるように。自動チェックで止まらない）。
     // 動かすときは npm run test:balance（vitest.balance.config.ts。こちらは差し替えず、本物の設定で動く）
     exclude: [...configDefaults.exclude, BALANCE_TESTS],
