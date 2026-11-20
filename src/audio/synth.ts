@@ -3,9 +3,10 @@
 // 2026-11-21：記憶の動く場面（docs/memory-movie.md）の音を足した。roar（大きな声。pitch は強さ）・rumble（地鳴り。pitch は長さ（秒））・
 // heartbeat（心音。pitch は強さ）・hush（最後の、静かな低い響き）・
 // sizzle・sizzle_soft（紙が燃えるような、細かいチリチリという音。pitch は長さ（秒）。soft は小さめ）・
-// chalk・chalk_bold（黒板にチョークで書く音。pitch は書いている長さ（秒）。bold は力を込めて、強く）
+// chalk・chalk_bold（黒板にチョークで書く音。pitch は書いている長さ（秒）。bold は力を込めて、強く）・
+// slash（赤い線が走る、鋭く切り裂く音。pitch は高さの倍率）
 
-export type SynthKind = 'freeze' | 'burn' | 'smash' | 'sear' | 'arcane' | 'steam' | 'swap' | 'kill' | 'roar' | 'rumble' | 'heartbeat' | 'hush' | 'sizzle' | 'sizzle_soft' | 'chalk' | 'chalk_bold';
+export type SynthKind = 'freeze' | 'burn' | 'smash' | 'sear' | 'arcane' | 'steam' | 'swap' | 'kill' | 'roar' | 'rumble' | 'heartbeat' | 'hush' | 'sizzle' | 'sizzle_soft' | 'chalk' | 'chalk_bold' | 'slash';
 
 let noise: AudioBuffer | null = null;
 const noiseOf = (ctx: AudioContext): AudioBuffer => {
@@ -169,8 +170,8 @@ function sizzle(ctx: AudioContext, out: AudioNode, at: number, len: number, leve
  * 下に、細かい粉の息と、黒板の板が鳴る低めのこもりを敷く。len 秒続き、level（1が標準）で強さが変わる
  */
 function chalk(ctx: AudioContext, out: AudioNode, at: number, len: number, level: number) {
-  hiss(ctx, out, at, { type: 'highpass', from: 5200, q: 0.5, len, gain: 0.07 * level, attack: Math.min(0.08, len / 3), offset: Math.random() * 0.5 });
-  hiss(ctx, out, at, { type: 'bandpass', from: 1100, q: 0.7, len, gain: 0.085 * level, attack: Math.min(0.1, len / 3), offset: Math.random() * 0.5 });
+  hiss(ctx, out, at, { type: 'highpass', from: 5200, q: 0.5, len, gain: 0.05 * level, attack: Math.min(0.08, len / 3), offset: Math.random() * 0.5 });
+  hiss(ctx, out, at, { type: 'bandpass', from: 1100, q: 0.7, len, gain: 0.06 * level, attack: Math.min(0.1, len / 3), offset: Math.random() * 0.5 });
   let t = 0;
   while (t < len) {
     const dur = Math.min(len - t + 0.04, 0.14 + Math.random() * 0.2); // 1画の長さ
@@ -181,7 +182,7 @@ function chalk(ctx: AudioContext, out: AudioNode, at: number, len: number, level
       to: up ? 3900 + Math.random() * 700 : 2300 + Math.random() * 500,
       q: 0.5 + Math.random() * 0.5,
       len: dur,
-      gain: (0.35 + Math.random() * 0.14) * level,
+      gain: (0.24 + Math.random() * 0.1) * level,
       attack: Math.min(0.045, dur * 0.4),
       offset: Math.random() * 0.8,
     });
@@ -280,6 +281,13 @@ export function synthSfx(ctx: AudioContext, out: AudioNode, kind: SynthKind, whe
     case 'chalk_bold': // 力を込めて、強く
       chalk(ctx, out, when, pitch, 1.3);
       break;
+    case 'slash': { // 赤い線が走る音：鋭く切り裂く「シュバッ」。高い雑音が、すっと低い方へ流れる（短い粒を並べず、1本の流れにする）。pitch は高さの倍率
+      const p = pitch;
+      hiss(ctx, out, when, { type: 'bandpass', from: 7600 * p, to: 1300 * p, q: 1.5, len: 0.22, gain: 0.7, attack: 0.004 });
+      hiss(ctx, out, when, { type: 'highpass', from: 3200 * p, to: 1800 * p, len: 0.07, gain: 0.3, attack: 0.002 });
+      tone(ctx, out, when, { freq: 260 * p, endFreq: 80, len: 0.26, gain: 0.26, attack: 0.006 }); // 空気を切る低い唸り
+      break;
+    }
     default: {
       const unreachable: never = kind;
       return unreachable;

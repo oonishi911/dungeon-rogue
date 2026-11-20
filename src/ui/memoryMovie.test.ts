@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { MEMORIES } from '../game/story';
 import { MOVIE_CONFIG, MOVIES, burstEmbers, emberLook, flashAt, glowAt, itemTimes, punchAt, quakeAt, soundCues, stepEmbers, valueAt, writeSeconds, type Ember, type Write } from './memoryMovie';
-import { scrawl } from './scrawl';
+import { SCRAWL_CONFIG, scrawl } from './scrawl';
 
 const flame = MOVIES.flame_beast!;
 
@@ -187,6 +187,14 @@ describe('音の予定', () => {
     expect(chalk.find((c) => Math.abs(c.at - (flame.lineAt[1]! + lag)) < 1e-9)!.kind).toBe('chalk');
     // 取り消し線を引く音：書いたあと、strikeDelay 後に強く
     expect(chalk.some((c) => Math.abs(c.at - (flame.crossedAt + MOVIE_CONFIG.strikeDelay)) < 1e-9 && c.kind === 'chalk_bold')).toBe(true);
+  });
+
+  it('赤い線が出るたびに、切り裂く音が鳴る：取り消し線の瞬間から、線の間隔で、線の数だけ', () => {
+    const slashes = cues.filter((c) => c.kind === 'slash');
+    expect(slashes).toHaveLength(SCRAWL_CONFIG.scratches);
+    expect(MOVIE_CONFIG.slash.pitch).toHaveLength(SCRAWL_CONFIG.scratches);
+    slashes.forEach((c, k) => expect(c.at).toBeCloseTo(flame.crossedAt + MOVIE_CONFIG.strikeDelay + k * MOVIE_CONFIG.slash.every));
+    expect(slashes[slashes.length - 1]!.at).toBeLessThan(flame.duration);
   });
 
   it('書かれる長さは、文字数に比例し、範囲に収まる。塗りつぶしは決まった長さ', () => {

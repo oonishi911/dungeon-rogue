@@ -37,6 +37,7 @@ export const MOVIE_CONFIG = {
   sound: { heartEvery: 0.95, burnCross: 3.4 }, // 音：心音の間隔（秒）／「やめて」が燃えるチリチリの長さ（秒）
   ember: { max: 240, rise: [40, 120] as const, drift: 26, life: [1.6, 3.4] as const, size: [1.6, 4.2] as const }, // 火の粉：上限の数・上る速さ(px/秒)・横ぶれ・寿命(秒)・大きさ(px)
   strikeDelay: 1.1, // 取り消し線が引かれるまで（出てから、秒）
+  slash: { every: 0.22, pitch: [1, 0.86, 1.14, 0.94] as const }, // 赤い線が1本ずつ出る間隔（秒。styles.css の .mm__scrawl .scrawl__scratches と同じ）と、その音の高さの倍率（線の数と同じだけ並べる）
   write: { perChar: 0.075, min: 0.7, max: 1.8, crossedPerChar: 0.12, crossedMin: 0.5, black: 0.45, strike: 0.5, soundLag: 0.08, soundTrim: 0.12 }, // 文字が書かれていく長さ（秒）：1文字あたり・最短・最長／書いては消した言葉（1文字あたり・最短）／塗りつぶしの帯／取り消し線を引く／チョークの音を、文字の見え始めに合わせて遅らせる秒数と、終わりを縮める秒数（文字が現れる最初の1〜2文字は、まだ見えないため）
   breath: { period: 3.2, depth: 0.18 }, // 息づかい：1回の長さ（秒）・光の増減の深さ
 } as const;
@@ -224,7 +225,7 @@ export function itemTimes(kinds: readonly ('line' | 'crossed' | 'black')[], movi
 /** 場面の音（時刻 at に、kind の音を鳴らす。power は synth.ts の pitch に渡す：roar・heartbeat は強さ、rumble・sizzle・chalk は長さ（秒）） */
 export interface SoundCue {
   at: number;
-  kind: 'roar' | 'rumble' | 'heartbeat' | 'hush' | 'sizzle' | 'sizzle_soft' | 'chalk' | 'chalk_bold';
+  kind: 'roar' | 'rumble' | 'heartbeat' | 'hush' | 'sizzle' | 'sizzle_soft' | 'chalk' | 'chalk_bold' | 'slash';
   power: number;
 }
 
@@ -273,7 +274,12 @@ export function soundCues(movie: MovieDef, writes: readonly Write[]): SoundCue[]
     const lag = w.kind === 'black' ? 0 : MOVIE_CONFIG.write.soundLag;
     const trim = w.kind === 'black' ? 0 : MOVIE_CONFIG.write.soundTrim;
     cues.push({ at: times[i]! + lag, kind: bold ? 'chalk_bold' : 'chalk', power: Math.max(0.3, writeSeconds(w) - trim) });
-    if (w.kind === 'crossed') cues.push({ at: times[i]! + MOVIE_CONFIG.strikeDelay, kind: 'chalk_bold', power: MOVIE_CONFIG.write.strike });
+    if (w.kind === 'crossed') {
+      const strikeAt = times[i]! + MOVIE_CONFIG.strikeDelay;
+      cues.push({ at: strikeAt, kind: 'chalk_bold', power: MOVIE_CONFIG.write.strike });
+      // 赤い引っかき傷（画面を走る赤い線）が出るたびに、切り裂く音（線は 0.22 秒ごとに1本ずつ出る。scrawl のCSS）
+      MOVIE_CONFIG.slash.pitch.forEach((p, k) => cues.push({ at: strikeAt + k * MOVIE_CONFIG.slash.every, kind: 'slash', power: p }));
+    }
   });
   cues.push({ at: movie.echoAt, kind: 'hush', power: 1 });
   return cues.sort((a, b) => a.at - b.at);
