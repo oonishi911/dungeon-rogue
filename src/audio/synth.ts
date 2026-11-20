@@ -186,7 +186,7 @@ export function synthSfx(ctx: AudioContext, out: AudioNode, kind: SynthKind, whe
       tone(ctx, out, when, { freq: 520 * pitch, endFreq: 780 * pitch, len: 0.16, gain: 0.3 });
       tone(ctx, out, when, { type: 'triangle', freq: 1040 * pitch, len: 0.1, gain: 0.14 });
       break;
-    case 'roar': { // 大きな声（家をゆらす怒鳴り声と、叩きつける衝撃）。荒々しく：歪んだ重い衝撃・はじける雑音・うなり声・家のきしみと破片・大きな部屋の響き。pitch は強さ（1で標準）
+    case 'roar': { // 大きな声（家をゆらす怒鳴り声と、叩きつける衝撃）。荒々しく：歪んだ重い衝撃・はじける雑音・うなり声・大きな部屋の響き。pitch は強さ（1で標準）
       const p = pitch;
       // 全体をまとめる出口：音がつぶれすぎないよう圧縮し、部屋の響き（残響）を足す
       const bus = ctx.createGain();
@@ -216,21 +216,6 @@ export function synthSfx(ctx: AudioContext, out: AudioNode, kind: SynthKind, whe
       hiss(ctx, bus, when, { type: 'highpass', from: 1400, len: 0.09, gain: 0.4 * p, attack: 0.001 });
       // 3 うなり声：少し遅れて、獣の怒鳴り声が上がる
       growl(ctx, bus, when + 0.03, { freq: 74 + 14 * p, len: 0.95 + 0.3 * p, gain: 0.34 * p });
-      // 4 家のきしみ：低い雑音が、細かくふるえる（ガタガタ）。壊れた破片が、ぱらぱら落ちる
-      const rattle = ctx.createGain();
-      rattle.gain.value = 0.5;
-      const rattleLfo = ctx.createOscillator();
-      rattleLfo.frequency.value = 21;
-      const rattleDepth = ctx.createGain();
-      rattleDepth.gain.value = 0.5;
-      rattleLfo.connect(rattleDepth).connect(rattle.gain);
-      rattleLfo.start(when);
-      rattleLfo.stop(when + 1.3);
-      hiss(ctx, rattle, when + 0.04, { type: 'bandpass', from: 220, to: 120, q: 1.2, len: 1.2, gain: 0.55 * p, attack: 0.05 });
-      rattle.connect(bus);
-      for (let i = 0; i < 12; i++) {
-        hiss(ctx, bus, when + 0.12 + Math.random() * 0.9, { type: 'highpass', from: 1800 + Math.random() * 3200, len: 0.025, gain: 0.2 * p, offset: Math.random() * 0.8 });
-      }
       break;
     }
     case 'rumble': // 地鳴り：低いノイズが、ゆっくり立ち上がって、長く続く。pitch は長さ（秒）
