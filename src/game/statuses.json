@@ -1,0 +1,15 @@
+{
+  "poison": {
+    "chance": 30,
+    "turns": 3,
+    "damage": 2
+  },
+  "chill": {
+    "chance": 30,
+    "steps": 2
+  },
+  "hunger": {
+    "chance": 30,
+    "amount": 4
+  }
+}

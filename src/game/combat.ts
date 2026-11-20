@@ -15,6 +15,7 @@ export function itemSlot(item: ItemDef): ItemSlot {
     case 'ring':
       return 'ring';
     case 'heal':
+    case 'cure':
     case 'food':
     case 'enchant':
     case 'sight': // 店では道具として買い、倉庫から持っていく
@@ -62,12 +63,20 @@ export function buildPlayer(loadout: readonly ItemId[], echoes?: readonly EchoId
  */
 export function enemyHitDamage(player: PlayerStats, enemy: EnemyDef): number {
   const base = Math.max(1, enemy.atk - player.def);
+  return Math.max(1, Math.ceil(base * elementRate(player, enemy) - 1e-9));
+}
+
+/**
+ * その敵の攻撃が、指輪で何倍になるか（1より小さいと耐性、大きいと弱点。指輪がなければ1）。
+ * 敵の攻撃のダメージ（enemyHitDamage）と、状態異常のかかりやすさ（status.ts）が、同じ倍率を使う
+ */
+export function elementRate(player: PlayerStats, enemy: EnemyDef): number {
   const guards: Guard[] = [];
   for (const id of player.rings ?? []) {
     const effect = ITEMS[id]?.effect;
     if (effect?.kind === 'ring') guards.push(...effect.guards);
   }
-  if (!guards.length) return base;
+  if (!guards.length) return 1;
   // 丸ごと効くもの（光・闇の指輪、万能の指輪）は、全体に掛ける
   let whole = 1;
   for (const g of guards) {
@@ -77,9 +86,9 @@ export function enemyHitDamage(player: PlayerStats, enemy: EnemyDef): number {
   for (const [component, share] of Object.entries(ELEMENT_COMPONENTS[enemy.element]) as [ElementComponent, number][]) {
     let rate = 1;
     for (const g of guards) if (g.kind === 'component' && g.component === component) rate *= g.rate;
-    total += base * share * rate;
+    total += share * rate;
   }
-  return Math.max(1, Math.ceil(total * whole - 1e-9));
+  return total * whole;
 }
 
 /** プレイヤーの攻撃1回で敵が受けるダメージ。武器と体質、付けた属性と敵の属性の相性、敵の物理の倍率（physical）で増減する */

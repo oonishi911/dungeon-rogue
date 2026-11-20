@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ECHO_MASTER, ITEM_MASTER } from './data';
+import { ECHO_MASTER, ITEM_MASTER, STATUS_MASTER } from './data';
 import { serializeEchoMaster } from './echoMaster';
+import { serializeStatusMaster } from './statusMaster';
 import { serializeItemMaster } from './itemMaster';
 import {
   ADMIN_TABS,
@@ -16,6 +17,7 @@ import {
   duplicateDungeon,
   ENEMY_FILE,
   ECHO_FILE,
+  STATUS_FILE,
   ITEM_FILE,
   isDungeonTab,
   planPublish,
@@ -61,6 +63,7 @@ const BASE: AdminData = {
   enemies: { enemies: copyJson(sample.enemies) } as EnemyMaster,
   items: copyJson(ITEM_MASTER),
   echoes: copyJson(ECHO_MASTER),
+  statuses: copyJson(STATUS_MASTER),
   dungeons: { standard: dungeon('標準'), cave: dungeon('ほら穴') },
 };
 const edited = (change: (d: AdminData) => void): AdminData => {
@@ -176,8 +179,8 @@ describe('管理画面の公開（敵のデータと、いくつものダンジ�
 });
 
 describe('管理画面のタブ', () => {
-  it('敵のデータと品物の設定の2つと、ダンジョンの設定の7つがある', () => {
-    expect(ADMIN_TABS.map((t) => t.id)).toEqual(['enemies', 'items', 'echoes', 'about', 'pool', 'floors', 'rooms', 'placement', 'growth', 'magic']);
+  it('敵・品物・残響・状態異常の4つと、ダンジョンの設定の7つがある', () => {
+    expect(ADMIN_TABS.map((t) => t.id)).toEqual(['enemies', 'items', 'echoes', 'statuses', 'about', 'pool', 'floors', 'rooms', 'placement', 'growth', 'magic']);
     expect(ADMIN_TABS.filter((t) => isDungeonTab(t.id)).map((t) => t.id)).toEqual(['about', 'pool', 'floors', 'rooms', 'placement', 'growth', 'magic']);
   });
 
@@ -285,6 +288,27 @@ describe('残響の設定の公開', () => {
       d.echoes.effects.ice.name = d.echoes.effects.fire.name;
     });
     expect(planPublish(BASE, draft).problems.length).toBe(2);
+  });
+});
+
+describe('状態異常の設定の公開', () => {
+  it('確率や長さを変えると、状態異常の設定ファイルを保存し、状態異常のタブに変えた印が付く', () => {
+    const { poison, chill } = BASE.statuses;
+    const draft = edited((d) => {
+      d.statuses.poison.chance = poison.chance + 10;
+      d.statuses.chill.steps = chill.steps + 3;
+    });
+    const plan = planPublish(BASE, draft);
+    expect(plan.files).toEqual([{ path: STATUS_FILE, text: serializeStatusMaster(draft.statuses), base: serializeStatusMaster(BASE.statuses) }]);
+    expect(plan.changes).toEqual([`状態異常：毒のかかる確率：${poison.chance}% → ${poison.chance + 10}%`, `状態異常：鈍足の歩数：${chill.steps} → ${chill.steps + 3}`]);
+    expect(plan.problems).toEqual([]);
+    expect(ADMIN_TABS.filter((t) => tabChanged(t.id, BASE, draft)).map((t) => t.id)).toEqual(['statuses']);
+  });
+
+  it('正しくない値（範囲の外・小数）は、直すところに出る', () => {
+    expect(planPublish(BASE, edited((d) => void (d.statuses.hunger.chance = 101))).problems.length).toBe(1);
+    expect(planPublish(BASE, edited((d) => void (d.statuses.poison.turns = 0))).problems.length).toBe(1);
+    expect(planPublish(BASE, edited((d) => void (d.statuses.poison.damage = 1.5))).problems.length).toBe(1);
   });
 });
 

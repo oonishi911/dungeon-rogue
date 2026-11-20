@@ -31,6 +31,7 @@ export type ItemId =
   | GearId
   | RingId
   | 'potion'
+  | 'panacea'
   | 'food'
   | 'fire_whetstone'
   | 'ice_whetstone'
@@ -71,6 +72,7 @@ export type ItemEffect =
   | { kind: 'armor'; def: number } // def：持つと上がる守り（段階が上がるほど大きい）。属性の耐性は付かない（指輪の役目）
   | { kind: 'ring'; guards: Guard[]; cut: number } // 指輪。guards：属性ごとの守り（逆の属性の弱点も入る）、cut：耐性（%。表示用）
   | { kind: 'heal'; hp: number }
+  | { kind: 'cure' } // 万能薬。毒と鈍足をすべて治す（空腹はその場で満腹度が減るだけなので、治すものはない）
   | { kind: 'food'; satiety: number }
   | { kind: 'enchant'; element: Element; hits: number } // 武器に一時的に属性を付ける
   | { kind: 'capacity'; slots: number } // 持っていくと、その探索のあいだ道具を持てる数が増える（ダンジョンでは使わない。探索1回でなくなる）
@@ -120,8 +122,9 @@ export interface Departure {
  * - charger（突進）：まっすぐ3マス以内にいると身構えて、次のターンに一直線に走ってくる
  * - shield（盾持ち）：向いている正面からの武器の攻撃を、大きく防ぐ
  * - summoner（召喚）：数ターンごとに、近くに弱い敵を呼ぶ
+ * - poison / chill / hunger（毒・鈍足・空腹）：攻撃が当たると、状態異常にさせることがある（ボスは今のところ与えない。詳しくは docs/status-spec.md）
  */
-export type EnemyBehavior = 'ranged' | 'charger' | 'shield' | 'summoner';
+export type EnemyBehavior = 'ranged' | 'charger' | 'shield' | 'summoner' | 'poison' | 'chill' | 'hunger';
 
 // 敵の ID。敵の種類はプログラムに決め打ちせず、src/game/enemies.json にある敵がすべて（管理画面 ?view=admin の「敵」タブで足す・消すことができる）
 export type EnemyId = string;
@@ -152,7 +155,8 @@ export interface PlayerStats {
   atk: number;
   def: number;
   mag: number; // レベルが上がって増えた魔力（魔法の強さに足される。武器の魔力とは別。最初は0）
-  poisonTurns: number; // 毒の残りターン（仕組みだけ残している。今は毒を与える敵はいない）
+  poisonTurns: number; // 毒の残りターン（毎ターン、守りに関係なくダメージ）
+  chillSteps?: number; // 鈍足の残り歩数（ないときは、0。歩くのに2ターンかかる）
   weapon: ItemId | null;
   armor: ItemId | null;
   rings?: ItemId[]; // 付けている指輪（ないときは、なし）

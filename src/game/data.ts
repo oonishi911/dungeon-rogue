@@ -14,9 +14,11 @@ import type {
 } from './types';
 import enemyMasterJson from './enemies.json';
 import echoesJson from './echoes.json';
+import statusesJson from './statuses.json';
 import itemsJson from './items.json';
 import { itemDefs, parseItemMaster, type ItemMaster } from './itemMaster';
 import { parseEchoMaster, type EchoMaster } from './echoMaster';
+import { parseStatusMaster, type StatusMaster } from './statusMaster';
 import { enemyDefs, enemyRewards, parseEnemyMaster, type EnemyReward } from './enemyMaster';
 import type { GrowthSettings } from './genMaster';
 
@@ -79,12 +81,14 @@ export const ITEMS: Record<ItemId, ItemDef> = itemDefs(ITEM_MASTER);
 // 残響と刻印装備の設定（src/game/echoes.json。管理画面の「残響」タブ）。働きは echo.ts
 export const ECHO_MASTER: EchoMaster = parseEchoMaster(echoesJson);
 
+// 状態異常の設定（src/game/statuses.json。管理画面の「状態異常」タブ）。かかる確率・続く長さ・毒のダメージ・空腹で減る数。働きは status.ts
+export const STATUS_MASTER: StatusMaster = parseStatusMaster(statusesJson);
+
 // ===== 戦闘の設定値（仮） =====
 export const COMBAT_CONFIG = {
   playerHp: 60,
   playerAtk: 6,
   playerDef: 1,
-  poisonDamage: 7, // 毒の1ターンあたりのダメージ（今は毒を与える敵はいない）
 } as const;
 
 /** 武器と体質の相性。素手はどの体質にも1倍 */

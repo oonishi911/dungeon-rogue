@@ -218,6 +218,7 @@ const SHAPES: Partial<Record<ItemId, () => ReactElement>> = {
     </>
   ),
   potion: () => flask(C.heal, heart('#fff')),
+  panacea: () => flask(C.green, sparkle('#fff')),
   food: () => (
     <>
       <path d="M3.5 13.5C3.5 9 7.5 6.5 12 6.5s8.5 2.5 8.5 7v3a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" fill={C.bread} />

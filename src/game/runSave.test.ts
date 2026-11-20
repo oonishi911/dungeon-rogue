@@ -96,6 +96,15 @@ describe('packRun / parseRun', () => {
     expect(parseRun(edited(state, (run) => void ((run.state.stats as { mag: unknown }).mag = 'x')))).toBeNull();
   });
 
+  it('毒と鈍足の残りも、保存して戻せる（鈍足の欄ができる前の中断データは、鈍足なし）。壊れた値は null', () => {
+    const state = start();
+    const sick = { ...state, stats: { ...state.stats, poisonTurns: 2, chillSteps: 3 } };
+    expect(parseRun(saved(sick))!.state.stats).toMatchObject({ poisonTurns: 2, chillSteps: 3 });
+    expect(parseRun(saved(state))!.state.stats.chillSteps).toBeUndefined();
+    expect(parseRun(edited(sick, (run) => void ((run.state.stats as { chillSteps: unknown }).chillSteps = -1)))).toBeNull();
+    expect(parseRun(edited(sick, (run) => void ((run.state.stats as { chillSteps: unknown }).chillSteps = 'x')))).toBeNull();
+  });
+
   it('始まったばかりの状態も保存できる', () => {
     const state = start();
     expect(parseRun(saved(state))!.state).toEqual(state);

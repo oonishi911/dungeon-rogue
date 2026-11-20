@@ -16,6 +16,7 @@ function testData(): Plugin {
     { file: '/src/game/data.ts', from: "'./enemies.json'", to: "'./testdata/enemies.json'" },
     { file: '/src/game/data.ts', from: "'./items.json'", to: "'./testdata/items.json'" },
     { file: '/src/game/data.ts', from: "'./echoes.json'", to: "'./testdata/echoes.json'" },
+    { file: '/src/game/data.ts', from: "'./statuses.json'", to: "'./testdata/statuses.json'" },
     { file: '/src/game/dungeons.ts', from: "'./dungeons/*.json'", to: "'./testdata/dungeons/*.json'" },
   ];
   return {

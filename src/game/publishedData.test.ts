@@ -5,11 +5,13 @@
 import { describe, expect, it } from 'vitest';
 import enemiesText from './enemies.json?raw';
 import echoesText from './echoes.json?raw';
+import statusesText from './statuses.json?raw';
 import itemsText from './items.json?raw';
 import { masterProblems, parseEnemyMaster, serializeEnemyMaster } from './enemyMaster';
 import { dungeonProblems, parseDungeon, serializeDungeon } from './genMaster';
 import { DEFAULT_DUNGEON_ID } from './dungeons';
 import { echoProblems, parseEchoMaster, serializeEchoMaster } from './echoMaster';
+import { parseStatusMaster, serializeStatusMaster, statusProblems } from './statusMaster';
 import { itemProblems, parseItemMaster, serializeItemMaster } from './itemMaster';
 
 const DUNGEON_TEXTS = import.meta.glob<string>('./dungeons/*.json', { eager: true, query: '?raw', import: 'default' });
@@ -26,6 +28,13 @@ describe('残響の設定（src/game/echoes.json）', () => {
   it('正しい形になっていて、書き出すと同じ中身になる', () => {
     expect(echoProblems(JSON.parse(echoesText))).toEqual([]);
     expect(serializeEchoMaster(parseEchoMaster(JSON.parse(echoesText)))).toBe(echoesText);
+  });
+});
+
+describe('状態異常の設定（src/game/statuses.json）', () => {
+  it('正しい形になっていて、書き出すと同じ中身になる', () => {
+    expect(statusProblems(JSON.parse(statusesText))).toEqual([]);
+    expect(serializeStatusMaster(parseStatusMaster(JSON.parse(statusesText)))).toBe(statusesText);
   });
 });
 
