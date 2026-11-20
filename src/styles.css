@@ -484,6 +484,8 @@ button {
 .explore__view {
   display: block;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   aspect-ratio: 7 / 5;
   border: 1px solid var(--pine-line);
   border-radius: 4px;
@@ -1074,6 +1076,9 @@ button {
     min-height: 0;
     display: flex;
     flex-direction: column;
+    /* PC用の指定（align-items: start）を引き継ぐと、3D画面の幅が、キャンバスの大きさ（描く解像度）で決まってしまい、
+       画面の幅が変わったあと（向きを変える・ブラウザの表示が変わる）に、左に寄って右が空くことがある。いつも横いっぱいに広げる */
+    align-items: stretch;
     gap: 0.5rem;
   }
 
