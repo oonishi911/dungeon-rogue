@@ -1,18 +1,39 @@
 // 探索で1手進んだときの、音・振動・3D 画面の演出。画面の状態は変えず、鳴らす・動かすだけ。
 
-import { playAttack, playChestOpen, playEnemyAttack, playFootstep, playSpell } from '../audio/sound';
+import { playAttack, playChestOpen, playEnemyAttack, playFootstep, playSpell, playSynth } from '../audio/sound';
+import type { SynthKind } from '../audio/synth';
 import { enemyBase } from '../game/data';
 import { gearOf } from '../game/itemMaster';
 import { type ExploreState } from '../game/exploreTypes';
 import { samePos } from '../game/exploreSight';
 import type { Pos } from '../game/map';
 import { weaponOf, type DungeonView3D } from './explore3d';
-import { FOE_FX } from './explore3dConfig';
+import { FOE_FX, HIT_STOP, KILL_CHAIN } from './explore3dConfig';
 import { HAPTICS, vibrate } from './haptics';
 
 // 敵の攻撃の音を鳴らす間合い（秒）。afterAttack：主人公も攻撃したとき、その音のあとに鳴らすまで。gap：敵が何体も攻撃したとき、1体ずつずらす間。max：1回の行動で鳴らす数
 const ENEMY_SOUND = { afterAttack: 0.2, gap: 0.12, max: 3 } as const;
 const CAST_THEN_HURT_MS = 150; // 呪文の矢が当たってから、敵の攻撃を見せるまで（ミリ秒）
+
+// 連続で倒した数（間があいたらやり直し）。倒すたびに音が上がる
+let chain = { count: 0, at: 0 };
+
+/** 倒した音を鳴らし、連続なら音を上げて「n連」を出す */
+function killFeedback(at: Pos, view3d: DungeonView3D | null) {
+  const now = performance.now();
+  chain = now - chain.at <= KILL_CHAIN.chainMs ? { count: chain.count + 1, at: now } : { count: 1, at: now };
+  const steps = Math.min(KILL_CHAIN.maxSteps, chain.count - 1);
+  playSynth('kill', 2 ** ((steps * KILL_CHAIN.stepSemitones) / 12));
+  if (chain.count >= 2) view3d?.popChain(at, chain.count, KILL_CHAIN.color);
+}
+
+/** この一撃の、ヒットストップの長さ（ミリ秒）。弱点・コンボ・倒したときは長め、効きにくいときは短め */
+function hitStopMs(hit: { affinity?: 'weak' | 'resist'; combo?: unknown; killed?: boolean }): number {
+  return Math.max(hit.affinity === 'weak' ? HIT_STOP.weak : hit.affinity === 'resist' ? HIT_STOP.resist : HIT_STOP.base, hit.combo ? HIT_STOP.combo : 0, hit.killed ? HIT_STOP.kill : 0);
+}
+
+/** 敵の状態異常・コンボ・蒸気の合成音 */
+const FOE_SOUNDS: Record<string, SynthKind> = { burn: 'burn', freeze: 'freeze', smash: 'smash', sear: 'sear', arcane: 'arcane' };
 
 /**
  * prev から next へ1手進んだときの演出を始める。
@@ -29,6 +50,13 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
     playSpell(next.cast.spell);
   }
   const foeMs = view3d?.playFoes(next.foes) ?? 0; // 遠距離の矢・杖の魔力弾が当たるまで（当たった側のダメージの数字は、そのあとに出す）
+  // 凍る・燃える・砕く・焼き斬り・共鳴・蒸気の音（呪文のときは、矢が当たってから）
+  for (const f of next.foes) {
+    const kind = f.kind === 'foe_status' ? FOE_SOUNDS[f.status] : f.kind === 'combo' ? FOE_SOUNDS[f.combo] : f.kind === 'steam' ? 'steam' : undefined;
+    if (kind) playSynth(kind, 1, impactMs / 1000);
+  }
+  // 持ち替えた
+  if (next.map === prev.map && prev.stats.weapon !== next.stats.weapon && next.stats.sub) playSynth('swap');
   const skill = next.foes.find((f) => f.kind === 'skill'); // 武器の固有技を出したとき
   const struck = next.cast ? undefined : next.hits.find((hit) => hit.kind === 'dealt' && !hit.slip);
   if (struck) {
@@ -54,12 +82,18 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
       // 出血のダメージは、数字だけを出す（武器を振る・画面を拡大する・振動はしない）
       if (hit.slip) {
         view3d?.popDamage(hit.at, hit.amount, hit.kind);
+        if (hit.kind === 'dealt' && hit.killed) killFeedback(hit.at, view3d); // 出血・燃焼で倒したときも、倒した音
         return;
       }
       view3d?.hitPulse(hit.kind === 'dealt' ? 'attack' : 'hurt');
       // 攻撃してきた敵は、主人公の方へ飛びかかる（離れて撃ってきた敵は飛びかからない）
       if (hit.kind === 'taken' && hit.by && !hit.ranged) view3d?.enemyAttack(hit.by);
-      view3d?.popDamage(hit.at, hit.amount, hit.kind, hit.kind === 'dealt' && hit.blocked === true);
+      view3d?.popDamage(hit.at, hit.amount, hit.kind, hit.kind === 'dealt' ? { blocked: hit.blocked === true, ...(hit.affinity ? { affinity: hit.affinity } : {}), ...(hit.combo ? { combo: hit.combo } : {}), killed: hit.killed === true } : {});
+      // 当てた一瞬、画面を止める（ヒットストップ）。倒したときは、倒した音も鳴らす
+      if (hit.kind === 'dealt') {
+        view3d?.hitStop(hitStopMs(hit));
+        if (hit.killed) killFeedback(hit.at, view3d);
+      }
       // スマホを震わせる（振動に対応したスマホだけ）。踏破したとき・力尽きたときは、長く震わせる
       if (hit.kind === 'dealt') vibrate(next.outcome === 'cleared' ? HAPTICS.cleared : HAPTICS.attack);
       else vibrate(next.outcome === 'defeated' ? HAPTICS.defeated : HAPTICS.hurt);

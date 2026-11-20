@@ -42,6 +42,23 @@ export const DAMAGE_POP = {
   rise: 0.35, // 消えるまでに浮かぶ高さ（マス）
   colors: { dealt: '#ece5d3', taken: '#e5624f' }, // 与えた：明るい生成り / 受けた：赤
 } as const;
+// 手応え（2026-11-20。docs/combat-fun-spec.md ⑥）。遊んでみて、ここの数字を変えて調整する
+// ヒットストップ：当てた一瞬、画面が止まる時間（ミリ秒）。弱点を突く・コンボ・倒したときは長め、効きにくいときは短め。重なったら、長いほうを使う
+export const HIT_STOP = { base: 60, weak: 80, resist: 40, combo: 90, kill: 85, max: 100 } as const;
+// ダメージの数字の見た目：scale は大きさの倍率、color は文字の色（なければ ふつうの色）。相性が弱点なら大きく黄色、効きにくいなら小さく灰色、コンボは技ごとの色
+export const DAMAGE_STYLE = {
+  weak: { scale: 1.45, color: '#ffd84a' },
+  resist: { scale: 0.8, color: '#9aa39f' },
+  smash: { scale: 1.65, color: '#bfeaff' },
+  sear: { scale: 1.65, color: '#ff9a3c' },
+  arcane: { scale: 1.5, color: '#c8a0ff' },
+  kill: { scale: 1.15 }, // 倒した一撃は、さらに少し大きく（相性の大きさに掛ける）
+} as const;
+// 連続で倒したとき：間があいていなければ連続（chainMs）。倒すたびに音を stepSemitones 半音ずつ上げ、maxSteps 回で頭打ち。2連から「n連」を出す
+export const KILL_CHAIN = { chainMs: 2600, stepSemitones: 2, maxSteps: 6, gap: 0.09, color: '#ffe27a' } as const;
+// 低いHPの画面のふち（赤）：HPの割合がこれ以下で出す。critical 以下では、脈打つ（心音のように）
+export const LOW_HP = { warn: 0.4, critical: 0.2 } as const;
+
 // 敵の行動の個性の演出（遠距離の矢・盾・突進の構え・召喚）
 export const FOE_FX = {
   shot: { ms: 260, height: 0.6, size: 0.13 }, // 遠距離の矢：飛ぶ時間・飛ぶ高さ・玉の大きさ（マス）

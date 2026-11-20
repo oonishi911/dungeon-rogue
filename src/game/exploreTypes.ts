@@ -54,6 +54,8 @@ export interface HitEvent {
   slip?: boolean; // dealt のとき、出血のダメージ（主人公が武器を振った演出や、画面の拡大は出さない）
   blocked?: boolean; // dealt のとき、盾持ちの敵に正面から防がれた（ダメージが減っている）
   combo?: ComboKind; // dealt のとき、決まったコンボ（砕く・焼き斬り・杖の共鳴）
+  affinity?: 'weak' | 'resist'; // dealt のとき、相性（弱点を突いた・効きにくい）。ダメージの数字の見た目に使う（相性がふつうならない）
+  killed?: boolean; // dealt のとき、この一撃で敵を倒した
   ranged?: boolean; // taken のとき、離れたところから撃たれた（敵が飛びかかる演出は出さない）
 }
 

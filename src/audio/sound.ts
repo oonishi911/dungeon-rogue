@@ -5,6 +5,7 @@
 import type { Body, SpellId, TraitId, WeaponType } from '../game/types';
 import { loadSoundSettings, writeSoundSettings } from '../storage';
 import { gainOf, type SoundSettings } from './settings';
+import { synthSfx, type SynthKind } from './synth';
 
 // 特性ごとの足音（一歩ごとにこの中から選ぶ。scripts/build-sounds.py の VARIATIONS と数を合わせる）。
 // 無属性は土（低く重い音）、炎は焼けて尖った細かい石（先端が砕けるゴリッという音）、
@@ -240,6 +241,12 @@ export function playFootstep(trait: TraitId) {
   const name = choices[Math.floor(Math.random() * choices.length)]!;
   lastStep = name;
   play(name, STEP_PITCH.min + Math.random() * (STEP_PITCH.max - STEP_PITCH.min));
+}
+
+/** 合成の効果音（凍る・燃える・砕く・持ち替え・倒したなど。音のファイルは使わない）。delay 秒あとに、pitch の高さで鳴らす */
+export function playSynth(kind: SynthKind, pitch = 1, delay = 0) {
+  if (!context || !effects || gainOf(settings) === 0) return;
+  synthSfx(context, effects, kind, context.currentTime + delay, pitch);
 }
 
 /** 音量を試すときの音 */

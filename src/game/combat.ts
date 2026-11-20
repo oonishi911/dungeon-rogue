@@ -114,6 +114,12 @@ export function playerHitDamage(player: PlayerStats, enemy: EnemyDef): number {
   return Math.max(1, Math.round(base * bodyMultiplier(player, enemy) * enchantMultiplier(player, enemy) * bodyDamageRate(player.echoes, enemy.body) * (enemy.physical ?? 1)));
 }
 
+/** 通常攻撃の相性：武器と体質・付けた属性と敵の属性・残響の相性の倍率が、1より大きければ弱点、小さければ効きにくい（演出に使う） */
+export function hitAffinity(player: PlayerStats, enemy: EnemyDef): 'weak' | 'resist' | null {
+  const rate = bodyMultiplier(player, enemy) * enchantMultiplier(player, enemy) * bodyDamageRate(player.echoes, enemy.body) * (enemy.physical ?? 1);
+  return rate > 1.001 ? 'weak' : rate < 0.999 ? 'resist' : null;
+}
+
 export function bodyMultiplier(player: PlayerStats, enemy: EnemyDef): number {
   const effect = player.weapon ? ITEMS[player.weapon].effect : null;
   return effect?.kind === 'weapon' ? WEAPON_VS_BODY[effect.weapon][enemy.body] : 1;

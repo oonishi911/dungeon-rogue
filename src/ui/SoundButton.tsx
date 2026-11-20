@@ -1,14 +1,16 @@
 // 音の設定。画面の上のボタンで開き、音のオン・オフと、効果音・環境音それぞれの音量を変える。変えた設定はブラウザに保存する
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { playSample, setSoundSettings, soundSettings, unlockSound } from '../audio/sound';
 import type { SoundSettings } from '../audio/settings';
+import { feelSettings, setFeelSettings, subscribeFeel } from './feelSettings';
 
 export function SoundButton() {
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<SoundSettings>(soundSettings);
   const rootRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
+  const feel = useSyncExternalStore(subscribeFeel, feelSettings);
   const muted = !settings.enabled || (settings.volume === 0 && settings.ambient === 0);
 
   const change = (next: SoundSettings) => {
@@ -95,6 +97,24 @@ export function SoundButton() {
               onChange={(e) => change({ ...settings, ambient: Number(e.target.value) / 100 })}
             />
           </label>
+          {/* 手応えの演出（揺れ・ヒットストップ）。苦手な人・見づらいと感じる人は切れる */}
+          <p className="sound__title">演出</p>
+          <button
+            type="button"
+            className="explore__wait sound__switch sound__switch--wide"
+            aria-pressed={feel.shake}
+            onClick={() => setFeelSettings({ ...feel, shake: !feel.shake })}
+          >
+            画面の揺れ：{feel.shake ? 'あり' : 'なし'}
+          </button>
+          <button
+            type="button"
+            className="explore__wait sound__switch sound__switch--wide"
+            aria-pressed={feel.hitStop}
+            onClick={() => setFeelSettings({ ...feel, hitStop: !feel.hitStop })}
+          >
+            ヒットストップ：{feel.hitStop ? 'あり' : 'なし'}
+          </button>
         </div>
       )}
     </div>

@@ -26,17 +26,18 @@ const urlCount = (name: string): number => {
 export function devSick(state: ExploreState): ExploreState {
   const poisonTurns = urlCount('poison');
   const chillSteps = urlCount('chill');
-  if (!poisonTurns && !chillSteps) return state;
-  return { ...state, stats: { ...state.stats, poisonTurns, ...(chillSteps ? { chillSteps } : {}) } };
+  const hp = urlCount('hp'); // ?hp=5 なら、HPが5の状態で始める（低いHPの画面のふちの確認用）
+  if (!poisonTurns && !chillSteps && !hp) return state;
+  return { ...state, stats: { ...state.stats, poisonTurns, ...(chillSteps ? { chillSteps } : {}), ...(hp ? { hp: Math.min(state.stats.maxHp, hp) } : {}) } };
 }
 
-/** ?foeburn=3&foefreeze=2 なら、最初の敵を主人公の近くに置いて、燃焼・凍結にした状態で始める（敵の状態異常の見た目の確認用。ふたつ付けると凍結が先） */
+/** ?foeburn=3&foefreeze=2 なら（foenear を付けると、すぐ隣に）、最初の敵を主人公の近くに置いて、燃焼・凍結にした状態で始める（敵の状態異常の見た目の確認用。ふたつ付けると凍結が先） */
 export function devFoes(state: ExploreState): ExploreState {
   const burn = urlCount('foeburn');
   const frozen = urlCount('foefreeze');
   const first = state.enemies[0];
   if ((!burn && !frozen) || !first) return state;
-  const spots = [2, 3, 1].flatMap((d) => [[d, 0], [-d, 0], [0, d], [0, -d]] as const).map(([dx, dy]) => ({ x: state.player.x + dx, y: state.player.y + dy })).filter((p) => tileAt(state.map, p) === 'floor');
+  const spots = (new URLSearchParams(location.search).has('foenear') ? [1] : [2, 3, 1]).flatMap((d) => [[d, 0], [-d, 0], [0, d], [0, -d]] as const).map(([dx, dy]) => ({ x: state.player.x + dx, y: state.player.y + dy })).filter((p) => tileAt(state.map, p) === 'floor');
   const pos = spots[0] ?? first.pos;
   const foe = { ...first, pos, mode: 'wander' as const, ...(burn ? { burn: { turns: burn, amount: 2 } } : {}), ...(frozen ? { frozen: true, stun: frozen } : {}) };
   return { ...state, enemies: [foe, ...state.enemies.slice(1)] };

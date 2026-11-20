@@ -8,7 +8,7 @@
 //   exploreFeedback.ts 1手ごとの音・振動・3D の演出 / exploreKeys.ts キーの割り当て / exploreWalk.ts タップで歩く判断
 //   ExploreSide.tsx 右側（下）の欄 / ExploreDialogs.tsx 重ねて出す確かめる画面 / ExploreParts.tsx ゲージと記録 / backGuard.ts 戻るの見張り
 
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react';
 import { preloadSounds, setAmbient } from '../audio/sound';
 import { SPELLS } from '../game/data';
 import { dungeonOfState, isBossFloor, step, upStairs } from '../game/explore';
@@ -22,7 +22,8 @@ import { useBackGuard } from './backGuard';
 import { drawMinimap, MINI_CELL, motionOf, readColors, type Frame, type Motion } from './exploreRender';
 import { DungeonView3D, webglAvailable } from './explore3d';
 import { LOST, lost } from '../game/story';
-import { INTRO_FX } from './explore3dConfig';
+import { INTRO_FX, LOW_HP } from './explore3dConfig';
+import { feelSettings, subscribeFeel } from './feelSettings';
 import { devBestHref } from './exploreDev';
 import { EndingPanel, LeaveDialog, RetireDialog } from './ExploreDialogs';
 import { playFeedback } from './exploreFeedback';
@@ -57,6 +58,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   // スマホで、装備・敵・記録をまとめた画面を開いているか（PCでは常に横に出ている）
   const [infoOpen, setInfoOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hurtKey, setHurtKey] = useState(0); // 敵に攻撃された回数（画面のふちを一瞬赤くする。変わるたびに、赤いふちの動きをやり直す）
+  const feel = useSyncExternalStore(subscribeFeel, feelSettings);
   const [mpShake, setMpShake] = useState(0); // 魔力が足りずに唱えられなかった回数（魔力のゲージを震わせる）
   // リタイアするかを確かめているところ
   const [retiring, setRetiring] = useState(false);
@@ -125,6 +128,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     // 音・振動・3D 画面の演出を始める。呪文を唱えたときは、矢が当たるまで次の行動を待たせる
     const impactMs = playFeedback(prev, next, view3dRef.current);
     if (impactMs > 0) busyUntilRef.current = performance.now() + impactMs;
+    if (next.hits.some((h) => h.kind === 'taken')) setHurtKey((n) => n + 1);
     // 階を移ったときは動かさずに切り替える
     motionRef.current = { from: motionOf(next.map === prev.map ? prev : next), start: performance.now() };
     stateRef.current = next;
@@ -240,6 +244,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       return route.path;
     };
     let frameId = 0;
+    let lastTick = performance.now();
     const tick = (now: number) => {
       if (now - motionRef.current.start >= STEP_MS && now >= busyUntilRef.current && stateRef.current.outcome === 'ongoing') {
         const held = heldRef.current.at(-1);
@@ -265,6 +270,15 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       if (sight.state !== current) {
         sight = { state: current, visible: visibleTiles(current.map, current.player, current.sightRadius) };
       }
+      // ヒットストップ：当てた一瞬、画面を止める（描き直さず、歩く動きの時計も止める）
+      const clock = performance.now();
+      if (view3d.holdFrame(clock)) {
+        motionRef.current = { ...motionRef.current, start: motionRef.current.start + (clock - lastTick) };
+        lastTick = clock;
+        frameId = requestAnimationFrame(tick);
+        return;
+      }
+      lastTick = clock;
       const frame: Frame = {
         state: current,
         visible: sight.visible,
@@ -477,6 +491,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const onStairs = state.map.stairs !== null && samePos(state.player, state.map.stairs);
   const ended = state.outcome !== 'ongoing';
   const floorName = isBossFloor(state) ? '最深部' : `地下${state.floor + 1}階`;
+  // 低いHP：HPの割合が warn 以下で赤いふちを出し、critical 以下で脈打つ
+  const hpRate = state.stats.maxHp > 0 ? state.stats.hp / state.stats.maxHp : 1;
+  const lowHpClass = state.outcome !== 'ongoing' || hpRate > LOW_HP.warn ? '' : hpRate <= LOW_HP.critical ? ' explore__vignette--critical' : ' explore__vignette--low';
 
   const lastLog = state.log.at(-1);
   const recentLog = state.log.slice(-8).reverse();
@@ -532,6 +549,13 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
             role="img"
             aria-label={`${floorName}の周囲。マスをタップするとそこまで歩き、指でなぞるとその向きに歩き続ける。主人公をダブルタップするとその場で1ターン待つ。階段は踏むと降りる。${onStairs ? '足元に階段がある' : ''}`}
           />
+          {/* 低いHPの画面のふち（赤）。HPが少ないほど濃く、とても少ないと心音のように脈打つ。敵に攻撃された一瞬も赤くなる */}
+          {!no3d && (
+            <>
+              <div className={`explore__vignette${lowHpClass}${feel.shake ? '' : ' explore__vignette--still'}`} aria-hidden="true" />
+              {hurtKey > 0 && <div key={hurtKey} className="explore__hurt" aria-hidden="true" />}
+            </>
+          )}
           {/* その場で1ターン待つ。3D画面の右下に重ねる（スマホでは、下に出る記録の行より上） */}
           {!ended && (
             <button
