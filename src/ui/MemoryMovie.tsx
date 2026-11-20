@@ -1,9 +1,12 @@
 // 記憶の「動く場面」（docs/memory-movie.md）：文章が出る時刻・画面の揺れ・光・火の粉を、1つの時計で動かす。
 // 時刻から決まる値は memoryMovie.ts の関数（揺れ・光・フラッシュ・火の粉）。文字の出方は CSS（--at 秒の遅れ）。
 // 描き直しは React を通さない（requestAnimationFrame で、画面の部品に直接書く）。
+// 音は、場面のはじめに、すべての音の予定（soundCues）を Web Audio に予約する。場面を離れたら、予約した音ごと静かにする。
 
 import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
-import { MOVIE_CONFIG, emberLook, flashAt, glowAt, itemTimes, quakeAt, stepEmbers, valueAt, type Ember, type MovieDef } from './memoryMovie';
+import { openSoundBus } from '../audio/sound';
+import { synthSfx } from '../audio/synth';
+import { MOVIE_CONFIG, burstEmbers, emberLook, flashAt, glowAt, itemTimes, punchAt, quakeAt, soundCues, stepEmbers, valueAt, type Ember, type MovieDef } from './memoryMovie';
 import type { ScrawlItem } from './scrawl';
 import { InkFilter, ScrawlItemView, Scratches } from './ScrawlParts';
 
@@ -27,6 +30,15 @@ export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps
     return items.map((i) => (i.kind === 'line' ? n++ : -1));
   }, [items]);
 
+  // 音：場面のはじめに予約する（音がオフ・準備前なら鳴らさない）。離れたら、すぐ静かにする
+  useEffect(() => {
+    const bus = openSoundBus();
+    if (!bus) return;
+    const now = bus.ctx.currentTime + 0.05;
+    for (const cue of soundCues(movie)) synthSfx(bus.ctx, bus.out, cue.kind, now + cue.at, cue.power);
+    return bus.close;
+  }, [movie]);
+
   useEffect(() => {
     const cv = canvas.current;
     const ctx = cv?.getContext('2d');
@@ -46,16 +58,22 @@ export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps
     let embers: Ember[] = [];
     const start = performance.now();
     let last = start;
+    let lastT = 0;
     let raf = 0;
     const frame = (now: number) => {
       const t = (now - start) / 1000;
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       const q = quakeAt(movie.hits, t);
-      if (body.current) body.current.style.transform = `translate(${q.x.toFixed(2)}px, ${q.y.toFixed(2)}px) rotate(${q.rot.toFixed(3)}deg)`;
-      if (glow.current) glow.current.style.opacity = String(glowAt(movie, t));
-      if (flash.current) flash.current.style.opacity = String(flashAt(movie.hits, t));
+      const scale = punchAt(movie.hits, t);
+      if (body.current) body.current.style.transform = `translate(${q.x.toFixed(2)}px, ${q.y.toFixed(2)}px) rotate(${q.rot.toFixed(3)}deg) scale(${scale.toFixed(4)})`;
+      const fl = flashAt(movie.hits, t);
+      if (glow.current) glow.current.style.opacity = String(Math.min(1, glowAt(movie, t) + fl * 0.6));
+      if (flash.current) flash.current.style.opacity = String(fl);
       embers = stepEmbers(embers, dt, valueAt(movie.embers, t), Math.random);
+      // 声が響いた瞬間に、火の粉が下から噴き上がる
+      for (const h of movie.hits) if (h.at > lastT && h.at <= t) embers = [...embers, ...burstEmbers(h.power, Math.random)].slice(-MOVIE_CONFIG.ember.max);
+      lastT = t;
       ctx.clearRect(0, 0, w, h);
       ctx.globalCompositeOperation = 'lighter';
       for (const e of embers) {

@@ -249,6 +249,26 @@ export function playSynth(kind: SynthKind, pitch = 1, delay = 0) {
   synthSfx(context, effects, kind, context.currentTime + delay, pitch);
 }
 
+/**
+ * 長い場面（記憶の動く場面）の音をまとめて予約するための出口。ctx.currentTime を基準に、synthSfx で好きな時刻の音を予約し、
+ * 場面が終わったら close() で、予約した音ごとすぐ静かにする。音の準備の前や、音がオフのときは null（鳴らさないだけ）
+ */
+export function openSoundBus(): { ctx: AudioContext; out: AudioNode; close: () => void } | null {
+  if (!context || !effects || gainOf(settings) === 0) return null;
+  const ctx = context;
+  const bus = ctx.createGain();
+  bus.connect(effects);
+  return {
+    ctx,
+    out: bus,
+    close: () => {
+      bus.gain.cancelScheduledValues(ctx.currentTime);
+      bus.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+      setTimeout(() => bus.disconnect(), 600);
+    },
+  };
+}
+
 /** 音量を試すときの音 */
 export function playSample() {
   if (SAMPLE_SOUND) play(SAMPLE_SOUND, 1);

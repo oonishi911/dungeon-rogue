@@ -30,9 +30,12 @@ export interface MovieDef {
 }
 
 export const MOVIE_CONFIG = {
-  quake: { decay: 0.45, freq: 14, amp: 9, rot: 0.6 }, // 揺れ：減っていく時間（秒）・揺れの速さ（Hz）・大きさ（px）・傾き（度）
-  flash: { decay: 0.35, peak: 0.55 }, // 赤いフラッシュ：消えるまでの時間（秒）・いちばん明るいときの濃さ
-  ember: { max: 140, rise: [40, 120] as const, drift: 26, life: [1.6, 3.4] as const, size: [1.6, 4.2] as const }, // 火の粉：上限の数・上る速さ(px/秒)・横ぶれ・寿命(秒)・大きさ(px)
+  quake: { decay: 0.6, freq: 13, amp: 20, rot: 1.3 }, // 揺れ：減っていく時間（秒）・揺れの速さ（Hz）・大きさ（px）・傾き（度）
+  punch: { decay: 0.32, scale: 0.05 }, // 声の瞬間に、画面がぐっと迫る：戻るまでの時間（秒）・拡大の割合（強さ1のとき）
+  flash: { decay: 0.4, peak: 0.85 }, // 赤いフラッシュ：消えるまでの時間（秒）・いちばん明るいときの濃さ
+  burst: { count: 46, rise: [180, 420] as const, size: [2, 5.5] as const, life: [1, 2.2] as const }, // 声の瞬間に下から噴き上がる火の粉（強さ1のときの数・上る速さ・大きさ・寿命）
+  sound: { crackleEvery: 0.8, crackleOver: 14, heartEvery: 0.95 }, // 音：火の粉のはぜる間隔（秒）と、はぜ始める火の粉の勢い／心音の間隔（秒）
+  ember: { max: 240, rise: [40, 120] as const, drift: 26, life: [1.6, 3.4] as const, size: [1.6, 4.2] as const }, // 火の粉：上限の数・上る速さ(px/秒)・横ぶれ・寿命(秒)・大きさ(px)
   strikeDelay: 1.1, // 取り消し線が引かれるまで（出てから、秒）
   breath: { period: 3.2, depth: 0.18 }, // 息づかい：1回の長さ（秒）・光の増減の深さ
 } as const;
@@ -117,6 +120,17 @@ export function quakeAt(hits: readonly Hit[], t: number): Quake {
   return { x, y, rot };
 }
 
+/** 時刻 t の、声の瞬間に画面がぐっと迫る倍率（1以上）。すぐ戻る */
+export function punchAt(hits: readonly Hit[], t: number): number {
+  const p = MOVIE_CONFIG.punch;
+  let k = 0;
+  for (const h of hits) {
+    const dt = t - h.at;
+    if (dt >= 0 && dt < p.decay * 5) k = Math.max(k, Math.exp(-dt / p.decay) * h.power);
+  }
+  return 1 + k * p.scale;
+}
+
 /** 時刻 t の、赤いフラッシュの濃さ（0〜）。大きな声が響いた瞬間に光って、すぐ消える */
 export function flashAt(hits: readonly Hit[], t: number): number {
   const f = MOVIE_CONFIG.flash;
@@ -171,6 +185,20 @@ export function stepEmbers(embers: readonly Ember[], dt: number, rate: number, r
   return alive;
 }
 
+/** 声の瞬間に、下から噴き上がる火の粉（強さ power のぶん、たくさん・速く） */
+export function burstEmbers(power: number, rand: Rand): Ember[] {
+  const b = MOVIE_CONFIG.burst;
+  return Array.from({ length: Math.round(b.count * power) }, () => ({
+    x: rand(),
+    y: -4,
+    vy: b.rise[0] + (b.rise[1] - b.rise[0]) * rand() * Math.min(1.3, 0.6 + power * 0.5),
+    phase: rand() * Math.PI * 2,
+    age: 0,
+    life: b.life[0] + (b.life[1] - b.life[0]) * rand(),
+    size: b.size[0] + (b.size[1] - b.size[0]) * rand(),
+  }));
+}
+
 /** 火の粉の、いまの横の位置（0〜1）と明るさ（0〜1。出てすぐ明るく、寿命に向けて消える） */
 export function emberLook(e: Ember): { x: number; alpha: number } {
   const c = MOVIE_CONFIG.ember;
@@ -190,4 +218,36 @@ export function itemTimes(kinds: readonly ('line' | 'crossed' | 'black')[], movi
     out.push(kind === 'line' ? (movie.lineAt[line++] ?? prev + 1.1) : kind === 'crossed' ? movie.crossedAt : prev + movie.blackDelay);
   }
   return out;
+}
+
+/** 場面の音（時刻 at に、kind の音を鳴らす。power は synth.ts の pitch に渡す：roar・heartbeat は強さ、rumble は長さ（秒）、crackle は大きさ） */
+export interface SoundCue {
+  at: number;
+  kind: 'roar' | 'rumble' | 'heartbeat' | 'scratch' | 'strike' | 'crackle' | 'hush';
+  power: number;
+}
+
+/**
+ * 場面の音の予定を、時刻の順に作る（乱数は使わない）。
+ * 地鳴りが場面のはじめから息をひそめる前まで続き、声が響くたびに roar。火の粉の勢いがあるあいだ、はぜる音。
+ * 息をひそめるあいだは心音。「やめて」を書く音と、取り消し線を引く音。最後に、静かな低い響き
+ */
+export function soundCues(movie: MovieDef): SoundCue[] {
+  const c = MOVIE_CONFIG.sound;
+  const cues: SoundCue[] = [];
+  const calmStart = movie.breath?.[0] ?? movie.lineAt[1] ?? movie.duration / 3;
+  cues.push({ at: 0.2, kind: 'rumble', power: Math.max(2, calmStart - 0.2) });
+  for (const h of movie.hits) cues.push({ at: h.at, kind: 'roar', power: h.power });
+  for (let t = c.crackleEvery; t < movie.duration; t += c.crackleEvery) {
+    const rate = valueAt(movie.embers, t);
+    if (rate >= c.crackleOver) cues.push({ at: t, kind: 'crackle', power: Math.min(1.6, rate / 40) });
+  }
+  if (movie.breath) {
+    const [from, to] = movie.breath;
+    for (let t = from + 0.3; t < to; t += c.heartEvery) cues.push({ at: t, kind: 'heartbeat', power: 0.45 + 0.35 * ((t - from) / (to - from)) });
+  }
+  cues.push({ at: movie.crossedAt, kind: 'scratch', power: 1 });
+  cues.push({ at: movie.crossedAt + MOVIE_CONFIG.strikeDelay, kind: 'strike', power: 1 });
+  cues.push({ at: movie.echoAt, kind: 'hush', power: 1 });
+  return cues.sort((a, b) => a.at - b.at);
 }

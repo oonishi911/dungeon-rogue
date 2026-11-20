@@ -1,7 +1,7 @@
 // 記憶の「動く場面」の、時刻から決まる値（docs/memory-movie.md）
 import { describe, expect, it } from 'vitest';
 import { MEMORIES } from '../game/story';
-import { MOVIE_CONFIG, MOVIES, emberLook, flashAt, glowAt, itemTimes, quakeAt, stepEmbers, valueAt, type Ember } from './memoryMovie';
+import { MOVIE_CONFIG, MOVIES, burstEmbers, emberLook, flashAt, glowAt, itemTimes, punchAt, quakeAt, soundCues, stepEmbers, valueAt, type Ember } from './memoryMovie';
 import { scrawl } from './scrawl';
 
 const flame = MOVIES.flame_beast!;
@@ -102,5 +102,57 @@ describe('火の粉', () => {
     expect(born.vy).toBeGreaterThan(0);
     expect(emberLook({ ...born, age: 0 }).alpha).toBe(0);
     expect(emberLook({ ...born, age: born.life * 0.3 }).alpha).toBeGreaterThan(emberLook({ ...born, age: born.life * 0.95 }).alpha);
+  });
+});
+
+describe('迫力（拡大・噴き上がる火の粉）', () => {
+  it('声の瞬間に画面が迫り（強いほど大きく）、すぐ1に戻る', () => {
+    const [weak, , strong] = [flame.hits[3]!, flame.hits[1]!, flame.hits[2]!];
+    expect(punchAt(flame.hits, 0)).toBe(1);
+    expect(punchAt(flame.hits, strong.at)).toBeGreaterThan(punchAt(flame.hits, weak.at));
+    expect(punchAt(flame.hits, strong.at)).toBeCloseTo(1 + MOVIE_CONFIG.punch.scale * strong.power);
+    expect(punchAt(flame.hits, strong.at + 2) - 1).toBeLessThan(0.005);
+  });
+
+  it('声が強いほど、噴き上がる火の粉が多い。下から出て、上へ進む', () => {
+    let n = 0;
+    const rand = () => (n++ * 0.37) % 1;
+    const strong = burstEmbers(1.2, rand);
+    const weak = burstEmbers(0.45, rand);
+    expect(strong.length).toBeGreaterThan(weak.length);
+    expect(strong.every((e) => e.vy > 0 && e.y < 0 && e.age === 0)).toBe(true);
+  });
+});
+
+describe('音の予定', () => {
+  const cues = soundCues(flame);
+
+  it('時刻の順で、場面の長さの中に収まる', () => {
+    expect(cues.every((c, i) => i === 0 || c.at >= cues[i - 1]!.at)).toBe(true);
+    expect(cues.every((c) => c.at >= 0 && c.at < flame.duration)).toBe(true);
+  });
+
+  it('声の数だけ roar が、声と同じ時刻に、同じ強さで鳴る', () => {
+    const roars = cues.filter((c) => c.kind === 'roar');
+    expect(roars.map((c) => [c.at, c.power])).toEqual(flame.hits.map((h) => [h.at, h.power]));
+  });
+
+  it('心音は、息をひそめるあいだだけ。取り消し線の音は、書く音のあと。最後に静かな響き', () => {
+    const [from, to] = flame.breath!;
+    const beats = cues.filter((c) => c.kind === 'heartbeat');
+    expect(beats.length).toBeGreaterThan(2);
+    expect(beats.every((c) => c.at >= from && c.at <= to)).toBe(true);
+    const scratch = cues.find((c) => c.kind === 'scratch')!;
+    const strike = cues.find((c) => c.kind === 'strike')!;
+    expect(scratch.at).toBe(flame.crossedAt);
+    expect(strike.at).toBeGreaterThan(scratch.at);
+    expect(cues.filter((c) => c.kind !== 'crackle').pop()!.kind).toBe('hush');
+  });
+
+  it('火の粉のはぜる音は、火の粉の勢いがあるときだけ。地鳴りは、場面のはじめから息をひそめる前まで', () => {
+    for (const c of cues.filter((c) => c.kind === 'crackle')) expect(valueAt(flame.embers, c.at)).toBeGreaterThanOrEqual(MOVIE_CONFIG.sound.crackleOver);
+    const rumble = cues.find((c) => c.kind === 'rumble')!;
+    expect(rumble.at).toBeLessThan(1);
+    expect(rumble.at + rumble.power).toBeCloseTo(flame.breath![0]);
   });
 });
