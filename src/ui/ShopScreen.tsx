@@ -124,6 +124,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
           </button>
         </h2>
         {bagOpen && (
+          <div className="shop__bag-body">
           <dl id="shop-slots" className="shop__slots">
             <div>
               <dt>武器</dt>
@@ -140,7 +141,6 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
                   <Chip key={id} id={id} title="外す" onClick={() => apply(unequipRing(save, id))} />
                 ))}
                 {rings.length === 0 && <span className="shop__none">なし</span>}
-                <span className="muted">（指{fingerCount}本まで。思い出した記憶で増える）</span>
               </dd>
             </div>
             <div>
@@ -164,8 +164,9 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
               </dd>
             </div>
           </dl>
+          <p className="muted shop__bag-hint">押すと外す（買ったものは、なくならない）。指輪は指{fingerCount}本まで（思い出した記憶で増える）</p>
+          </div>
         )}
-        {bagOpen && <p className="muted">押すと外す（買ったものは、なくならない）</p>}
         <button type="button" className="primary shop__go" onClick={onDepart}>
           {kitLoadout(save).length === 0 ? '何も持たずに出発する' : kit.weapon ? 'この持ち物で出発する' : '武器なしで出発する'}
         </button>
