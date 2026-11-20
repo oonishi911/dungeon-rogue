@@ -223,7 +223,7 @@ export function itemTimes(kinds: readonly ('line' | 'crossed' | 'black')[], movi
 /** 場面の音（時刻 at に、kind の音を鳴らす。power は synth.ts の pitch に渡す：roar・heartbeat は強さ、rumble・sizzle は長さ（秒）） */
 export interface SoundCue {
   at: number;
-  kind: 'roar' | 'rumble' | 'heartbeat' | 'scratch' | 'strike' | 'hush' | 'sizzle' | 'sizzle_soft';
+  kind: 'roar' | 'rumble' | 'heartbeat' | 'hush' | 'sizzle' | 'sizzle_soft';
   power: number;
 }
 
@@ -231,7 +231,7 @@ export interface SoundCue {
  * 場面の音の予定を、時刻の順に作る（乱数は使わない）。
  * 地鳴りが場面のはじめから息をひそめる前まで続き、声が響くたびに roar。
  * 紙が燃えるようなチリチリ（sizzle）が、声のあいだは大きく、息をひそめるあいだは小さく、「やめて」が燃えるときは大きく、最後はそっと続く。
- * 息をひそめるあいだは心音。「やめて」を書く音と、取り消し線を引く音。最後に、静かな低い響き
+ * 息をひそめるあいだは心音。最後に、静かな低い響き。（「やめて」を書く音・取り消し線を引く音は、乾いた「かかか、かこかこ」に聞こえたので、鳴らさない）
  */
 export function soundCues(movie: MovieDef): SoundCue[] {
   const c = MOVIE_CONFIG.sound;
@@ -248,8 +248,6 @@ export function soundCues(movie: MovieDef): SoundCue[] {
     const [from, to] = movie.breath;
     for (let t = from + 0.3; t < to; t += c.heartEvery) cues.push({ at: t, kind: 'heartbeat', power: 0.45 + 0.35 * ((t - from) / (to - from)) });
   }
-  cues.push({ at: movie.crossedAt, kind: 'scratch', power: 1 });
-  cues.push({ at: movie.crossedAt + MOVIE_CONFIG.strikeDelay, kind: 'strike', power: 1 });
   cues.push({ at: movie.echoAt, kind: 'hush', power: 1 });
   return cues.sort((a, b) => a.at - b.at);
 }

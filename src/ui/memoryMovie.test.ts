@@ -137,15 +137,13 @@ describe('音の予定', () => {
     expect(roars.map((c) => [c.at, c.power])).toEqual(flame.hits.map((h) => [h.at, h.power]));
   });
 
-  it('心音は、息をひそめるあいだだけ。取り消し線の音は、書く音のあと。最後に静かな響き', () => {
+  it('心音は、息をひそめるあいだだけ。最後に静かな響き。書く音・取り消し線の音は鳴らさない', () => {
     const [from, to] = flame.breath!;
     const beats = cues.filter((c) => c.kind === 'heartbeat');
     expect(beats.length).toBeGreaterThan(2);
     expect(beats.every((c) => c.at >= from && c.at <= to)).toBe(true);
-    const scratch = cues.find((c) => c.kind === 'scratch')!;
-    const strike = cues.find((c) => c.kind === 'strike')!;
-    expect(scratch.at).toBe(flame.crossedAt);
-    expect(strike.at).toBeGreaterThan(scratch.at);
+    expect(cues.map((c) => c.kind as string)).not.toContain('scratch');
+    expect(cues.map((c) => c.kind as string)).not.toContain('strike');
     const hush = cues.find((c) => c.kind === 'hush')!;
     expect(hush.at).toBe(flame.echoAt);
     expect(cues.filter((c) => c.at > hush.at).every((c) => c.kind === 'sizzle_soft')).toBe(true);
