@@ -23,9 +23,16 @@ function Glyphs({ glyphs }: { glyphs: Glyph[] }) {
   );
 }
 
-/** 文字の絵を1つ出す。at：動く場面で、出る時刻（秒）。ないときは、番号 index の順に、一定の間をあけて出る。loud：大きな声で、文字がふるえる */
-export function ScrawlItemView({ item, index, at, loud }: { item: ScrawlItem; index: number; at?: number; loud?: boolean }) {
-  const style = { '--i': index, '--tilt': `${item.tilt}deg`, '--shift': `${item.shift}%`, ...(at === undefined ? {} : { '--at': at }) } as CSSProperties;
+/** 文字の絵を1つ出す。at：動く場面で、出る時刻（秒）。ないときは、番号 index の順に、一定の間をあけて出る。loud：大きな声で、文字がふるえる。write：書かれていく長さ（秒） */
+export function ScrawlItemView({ item, index, at, loud, write }: { item: ScrawlItem; index: number; at?: number; loud?: boolean; write?: number }) {
+  const style = {
+    '--i': index,
+    '--tilt': `${item.tilt}deg`,
+    '--shift': `${item.shift}%`,
+    ...(at === undefined ? {} : { '--at': at }),
+    // 書かれていく長さ（秒）と、1文字ずつ進むための段数（動く場面。左から右へ、チョークで書くように現れる）
+    ...(write === undefined ? {} : { '--write': write, '--steps': item.kind === 'black' ? 1 : item.glyphs.length }),
+  } as CSSProperties;
   if (item.kind === 'black') {
     const s = item.shape;
     const clip = `polygon(0% ${s[0]}%, 33% ${s[1]}%, 66% ${s[2]}%, 100% ${s[3]}%, 100% ${100 - s[4]!}%, 66% ${100 - s[5]!}%, 33% ${100 - s[6]!}%, 0% ${100 - s[7]!}%)`;

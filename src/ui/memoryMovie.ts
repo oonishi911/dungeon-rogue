@@ -37,6 +37,7 @@ export const MOVIE_CONFIG = {
   sound: { heartEvery: 0.95, burnCross: 3.4 }, // 音：心音の間隔（秒）／「やめて」が燃えるチリチリの長さ（秒）
   ember: { max: 240, rise: [40, 120] as const, drift: 26, life: [1.6, 3.4] as const, size: [1.6, 4.2] as const }, // 火の粉：上限の数・上る速さ(px/秒)・横ぶれ・寿命(秒)・大きさ(px)
   strikeDelay: 1.1, // 取り消し線が引かれるまで（出てから、秒）
+  write: { perChar: 0.075, min: 0.7, max: 1.8, crossedPerChar: 0.12, crossedMin: 0.5, black: 0.45, strike: 0.5 }, // 文字が書かれていく長さ（秒）：1文字あたり・最短・最長／書いては消した言葉（1文字あたり・最短）／塗りつぶしの帯／取り消し線を引く
   breath: { period: 3.2, depth: 0.18 }, // 息づかい：1回の長さ（秒）・光の増減の深さ
 } as const;
 
@@ -220,11 +221,25 @@ export function itemTimes(kinds: readonly ('line' | 'crossed' | 'black')[], movi
   return out;
 }
 
-/** 場面の音（時刻 at に、kind の音を鳴らす。power は synth.ts の pitch に渡す：roar・heartbeat は強さ、rumble・sizzle は長さ（秒）） */
+/** 場面の音（時刻 at に、kind の音を鳴らす。power は synth.ts の pitch に渡す：roar・heartbeat は強さ、rumble・sizzle・chalk は長さ（秒）） */
 export interface SoundCue {
   at: number;
-  kind: 'roar' | 'rumble' | 'heartbeat' | 'hush' | 'sizzle' | 'sizzle_soft';
+  kind: 'roar' | 'rumble' | 'heartbeat' | 'hush' | 'sizzle' | 'sizzle_soft' | 'chalk' | 'chalk_bold';
   power: number;
+}
+
+/** 文字の絵ひとつ。chars は文字数（塗りつぶしの帯は 0） */
+export interface Write {
+  kind: 'line' | 'crossed' | 'black';
+  chars: number;
+}
+
+/** 文字の絵ひとつが、書かれていく長さ（秒）。文字数に比例（短い行・長い行で、極端にならないよう範囲を決める）。画面の出方（CSS の --write）と、チョークの音が同じ長さを使う */
+export function writeSeconds(w: Write): number {
+  const c = MOVIE_CONFIG.write;
+  if (w.kind === 'black') return c.black;
+  if (w.kind === 'crossed') return Math.max(c.crossedMin, w.chars * c.crossedPerChar);
+  return Math.min(c.max, Math.max(c.min, w.chars * c.perChar));
 }
 
 /**
@@ -233,7 +248,7 @@ export interface SoundCue {
  * 紙が燃えるようなチリチリ（sizzle）が、声のあいだは大きく、息をひそめるあいだは小さく、「やめて」が燃えるときは大きく、最後はそっと続く。
  * 息をひそめるあいだは心音。最後に、静かな低い響き。（「やめて」を書く音・取り消し線を引く音は、乾いた「かかか、かこかこ」に聞こえたので、鳴らさない）
  */
-export function soundCues(movie: MovieDef): SoundCue[] {
+export function soundCues(movie: MovieDef, writes: readonly Write[] = []): SoundCue[] {
   const c = MOVIE_CONFIG.sound;
   const cues: SoundCue[] = [];
   const calmStart = movie.breath?.[0] ?? movie.lineAt[1] ?? movie.duration / 3;
@@ -248,6 +263,15 @@ export function soundCues(movie: MovieDef): SoundCue[] {
     const [from, to] = movie.breath;
     for (let t = from + 0.3; t < to; t += c.heartEvery) cues.push({ at: t, kind: 'heartbeat', power: 0.45 + 0.35 * ((t - from) / (to - from)) });
   }
+  // 文字が書かれていくあいだ、チョークで書く音（声の行は力を込めて、強く。塗りつぶしの帯も強く）。取り消し線は、勢いよく引く
+  const times = itemTimes(writes.map((w) => w.kind), movie);
+  let line = 0;
+  writes.forEach((w, i) => {
+    const bold = w.kind === 'black' || (w.kind === 'line' && movie.loud.includes(line));
+    if (w.kind === 'line') line++;
+    cues.push({ at: times[i]!, kind: bold ? 'chalk_bold' : 'chalk', power: writeSeconds(w) });
+    if (w.kind === 'crossed') cues.push({ at: times[i]! + MOVIE_CONFIG.strikeDelay, kind: 'chalk_bold', power: MOVIE_CONFIG.write.strike });
+  });
   cues.push({ at: movie.echoAt, kind: 'hush', power: 1 });
   return cues.sort((a, b) => a.at - b.at);
 }

@@ -2,9 +2,10 @@
 // 凍る・燃える・砕く・焼き斬り・杖の共鳴・蒸気・持ち替え・倒した、の8つ。pitch は音の高さの倍率（連続で倒すと上げていく）。
 // 2026-11-21：記憶の動く場面（docs/memory-movie.md）の音を足した。roar（大きな声。pitch は強さ）・rumble（地鳴り。pitch は長さ（秒））・
 // heartbeat（心音。pitch は強さ）・hush（最後の、静かな低い響き）・
-// sizzle・sizzle_soft（紙が燃えるような、細かいチリチリという音。pitch は長さ（秒）。soft は小さめ）
+// sizzle・sizzle_soft（紙が燃えるような、細かいチリチリという音。pitch は長さ（秒）。soft は小さめ）・
+// chalk・chalk_bold（黒板にチョークで書く音。pitch は書いている長さ（秒）。bold は力を込めて、強く）
 
-export type SynthKind = 'freeze' | 'burn' | 'smash' | 'sear' | 'arcane' | 'steam' | 'swap' | 'kill' | 'roar' | 'rumble' | 'heartbeat' | 'hush' | 'sizzle' | 'sizzle_soft';
+export type SynthKind = 'freeze' | 'burn' | 'smash' | 'sear' | 'arcane' | 'steam' | 'swap' | 'kill' | 'roar' | 'rumble' | 'heartbeat' | 'hush' | 'sizzle' | 'sizzle_soft' | 'chalk' | 'chalk_bold';
 
 let noise: AudioBuffer | null = null;
 const noiseOf = (ctx: AudioContext): AudioBuffer => {
@@ -151,6 +152,32 @@ function sizzle(ctx: AudioContext, out: AudioNode, at: number, len: number, leve
   }
 }
 
+/**
+ * 黒板にチョークで書く音：粉っぽい摩擦の「シャッ、シャッ」。1画ごとに、帯域のノイズがすっと立ち上がって、ゆるやかに消える。
+ * 画は少し重ねて、途切れない摩擦にする（短い粒を並べると、かたかたした音になるので、粒は作らない）。
+ * 下に、細かい粉の息と、黒板の板が鳴る低めのこもりを敷く。len 秒続き、level（1が標準）で強さが変わる
+ */
+function chalk(ctx: AudioContext, out: AudioNode, at: number, len: number, level: number) {
+  hiss(ctx, out, at, { type: 'highpass', from: 5200, q: 0.5, len, gain: 0.05 * level, attack: Math.min(0.08, len / 3), offset: Math.random() * 0.5 });
+  hiss(ctx, out, at, { type: 'bandpass', from: 850, q: 0.8, len, gain: 0.05 * level, attack: Math.min(0.1, len / 3), offset: Math.random() * 0.5 });
+  let t = 0;
+  while (t < len) {
+    const dur = Math.min(len - t + 0.04, 0.14 + Math.random() * 0.2); // 1画の長さ
+    const up = Math.random() < 0.5; // 画の途中で、音の高さが上がるか下がるか
+    hiss(ctx, out, at + t, {
+      type: 'bandpass',
+      from: up ? 2200 + Math.random() * 600 : 3800 + Math.random() * 700,
+      to: up ? 3900 + Math.random() * 700 : 2300 + Math.random() * 500,
+      q: 0.8 + Math.random() * 0.9,
+      len: dur,
+      gain: (0.2 + Math.random() * 0.1) * level,
+      attack: Math.min(0.045, dur * 0.4),
+      offset: Math.random() * 0.8,
+    });
+    t += dur * 0.78; // 次の画が、前の画の終わりに重なる
+  }
+}
+
 /** 効果音を1つ鳴らす。when は鳴らし始める時刻（AudioContext の時間） */
 export function synthSfx(ctx: AudioContext, out: AudioNode, kind: SynthKind, when: number, pitch = 1) {
   switch (kind) {
@@ -235,6 +262,12 @@ export function synthSfx(ctx: AudioContext, out: AudioNode, kind: SynthKind, whe
       break;
     case 'sizzle_soft': // 同じ音を、小さく
       sizzle(ctx, out, when, pitch, 0.5);
+      break;
+    case 'chalk': // チョークで書く音。pitch は長さ（秒）
+      chalk(ctx, out, when, pitch, 1);
+      break;
+    case 'chalk_bold': // 力を込めて、強く
+      chalk(ctx, out, when, pitch, 1.5);
       break;
     default: {
       const unreachable: never = kind;

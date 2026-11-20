@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { openSoundBus } from '../audio/sound';
 import { synthSfx } from '../audio/synth';
-import { MOVIE_CONFIG, burstEmbers, emberLook, flashAt, glowAt, itemTimes, punchAt, quakeAt, soundCues, stepEmbers, valueAt, type Ember, type MovieDef } from './memoryMovie';
+import { MOVIE_CONFIG, burstEmbers, emberLook, flashAt, glowAt, itemTimes, punchAt, quakeAt, soundCues, stepEmbers, valueAt, writeSeconds, type Ember, type MovieDef, type Write } from './memoryMovie';
 import type { ScrawlItem } from './scrawl';
 import { InkFilter, ScrawlItemView, Scratches } from './ScrawlParts';
 
@@ -24,6 +24,8 @@ export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps
   const flash = useRef<HTMLElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const times = useMemo(() => itemTimes(items.map((i) => i.kind), movie), [items, movie]);
+  // 文字の絵ごとの、書かれていく長さ（画面の出方と、チョークの音が同じ長さを使う）
+  const writes = useMemo<Write[]>(() => items.map((i) => ({ kind: i.kind, chars: i.kind === 'black' ? 0 : i.glyphs.length })), [items]);
   // 何番目の「行」か（loud の指定は、行の番号）
   const lineNo = useMemo(() => {
     let n = 0;
@@ -35,9 +37,9 @@ export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps
     const bus = openSoundBus();
     if (!bus) return;
     const now = bus.ctx.currentTime + 0.05;
-    for (const cue of soundCues(movie)) synthSfx(bus.ctx, bus.out, cue.kind, now + cue.at, cue.power);
+    for (const cue of soundCues(movie, writes)) synthSfx(bus.ctx, bus.out, cue.kind, now + cue.at, cue.power);
     return bus.close;
-  }, [movie]);
+  }, [movie, writes]);
 
   useEffect(() => {
     const cv = canvas.current;
@@ -100,9 +102,9 @@ export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps
         {/* 文字は荒れているので、読み上げには、きれいな文章を渡す */}
         <p className="sr-only">{text}</p>
         <InkFilter />
-        <div className="scrawl mm__scrawl">
+        <div className="scrawl mm__scrawl" style={{ '--strike-delay': `${MOVIE_CONFIG.strikeDelay}s` } as CSSProperties}>
           {items.map((item, i) => (
-            <ScrawlItemView key={i} item={item} index={i} at={times[i]} loud={movie.loud.includes(lineNo[i]!)} />
+            <ScrawlItemView key={i} item={item} index={i} at={times[i]} write={writeSeconds(writes[i]!)} loud={movie.loud.includes(lineNo[i]!)} />
           ))}
           <Scratches seed={seed} at={movie.crossedAt + MOVIE_CONFIG.strikeDelay} />
         </div>

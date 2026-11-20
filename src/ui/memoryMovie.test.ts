@@ -1,7 +1,7 @@
 // 記憶の「動く場面」の、時刻から決まる値（docs/memory-movie.md）
 import { describe, expect, it } from 'vitest';
 import { MEMORIES } from '../game/story';
-import { MOVIE_CONFIG, MOVIES, burstEmbers, emberLook, flashAt, glowAt, itemTimes, punchAt, quakeAt, soundCues, stepEmbers, valueAt, type Ember } from './memoryMovie';
+import { MOVIE_CONFIG, MOVIES, burstEmbers, emberLook, flashAt, glowAt, itemTimes, punchAt, quakeAt, soundCues, stepEmbers, valueAt, writeSeconds, type Ember, type Write } from './memoryMovie';
 import { scrawl } from './scrawl';
 
 const flame = MOVIES.flame_beast!;
@@ -124,8 +124,12 @@ describe('迫力（拡大・噴き上がる火の粉）', () => {
   });
 });
 
+const memoryFlame = MEMORIES.flame_beast!;
+const flameItems = scrawl(memoryFlame.lines, memoryFlame.crossed, 'flame_beast');
+const flameWrites: Write[] = flameItems.map((i) => ({ kind: i.kind, chars: i.kind === 'black' ? 0 : i.glyphs.length }));
+
 describe('音の予定', () => {
-  const cues = soundCues(flame);
+  const cues = soundCues(flame, flameWrites);
 
   it('時刻の順で、場面の長さの中に収まる', () => {
     expect(cues.every((c, i) => i === 0 || c.at >= cues[i - 1]!.at)).toBe(true);
@@ -166,5 +170,31 @@ describe('音の予定', () => {
       expect(b.power).toBeGreaterThan(0);
       expect(b.at + b.power).toBeLessThanOrEqual(flame.duration + 1e-9);
     }
+  });
+
+  it('文字が書かれていくあいだ、チョークの音が鳴る：出る時刻と同じ時刻に、書かれる長さのあいだ。声の行と塗りつぶしは強く', () => {
+    const times = itemTimes(flameWrites.map((w) => w.kind), flame);
+    const chalk = cues.filter((c) => c.kind === 'chalk' || c.kind === 'chalk_bold');
+    flameWrites.forEach((w, i) => {
+      const cue = chalk.find((c) => c.at === times[i] && c.power === writeSeconds(w));
+      expect(cue).toBeDefined();
+      if (w.kind === 'black') expect(cue!.kind).toBe('chalk_bold');
+    });
+    expect(chalk.find((c) => c.at === flame.lineAt[0])!.kind).toBe('chalk_bold'); // 声の行
+    expect(chalk.find((c) => c.at === flame.lineAt[1])!.kind).toBe('chalk');
+    // 取り消し線を引く音：書いたあと、strikeDelay 後に強く
+    expect(chalk.some((c) => Math.abs(c.at - (flame.crossedAt + MOVIE_CONFIG.strikeDelay)) < 1e-9 && c.kind === 'chalk_bold')).toBe(true);
+  });
+
+  it('書かれる長さは、文字数に比例し、範囲に収まる。塗りつぶしは決まった長さ', () => {
+    const w = MOVIE_CONFIG.write;
+    expect(writeSeconds({ kind: 'line', chars: 1 })).toBe(w.min);
+    expect(writeSeconds({ kind: 'line', chars: 500 })).toBe(w.max);
+    expect(writeSeconds({ kind: 'line', chars: 20 })).toBeCloseTo(20 * w.perChar);
+    expect(writeSeconds({ kind: 'black', chars: 0 })).toBe(w.black);
+    expect(writeSeconds({ kind: 'crossed', chars: 3 })).toBeCloseTo(Math.max(w.crossedMin, 3 * w.crossedPerChar));
+    // どの文字の絵も、場面が終わるまでに書き終わる
+    const times = itemTimes(flameWrites.map((x) => x.kind), flame);
+    flameWrites.forEach((x, i) => expect(times[i]! + writeSeconds(x)).toBeLessThan(flame.duration));
   });
 });
