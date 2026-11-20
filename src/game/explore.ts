@@ -31,7 +31,7 @@ import { SKILL_CONFIG, skillOf } from './weaponSkill';
 import { afflict, cureAll, statusNames } from './status';
 import { applyFoeStatus, burnRemaining, extinguish, foeImmune, foeKindOf, scaled, thaw, whetstoneChance, type ComboKind, type FoeStatusKind } from './foeStatus';
 import { around9, FIELD_CONFIG, fieldAt, immuneToField, placeField, tickFields, type FieldKind } from './fields';
-import type { DungeonFile, RoomSettings } from './genMaster';
+import type { DungeonFile, GrowthSettings, RoomSettings } from './genMaster';
 import { magicPower, spellAffinity, spellDamage, startMagic } from './magic';
 import {
   behaviorsOf,
@@ -51,7 +51,7 @@ import {
 import { generateBossFloor, generateFloor, tileAt, type FloorMap, type Pos } from './map';
 import { floorParams } from './floorParams';
 import { nextInt, nextRandom, shuffle } from './rng';
-import type { Element, EnemyDef, EnemyId, ItemId, Result, SpellId, TraitId } from './types';
+import type { Element, EnemyDef, EnemyId, ItemId, PlayerStats, Result, SpellId, TraitId } from './types';
 import { lost } from './story';
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value });
@@ -89,7 +89,7 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     enemyDensity: options.enemyDensity ?? params.enemyDensity,
     map: floorMap(seed, 0, mapSize, settings.rooms),
     player: { x: 0, y: 0 },
-    stats: buildPlayer(options.loadout ?? [], options.echoes),
+    stats: startStats(buildPlayer(options.loadout ?? [], options.echoes), settings.growth),
     satiety: maxSatiety,
     maxSatiety,
     ...startMagic(options.loadout ?? [], settings.magic),
@@ -117,6 +117,11 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     found: noFound(),
   };
   return enterFloor(state, 0, state.map);
+}
+
+/** ダンジョンに入ったときのHPと最大HP（そのダンジョンの設定 growth.startHp・startMaxHp）にする。HPは最大HPを超えない */
+export function startStats(stats: PlayerStats, growth: Pick<GrowthSettings, 'startHp' | 'startMaxHp'>): PlayerStats {
+  return { ...stats, maxHp: growth.startMaxHp, hp: Math.min(growth.startHp, growth.startMaxHp) };
 }
 
 /** 持っていくものから決まる、視界の半径（視界を広げる道具がなければ EXPLORE_CONFIG.sightRadius） */

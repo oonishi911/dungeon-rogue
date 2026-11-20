@@ -24,7 +24,7 @@ const SAMPLE: GenSettings = {
   floors: { count: 3, size: 40, satiety: 1600 },
   rooms: { attemptRate: 0.04, minSize: 3, maxSize: 9 },
   enemies: { amount: 1, placement: 'mixed', roomWeight: 1, nestChance: 0, nestMin: 3, nestMax: 5, stayInRoom: false, bossMinions: 4 },
-  growth: { expBase: 30, expStep: 20, hpPerLevel: 2, atkPerLevel: 1, magPerLevel: 1, maxLevel: 10, eliteRate: 3 },
+  growth: { startHp: 60, startMaxHp: 60, expBase: 30, expStep: 20, hpPerLevel: 2, atkPerLevel: 1, magPerLevel: 1, maxLevel: 10, eliteRate: 3 },
   magic: { maxMp: 20, regenEvery: 6, power: 8, staffPower: 1.5, staffMp: 10, noiseRadius: 3 },
   spells: {
     shockwave: { cost: 6, power: 0.3, push: 3, crash: 3 },
@@ -153,6 +153,7 @@ describe('マップと探索の設定', () => {
     after.floors.satiety = 1200;
     after.rooms.attemptRate = 0.1;
     after.enemies.stayInRoom = true;
+    after.growth.startMaxHp = 80;
     after.growth.hpPerLevel = 4;
     after.magic.maxMp = 30;
     after.spells.shockwave.push = 2;
@@ -162,6 +163,7 @@ describe('マップと探索の設定', () => {
       '満腹度：1600 → 1200',
       '部屋の多さ：0.04 → 0.1',
       '部屋の敵は部屋から出ない：しない → する',
+      '入ったときの最大HP：60 → 80',
       '1レベルで増える最大HP：2 → 4',
       '魔力の最大：20 → 30',
       '衝撃波の吹き飛ばすマス数：3 → 2',

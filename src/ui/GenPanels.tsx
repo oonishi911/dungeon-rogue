@@ -2,7 +2,7 @@
 // 直すダンジョンは、タブの上の欄で選ぶ（DungeonPanels.tsx）：
 // 「階の数・広さ・満腹度」、「小部屋」（多さと大きさ）、
 // 「敵の数と置き方」（部屋に集める・部屋には置かない・群れ部屋・部屋から出さない）、
-// 「レベルと強敵の報酬」（敵を倒したときのレベルの上がり方と強敵の報酬の倍率）、「魔法」（魔力と呪文の強さ）と、
+// 「HP・レベル・強敵の報酬」（入ったときのHPと最大HP、敵を倒したときのレベルの上がり方と強敵の報酬の倍率）、「魔法」（魔力と呪文の強さ）と、
 // 変えた値で作ったマップの見本。
 // 変えた内容は、管理画面の「変更を公開」でリポジトリに保存され、自動チェックが通れば数分で公開版に反映される
 
@@ -246,14 +246,31 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
   );
 }
 
-/** 「レベルと強敵の報酬」のタブ */
+/** 「HP・レベル・強敵の報酬」のタブ */
 export function GrowthPanel({ base, draft, setDraft }: GenPanelProps) {
   const g = draft.growth;
   const bg = base.growth;
   const setGrowth = (patch: Partial<GrowthSettings>) => setDraft((d) => ({ ...d, growth: { ...d.growth, ...patch } }));
   return (
     <section className="admin__section" role="tabpanel" id="admin-growth-panel" aria-labelledby="admin-growth-tab">
-      <h2 className="admin__heading">レベルと強敵の報酬</h2>
+      <h2 className="admin__heading">HP・レベル・強敵の報酬</h2>
+      <h3 className="gen__subheading">ダンジョンに入ったときのHP</h3>
+      <p className="admin__note">
+        探索を始める（1階に入る）ときの、HPと最大HPです。装備や指輪では変わりません。HPは、最大HPより大きくできません。
+      </p>
+      <div className="gen__fields">
+        {(
+          [
+            ['startMaxHp', '入ったときの最大HPです。レベルが上がると、1レベルごとに「1レベルで増える最大HP」だけ増えます。', '60なら、レベル1の最大HPは60。'],
+            ['startHp', '入ったときのHPです。最大HPより小さくすると、傷ついた状態で始まります（回復薬や癒しで回復できます）。', '最大HPが60で、これが40なら、HP40/60で始まります。'],
+          ] as const
+        ).map(([key, hint, example]) => (
+          <Field key={key} label={GEN_LABELS[key]} hint={hint} example={example}>
+            <NumberField {...GEN_LIMITS[key]} value={g[key]} changed={g[key] !== bg[key]} base={bg[key]} label={GEN_LABELS[key]} onChange={(v) => setGrowth({ [key]: v })} />
+          </Field>
+        ))}
+      </div>
+      <h3 className="gen__subheading">レベルと強敵の報酬</h3>
       <p className="admin__note">
         敵を倒して経験値がたまると、その挑戦のあいだだけレベルが上がります。敵ごとの金貨・経験値・道具を落とす確率は、「敵」のタブで変えます。
         強くしすぎると、外れた準備でもクリアできてしまうので気を付けてください（バランスのテストは、今は自動チェックから外しています）。
