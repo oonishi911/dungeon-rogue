@@ -158,8 +158,8 @@ function sizzle(ctx: AudioContext, out: AudioNode, at: number, len: number, leve
  * 下に、細かい粉の息と、黒板の板が鳴る低めのこもりを敷く。len 秒続き、level（1が標準）で強さが変わる
  */
 function chalk(ctx: AudioContext, out: AudioNode, at: number, len: number, level: number) {
-  hiss(ctx, out, at, { type: 'highpass', from: 5200, q: 0.5, len, gain: 0.05 * level, attack: Math.min(0.08, len / 3), offset: Math.random() * 0.5 });
-  hiss(ctx, out, at, { type: 'bandpass', from: 850, q: 0.8, len, gain: 0.05 * level, attack: Math.min(0.1, len / 3), offset: Math.random() * 0.5 });
+  hiss(ctx, out, at, { type: 'highpass', from: 5200, q: 0.5, len, gain: 0.1 * level, attack: Math.min(0.08, len / 3), offset: Math.random() * 0.5 });
+  hiss(ctx, out, at, { type: 'bandpass', from: 1100, q: 0.7, len, gain: 0.12 * level, attack: Math.min(0.1, len / 3), offset: Math.random() * 0.5 });
   let t = 0;
   while (t < len) {
     const dur = Math.min(len - t + 0.04, 0.14 + Math.random() * 0.2); // 1画の長さ
@@ -168,9 +168,9 @@ function chalk(ctx: AudioContext, out: AudioNode, at: number, len: number, level
       type: 'bandpass',
       from: up ? 2200 + Math.random() * 600 : 3800 + Math.random() * 700,
       to: up ? 3900 + Math.random() * 700 : 2300 + Math.random() * 500,
-      q: 0.8 + Math.random() * 0.9,
+      q: 0.5 + Math.random() * 0.5,
       len: dur,
-      gain: (0.2 + Math.random() * 0.1) * level,
+      gain: (0.5 + Math.random() * 0.2) * level,
       attack: Math.min(0.045, dur * 0.4),
       offset: Math.random() * 0.8,
     });
@@ -267,7 +267,7 @@ export function synthSfx(ctx: AudioContext, out: AudioNode, kind: SynthKind, whe
       chalk(ctx, out, when, pitch, 1);
       break;
     case 'chalk_bold': // 力を込めて、強く
-      chalk(ctx, out, when, pitch, 1.5);
+      chalk(ctx, out, when, pitch, 1.3);
       break;
     default: {
       const unreachable: never = kind;

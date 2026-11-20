@@ -263,11 +263,11 @@ export function soundCues(movie: MovieDef, writes: readonly Write[] = []): Sound
     const [from, to] = movie.breath;
     for (let t = from + 0.3; t < to; t += c.heartEvery) cues.push({ at: t, kind: 'heartbeat', power: 0.45 + 0.35 * ((t - from) / (to - from)) });
   }
-  // 文字が書かれていくあいだ、チョークで書く音（声の行は力を込めて、強く。塗りつぶしの帯も強く）。取り消し線は、勢いよく引く
+  // 文字が書かれていくあいだ、チョークで書く音（声の行は力を込めて、強く。書いては消した言葉・塗りつぶしの帯も強く）。取り消し線は、勢いよく引く
   const times = itemTimes(writes.map((w) => w.kind), movie);
   let line = 0;
   writes.forEach((w, i) => {
-    const bold = w.kind === 'black' || (w.kind === 'line' && movie.loud.includes(line));
+    const bold = w.kind !== 'line' || movie.loud.includes(line);
     if (w.kind === 'line') line++;
     cues.push({ at: times[i]!, kind: bold ? 'chalk_bold' : 'chalk', power: writeSeconds(w) });
     if (w.kind === 'crossed') cues.push({ at: times[i]! + MOVIE_CONFIG.strikeDelay, kind: 'chalk_bold', power: MOVIE_CONFIG.write.strike });
