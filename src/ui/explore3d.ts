@@ -28,10 +28,11 @@ import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
-import { AFTERGLOW_FX, AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEATH_FX, DEBRIS, GLOW_FX, INTRO_FX, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, FOE_FX, FOE_STATUS_FX, SPLASH_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, QUALITY, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
+import { AFTERGLOW_FX, AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEATH_FX, DEBRIS, GLOW_FX, INTRO_FX, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, DAMAGE_STYLE, FOE_FX, FOE_STATUS_FX, HIT_STOP, SPLASH_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, QUALITY, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
 import { applyFog, createFog, createGroundMist, litBillboard, worldMapped } from './explore3dKit';
 import { asMetal } from './materialLook';
 import { PostFx } from './postFx';
+import { feelSettings } from './feelSettings';
 import { normalMapFrom } from './surfaceNormals';
 import { Particles } from './particles';
 import { Sconces } from './sconces';
@@ -80,6 +81,7 @@ export class DungeonView3D {
   private readonly ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
   private shownState: ExploreState | null = null;
+  private stopUntil = 0; // ヒットストップで画面を止めておく時刻（performance.now）
   private readonly floors: THREE.InstancedMesh[]; // 床の模様ごとに1つ
   // 壁は、床に面している側面の組み合わせごとに形が違う（面した縁だけ丸める）ので、組み合わせごとに入れ物を分ける
   private readonly walls: THREE.InstancedMesh[];
@@ -433,7 +435,7 @@ export class DungeonView3D {
       }
     }
     // 呪文の揺れ（spellFx.shake）は、カメラの位置と見る先の両方に足す
-    const shake = this.spellFx.shake;
+    const shake = feelSettings().shake ? this.spellFx.shake : { x: 0, z: 0 }; // 「画面の揺れ」を切っているときは揺らさない
     this.camera.position.set(p.x + shake.x, CAMERA.height, p.y + CAMERA.back + shake.z);
     this.camera.lookAt(p.x + shake.x, 0, p.y + shake.z);
     for (const e of s.enemies) {
@@ -869,22 +871,46 @@ export class DungeonView3D {
   /** 攻撃したとき・攻撃されたときに、画面を少し拡大縮小する。動きを減らす設定では何もしない */
   hitPulse(kind: HitPulse) {
     this.lastCombatAt = performance.now();
-    if (this.reduceMotion) return;
+    if (this.reduceMotion || !feelSettings().shake) return;
     // 敵の攻撃は、自分の攻撃より目立たせる（同時に起きたら敵の攻撃の効果にする）
     if (this.pulse?.kind === 'hurt' && kind === 'attack' && performance.now() - this.pulse.start < HIT_PULSE.hurt.ms) return;
     this.pulse = { kind, start: performance.now() };
   }
 
   /**
+   * ヒットストップ：当てた一瞬、画面を止める（ms ミリ秒。重なったら長いほう。最長は HIT_STOP.max）。
+   * 「動きを減らす」設定・手応えの設定でヒットストップを切っているときは止めない
+   */
+  hitStop(ms: number) {
+    if (this.reduceMotion || !feelSettings().hitStop) return;
+    const until = performance.now() + Math.min(HIT_STOP.max, ms);
+    if (until > this.stopUntil) this.stopUntil = until;
+  }
+
+  /** 画面を止めているあいだ true（呼び出し側は、描かずに動きの時計を止める） */
+  holdFrame(now: number): boolean {
+    return now < this.stopUntil;
+  }
+
+  /**
    * ダメージの数字を出す。at は受けた側のマス、kind は与えた（dealt）か受けた（taken）か。
    * 同じマスに続けて出るときは、少しずつ横にずらして重ならないようにする
    */
-  popDamage(at: Pos, amount: number, kind: 'dealt' | 'taken', blocked = false) {
-    this.popText(at, String(amount), blocked ? FOE_FX.marks.blocked : DAMAGE_POP.colors[kind]);
+  popDamage(at: Pos, amount: number, kind: 'dealt' | 'taken', style: { blocked?: boolean; affinity?: 'weak' | 'resist'; combo?: 'smash' | 'sear' | 'arcane'; killed?: boolean } = {}) {
+    // 見た目：コンボ ＞ 相性（弱点は大きく黄色、効きにくいのは小さく灰色）。倒した一撃は、もう少し大きく
+    const base = style.combo ? DAMAGE_STYLE[style.combo] : style.affinity ? DAMAGE_STYLE[style.affinity] : null;
+    const color = style.blocked ? FOE_FX.marks.blocked : (base?.color ?? DAMAGE_POP.colors[kind]);
+    const scale = (base?.scale ?? 1) * (style.killed && kind === 'dealt' ? DAMAGE_STYLE.kill.scale : 1);
+    this.popText(at, style.combo || style.affinity === 'weak' ? `${amount}!` : String(amount), color, scale);
+  }
+
+  /** 連続で倒したときの「n連」を、倒した場所に出す */
+  popChain(at: Pos, count: number, color: string) {
+    this.popText({ x: at.x, y: at.y - 0.4 }, `${count}連`, color, 1.2);
   }
 
   /** at のマスの上に、色つきの短い文字を浮かべる（ダメージの数字や、突進・召喚の知らせ） */
-  private popText(at: Pos, text: string, color: string) {
+  private popText(at: Pos, text: string, color: string, scale = 1) {
     const canvas = document.createElement('canvas');
     canvas.width = 128;
     canvas.height = 64;
@@ -905,7 +931,7 @@ export class DungeonView3D {
     sprite.renderOrder = 20; // 壁や敵より手前に出す
     const now = performance.now();
     const crowd = this.damagePops.filter((p) => p.sprite.userData.tile === `${at.x},${at.y}` && now - p.start < DAMAGE_POP.ms / 2).length;
-    sprite.userData = { tile: `${at.x},${at.y}`, x: at.x + crowd * 0.45, z: at.y };
+    sprite.userData = { tile: `${at.x},${at.y}`, x: at.x + crowd * 0.45, z: at.y, scale };
     this.scene.add(sprite);
     this.damagePops.push({ sprite, start: now });
     this.updateDamagePops(now);
@@ -1205,9 +1231,9 @@ export class DungeonView3D {
         continue;
       }
       const grow = 1 - (1 - t) ** 3; // 出だしは速く、だんだんゆっくり大きくなる
-      const size = this.reduceMotion ? DAMAGE_POP.to * 0.75 : DAMAGE_POP.from + (DAMAGE_POP.to - DAMAGE_POP.from) * grow;
+      const { x, z, scale = 1 } = sprite.userData as { x: number; z: number; scale?: number };
+      const size = (this.reduceMotion ? DAMAGE_POP.to * 0.75 : DAMAGE_POP.from + (DAMAGE_POP.to - DAMAGE_POP.from) * grow) * scale;
       sprite.scale.set(size * 2, size, 1); // 字の画像は横長（2:1）
-      const { x, z } = sprite.userData as { x: number; z: number };
       sprite.position.set(x, DAMAGE_POP.height + (this.reduceMotion ? 0 : DAMAGE_POP.rise * grow), z);
       // はじめははっきり見せ、後半でなめらかに透けていく
       const fade = t < 0.35 ? 1 : 1 - ((t - 0.35) / 0.65) ** 2;

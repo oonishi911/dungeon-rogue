@@ -339,6 +339,75 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* 低いHPの画面のふち（赤）と、攻撃された一瞬の赤。3D画面の上に重ね、操作のじゃまはしない（2026-11-20。数字は explore3dConfig.ts の LOW_HP） */
+.explore__vignette,
+.explore__hurt {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+}
+
+.explore__vignette {
+  box-shadow: inset 0 0 6rem 1.2rem rgba(190, 28, 36, 0.55);
+  transition: opacity 0.4s ease;
+}
+
+.explore__vignette--low {
+  opacity: 0.55;
+}
+
+.explore__vignette--critical {
+  opacity: 0.9;
+  animation: heartbeat 1.1s ease-in-out infinite;
+}
+
+.explore__hurt {
+  box-shadow: inset 0 0 5rem 0.8rem rgba(220, 40, 40, 0.7);
+  animation: hurt-flash 0.38s ease-out;
+}
+
+@keyframes heartbeat {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  14% {
+    opacity: 1;
+  }
+  28% {
+    opacity: 0.65;
+  }
+  42% {
+    opacity: 0.95;
+  }
+}
+
+@keyframes hurt-flash {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* 「動きを減らす」設定・手応えの設定で揺れを切っているときは、脈打たず、赤いふちだけを出す */
+.explore__vignette--still {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .explore__vignette--critical {
+    animation: none;
+  }
+
+  .explore__hurt {
+    animation-duration: 0.01s;
+  }
+}
+
 /* いちばん新しい記録。スマホでだけ画面の上に重ねて出す（PCでは下の記録の欄で読める） */
 .explore__toast {
   display: none;
@@ -938,6 +1007,11 @@ button {
 .sound__switch[aria-pressed='true'] {
   background: var(--funds);
   border-color: var(--funds);
+}
+
+.sound__switch--wide {
+  justify-self: stretch;
+  text-align: left;
 }
 
 .sound__volume {

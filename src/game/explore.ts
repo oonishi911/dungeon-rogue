@@ -6,7 +6,7 @@
 // 型と数値は exploreTypes.ts、視界の計算は exploreSight.ts、魔法の計算（魔力・ダメージ・相性）は magic.ts にある。
 
 import { BOSS_CONFIG, phaseOf, phaseSow, PHASE_MAX } from './bossPhase';
-import { buildPlayer, enemyHitDamage, itemCapacity, playerHitDamage, swapWeapons, weaponTypeOf } from './combat';
+import { buildPlayer, enemyHitDamage, hitAffinity, itemCapacity, playerHitDamage, swapWeapons, weaponTypeOf } from './combat';
 import { gearName, lootSeed, noFound, rollLoot, satietySaving, savesSatiety } from './echo';
 import { echoName } from './echo';
 import { enemyBase, enemyReward, expToNext, ITEMS, REWARD_CONFIG, SPELLS, STATUS_MASTER, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
@@ -505,7 +505,8 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
       const centerDamage = center ? spellDamage(s.stats, spell, enemyDef(center), settings) : 0;
       for (const t of targets) {
         const b = staffBoost(s, t.uid, spellDamage(s.stats, spell, enemyDef(t), settings));
-        s = hurtEnemy(s, t.uid, b.dmg, false, b.combo);
+        const a = def.effect.kind === 'bolt' ? spellAffinity(spell, enemyDef(t)) : 'normal';
+        s = hurtEnemy(s, t.uid, b.dmg, false, b.combo, a === 'normal' ? undefined : a);
       }
       const splashDamage = centerDamage > 0 && (cfg.splash ?? 0) > 0 ? Math.max(1, Math.round(centerDamage * (cfg.splash ?? 0))) : 0;
       if (splashDamage > 0) {
@@ -592,14 +593,14 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
 }
 
 /** 敵に魔法などでダメージを与える。倒したら報酬（ボスなら踏破）、倒れなければこちらに気付く */
-function hurtEnemy(state: ExploreState, uid: number, dmg: number, slip: boolean | 'burn' | 'flame' = false, combo?: ComboKind): ExploreState {
+function hurtEnemy(state: ExploreState, uid: number, dmg: number, slip: boolean | 'burn' | 'flame' = false, combo?: ComboKind, affinity?: 'weak' | 'resist'): ExploreState {
   const target = state.enemies.find((e) => e.uid === uid);
   if (!target || state.outcome !== 'ongoing') return state;
   const def = enemyDef(target);
   const hp = target.hp - dmg;
   const slipName = slip === 'burn' ? '燃える床' : slip === 'flame' ? '燃焼' : '出血';
   const log = [...state.log, slip ? `${def.name}は${slipName}で${dmg}のダメージ` : combo ? `${COMBO_NAMES[combo]}！ ${def.name}に${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`];
-  state = { ...state, hits: [...state.hits, { kind: 'dealt', at: target.pos, amount: dmg, ...(slip ? { slip: true } : {}), ...(combo ? { combo } : {}) }], foes: combo ? [...state.foes, { kind: 'combo', at: target.pos, combo }] : state.foes };
+  state = { ...state, hits: [...state.hits, { kind: 'dealt', at: target.pos, amount: dmg, ...(slip ? { slip: true } : {}), ...(combo ? { combo } : {}), ...(affinity ? { affinity } : {}), ...(hp <= 0 ? { killed: true } : {}) }], foes: combo ? [...state.foes, { kind: 'combo', at: target.pos, combo }] : state.foes };
   if (hp <= 0) {
     log.push(`${def.name}を倒した`);
     const defeated = { ...state, enemies: state.enemies.filter((e) => e.uid !== uid), defeated: state.defeated + (target.summoned ? 0 : 1) };
@@ -804,10 +805,11 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
     combo ? `${COMBO_NAMES[combo]}！ ${def.name}に${dmg}のダメージ` : guarded ? `${def.name}の盾に防がれた（${dmg}のダメージ）` : surprise ? `${def.name}に不意打ち！ ${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`,
   ];
   const enchantBefore = state.stats.enchant;
+  const affinity = guarded ? null : hitAffinity(state.stats, def);
   state = {
     ...state,
     skill: gaugeUp(state),
-    hits: [...state.hits, { kind: 'dealt', at: target.pos, amount: dmg, ...(guarded ? { blocked: true } : {}), ...(combo ? { combo } : {}) }],
+    hits: [...state.hits, { kind: 'dealt', at: target.pos, amount: dmg, ...(guarded ? { blocked: true } : {}), ...(combo ? { combo } : {}), ...(affinity ? { affinity } : {}), ...(hp <= 0 ? { killed: true } : {}) }],
     foes: [...(guarded ? [...state.foes, { kind: 'block' as const, at: target.pos }] : state.foes), ...(combo ? [{ kind: 'combo' as const, at: target.pos, combo }] : [])],
   };
 

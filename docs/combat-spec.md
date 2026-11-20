@@ -102,6 +102,7 @@
 | 5. 見た目 1・2・4・5 | 実装済み |
 | 6. 武器の持ち替え（メイン＋サブ） | 実装済み（[combat-fun-spec.md](combat-fun-spec.md)） |
 | 7. 敵への状態異常（燃焼・凍結）とコンボ | 実装済み（[combat-fun-spec.md](combat-fun-spec.md)） |
+| 8. 手応え（ヒットストップ・ダメージ数字・連続撃破・低いHPのふち・合成の効果音） | 実装済み（[combat-fun-spec.md](combat-fun-spec.md)） |
 
 ## バランスの注意
 
