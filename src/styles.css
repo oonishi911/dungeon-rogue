@@ -3419,6 +3419,77 @@ button {
   background: rgba(255, 255, 255, 0.06);
 }
 
+/* 動く場面（MemoryMovie.tsx。docs/memory-movie.md）：後ろの光・火の粉・フラッシュと、揺れる文字 */
+.memory--movie .memory__body,
+.memory--movie .memory__next {
+  position: relative;
+  z-index: 1;
+}
+
+.mm__glow,
+.mm__embers,
+.mm__flash {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.mm__glow {
+  background: radial-gradient(ellipse at 50% 85%, rgba(255, 96, 32, 0.6), rgba(150, 30, 14, 0.3) 42%, transparent 72%);
+  mix-blend-mode: screen;
+  opacity: 0;
+}
+
+/* 大きな声が響いたときの、ふちの赤いフラッシュ（真ん中は、文字が読めるように透かす） */
+.mm__flash {
+  background: radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(210, 36, 22, 0.95) 125%);
+  opacity: 0;
+}
+
+.mm__body {
+  will-change: transform;
+}
+
+/* 動く場面では、出る時刻を --at（秒）で決める */
+.mm__scrawl .scrawl__line,
+.mm__scrawl .scrawl__black,
+.mm__scrawl .scrawl__scratches polyline {
+  animation-delay: calc(var(--at, 0) * 1s);
+}
+
+.mm__scrawl .scrawl__scratches polyline {
+  animation-delay: calc(var(--at, 0) * 1s + var(--i, 0) * 0.22s);
+}
+
+.mm__echo {
+  animation-delay: calc(var(--at, 0) * 1s);
+}
+
+/* 大きな声の行：ふるえる（約5秒） */
+.scrawl__line--loud {
+  animation:
+    scrawl-in 0.5s steps(5) forwards,
+    mm-tremble 0.09s steps(2) infinite;
+  animation-delay: calc(var(--at, 0) * 1s), calc(var(--at, 0) * 1s);
+  animation-iteration-count: 1, 55;
+  animation-fill-mode: forwards, both;
+  font-size: 1.18em;
+}
+
+@keyframes mm-tremble {
+  0% {
+    translate: 0.14rem -0.09rem;
+  }
+  50% {
+    translate: -0.12rem 0.1rem;
+  }
+  100% {
+    translate: 0.09rem 0.07rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .memory__quiet p,
   .memory__faint,
