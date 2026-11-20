@@ -87,7 +87,7 @@ export const STATUS_MASTER: StatusMaster = parseStatusMaster(statusesJson);
 
 // ===== 戦闘の設定値（仮） =====
 export const COMBAT_CONFIG = {
-  playerHp: 60,
+  playerHp: 60, // 装備だけで組み立てたときの体力（buildPlayer）。ダンジョンに入ったときの値は、ダンジョンの設定 growth.startHp・startMaxHp（管理画面）で決める
   playerAtk: 6,
   playerDef: 1,
 } as const;
@@ -184,7 +184,7 @@ export const TREASURE_CONFIG = {
  * - 経験値：たまるとレベルが上がり、最大HPと攻撃力が上がる（上がった分だけHPも回復する）。挑戦が終わると1に戻る
  */
 // レベルの上がり方と強敵の倍率（金貨と経験値）は、ダンジョンごとの設定（src/game/dungeons/*.json の growth。
-// 管理画面 ?view=admin の「レベルと強敵の報酬」タブ）にある。
+// 管理画面 ?view=admin の「HP・レベル・強敵の報酬」タブ）にある。
 // 標準のダンジョンでは、無属性のダンジョンの外れた準備は、報酬なしで77.5%、今の値で87.5%（バランスのテストの上限90%）
 export const REWARD_CONFIG = {
   dropItems: ['potion', 'food'] as readonly ItemId[],

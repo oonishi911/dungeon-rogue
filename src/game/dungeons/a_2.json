@@ -22,6 +22,8 @@
     "bossMinions": 3
   },
   "growth": {
+    "startHp": 60,
+    "startMaxHp": 60,
     "expBase": 20,
     "expStep": 10,
     "hpPerLevel": 1,

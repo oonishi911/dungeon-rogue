@@ -47,7 +47,7 @@ export const ADMIN_TABS = [
   { id: 'floors', label: '階の数・広さ・満腹度', part: 'dungeon' },
   { id: 'rooms', label: '小部屋', part: 'dungeon' },
   { id: 'placement', label: '敵の数と置き方', part: 'dungeon' },
-  { id: 'growth', label: 'レベルと強敵の報酬', part: 'dungeon' },
+  { id: 'growth', label: 'HP・レベル・強敵の報酬', part: 'dungeon' },
   { id: 'magic', label: '魔法', part: 'dungeon' },
 ] as const;
 

@@ -43,6 +43,8 @@ export interface EnemySettings {
 
 /** 敵を倒したときのレベルの上がり方と、強敵の報酬の倍率（data.ts の REWARD_CONFIG） */
 export interface GrowthSettings {
+  startHp: number; // ダンジョンに入ったときのHP（最大HP以下）
+  startMaxHp: number; // ダンジョンに入ったときの最大HP（レベルが上がると、1レベルごとに hpPerLevel 増える）
   expBase: number; // レベル1→2に必要な経験値
   expStep: number; // レベルが1上がるごとに、次に必要な経験値が増える量
   hpPerLevel: number; // 1レベルで増える最大HP（上がった分だけHPも回復する）
@@ -171,6 +173,8 @@ export const GEN_LIMITS = {
   nestChance: { min: 0, max: 1, step: 0.05 },
   nestCount: { min: 1, max: 12, step: 1 },
   bossMinions: { min: 0, max: 40, step: 1 },
+  startHp: { min: 1, max: 999, step: 1 },
+  startMaxHp: { min: 1, max: 999, step: 1 },
   expBase: { min: 1, max: 999, step: 1 },
   expStep: { min: 0, max: 999, step: 1 },
   hpPerLevel: { min: 0, max: 50, step: 1 },
@@ -196,6 +200,8 @@ export const GEN_LABELS = {
   nestMax: '群れの敵の数（最大）',
   stayInRoom: '部屋の敵は部屋から出ない',
   bossMinions: 'ボスの部屋の雑魚敵の数',
+  startHp: '入ったときのHP',
+  startMaxHp: '入ったときの最大HP',
   expBase: '最初のレベルアップに要る経験値',
   expStep: '1レベルごとに増える必要経験値',
   hpPerLevel: '1レベルで増える最大HP',
@@ -246,9 +252,12 @@ export function genProblems(data: unknown): string[] {
   num(enemies.bossMinions, GEN_LABELS.bossMinions, GEN_LIMITS.bossMinions);
   if (typeof enemies.bossMinions === 'number' && !Number.isInteger(enemies.bossMinions)) problems.push(`${GEN_LABELS.bossMinions}：整数にする`);
   const { growth } = data;
-  for (const k of ['expBase', 'expStep', 'hpPerLevel', 'atkPerLevel', 'magPerLevel', 'maxLevel'] as const) {
+  for (const k of ['startHp', 'startMaxHp', 'expBase', 'expStep', 'hpPerLevel', 'atkPerLevel', 'magPerLevel', 'maxLevel'] as const) {
     num(growth[k], GEN_LABELS[k], GEN_LIMITS[k]);
     if (typeof growth[k] === 'number' && !Number.isInteger(growth[k])) problems.push(`${GEN_LABELS[k]}：整数にする`);
+  }
+  if (typeof growth.startHp === 'number' && typeof growth.startMaxHp === 'number' && growth.startHp > growth.startMaxHp) {
+    problems.push(`${GEN_LABELS.startHp}：${GEN_LABELS.startMaxHp}以下にする`);
   }
   num(growth.eliteRate, GEN_LABELS.eliteRate, GEN_LIMITS.eliteRate);
   const { magic, spells } = data;
