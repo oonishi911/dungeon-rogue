@@ -1,9 +1,10 @@
 // 合成の効果音（2026-11-20。docs/combat-fun-spec.md ⑥）。音のファイルを持たず、Web Audio の発振器とノイズで鳴らす短い音。
 // 凍る・燃える・砕く・焼き斬り・杖の共鳴・蒸気・持ち替え・倒した、の8つ。pitch は音の高さの倍率（連続で倒すと上げていく）。
 // 2026-11-21：記憶の動く場面（docs/memory-movie.md）の音を足した。roar（大きな声。pitch は強さ）・rumble（地鳴り。pitch は長さ（秒））・
-// heartbeat（心音。pitch は強さ）・scratch（書きなぐる音）・strike（取り消し線を引く音）・crackle（火の粉のはぜる音）・hush（最後の、静かな低い響き）
+// heartbeat（心音。pitch は強さ）・scratch（書きなぐる音）・strike（取り消し線を引く音）・crackle（火の粉のはぜる音）・hush（最後の、静かな低い響き）・
+// sizzle・sizzle_soft（紙が燃えるような、細かいチリチリという音。pitch は長さ（秒）。soft は小さめ）
 
-export type SynthKind = 'freeze' | 'burn' | 'smash' | 'sear' | 'arcane' | 'steam' | 'swap' | 'kill' | 'roar' | 'rumble' | 'heartbeat' | 'scratch' | 'strike' | 'crackle' | 'hush';
+export type SynthKind = 'freeze' | 'burn' | 'smash' | 'sear' | 'arcane' | 'steam' | 'swap' | 'kill' | 'roar' | 'rumble' | 'heartbeat' | 'scratch' | 'strike' | 'crackle' | 'hush' | 'sizzle' | 'sizzle_soft';
 
 let noise: AudioBuffer | null = null;
 const noiseOf = (ctx: AudioContext): AudioBuffer => {
@@ -52,6 +53,32 @@ function hiss(ctx: AudioContext, out: AudioNode, at: number, o: { type: BiquadFi
   src.connect(filter).connect(env).connect(out);
   src.start(at, o.offset ?? 0);
   src.stop(at + o.len + 0.02);
+}
+
+/**
+ * 紙が燃えるような、チリチリという音：ごく短い高い雑音の粒を、不規則に、まとまって並べる（ときどき静まり、ときどき密になる）。
+ * 下に、細かい火のかすれた息を敷く。len 秒続き、level（1が標準）で大きさが変わる
+ */
+function sizzle(ctx: AudioContext, out: AudioNode, at: number, len: number, level: number) {
+  hiss(ctx, out, at, { type: 'highpass', from: 5200, q: 0.5, len, gain: 0.07 * level, attack: Math.min(0.6, len / 4), offset: Math.random() * 0.5 });
+  let t = 0;
+  let density = 0.5; // 粒の密さ（0〜1）。ゆっくり揺らす
+  while (t < len) {
+    density = Math.min(1, Math.max(0.1, density + (Math.random() - 0.5) * 0.5));
+    const step = 0.006 + (1 - density) * 0.05 * Math.random() * 2; // 密なときは、数msごと
+    t += step;
+    if (t >= len) break;
+    const fade = Math.min(1, t / 0.3, (len - t) / 0.4); // はじめとおわりは、そっと
+    hiss(ctx, out, at + t, {
+      type: 'bandpass',
+      from: 3200 + Math.random() * 6000,
+      q: 1.2 + Math.random() * 2,
+      len: 0.006 + Math.random() * 0.02,
+      gain: (0.12 + Math.random() * 0.28) * level * fade,
+      attack: 0.0008,
+      offset: Math.random() * 0.8,
+    });
+  }
 }
 
 /** 効果音を1つ鳴らす。when は鳴らし始める時刻（AudioContext の時間） */
@@ -119,6 +146,12 @@ export function synthSfx(ctx: AudioContext, out: AudioNode, kind: SynthKind, whe
     case 'hush': // 静かな低い響き：ゆっくり立ち上がり、長く消える
       tone(ctx, out, when, { freq: 110, len: 3.2, gain: 0.2, attack: 1.0 });
       tone(ctx, out, when, { freq: 165, len: 3.2, gain: 0.08, attack: 1.2 });
+      break;
+    case 'sizzle': // 紙が燃えるような、チリチリという音。pitch は長さ（秒）
+      sizzle(ctx, out, when, pitch, 1);
+      break;
+    case 'sizzle_soft': // 同じ音を、小さく
+      sizzle(ctx, out, when, pitch, 0.5);
       break;
     default: {
       const unreachable: never = kind;

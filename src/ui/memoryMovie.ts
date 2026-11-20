@@ -34,7 +34,7 @@ export const MOVIE_CONFIG = {
   punch: { decay: 0.32, scale: 0.05 }, // 声の瞬間に、画面がぐっと迫る：戻るまでの時間（秒）・拡大の割合（強さ1のとき）
   flash: { decay: 0.4, peak: 0.85 }, // 赤いフラッシュ：消えるまでの時間（秒）・いちばん明るいときの濃さ
   burst: { count: 46, rise: [180, 420] as const, size: [2, 5.5] as const, life: [1, 2.2] as const }, // 声の瞬間に下から噴き上がる火の粉（強さ1のときの数・上る速さ・大きさ・寿命）
-  sound: { crackleEvery: 0.8, crackleOver: 14, heartEvery: 0.95 }, // 音：火の粉のはぜる間隔（秒）と、はぜ始める火の粉の勢い／心音の間隔（秒）
+  sound: { crackleEvery: 0.8, crackleOver: 14, heartEvery: 0.95, burnCross: 3.4 }, // 音：火の粉のはぜる間隔（秒）と、はぜ始める火の粉の勢い／心音の間隔（秒）／「やめて」が燃えるチリチリの長さ（秒）
   ember: { max: 240, rise: [40, 120] as const, drift: 26, life: [1.6, 3.4] as const, size: [1.6, 4.2] as const }, // 火の粉：上限の数・上る速さ(px/秒)・横ぶれ・寿命(秒)・大きさ(px)
   strikeDelay: 1.1, // 取り消し線が引かれるまで（出てから、秒）
   breath: { period: 3.2, depth: 0.18 }, // 息づかい：1回の長さ（秒）・光の増減の深さ
@@ -220,16 +220,17 @@ export function itemTimes(kinds: readonly ('line' | 'crossed' | 'black')[], movi
   return out;
 }
 
-/** 場面の音（時刻 at に、kind の音を鳴らす。power は synth.ts の pitch に渡す：roar・heartbeat は強さ、rumble は長さ（秒）、crackle は大きさ） */
+/** 場面の音（時刻 at に、kind の音を鳴らす。power は synth.ts の pitch に渡す：roar・heartbeat は強さ、rumble・sizzle は長さ（秒）、crackle は大きさ） */
 export interface SoundCue {
   at: number;
-  kind: 'roar' | 'rumble' | 'heartbeat' | 'scratch' | 'strike' | 'crackle' | 'hush';
+  kind: 'roar' | 'rumble' | 'heartbeat' | 'scratch' | 'strike' | 'crackle' | 'hush' | 'sizzle' | 'sizzle_soft';
   power: number;
 }
 
 /**
  * 場面の音の予定を、時刻の順に作る（乱数は使わない）。
  * 地鳴りが場面のはじめから息をひそめる前まで続き、声が響くたびに roar。火の粉の勢いがあるあいだ、はぜる音。
+ * 紙が燃えるようなチリチリ（sizzle）が、声のあいだは大きく、息をひそめるあいだは小さく、「やめて」が燃えるときは大きく、最後はそっと続く。
  * 息をひそめるあいだは心音。「やめて」を書く音と、取り消し線を引く音。最後に、静かな低い響き
  */
 export function soundCues(movie: MovieDef): SoundCue[] {
@@ -238,6 +239,11 @@ export function soundCues(movie: MovieDef): SoundCue[] {
   const calmStart = movie.breath?.[0] ?? movie.lineAt[1] ?? movie.duration / 3;
   cues.push({ at: 0.2, kind: 'rumble', power: Math.max(2, calmStart - 0.2) });
   for (const h of movie.hits) cues.push({ at: h.at, kind: 'roar', power: h.power });
+  const burnEnd = movie.crossedAt + c.burnCross;
+  cues.push({ at: movie.lineAt[0]! - 0.6, kind: 'sizzle', power: calmStart - movie.lineAt[0]! + 0.6 });
+  cues.push({ at: calmStart, kind: 'sizzle_soft', power: movie.crossedAt - calmStart });
+  cues.push({ at: movie.crossedAt, kind: 'sizzle', power: burnEnd - movie.crossedAt });
+  cues.push({ at: movie.echoAt, kind: 'sizzle_soft', power: movie.duration - movie.echoAt });
   for (let t = c.crackleEvery; t < movie.duration; t += c.crackleEvery) {
     const rate = valueAt(movie.embers, t);
     if (rate >= c.crackleOver) cues.push({ at: t, kind: 'crackle', power: Math.min(1.6, rate / 40) });
