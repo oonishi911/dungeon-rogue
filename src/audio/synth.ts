@@ -55,6 +55,76 @@ function hiss(ctx: AudioContext, out: AudioNode, at: number, o: { type: BiquadFi
   src.stop(at + o.len + 0.02);
 }
 
+/** 音をつぶして荒くする（歪み）：drive が大きいほど、ざらつく */
+function grit(ctx: AudioContext, drive: number): WaveShaperNode {
+  const shaper = ctx.createWaveShaper();
+  const n = 1024;
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    curve[i] = Math.tanh(x * drive);
+  }
+  shaper.curve = curve;
+  shaper.oversample = '2x';
+  return shaper;
+}
+
+const rooms = new WeakMap<AudioContext, AudioBuffer>();
+/** 大きな部屋の響き（減っていくノイズ。毎回同じ） */
+function roomOf(ctx: AudioContext): AudioBuffer {
+  let room = rooms.get(ctx);
+  if (!room) {
+    const n = Math.round(ctx.sampleRate * 1.7);
+    room = ctx.createBuffer(2, n, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const data = room.getChannelData(c);
+      let x = 777 + c * 991;
+      for (let i = 0; i < n; i++) {
+        x = (x * 1664525 + 1013904223) >>> 0;
+        data[i] = ((x / 0xffffffff) * 2 - 1) * Math.pow(1 - i / n, 2.6);
+      }
+    }
+    rooms.set(ctx, room);
+  }
+  return room;
+}
+
+/** うなり声：2本の濁った低い音をぶつけ、ふるわせ（荒い声）、口の形のように音色を動かして、歪ませる */
+function growl(ctx: AudioContext, out: AudioNode, at: number, o: { freq: number; len: number; gain: number }) {
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, at);
+  env.gain.linearRampToValueAtTime(o.gain, at + 0.05);
+  env.gain.exponentialRampToValueAtTime(0.0001, at + o.len);
+  // 声の荒れ：音量を、速くふるわせる
+  const shake = ctx.createGain();
+  shake.gain.value = 0.6;
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = 26;
+  const lfoDepth = ctx.createGain();
+  lfoDepth.gain.value = 0.4;
+  lfo.connect(lfoDepth).connect(shake.gain);
+  // 口の形：音色のフィルターが「おー」から「あー」へ開く
+  const mouth = ctx.createBiquadFilter();
+  mouth.type = 'bandpass';
+  mouth.Q.value = 1.4;
+  mouth.frequency.setValueAtTime(380, at);
+  mouth.frequency.exponentialRampToValueAtTime(900, at + o.len * 0.5);
+  mouth.frequency.exponentialRampToValueAtTime(300, at + o.len);
+  const g = grit(ctx, 5);
+  [1, 1.045].forEach((detune) => {
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(o.freq * detune, at);
+    osc.frequency.exponentialRampToValueAtTime(o.freq * detune * 0.62, at + o.len);
+    osc.connect(g);
+    osc.start(at);
+    osc.stop(at + o.len + 0.02);
+  });
+  g.connect(mouth).connect(shake).connect(env).connect(out);
+  lfo.start(at);
+  lfo.stop(at + o.len + 0.02);
+}
+
 /**
  * 紙が燃えるような、チリチリという音：ごく短い高い雑音の粒を、不規則に、まとまって並べる（ときどき静まり、ときどき密になる）。
  * 下に、細かい火のかすれた息を敷く。len 秒続き、level（1が標準）で大きさが変わる
@@ -116,13 +186,51 @@ export function synthSfx(ctx: AudioContext, out: AudioNode, kind: SynthKind, whe
       tone(ctx, out, when, { freq: 520 * pitch, endFreq: 780 * pitch, len: 0.16, gain: 0.3 });
       tone(ctx, out, when, { type: 'triangle', freq: 1040 * pitch, len: 0.1, gain: 0.14 });
       break;
-    case 'roar': { // 大きな声：腹に響く低い衝撃と、うなる濁った音、砕ける高い雑音。pitch は強さ（1で標準）
+    case 'roar': { // 大きな声（家をゆらす怒鳴り声と、叩きつける衝撃）。荒々しく：歪んだ重い衝撃・はじける雑音・うなり声・家のきしみと破片・大きな部屋の響き。pitch は強さ（1で標準）
       const p = pitch;
-      tone(ctx, out, when, { freq: 95, endFreq: 28, len: 1.0, gain: 0.44 * p });
-      tone(ctx, out, when, { type: 'triangle', freq: 150, endFreq: 48, len: 0.55, gain: 0.3 * p });
-      tone(ctx, out, when, { type: 'sawtooth', freq: 66, endFreq: 38, len: 0.9, gain: 0.12 * p, attack: 0.03 });
-      hiss(ctx, out, when, { type: 'lowpass', from: 900, to: 110, q: 0.7, len: 0.85, gain: 0.36 * p, attack: 0.02 });
-      hiss(ctx, out, when, { type: 'highpass', from: 2200, len: 0.14, gain: 0.2 * p });
+      // 全体をまとめる出口：音がつぶれすぎないよう圧縮し、部屋の響き（残響）を足す
+      const bus = ctx.createGain();
+      const squash = ctx.createDynamicsCompressor();
+      squash.threshold.value = -14;
+      squash.ratio.value = 6;
+      squash.attack.value = 0.002;
+      squash.release.value = 0.25;
+      const level = ctx.createGain();
+      level.gain.value = 0.58; // 重ねた音の合計が、割れない大きさに収まるように
+      squash.connect(level).connect(out);
+      bus.connect(squash);
+      const room = ctx.createConvolver();
+      room.buffer = roomOf(ctx);
+      const wet = ctx.createGain();
+      wet.gain.value = 0.32;
+      bus.connect(room).connect(wet).connect(squash);
+      // 1 衝撃：低い音が落ちる。歪ませて、ざらつかせる
+      const thump = ctx.createGain();
+      const thumpGrit = grit(ctx, 3.2);
+      thumpGrit.connect(thump).connect(bus);
+      tone(ctx, thumpGrit, when, { freq: 118, endFreq: 30, len: 0.95, gain: 0.55 * p, attack: 0.004 });
+      tone(ctx, thumpGrit, when, { type: 'triangle', freq: 190, endFreq: 52, len: 0.45, gain: 0.4 * p, attack: 0.003 });
+      thump.gain.value = 0.9;
+      // 2 叩きつける：全域の雑音がはじけ、低い方へ沈む
+      hiss(ctx, bus, when, { type: 'lowpass', from: 6500, to: 160, q: 0.6, len: 0.65, gain: 0.55 * p, attack: 0.002 });
+      hiss(ctx, bus, when, { type: 'highpass', from: 1400, len: 0.09, gain: 0.4 * p, attack: 0.001 });
+      // 3 うなり声：少し遅れて、獣の怒鳴り声が上がる
+      growl(ctx, bus, when + 0.03, { freq: 74 + 14 * p, len: 0.95 + 0.3 * p, gain: 0.34 * p });
+      // 4 家のきしみ：低い雑音が、細かくふるえる（ガタガタ）。壊れた破片が、ぱらぱら落ちる
+      const rattle = ctx.createGain();
+      rattle.gain.value = 0.5;
+      const rattleLfo = ctx.createOscillator();
+      rattleLfo.frequency.value = 21;
+      const rattleDepth = ctx.createGain();
+      rattleDepth.gain.value = 0.5;
+      rattleLfo.connect(rattleDepth).connect(rattle.gain);
+      rattleLfo.start(when);
+      rattleLfo.stop(when + 1.3);
+      hiss(ctx, rattle, when + 0.04, { type: 'bandpass', from: 220, to: 120, q: 1.2, len: 1.2, gain: 0.55 * p, attack: 0.05 });
+      rattle.connect(bus);
+      for (let i = 0; i < 12; i++) {
+        hiss(ctx, bus, when + 0.12 + Math.random() * 0.9, { type: 'highpass', from: 1800 + Math.random() * 3200, len: 0.025, gain: 0.2 * p, offset: Math.random() * 0.8 });
+      }
       break;
     }
     case 'rumble': // 地鳴り：低いノイズが、ゆっくり立ち上がって、長く続く。pitch は長さ（秒）
