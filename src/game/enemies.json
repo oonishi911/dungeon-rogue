@@ -7,6 +7,9 @@
       "def": 1,
       "element": "neutral",
       "body": "normal",
+      "behaviors": [
+        "poison"
+      ],
       "look": {
         "sprite": "goblin"
       },
@@ -24,7 +27,8 @@
       "element": "neutral",
       "body": "soft",
       "behaviors": [
-        "charger"
+        "charger",
+        "hunger"
       ],
       "look": {
         "sprite": "flame_hound",
@@ -105,6 +109,9 @@
       "def": 3,
       "element": "fire",
       "body": "hard",
+      "behaviors": [
+        "poison"
+      ],
       "look": {
         "sprite": "fire_drake"
       },
@@ -121,6 +128,9 @@
       "def": 0,
       "element": "ice",
       "body": "normal",
+      "behaviors": [
+        "chill"
+      ],
       "look": {
         "sprite": "fire_imp",
         "recolor": {
@@ -143,6 +153,9 @@
       "def": 0,
       "element": "ice",
       "body": "soft",
+      "behaviors": [
+        "chill"
+      ],
       "look": {
         "sprite": "poison_slime",
         "recolor": {
@@ -164,6 +177,9 @@
       "def": 3,
       "element": "ice",
       "body": "hard",
+      "behaviors": [
+        "poison"
+      ],
       "look": {
         "sprite": "venom_spider",
         "recolor": {
@@ -261,6 +277,9 @@
       "def": 0,
       "element": "dark",
       "body": "soft",
+      "behaviors": [
+        "hunger"
+      ],
       "look": {
         "sprite": "venom_spider",
         "recolor": {
@@ -548,7 +567,8 @@
       "element": "ice",
       "body": "normal",
       "behaviors": [
-        "charger"
+        "charger",
+        "chill"
       ],
       "look": {
         "sprite": "goblin",

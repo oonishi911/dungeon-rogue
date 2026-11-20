@@ -16,7 +16,7 @@ export const ARMOR_BASES = ['plate'] as const satisfies readonly GearBaseId[];
 export type ArmorBaseId = (typeof ARMOR_BASES)[number];
 export const GEAR_BASES: readonly GearBaseId[] = [...WEAPON_BASES, ...ARMOR_BASES];
 
-export const SUPPLY_IDS = ['potion', 'food', 'fire_whetstone', 'ice_whetstone', 'holy_water', 'dark_oil', 'lantern', 'bag'] as const satisfies readonly ItemId[];
+export const SUPPLY_IDS = ['potion', 'panacea', 'food', 'fire_whetstone', 'ice_whetstone', 'holy_water', 'dark_oil', 'lantern', 'bag'] as const satisfies readonly ItemId[];
 export type SupplyId = (typeof SUPPLY_IDS)[number];
 export const SPELLBOOK_IDS = [
   'book_shockwave',
@@ -127,6 +127,7 @@ export function elementGuards(element: Element, cut: number, weak = 0): Guard[] 
 /** 道具の働きと説明 */
 export const SUPPLY_INFO: Record<SupplyId, { effect: ItemEffect; text: string }> = {
   potion: { effect: { kind: 'heal', hp: 15 }, text: 'HPを15回復する' },
+  panacea: { effect: { kind: 'cure' }, text: '毒と鈍足をすべて治す（回復薬では治らない）' },
   food: { effect: { kind: 'food', satiety: 200 }, text: '満腹度を200回復する' },
   fire_whetstone: { effect: { kind: 'enchant', element: 'fire', hits: 5 }, text: '武器に炎の力を宿す（攻撃5回）。氷の敵によく効く。当てた敵の足元に燃える床が残る' },
   ice_whetstone: { effect: { kind: 'enchant', element: 'ice', hits: 5 }, text: '武器に氷の力を宿す（攻撃5回）。炎の敵によく効く。当てた敵の足元に霜の床が残る' },

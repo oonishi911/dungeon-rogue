@@ -1,10 +1,12 @@
 // 探索画面の右側（スマホでは下）。体力などのゲージ、呪文と道具のボタン、装備・見えている敵・記録・リタイア。
 
-import { BODY_NAMES, expToNext, ITEMS, SPELLS, TRAITS } from '../game/data';
+import { BODY_NAMES, expToNext, ITEMS, SPELLS, STATUS_MASTER, TRAITS } from '../game/data';
 import { enemyDef } from '../game/enemies';
 import type { ExploreState } from '../game/exploreTypes';
 import type { DungeonFile } from '../game/genMaster';
 import type { ItemId, SpellId } from '../game/types';
+import { activeStatuses } from '../game/status';
+import { STATUS_LABELS, STATUS_TEXTS } from '../game/statusMaster';
 import { SKILL_TEXTS, skillOf } from '../game/weaponSkill';
 import { ENEMY_MARK } from './exploreRender';
 import { SKILL_KEY, SPELL_KEYS } from './exploreKeys';
@@ -30,12 +32,24 @@ interface ExploreSideProps {
 export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibleEnemies, recentLog, infoOpen, onCast, onSkill, onUseItem, onCloseInfo, onRetire }: ExploreSideProps) {
   const { stats } = state;
   const skill = skillOf(stats.weapon, stats.echoes); // 持っている武器の固有技（素手なら無い）
+  const afflictions = activeStatuses(stats);
   return (
     <aside className="explore__side">
       <div className="explore__status">
         {/* 体力・満腹度・魔力は、数字を出さずゲージだけにする。体力と満腹度は、残りが少ないと点滅する */}
         <Meter label="HP" value={stats.hp} max={stats.maxHp} tone="hp" gaugeOnly warnBelow={0.25} pulse />
         <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" gaugeOnly warnBelow={0.25} />
+        {afflictions.length > 0 && (
+          // 状態異常（毒・鈍足）：かかっているあいだだけ、残りのターン数・歩数を出す。空腹はその場で満腹度が減るだけなので出さない
+          <ul className="explore__ailments" aria-label="状態異常">
+            {afflictions.map((a) => (
+              <li key={a.id} className={`explore__ailment explore__ailment--${a.id}`} title={STATUS_TEXTS[a.id](STATUS_MASTER)}>
+                <span className="explore__ailment-name">{STATUS_LABELS[a.id]}</span>
+                <span className="explore__ailment-left">{a.remain}{a.id === 'chill' ? '歩' : 'ターン'}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         {state.maxMp > 0 && <Meter label="魔力" value={state.mp} max={state.maxMp} tone="mp" gaugeOnly pulse shakeKey={mpShake} />}
         {/* レベルは、この挑戦のあいだだけ。いちばん上のレベルでは経験値の棒を出さない */}
         {state.level < dungeon.growth.maxLevel ? (

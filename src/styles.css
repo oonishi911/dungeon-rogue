@@ -493,6 +493,51 @@ button {
   gap: 0.75rem;
 }
 
+/* 管理画面：ラベルと数字の欄を横に並べる（状態異常タブの、長さ・大きさの欄） */
+.admin__inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* 状態異常（毒・鈍足）：かかっているあいだだけ、ゲージの下に並ぶ */
+.explore__ailments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.explore__ailment {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 999px;
+  background: var(--pine-deep);
+  font-size: var(--step--1);
+  color: var(--bone);
+}
+
+.explore__ailment--poison {
+  border-color: #a98be6;
+  color: #d8c9f7;
+}
+
+.explore__ailment--chill {
+  border-color: #6fb7d8;
+  color: #bfe3f2;
+}
+
+.explore__ailment-left {
+  font-variant-numeric: tabular-nums;
+  color: var(--bone-dim);
+}
+
 .explore__wait {
   padding: 0.5rem;
   background: var(--pine-deep);

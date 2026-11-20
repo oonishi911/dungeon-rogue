@@ -9,7 +9,7 @@ import { BOSS_CONFIG, phaseOf, phaseSow, PHASE_MAX } from './bossPhase';
 import { buildPlayer, enemyHitDamage, itemCapacity, playerHitDamage } from './combat';
 import { gearName, lootSeed, noFound, rollLoot, satietySaving, savesSatiety } from './echo';
 import { echoName } from './echo';
-import { COMBAT_CONFIG, enemyBase, enemyReward, expToNext, ITEMS, REWARD_CONFIG, SPELLS, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
+import { enemyBase, enemyReward, expToNext, ITEMS, REWARD_CONFIG, SPELLS, STATUS_MASTER, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
 import { DEFAULT_DUNGEON_ID, dungeonOf } from './dungeons';
 import {
   DIR_DELTA,
@@ -28,6 +28,7 @@ import {
 import { chargeRun, guardsAgainst, minionTile, retreatStep, stepDir, straightLine, weakestOf } from './enemyBehavior';
 import { canSee, samePos, visibleTiles } from './exploreSight';
 import { SKILL_CONFIG, skillOf } from './weaponSkill';
+import { afflict, cureAll, statusNames } from './status';
 import { around9, FIELD_CONFIG, fieldAt, immuneToField, placeField, tickFields, type FieldKind } from './fields';
 import type { DungeonFile, RoomSettings } from './genMaster';
 import { magicPower, spellAffinity, spellDamage, startMagic } from './magic';
@@ -49,7 +50,7 @@ import {
 import { generateBossFloor, generateFloor, tileAt, type FloorMap, type Pos } from './map';
 import { floorParams } from './floorParams';
 import { nextInt, nextRandom, shuffle } from './rng';
-import type { EnemyId, ItemId, Result, SpellId, TraitId } from './types';
+import type { EnemyDef, EnemyId, ItemId, Result, SpellId, TraitId } from './types';
 import { lost } from './story';
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value });
@@ -131,7 +132,8 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
   state = { ...state, hits: [], foes: [], cast: null };
 
   let next: ExploreState;
-  let slowed = false; // 霜の床から歩き出すと、その1歩に2ターンかかる
+  let slowed = false; // 霜の床から歩き出すか、鈍足のあいだは、その1歩に2ターンかかる
+  let chilled = false; // 鈍足で歩いた1歩（終わったら、残りの歩数が1減る）
   let bleedSkip: readonly Pos[] = []; // 出血させたターンは、まだ出血のダメージを受けない敵のいるマス
   switch (action.kind) {
     case 'move': {
@@ -142,10 +144,12 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
       if (target) {
         next = playerAttack(state, target);
       } else {
-        slowed = fieldAt(state.fields, state.player)?.kind === 'frost';
+        chilled = (state.stats.chillSteps ?? 0) > 0;
+        slowed = chilled || fieldAt(state.fields, state.player)?.kind === 'frost';
         next = backAttacks(state, to);
         if (next.outcome !== 'ongoing') return ok({ ...next, turn: next.turn + 1 });
         next = openChest(reveal({ ...next, player: to }));
+        if (chilled) next = stepChill(next);
       }
       break;
     }
@@ -207,6 +211,13 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
   next = passTurn(next, bleedSkip);
   if (slowed && next.outcome === 'ongoing') next = passTurn(next, []);
   return ok(next);
+}
+
+/** 鈍足で歩いた1歩ぶん、残りの歩数を減らす（0になったら治る） */
+function stepChill(state: ExploreState): ExploreState {
+  const left = Math.max(0, (state.stats.chillSteps ?? 0) - 1);
+  const { chillSteps: _chill, ...rest } = state.stats;
+  return { ...state, stats: left > 0 ? { ...rest, chillSteps: left } : rest, log: left > 0 ? state.log : [...state.log, '足が軽くなった'] };
 }
 
 /** 1ターン進める：満腹度・出血・敵の動き・床の跡の順 */
@@ -377,6 +388,11 @@ function useItem(state: ExploreState, itemId: ItemId): Result<ExploreState> {
       if (stats.hp >= stats.maxHp) return err('HPは減っていない');
       const hp = Math.min(stats.maxHp, stats.hp + effect.hp);
       return ok({ ...state, stats: { ...stats, hp, items }, log: [...state.log, `${item.name}でHPが${hp - stats.hp}回復`] });
+    }
+    case 'cure': {
+      const cured = cureAll(stats);
+      if (!cured) return err('毒も鈍足も受けていない');
+      return ok({ ...state, stats: { ...cured.stats, items }, log: [...state.log, `${item.name}で、${statusNames(cured.cured)}が治った`] });
     }
     case 'food': {
       if (state.satiety >= state.maxSatiety) return err('お腹はいっぱいだ');
@@ -743,7 +759,7 @@ function backAttacks(state: ExploreState, to: Pos): ExploreState {
     }
     if (!hits) continue;
     const def = enemyDef(e);
-    s = damagePlayer(s, enemyHitDamage(s.stats, def), `離れようとして、${def.name}に背後から攻撃された`, def.name, def.id);
+    s = hitByEnemy(s, enemyHitDamage(s.stats, def), `離れようとして、${def.name}に背後から攻撃された`, def);
     if (s.outcome !== 'ongoing') return s;
   }
   return s;
@@ -855,7 +871,7 @@ function enemiesTurn(state: ExploreState): ExploreState {
       s = { ...s, foes: [...s.foes, { kind: 'charge', from, to: run.to, hit: run.hit }] };
       if (run.hit) {
         enemies[i] = e;
-        s = damagePlayer(s, Math.max(1, Math.ceil(enemyHitDamage(s.stats, def) * ENEMY_CONFIG.chargeRate)), `${def.name}の突進`, def.name, def.id);
+        s = hitByEnemy(s, Math.max(1, Math.ceil(enemyHitDamage(s.stats, def) * ENEMY_CONFIG.chargeRate)), `${def.name}の突進`, def);
         if (s.outcome !== 'ongoing') return { ...s, enemies };
         continue;
       }
@@ -910,7 +926,7 @@ function enemiesTurn(state: ExploreState): ExploreState {
         if (line && line.dist >= 2 && line.dist <= ENEMY_CONFIG.rangedRange) {
           enemies[i] = e;
           s = { ...s, foes: [...s.foes, { kind: 'shot', from: e.pos, to: s.player, by: e.id }] };
-          s = damagePlayer(s, Math.max(1, Math.ceil(enemyHitDamage(s.stats, def) * ENEMY_CONFIG.rangedRate)), `${def.name}の遠距離攻撃`, def.name, def.id, true);
+          s = hitByEnemy(s, Math.max(1, Math.ceil(enemyHitDamage(s.stats, def) * ENEMY_CONFIG.rangedRate)), `${def.name}の遠距離攻撃`, def, true);
           if (s.outcome !== 'ongoing') return { ...s, enemies };
           continue;
         }
@@ -930,7 +946,7 @@ function enemiesTurn(state: ExploreState): ExploreState {
     // 攻撃
     if (e.mode !== 'wander' && isAdjacent(e.pos, s.player)) {
       enemies[i] = e;
-      s = damagePlayer(s, enemyHitDamage(s.stats, def), `${def.name}の攻撃`, def.name, def.id);
+      s = hitByEnemy(s, enemyHitDamage(s.stats, def), `${def.name}の攻撃`, def);
       if (s.outcome !== 'ongoing') return { ...s, enemies };
       continue;
     }
@@ -1115,6 +1131,15 @@ function damagePlayer(state: ExploreState, dmg: number, message: string, by: str
   return { ...state, stats: { ...state.stats, hp }, log };
 }
 
+/** 敵の攻撃を受ける。ダメージのあと、生きていれば、その敵の状態異常（毒・鈍足・空腹。status.ts）にかかることがある */
+function hitByEnemy(state: ExploreState, dmg: number, message: string, def: EnemyDef, ranged = false): ExploreState {
+  const hit = damagePlayer(state, dmg, message, def.name, def.id, ranged);
+  if (hit.outcome !== 'ongoing') return hit;
+  const a = afflict(hit, def);
+  if (!a.log.length && a.rngState === hit.rngState) return hit;
+  return { ...hit, stats: a.stats, satiety: a.satiety, rngState: a.rngState, log: [...hit.log, ...a.log] };
+}
+
 // ===== 満腹度 =====
 
 /** 1行動ぶん満腹度を減らす。0ならHPが減る（HPは歩いても自然には回復しない。回復薬・呪文・レベルアップで戻す） */
@@ -1138,12 +1163,13 @@ function spendAction(state: ExploreState): ExploreState {
   return { ...state, turn, stats: { ...stats, hp } };
 }
 
-/** 毒の仕組み（今は毒を与える敵はいないが、状態異常として残している） */
+/** 毒：毎ターン、守りに関係なくダメージ（ターン数は status.ts。ダメージは statuses.json の poison.damage） */
 function applyPoison(state: ExploreState): ExploreState {
   const { stats } = state;
   if (stats.poisonTurns <= 0) return state;
   const next = { ...stats, poisonTurns: stats.poisonTurns - 1 };
-  return damagePlayer({ ...state, stats: next }, COMBAT_CONFIG.poisonDamage, '毒', '毒');
+  const hurt = damagePlayer({ ...state, stats: next }, STATUS_MASTER.poison.damage, '毒', '毒');
+  return next.poisonTurns === 0 && hurt.outcome === 'ongoing' ? { ...hurt, log: [...hurt.log, '毒が抜けた'] } : hurt;
 }
 
 // ===== 結果 =====

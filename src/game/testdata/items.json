@@ -420,6 +420,10 @@
       "name": "回復薬",
       "price": 10
     },
+    "panacea": {
+      "name": "万能薬",
+      "price": 60
+    },
     "food": {
       "name": "食料",
       "price": 15
