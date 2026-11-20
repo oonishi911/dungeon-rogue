@@ -35,6 +35,7 @@ export const ENEMY_CONFIG = {
   shieldCut: 0.7, // 盾持ち：正面からの武器の攻撃を、この割合カットする
   summonEvery: 5, // 召喚：何ターンごとに呼ぶか
   summonMax: 2, // 召喚：同時に出していられる数
+  ambushRange: 2, // 待ち伏せ：気付かれていないあいだ、このマス数以内に近づかれると襲いかかる（ふつうの敵の視界は sight）
 } as const;
 
 /**

@@ -122,9 +122,11 @@ export interface Departure {
  * - charger（突進）：まっすぐ3マス以内にいると身構えて、次のターンに一直線に走ってくる
  * - shield（盾持ち）：向いている正面からの武器の攻撃を、大きく防ぐ
  * - summoner（召喚）：数ターンごとに、近くに弱い敵を呼ぶ
+ * - trail（炎の足跡）：歩いたあとのマスに、燃える床を残す（炎の敵は燃えない。ほかの敵や主人公が乗ると、燃える）
+ * - ambush（待ち伏せ）：気付かれていないあいだは、その場から動かない。2マス以内に近づかれると、すぐ襲いかかってくる（気付いたターンの猶予がない）
  * - poison / chill / hunger（毒・鈍足・空腹）：攻撃が当たると、状態異常にさせることがある（ボスは今のところ与えない。詳しくは docs/status-spec.md）
  */
-export type EnemyBehavior = 'ranged' | 'charger' | 'shield' | 'summoner' | 'poison' | 'chill' | 'hunger';
+export type EnemyBehavior = 'ranged' | 'charger' | 'shield' | 'summoner' | 'trail' | 'ambush' | 'poison' | 'chill' | 'hunger';
 
 // 敵の ID。敵の種類はプログラムに決め打ちせず、src/game/enemies.json にある敵がすべて（管理画面 ?view=admin の「敵」タブで足す・消すことができる）
 export type EnemyId = string;

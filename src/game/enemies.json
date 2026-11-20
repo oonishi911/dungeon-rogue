@@ -52,6 +52,9 @@
       "def": 3,
       "element": "neutral",
       "body": "hard",
+      "behaviors": [
+        "chill"
+      ],
       "look": {
         "sprite": "fire_drake",
         "recolor": {
@@ -74,6 +77,9 @@
       "def": 0,
       "element": "fire",
       "body": "normal",
+      "behaviors": [
+        "trail"
+      ],
       "look": {
         "sprite": "fire_imp"
       },
@@ -204,6 +210,9 @@
       "def": 0,
       "element": "light",
       "body": "soft",
+      "behaviors": [
+        "charger"
+      ],
       "look": {
         "sprite": "fire_imp",
         "recolor": {
@@ -303,6 +312,9 @@
       "def": 1,
       "element": "dark",
       "body": "spirit",
+      "behaviors": [
+        "poison"
+      ],
       "look": {
         "sprite": "poison_slime",
         "recolor": {
@@ -475,6 +487,9 @@
       "def": 0,
       "element": "fire",
       "body": "soft",
+      "behaviors": [
+        "poison"
+      ],
       "look": {
         "sprite": "poison_slime",
         "recolor": {
@@ -521,6 +536,9 @@
       "def": 1,
       "element": "dark",
       "body": "spirit",
+      "behaviors": [
+        "chill"
+      ],
       "look": {
         "sprite": "fire_imp",
         "recolor": {
@@ -675,6 +693,9 @@
       "body": "hard",
       "physical": 0.75,
       "magic": 1.5,
+      "behaviors": [
+        "ambush"
+      ],
       "look": {
         "sprite": "fire_drake",
         "recolor": {
@@ -699,6 +720,9 @@
       "body": "hard",
       "physical": 0.75,
       "magic": 1.5,
+      "behaviors": [
+        "ambush"
+      ],
       "look": {
         "sprite": "venom_queen",
         "recolor": {
