@@ -248,7 +248,7 @@ export function writeSeconds(w: Write): number {
  * 紙が燃えるようなチリチリ（sizzle）が、声のあいだは大きく、息をひそめるあいだは小さく、「やめて」が燃えるときは大きく、最後はそっと続く。
  * 息をひそめるあいだは心音。最後に、静かな低い響き。（「やめて」を書く音・取り消し線を引く音は、乾いた「かかか、かこかこ」に聞こえたので、鳴らさない）
  */
-export function soundCues(movie: MovieDef, writes: readonly Write[] = []): SoundCue[] {
+export function soundCues(movie: MovieDef, writes: readonly Write[]): SoundCue[] {
   const c = MOVIE_CONFIG.sound;
   const cues: SoundCue[] = [];
   const calmStart = movie.breath?.[0] ?? movie.lineAt[1] ?? movie.duration / 3;
