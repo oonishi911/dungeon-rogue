@@ -1,10 +1,10 @@
 // 合成の効果音（2026-11-20。docs/combat-fun-spec.md ⑥）。音のファイルを持たず、Web Audio の発振器とノイズで鳴らす短い音。
 // 凍る・燃える・砕く・焼き斬り・杖の共鳴・蒸気・持ち替え・倒した、の8つ。pitch は音の高さの倍率（連続で倒すと上げていく）。
 // 2026-11-21：記憶の動く場面（docs/memory-movie.md）の音を足した。roar（大きな声。pitch は強さ）・rumble（地鳴り。pitch は長さ（秒））・
-// heartbeat（心音。pitch は強さ）・scratch（書きなぐる音）・strike（取り消し線を引く音）・crackle（火の粉のはぜる音）・hush（最後の、静かな低い響き）・
+// heartbeat（心音。pitch は強さ）・scratch（書きなぐる音）・strike（取り消し線を引く音）・hush（最後の、静かな低い響き）・
 // sizzle・sizzle_soft（紙が燃えるような、細かいチリチリという音。pitch は長さ（秒）。soft は小さめ）
 
-export type SynthKind = 'freeze' | 'burn' | 'smash' | 'sear' | 'arcane' | 'steam' | 'swap' | 'kill' | 'roar' | 'rumble' | 'heartbeat' | 'scratch' | 'strike' | 'crackle' | 'hush' | 'sizzle' | 'sizzle_soft';
+export type SynthKind = 'freeze' | 'burn' | 'smash' | 'sear' | 'arcane' | 'steam' | 'swap' | 'kill' | 'roar' | 'rumble' | 'heartbeat' | 'scratch' | 'strike' | 'hush' | 'sizzle' | 'sizzle_soft';
 
 let noise: AudioBuffer | null = null;
 const noiseOf = (ctx: AudioContext): AudioBuffer => {
@@ -232,9 +232,6 @@ export function synthSfx(ctx: AudioContext, out: AudioNode, kind: SynthKind, whe
     case 'strike': // 取り消し線を荒く引く音：ざざっと、往復する
       [0, 0.09, 0.19, 0.3].forEach((d, i) => hiss(ctx, out, when + d, { type: 'bandpass', from: i % 2 ? 1200 : 3400, to: i % 2 ? 3400 : 1200, q: 1.6, len: 0.11, gain: 0.34, attack: 0.008 }));
       tone(ctx, out, when + 0.34, { freq: 110, endFreq: 70, len: 0.4, gain: 0.25 });
-      break;
-    case 'crackle': // 火の粉のはぜる音：小さなぱちぱち（毎回少しずつちがう）
-      for (let i = 0; i < 5; i++) hiss(ctx, out, when + Math.random() * 0.5, { type: 'highpass', from: 2500 + Math.random() * 3000, len: 0.03, gain: 0.12 * pitch, offset: Math.random() * 0.8 });
       break;
     case 'hush': // 静かな低い響き：ゆっくり立ち上がり、長く消える
       tone(ctx, out, when, { freq: 110, len: 3.2, gain: 0.2, attack: 1.0 });

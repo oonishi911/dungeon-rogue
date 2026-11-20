@@ -148,15 +148,15 @@ describe('音の予定', () => {
     expect(strike.at).toBeGreaterThan(scratch.at);
     const hush = cues.find((c) => c.kind === 'hush')!;
     expect(hush.at).toBe(flame.echoAt);
-    expect(cues.filter((c) => c.at > hush.at).every((c) => c.kind === 'crackle' || c.kind === 'sizzle_soft')).toBe(true);
+    expect(cues.filter((c) => c.at > hush.at).every((c) => c.kind === 'sizzle_soft')).toBe(true);
   });
 
-  it('火の粉のはぜる音は、火の粉の勢いがあるときだけ。地鳴りは、場面のはじめから息をひそめる前まで', () => {
-    for (const c of cues.filter((c) => c.kind === 'crackle')) expect(valueAt(flame.embers, c.at)).toBeGreaterThanOrEqual(MOVIE_CONFIG.sound.crackleOver);
+  it('地鳴りは、場面のはじめから息をひそめる前まで', () => {
     const rumble = cues.find((c) => c.kind === 'rumble')!;
     expect(rumble.at).toBeLessThan(1);
     expect(rumble.at + rumble.power).toBeCloseTo(flame.breath![0]);
   });
+
 
   it('紙が燃えるようなチリチリは、声のあいだ・息をひそめるあいだ（小さく）・「やめて」が燃えるとき・最後（小さく）に鳴り、場面の長さを超えない', () => {
     const burns = cues.filter((c) => c.kind === 'sizzle' || c.kind === 'sizzle_soft');
