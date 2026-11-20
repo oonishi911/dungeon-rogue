@@ -22,10 +22,10 @@
     "bossMinions": 3
   },
   "growth": {
-    "expBase": 6,
-    "expStep": 2,
-    "hpPerLevel": 14,
-    "atkPerLevel": 3,
+    "expBase": 20,
+    "expStep": 10,
+    "hpPerLevel": 1,
+    "atkPerLevel": 1,
     "magPerLevel": 1,
     "maxLevel": 99,
     "eliteRate": 3
