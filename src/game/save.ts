@@ -10,7 +10,7 @@ import { ITEMS } from './data';
 import { ECHO_IDS } from './echoMaster';
 import { ringId } from './itemMaster';
 import { MEMORIES } from './story';
-import { itemSlot } from './combat';
+import { itemSlot, weaponTypeOf } from './combat';
 import { fingers, fitRingList } from './ring';
 import type { EchoId, ItemId } from './types';
 
@@ -22,6 +22,7 @@ export interface Kit {
   armor: ItemId | null;
   books: ItemId[]; // 持っていく呪文書
   take: ItemId[]; // 倉庫から持っていく道具（同じ道具は何個でも並べる）
+  weapon2?: ItemId | null; // サブ武器（買った武器から。メインとちがう種類。道具の枠を1つ使う。ないときは、なし）
   weaponGear?: number | null; // 武器に刻印武器を付けているときの、その番号（engraved の uid。weapon は、その元の武器）
   rings?: ItemId[]; // 付けている指輪（owned から。指の数まで、同じ種類は1つ。ring.ts。ないときは、なし）
 }
@@ -119,8 +120,13 @@ function parseKit(v: unknown, owned: readonly ItemId[], engraved: readonly Engra
   const rings = fitRingList([...items(k.rings), ...armorGifts], owned, fingers(memories));
   // 刻印武器を付けているときは、その元の武器が装備になる（買っていなくてよい）
   const wg = engraved.find((g) => g.uid === k.weaponGear);
+  const weapon = wg ? wg.base : pick(k.weapon, 'weapon');
+  // サブ武器は、メインの武器があって、ちがう種類のときだけ
+  const sub = pick(k.weapon2, 'weapon');
+  const weapon2 = weapon && sub && weaponTypeOf(sub) !== weaponTypeOf(weapon) ? sub : null;
   return {
-    weapon: wg ? wg.base : pick(k.weapon, 'weapon'),
+    weapon,
+    ...(weapon2 ? { weapon2 } : {}),
     armor: pick(armor, 'armor'),
     ...(wg ? { weaponGear: wg.uid } : {}),
     ...(rings.length ? { rings } : {}),

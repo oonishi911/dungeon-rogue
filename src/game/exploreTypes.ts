@@ -30,6 +30,7 @@ export type ExploreAction =
   | { kind: 'use_item'; item: ItemId }
   | { kind: 'cast'; spell: SpellId; dir?: Dir } // 呪文を唱える。向きを選ぶ呪文（なぎ払い・矢）は dir が要る
   | { kind: 'skill'; dir?: Dir } // 武器の固有技（技ゲージが満タンのとき）。向きを選ぶ技（剣の連斬り・杖の魔力弾）は dir が要る
+  | { kind: 'swap' } // 持ち替え：手に持っている武器と、サブ武器を入れ替える（1ターン。サブ武器がないときはできない）
   | { kind: 'retire' }; // リタイア：探索をやめてダンジョンを出る（踏破しなかった扱い。金貨は力尽きたときと同じだけ持ち帰る）
 
 export type ExploreOutcome = 'ongoing' | 'cleared' | 'defeated' | 'retired';

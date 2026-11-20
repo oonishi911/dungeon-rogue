@@ -24,7 +24,8 @@ import type { GrowthSettings } from './genMaster';
 
 // ===== 持ち物の上限 =====
 export const LOADOUT_CONFIG = {
-  maxItems: 8, // 道具（消耗品）を持てる数。武器と防具は1つずつ
+  maxItems: 8, // 道具（消耗品）を持てる数。防具は1つ、武器はメインとサブの2本まで
+  subWeaponSlots: 1, // サブ武器を持っていくと、道具を持てる数がこれだけ減る
   maxSpellbooks: 3, // 持っていける呪文書の数（同じ呪文書は1冊まで）
 } as const;
 

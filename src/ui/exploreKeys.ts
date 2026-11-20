@@ -19,6 +19,9 @@ export const SPELL_KEYS = ['z', 'x', 'c'] as const;
 // 武器の固有技（技ゲージが満タンのとき）は f キー
 export const SKILL_KEY = 'f';
 
+// 武器の持ち替え（サブ武器があるとき）は q キー
+export const SWAP_KEY = 'q';
+
 export const KEY_ACTIONS: Record<string, ExploreAction> = {
   ' ': { kind: 'wait' },
   '.': { kind: 'wait' },

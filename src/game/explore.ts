@@ -6,7 +6,7 @@
 // 型と数値は exploreTypes.ts、視界の計算は exploreSight.ts、魔法の計算（魔力・ダメージ・相性）は magic.ts にある。
 
 import { BOSS_CONFIG, phaseOf, phaseSow, PHASE_MAX } from './bossPhase';
-import { buildPlayer, enemyHitDamage, itemCapacity, playerHitDamage } from './combat';
+import { buildPlayer, enemyHitDamage, itemCapacity, playerHitDamage, swapWeapons } from './combat';
 import { gearName, lootSeed, noFound, rollLoot, satietySaving, savesSatiety } from './echo';
 import { echoName } from './echo';
 import { enemyBase, enemyReward, expToNext, ITEMS, REWARD_CONFIG, SPELLS, STATUS_MASTER, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
@@ -177,6 +177,14 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
       next = r.value;
       bleedSkip = next.foes.flatMap((f) => (f.kind === 'skill' && f.weapon === 'sword' ? f.path : []));
       if (next.outcome !== 'ongoing') return ok({ ...next, turn: next.turn + 1 });
+      break;
+    }
+    case 'swap': {
+      // 持ち替え：武器・残響・技ゲージが入れ替わる。1ターンかかる（敵は動く）
+      const swapped = swapWeapons(state.stats, state.skill);
+      if (!swapped) return err('サブ武器がない');
+      const from = state.stats.weapon!;
+      next = { ...state, stats: swapped.stats, skill: swapped.skill, log: [...state.log, `${ITEMS[from].name}から${ITEMS[swapped.stats.weapon!].name}に持ち替えた`] };
       break;
     }
     case 'descend': {

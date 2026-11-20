@@ -151,6 +151,13 @@ export interface Enchant {
   hits: number; // あと何回の攻撃に属性が乗るか
 }
 
+/** サブ武器。持ち替えると、手に持っている武器（weapon・echoes・技ゲージ）と入れ替わる */
+export interface SubWeapon {
+  weapon: ItemId;
+  echoes?: EchoId[]; // サブ武器にはめた残響（今は付けられないので、ふつうはなし）
+  skill: number; // サブ武器の技ゲージ（武器ごとに別々にたまる）
+}
+
 export interface PlayerStats {
   hp: number;
   maxHp: number;
@@ -160,6 +167,7 @@ export interface PlayerStats {
   poisonTurns: number; // 毒の残りターン（毎ターン、守りに関係なくダメージ）
   chillSteps?: number; // 鈍足の残り歩数（ないときは、0。歩くのに2ターンかかる）
   weapon: ItemId | null;
+  sub?: SubWeapon; // サブ武器（持ち替えで手に持つ。ないときは、1本だけ。docs/combat-fun-spec.md の②）
   armor: ItemId | null;
   rings?: ItemId[]; // 付けている指輪（ないときは、なし）
   items: ItemId[]; // 持っている道具（消耗品）

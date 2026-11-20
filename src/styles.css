@@ -787,6 +787,11 @@ button {
 }
 
 /* 武器の固有技のボタン：技ゲージを丸で右に出す。満タンになると光る */
+.explore__matchup {
+  color: var(--bone-dim);
+  font-size: var(--step--1);
+}
+
 .explore__skill {
   border-color: var(--pine-line);
 }
