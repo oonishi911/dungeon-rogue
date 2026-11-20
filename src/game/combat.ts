@@ -4,7 +4,7 @@
 
 import { COMBAT_CONFIG as C, ELEMENT_COMPONENTS, ENCHANT_VS_ELEMENT, ITEMS, LOADOUT_CONFIG, WEAPON_VS_BODY } from './data';
 import { bodyDamageRate, echoAtk, imbuedElement } from './echo';
-import type { EchoId, ElementComponent, EnemyDef, Guard, ItemDef, ItemId, ItemSlot, PlayerStats } from './types';
+import type { EchoId, ElementComponent, EnemyDef, Guard, ItemDef, ItemId, ItemSlot, PlayerStats, WeaponType } from './types';
 
 export function itemSlot(item: ItemDef): ItemSlot {
   switch (item.effect.kind) {
@@ -30,22 +30,39 @@ export function itemSlot(item: ItemDef): ItemSlot {
   }
 }
 
-/** 持ち込んだアイテムからプレイヤーの能力を作る。武器・防具は1つずつ、指輪は付けた分だけ装備する。echoes：装備した刻印武器にはめた残響（ない・空なら、残響なし） */
+/** 武器の種類（剣・ハンマー・杖）。武器でなければ null */
+export function weaponTypeOf(id: ItemId | null | undefined): WeaponType | null {
+  const effect = id ? ITEMS[id]?.effect : null;
+  return effect?.kind === 'weapon' ? effect.weapon : null;
+}
+
+/** 武器を持ったときに上がる攻撃力（武器の攻撃力と、はめた残響の分） */
+export function weaponAtk(weapon: ItemId | null, echoes?: readonly EchoId[]): number {
+  const effect = weapon ? ITEMS[weapon].effect : null;
+  return (effect?.kind === 'weapon' ? effect.atk : 0) + (weapon ? echoAtk(echoes) : 0);
+}
+
+/**
+ * 持ち込んだアイテムからプレイヤーの能力を作る。武器は1本目がメイン、メインとちがう種類の2本目がサブ（持ち替えで使う）。防具は1つ、指輪は付けた分だけ装備する。
+ * echoes：メインの刻印武器にはめた残響（ない・空なら、残響なし）
+ */
 export function buildPlayer(loadout: readonly ItemId[], echoes?: readonly EchoId[]): PlayerStats {
-  const weapon = loadout.find((id) => itemSlot(ITEMS[id]) === 'weapon') ?? null;
+  const weapons = loadout.filter((id) => itemSlot(ITEMS[id]) === 'weapon');
+  const weapon = weapons[0] ?? null;
+  const subId = weapons.find((id) => weaponTypeOf(id) !== weaponTypeOf(weapon)) ?? null;
   const armor = loadout.find((id) => itemSlot(ITEMS[id]) === 'armor') ?? null;
-  const w = weapon ? ITEMS[weapon].effect : null;
   const a = armor ? ITEMS[armor].effect : null;
   const rings = loadout.filter((id) => itemSlot(ITEMS[id]) === 'ring');
   return {
     hp: C.playerHp,
     maxHp: C.playerHp,
     // 武器は攻撃力を、防具は守りを上げる（段階が上がるほど大きい。品物の設定 items.json）
-    atk: C.playerAtk + (w?.kind === 'weapon' ? w.atk : 0) + (weapon ? echoAtk(echoes) : 0),
+    atk: C.playerAtk + weaponAtk(weapon, echoes),
     def: C.playerDef + (a?.kind === 'armor' ? a.def : 0),
     mag: 0,
     poisonTurns: 0,
     weapon,
+    ...(subId ? { sub: { weapon: subId, skill: 0 } } : {}),
     armor,
     ...(rings.length ? { rings } : {}),
     // 持っていくだけで効く道具（ランタン・大きな袋）は、ダンジョンでは使わないので持ち物に入れない（持ち帰らず、なくなる）
@@ -121,5 +138,24 @@ export function itemCapacity(loadout: readonly ItemId[]): number {
     const e = ITEMS[id].effect;
     return e.kind === 'capacity' ? Math.max(best, e.slots) : best;
   }, 0);
-  return LOADOUT_CONFIG.maxItems + bonus;
+  // サブ武器（メインとちがう種類の2本目の武器）を持っていくと、道具の枠を使う
+  const weapons = loadout.filter((id) => itemSlot(ITEMS[id]) === 'weapon');
+  const hasSub = weapons.some((id) => weaponTypeOf(id) !== weaponTypeOf(weapons[0]));
+  return LOADOUT_CONFIG.maxItems + bonus - (hasSub ? LOADOUT_CONFIG.subWeaponSlots : 0);
+}
+
+/**
+ * 持ち替え：手に持っている武器と、サブ武器を入れ替える（武器・残響・技ゲージ。攻撃力は武器の分だけ変わる）。サブ武器がなければ null。
+ * skill は今の技ゲージ。入れ替えたあとの技ゲージを返す
+ */
+export function swapWeapons(stats: PlayerStats, skill: number): { stats: PlayerStats; skill: number } | null {
+  const { sub } = stats;
+  if (!sub || !stats.weapon) return null;
+  const { echoes: heldEchoes, ...rest } = stats;
+  const atk = stats.atk - weaponAtk(stats.weapon, heldEchoes) + weaponAtk(sub.weapon, sub.echoes);
+  const held: PlayerStats['sub'] = { weapon: stats.weapon, skill, ...(heldEchoes?.length ? { echoes: heldEchoes } : {}) };
+  return {
+    stats: { ...rest, atk, weapon: sub.weapon, sub: held!, ...(sub.echoes?.length ? { echoes: sub.echoes } : {}) },
+    skill: sub.skill,
+  };
 }

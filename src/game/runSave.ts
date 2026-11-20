@@ -162,6 +162,8 @@ function isStats(v: unknown): v is ExploreState['stats'] {
   if (!isItemOrNull(v.weapon) || !isItemOrNull(v.armor) || !Array.isArray(v.items) || !v.items.every(isItem)) return false;
   if (!(v.echoes === undefined || isEchoList(v.echoes))) return false; // 残響の欄ができる前の中断データには、ない
   if (!(v.rings === undefined || (Array.isArray(v.rings) && v.rings.every((id) => isItem(id) && ITEMS[id].effect.kind === 'ring')))) return false; // 指輪の欄ができる前の中断データには、ない
+  const sw = v.sub;
+  if (!(sw === undefined || (isObject(sw) && isItem(sw.weapon) && ITEMS[sw.weapon].effect.kind === 'weapon' && isCount(sw.skill) && (sw.echoes === undefined || isEchoList(sw.echoes))))) return false; // サブ武器の欄ができる前の中断データには、ない
   const e = v.enchant;
   return e === null || (isObject(e) && TRAIT_IDS.includes(e.element as TraitId) && isCount(e.hits));
 }

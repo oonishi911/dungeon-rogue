@@ -26,7 +26,7 @@ import { INTRO_FX } from './explore3dConfig';
 import { devBestHref } from './exploreDev';
 import { EndingPanel, LeaveDialog, RetireDialog } from './ExploreDialogs';
 import { playFeedback } from './exploreFeedback';
-import { KEY_ACTIONS, KEY_DIRS, SKILL_KEY, SPELL_KEYS } from './exploreKeys';
+import { KEY_ACTIONS, KEY_DIRS, SKILL_KEY, SPELL_KEYS, SWAP_KEY } from './exploreKeys';
 import { LogList } from './ExploreParts';
 import { ExploreSide } from './ExploreSide';
 import { avoidOnWalk, visibleEnemyIds, type WalkGoal } from './exploreWalk';
@@ -164,6 +164,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const useSkillNow = useCallback(() => request({ kind: 'skill' }), [request]);
   const useSkillRef = useRef(useSkillNow);
   useSkillRef.current = useSkillNow;
+  const swapNow = useCallback(() => request({ kind: 'swap' }), [request]);
+  const swapRef = useRef(swapNow);
+  swapRef.current = swapNow;
 
   const hold = useCallback((dir: Dir) => {
     walkRef.current = null;
@@ -316,6 +319,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       if (dir) {
         e.preventDefault(); // 矢印キーでページがスクロールしないように
         if (!e.repeat) hold(dir);
+        return;
+      }
+      if (key === SWAP_KEY) {
+        e.preventDefault();
+        if (!e.repeat && stateRef.current.stats.sub) swapRef.current();
         return;
       }
       if (key === SKILL_KEY) {
@@ -596,6 +604,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
           infoOpen={infoOpen}
           onCast={chooseSpell}
           onSkill={useSkillNow}
+          onSwap={swapNow}
           onUseItem={(item) => request({ kind: 'use_item', item })}
           onCloseInfo={() => setInfoOpen(false)}
           onRetire={() => {

@@ -9,7 +9,7 @@
 //   店で上の段階を買っても、並びはその場では広がらず、次に潜るときの店で広がる
 // ほかのロジックと同じく、状態を受け取り新しい状態を返す純粋関数でできている。
 
-import { itemCapacity, itemSlot } from './combat';
+import { itemCapacity, itemSlot, weaponTypeOf } from './combat';
 import { ENCHANT_VS_ELEMENT, ITEMS, LOADOUT_CONFIG, SPELLS, WEAPON_VS_BODY } from './data';
 import type { Intel } from './informant';
 import { ARMOR_BASES, GEAR_TIERS, gearId, gearOf, pairElements, RING_KINDS, RING_LEVELS, ringId, ringOf, SPELLBOOK_IDS, SUPPLY_IDS, WEAPON_BASES } from './itemMaster';
@@ -94,9 +94,12 @@ export function buy(save: SaveData, id: ItemId, atEntry: readonly ItemId[] = sav
   if (item.price > save.gold) return err('忘れ物が足りない');
   const gold = save.gold - item.price;
   const kit = { ...save.kit };
-  if (shelf === 'weapon') delete kit.weaponGear; // 買った武器を装備する（刻印武器は外れる）
+  if (shelf === 'weapon') {
+    delete kit.weaponGear; // 買った武器を装備する（刻印武器は外れる）
+    if (kit.weapon2 && weaponTypeOf(kit.weapon2) === weaponTypeOf(id)) delete kit.weapon2; // サブ武器と同じ種類になったら、サブは外れる
+  }
   if (shelf === 'supply') {
-    if (canTake(kit.take, id)) kit.take = [...kit.take, id];
+    if (canTake(kit.take, id, Boolean(kit.weapon2))) kit.take = [...kit.take, id];
     return ok({ ...save, gold, stock: [...save.stock, id], kit });
   }
   if (shelf === 'weapon') kit.weapon = id;
@@ -115,7 +118,25 @@ export function equip(save: SaveData, slot: 'weapon' | 'armor', id: ItemId | nul
   if (id !== null && (!save.owned.includes(id) || shelfOf(id) !== slot)) return err('持っていない');
   // ふつうの武器を選ぶ（外す）と、刻印武器は外れる
   const { weaponGear: _gear, ...rest } = save.kit;
-  return ok({ ...save, kit: slot === 'weapon' ? { ...rest, weapon: id } : { ...save.kit, armor: id } });
+  if (slot === 'armor') return ok({ ...save, kit: { ...save.kit, armor: id } });
+  // メインの武器を外す・同じ種類のサブ武器と入れ替えるときは、サブ武器も外れる（サブはメインとちがう種類）
+  const { weapon2, ...noSub } = rest;
+  const keepSub = weapon2 && id && weaponTypeOf(weapon2) !== weaponTypeOf(id);
+  return ok({ ...save, kit: { ...noSub, weapon: id, ...(keepSub ? { weapon2 } : {}) } });
+}
+
+/**
+ * サブ武器を決める（null で外す）。持っている武器で、メインとちがう種類のものだけ。
+ * サブ武器は、持っていける道具の数を1つ減らす。道具がいっぱいのときは、先に道具を減らしてもらう
+ */
+export function equipSub(save: SaveData, id: ItemId | null): Result<SaveData> {
+  const { weapon2: _old, ...rest } = save.kit;
+  if (id === null) return ok({ ...save, kit: rest });
+  if (!save.owned.includes(id) || shelfOf(id) !== 'weapon') return err('持っていない');
+  if (!save.kit.weapon) return err('先に、メインの武器を決めてください');
+  if (weaponTypeOf(id) === weaponTypeOf(save.kit.weapon)) return err('サブ武器は、メインとちがう種類の武器にします');
+  if (!save.kit.weapon2 && takeCount(save.kit.take) > takeLimit(save.kit.take, true)) return err('道具を1つ減らすと、サブ武器を持っていけます');
+  return ok({ ...save, kit: { ...rest, weapon2: id } });
 }
 
 /** 呪文書を持っていく・外す */
@@ -138,7 +159,8 @@ export function takeSupply(save: SaveData, id: ItemId, delta: 1 | -1): Result<Sa
   }
   if (count(take, id) >= count(save.stock, id)) return err('倉庫にもうない');
   if (isBag(id) && take.some(isBag)) return err('大きな袋は1つまで');
-  if (!canTake(take, id)) return err(`道具は${takeLimit(take)}つまで`);
+  const hasSub = Boolean(save.kit.weapon2);
+  if (!canTake(take, id, hasSub)) return err(`道具は${takeLimit(take, hasSub)}つまで`);
   return ok({ ...save, kit: { ...save.kit, take: [...take, id] } });
 }
 
@@ -149,19 +171,19 @@ const isBag = (id: ItemId) => ITEMS[id].effect.kind === 'capacity';
 /** 持っていく道具のうち、数に入るもの（大きな袋は数えない） */
 export const takeCount = (take: readonly ItemId[]): number => take.filter((id) => !isBag(id)).length;
 
-/** 持っていける道具の数（大きな袋を入れていれば増える） */
-export const takeLimit = (take: readonly ItemId[]): number => itemCapacity(take);
+/** 持っていける道具の数（大きな袋を入れていれば増え、サブ武器（hasSub）を持っていくと減る） */
+export const takeLimit = (take: readonly ItemId[], hasSub = false): number => itemCapacity(take) - (hasSub ? LOADOUT_CONFIG.subWeaponSlots : 0);
 
 /** その道具を、もう1つ持っていくものに入れられるか（倉庫の数は見ない） */
-export function canTake(take: readonly ItemId[], id: ItemId): boolean {
+export function canTake(take: readonly ItemId[], id: ItemId, hasSub = false): boolean {
   if (isBag(id)) return !take.some(isBag);
-  return takeCount(take) < takeLimit(take);
+  return takeCount(take) < takeLimit(take, hasSub);
 }
 
 /** 持っていくもの（探索の持ち物） */
 export function kitLoadout(save: SaveData): ItemId[] {
-  const { weapon, armor, books, take } = save.kit;
-  return [...(weapon ? [weapon] : []), ...(armor ? [armor] : []), ...(save.kit.rings ?? []), ...books, ...take];
+  const { weapon, weapon2, armor, books, take } = save.kit;
+  return [...(weapon ? [weapon] : []), ...(weapon && weapon2 ? [weapon2] : []), ...(armor ? [armor] : []), ...(save.kit.rings ?? []), ...books, ...take];
 }
 
 /** 出発する：持っていく道具を倉庫から出す（選んだ持ち物は、次の店でも同じ選び方から始めるよう残す） */
@@ -194,7 +216,7 @@ export function fitKit(save: SaveData): SaveData {
   });
   // 大きな袋は1つだけ。袋を除いた道具は、持っていける数まで（前に入れたものから残す）
   const bag = inStock.find(isBag);
-  const limit = takeLimit(bag ? [bag] : []);
+  const limit = takeLimit(bag ? [bag] : [], Boolean(save.kit.weapon2));
   let kept = 0;
   let bags = 0;
   const take = inStock.filter((id) => (isBag(id) ? bags++ === 0 : kept++ < limit));

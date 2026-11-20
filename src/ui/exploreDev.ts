@@ -30,7 +30,7 @@ export function devSick(state: ExploreState): ExploreState {
 }
 
 // 開発用画面で持たせる装備と道具
-export const DEV_LOADOUT: ItemId[] = ['sword', 'plate', 'ring_all_2', 'potion', 'potion', 'panacea', 'food', 'fire_whetstone', 'ice_whetstone', 'book_shockwave', 'book_fire_bolt', 'book_heal'];
+export const DEV_LOADOUT: ItemId[] = ['sword', 'hammer', 'plate', 'ring_all_2', 'potion', 'potion', 'panacea', 'food', 'fire_whetstone', 'ice_whetstone', 'book_shockwave', 'book_fire_bolt', 'book_heal'];
 
 /** 開発用画面の「いちばん強い装備で試す」の切り替え先（今のダンジョンの特性のまま、装備だけを切り替える） */
 export function devBestHref(best: boolean, trait: TraitId): string {

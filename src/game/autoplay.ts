@@ -2,7 +2,7 @@
 // 画面で人が遊ぶときと同じ step() を使うので、バランステストの結果がそのまま手動プレイにも当てはまる。
 // AIはプレイヤーと同じ情報（霧が晴れた場所と、今見えている敵）だけで判断する。
 
-import { enchantMultiplier, playerHitDamage } from './combat';
+import { enchantMultiplier, playerHitDamage, swapWeapons } from './combat';
 import { ITEMS } from './data';
 import { behaviorsOf, enemyDef, ENEMY_CONFIG, isAdjacent, key, type MapEnemy } from './enemies';
 import { straightLine } from './enemyBehavior';
@@ -17,6 +17,7 @@ import type { ItemId, TraitId } from './types';
 export const AUTOPLAY_CONFIG = {
   healBelow: 0.4, // HPがこの割合を下回ったら回復薬を使う
   eatBelow: 60, // 満腹度がこれを下回ったら食料を食べる
+  swapGain: 1.3, // サブ武器のダメージが、今の武器のこの倍以上なら、持ち替える（持ち替えは1ターンかかる）
   // 無限ループ防止。最後まで遊んだときの長さの目安（階の数が5で、長くても1万ターンほど）の2倍に置く。
   // 低すぎると、まだ歩いている途中で「力尽きた」と数えてしまい、クリア率が実際より低く出る（階の数を増やすたびに起きる）
   maxTurns: 20000,
@@ -39,6 +40,9 @@ export function autoAction(state: ExploreState): ExploreAction {
   if (target) {
     const enchant = bestEnchant(state, target);
     if (enchant) return { kind: 'use_item', item: enchant };
+    // サブ武器のほうが、この敵にずっと効くなら、持ち替える（持ち替えは1ターンかかるので、1.3倍以上のときだけ）
+    const other = swapWeapons(stats, state.skill);
+    if (other && playerHitDamage(other.stats, enemyDef(target)) >= playerHitDamage(stats, enemyDef(target)) * AUTOPLAY_CONFIG.swapGain) return { kind: 'swap' };
     return { kind: 'move', dir: dirBetween(player, target.pos) };
   }
 

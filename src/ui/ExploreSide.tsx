@@ -5,11 +5,12 @@ import { enemyDef } from '../game/enemies';
 import type { ExploreState } from '../game/exploreTypes';
 import type { DungeonFile } from '../game/genMaster';
 import type { ItemId, SpellId } from '../game/types';
+import { playerHitDamage, swapWeapons } from '../game/combat';
 import { activeStatuses } from '../game/status';
 import { STATUS_LABELS, STATUS_TEXTS } from '../game/statusMaster';
 import { SKILL_TEXTS, skillOf } from '../game/weaponSkill';
 import { ENEMY_MARK } from './exploreRender';
-import { SKILL_KEY, SPELL_KEYS } from './exploreKeys';
+import { SKILL_KEY, SPELL_KEYS, SWAP_KEY } from './exploreKeys';
 import { LogList, Meter } from './ExploreParts';
 import { ItemIcon, ItemLabel, SpellIcon } from './ItemIcon';
 
@@ -24,15 +25,19 @@ interface ExploreSideProps {
   infoOpen: boolean; // スマホで、装備・敵・記録をまとめた画面を開いているか（PCでは常に横に出ている）
   onCast: (spell: SpellId) => void;
   onSkill: () => void;
+  onSwap: () => void;
   onUseItem: (item: ItemId) => void;
   onCloseInfo: () => void;
   onRetire: () => void;
 }
 
-export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibleEnemies, recentLog, infoOpen, onCast, onSkill, onUseItem, onCloseInfo, onRetire }: ExploreSideProps) {
+const weaponName = (id: ItemId | null): string => (id ? ITEMS[id].name : '素手');
+
+export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibleEnemies, recentLog, infoOpen, onCast, onSkill, onSwap, onUseItem, onCloseInfo, onRetire }: ExploreSideProps) {
   const { stats } = state;
   const skill = skillOf(stats.weapon, stats.echoes); // 持っている武器の固有技（素手なら無い）
   const afflictions = activeStatuses(stats);
+  const other = swapWeapons(stats, state.skill)?.stats ?? null; // 持ち替えたあとの能力（サブ武器がないときは null）
   return (
     <aside className="explore__side">
       <div className="explore__status">
@@ -63,6 +68,22 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
       </div>
 
       <div className="explore__controls">
+        {stats.sub && (
+          // 持ち替え：手に持っている武器と、サブ武器を入れ替える（1ターンかかる）
+          <button
+            type="button"
+            className="explore__use explore__swap"
+            onClick={onSwap}
+            disabled={ended}
+            aria-label={`${ITEMS[stats.sub.weapon].name}に持ち替える`}
+            title={`${ITEMS[stats.weapon!].name}から${ITEMS[stats.sub.weapon].name}に持ち替える（1ターンかかる。技ゲージは武器ごとにたまる）`}
+          >
+            <span className="explore__key">{SWAP_KEY.toUpperCase()}</span>
+            <ItemIcon id={stats.sub.weapon} size={22} />
+            持ち替え
+            <span className="explore__cost">{ITEMS[stats.sub.weapon].name}</span>
+          </button>
+        )}
         {skill && (
           // 武器の固有技：通常攻撃を当てるとゲージ（丸）がたまり、満タンで押せる
           <button
@@ -151,6 +172,12 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
           <p className="explore__gear">
             武器：{stats.weapon ? <ItemLabel id={stats.weapon} name={ITEMS[stats.weapon].name} /> : 'なし'}
             <br />
+            {stats.sub && (
+              <>
+                サブ：<ItemLabel id={stats.sub.weapon} name={ITEMS[stats.sub.weapon].name} />
+                <br />
+              </>
+            )}
             防具：{stats.armor ? <ItemLabel id={stats.armor} name={ITEMS[stats.armor].name} /> : 'なし'}
             <br />
             指輪：{stats.rings?.length ? stats.rings.map((id) => <ItemLabel key={id} id={id} name={ITEMS[id].name} />) : 'なし'}
@@ -178,6 +205,15 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
                   </span>
                   {enemyDef(e).name}（{TRAITS[enemyDef(e).element].name}・{BODY_NAMES[enemyDef(e).body]}、HP {e.hp}）：
                   {ENEMY_MARK[e.mode].text}
+                  {other && (
+                    // サブ武器があるときは、手に持っている武器と、持ち替えたときの1回のダメージを並べる（持ち替えを選ぶ目安）
+                    <span className="explore__matchup">
+                      {' '}
+                      ダメージ：{weaponName(stats.weapon)} {playerHitDamage(stats, enemyDef(e))}
+                      {' ／ '}
+                      {weaponName(other.weapon)} {playerHitDamage(other, enemyDef(e))}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>

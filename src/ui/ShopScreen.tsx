@@ -10,7 +10,7 @@ import { RoomBackdrop } from './RoomBackdrop';
 import { ITEMS, LOADOUT_CONFIG } from '../game/data';
 import type { Intel } from '../game/informant';
 import type { SaveData } from '../game/save';
-import { buy, canTake, count, equip, kitLoadout, recommended, shelfItems, SHELVES, takeCount, takeLimit, takeSupply, toggleBook, type Shelf } from '../game/shop';
+import { buy, canTake, count, equip, equipSub, kitLoadout, recommended, shelfItems, SHELVES, takeCount, takeLimit, takeSupply, toggleBook, type Shelf } from '../game/shop';
 import type { ItemId, Result } from '../game/types';
 import { ItemIcon } from './ItemIcon';
 import { EngravePanel } from './EngravePanel';
@@ -116,7 +116,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
           <button type="button" className="shop__bag-toggle" aria-expanded={bagOpen} aria-controls="shop-slots" onClick={() => setBagOpen((o) => !o)}>
             <span>持っていくもの</span>
             <span className="shop__bag-sum">
-              指輪 {rings.length}/{fingerCount}・道具 {takeCount(kit.take)}/{takeLimit(kit.take)}・呪文書 {kit.books.length}/{LOADOUT_CONFIG.maxSpellbooks}
+              指輪 {rings.length}/{fingerCount}・道具 {takeCount(kit.take)}/{takeLimit(kit.take, Boolean(kit.weapon2))}・呪文書 {kit.books.length}/{LOADOUT_CONFIG.maxSpellbooks}
             </span>
             <span className="shop__bag-arrow" aria-hidden="true">
               {bagOpen ? '▼' : '▲'}
@@ -129,6 +129,10 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
             <div>
               <dt>武器</dt>
               <dd>{kit.weapon ? <Chip id={kit.weapon} label={gearLabel(save)} title="外す" onClick={() => apply(equip(save, 'weapon', null))} /> : <span className="shop__none">なし</span>}</dd>
+            </div>
+            <div>
+              <dt>サブ武器</dt>
+              <dd>{kit.weapon2 ? <Chip id={kit.weapon2} title="外す" onClick={() => apply(equipSub(save, null))} /> : <span className="shop__none">なし</span>}</dd>
             </div>
             <div>
               <dt>防具</dt>
@@ -203,7 +207,7 @@ function Deal({ id, shelf, save, atEntry, apply }: { id: ItemId; shelf: Shelf; s
             type="button"
             className="shop__step"
             aria-label={`${ITEMS[id].name}を1つ増やす`}
-            disabled={taking >= inStock || !canTake(save.kit.take, id)}
+            disabled={taking >= inStock || !canTake(save.kit.take, id, Boolean(save.kit.weapon2))}
             onClick={() => apply(takeSupply(save, id, 1))}
           >
             ＋
@@ -237,9 +241,21 @@ function Deal({ id, shelf, save, atEntry, apply }: { id: ItemId; shelf: Shelf; s
   }
   const slot = shelf === 'weapon' ? 'weapon' : 'armor';
   const wearing = save.kit[slot] === id;
+  const isSub = slot === 'weapon' && save.kit.weapon2 === id;
   return (
     <>
       <span className="shop__owned">持っている</span>
+      {slot === 'weapon' && !wearing && (
+        // サブ武器：探索中に持ち替えて使う（メインとちがう種類。道具を持てる数が1つ減る）
+        <button
+          type="button"
+          className={isSub ? 'shop__buy shop__buy--off' : 'shop__buy'}
+          title="持ち替えて使う2本目の武器（メインとちがう種類。道具を持てる数が1つ減る）"
+          onClick={() => apply(equipSub(save, isSub ? null : id))}
+        >
+          {isSub ? 'サブを外す' : 'サブにする'}
+        </button>
+      )}
       <button type="button" className={wearing ? 'shop__buy shop__buy--off' : 'primary shop__buy'} disabled={wearing} onClick={() => apply(equip(save, slot, id))}>
         {wearing ? '装備中' : '装備する'}
       </button>
