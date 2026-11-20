@@ -838,17 +838,25 @@ function enemiesTurn(state: ExploreState): ExploreState {
       continue;
     }
     const def = enemyDef(current);
-    const sees = canSee(s.map, current.pos, s.player, ENEMY_CONFIG.sight);
+    // 待ち伏せ：気付かれていないあいだは、近く（ambushRange）に来るまで気付かない
+    const lying = current.mode === 'wander' && behaviorsOf(def).includes('ambush');
+    const sees = canSee(s.map, current.pos, s.player, lying ? ENEMY_CONFIG.ambushRange : ENEMY_CONFIG.sight);
     let e: MapEnemy = { ...current, justNoticed: false };
 
     if (sees) {
       if (e.mode !== 'chase') {
-        // 気付いたターンは身構えるだけで動かない。プレイヤーに対応する猶予を与える
-        // 記録には書かない（気付いたことは、頭上の「！」で見せる）
-        enemies[i] = { ...e, mode: 'chase', justNoticed: true, lastSeen: s.player };
-        continue;
+        if (!lying) {
+          // 気付いたターンは身構えるだけで動かない。プレイヤーに対応する猶予を与える
+          // 記録には書かない（気付いたことは、頭上の「！」で見せる）
+          enemies[i] = { ...e, mode: 'chase', justNoticed: true, lastSeen: s.player };
+          continue;
+        }
+        // 待ち伏せは、猶予なし。気付いたそのターンに動く（隣なら殴る）
+        e = { ...e, mode: 'chase', justNoticed: true, lastSeen: s.player };
+        s = { ...s, log: [...s.log, `${def.name}が襲いかかってきた`] };
+      } else {
+        e = { ...e, lastSeen: s.player };
       }
-      e = { ...e, lastSeen: s.player };
     } else if (e.mode === 'chase') {
       e = { ...e, mode: 'search', searchTurns: ENEMY_CONFIG.loseTurns };
     } else if (e.mode === 'search') {
@@ -951,6 +959,12 @@ function enemiesTurn(state: ExploreState): ExploreState {
       continue;
     }
 
+    // 待ち伏せ：気付かれていないあいだは、その場から動かない
+    if (e.mode === 'wander' && behaviorsOf(def).includes('ambush')) {
+      enemies[i] = e;
+      continue;
+    }
+
     // 移動（自分のいるマスは、自分にとっては通れないマスに数えない）。ボスは歩いて追ってくる。
     // 強敵は持ち場を守る：ふだんは持ち場の近くをうろつき、気付いたら追うが、持ち場から離れすぎるところへは行かず、あきらめて戻る
     const home = e.elite && !def.boss ? (e.home ?? e.pos) : null; // 持ち場のない前の版の途中保存は、今いる場所を持ち場にする
@@ -979,6 +993,8 @@ function enemiesTurn(state: ExploreState): ExploreState {
     // 歩いたら、その向きが正面になる（盾持ちの盾の向き）
     const faced = samePos(e.pos, current.pos) ? null : stepDir(current.pos, e.pos);
     if (faced) e = { ...e, facing: faced };
+    // 炎の足跡：歩いたら、離れたマスに燃える床を残す
+    if (!samePos(e.pos, current.pos) && behaviorsOf(def).includes('trail')) s = addFields(s, [current.pos], 'fire');
     enter(key(e.pos));
     enemies[i] = e;
   }
