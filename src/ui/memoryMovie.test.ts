@@ -176,12 +176,15 @@ describe('音の予定', () => {
     const times = itemTimes(flameWrites.map((w) => w.kind), flame);
     const chalk = cues.filter((c) => c.kind === 'chalk' || c.kind === 'chalk_bold');
     flameWrites.forEach((w, i) => {
-      const cue = chalk.find((c) => c.at === times[i] && c.power === writeSeconds(w));
+      const lag = w.kind === 'black' ? 0 : MOVIE_CONFIG.write.soundLag;
+      const trim = w.kind === 'black' ? 0 : MOVIE_CONFIG.write.soundTrim;
+      const cue = chalk.find((c) => Math.abs(c.at - (times[i]! + lag)) < 1e-9 && Math.abs(c.power - Math.max(0.3, writeSeconds(w) - trim)) < 1e-9);
       expect(cue).toBeDefined();
       if (w.kind === 'black') expect(cue!.kind).toBe('chalk_bold');
     });
-    expect(chalk.find((c) => c.at === flame.lineAt[0])!.kind).toBe('chalk_bold'); // 声の行
-    expect(chalk.find((c) => c.at === flame.lineAt[1])!.kind).toBe('chalk');
+    const lag = MOVIE_CONFIG.write.soundLag;
+    expect(chalk.find((c) => Math.abs(c.at - (flame.lineAt[0]! + lag)) < 1e-9)!.kind).toBe('chalk_bold'); // 声の行
+    expect(chalk.find((c) => Math.abs(c.at - (flame.lineAt[1]! + lag)) < 1e-9)!.kind).toBe('chalk');
     // 取り消し線を引く音：書いたあと、strikeDelay 後に強く
     expect(chalk.some((c) => Math.abs(c.at - (flame.crossedAt + MOVIE_CONFIG.strikeDelay)) < 1e-9 && c.kind === 'chalk_bold')).toBe(true);
   });

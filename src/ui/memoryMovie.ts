@@ -37,7 +37,7 @@ export const MOVIE_CONFIG = {
   sound: { heartEvery: 0.95, burnCross: 3.4 }, // 音：心音の間隔（秒）／「やめて」が燃えるチリチリの長さ（秒）
   ember: { max: 240, rise: [40, 120] as const, drift: 26, life: [1.6, 3.4] as const, size: [1.6, 4.2] as const }, // 火の粉：上限の数・上る速さ(px/秒)・横ぶれ・寿命(秒)・大きさ(px)
   strikeDelay: 1.1, // 取り消し線が引かれるまで（出てから、秒）
-  write: { perChar: 0.075, min: 0.7, max: 1.8, crossedPerChar: 0.12, crossedMin: 0.5, black: 0.45, strike: 0.5 }, // 文字が書かれていく長さ（秒）：1文字あたり・最短・最長／書いては消した言葉（1文字あたり・最短）／塗りつぶしの帯／取り消し線を引く
+  write: { perChar: 0.075, min: 0.7, max: 1.8, crossedPerChar: 0.12, crossedMin: 0.5, black: 0.45, strike: 0.5, soundLag: 0.08, soundTrim: 0.12 }, // 文字が書かれていく長さ（秒）：1文字あたり・最短・最長／書いては消した言葉（1文字あたり・最短）／塗りつぶしの帯／取り消し線を引く／チョークの音を、文字の見え始めに合わせて遅らせる秒数と、終わりを縮める秒数（文字が現れる最初の1〜2文字は、まだ見えないため）
   breath: { period: 3.2, depth: 0.18 }, // 息づかい：1回の長さ（秒）・光の増減の深さ
 } as const;
 
@@ -269,7 +269,10 @@ export function soundCues(movie: MovieDef, writes: readonly Write[]): SoundCue[]
   writes.forEach((w, i) => {
     const bold = w.kind !== 'line' || movie.loud.includes(line);
     if (w.kind === 'line') line++;
-    cues.push({ at: times[i]!, kind: bold ? 'chalk_bold' : 'chalk', power: writeSeconds(w) });
+    // 文字は、書かれ始めてから少し遅れて見え始めるので、音も少し遅らせ、終わりも縮める（帯は、すぐ見える）
+    const lag = w.kind === 'black' ? 0 : MOVIE_CONFIG.write.soundLag;
+    const trim = w.kind === 'black' ? 0 : MOVIE_CONFIG.write.soundTrim;
+    cues.push({ at: times[i]! + lag, kind: bold ? 'chalk_bold' : 'chalk', power: Math.max(0.3, writeSeconds(w) - trim) });
     if (w.kind === 'crossed') cues.push({ at: times[i]! + MOVIE_CONFIG.strikeDelay, kind: 'chalk_bold', power: MOVIE_CONFIG.write.strike });
   });
   cues.push({ at: movie.echoAt, kind: 'hush', power: 1 });

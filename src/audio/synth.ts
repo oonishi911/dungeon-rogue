@@ -56,6 +56,17 @@ function hiss(ctx: AudioContext, out: AudioNode, at: number, o: { type: BiquadFi
   src.stop(at + o.len + 0.02);
 }
 
+/** 長い場面（記憶の動く場面）の音の出口に置く、割れ止め：重なった音の合計が大きくなりすぎたときだけ、押さえる */
+export function sceneLimiter(ctx: AudioContext): DynamicsCompressorNode {
+  const limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = -4;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 14;
+  limiter.attack.value = 0.002;
+  limiter.release.value = 0.12;
+  return limiter;
+}
+
 /** 音をつぶして荒くする（歪み）：drive が大きいほど、ざらつく */
 function grit(ctx: AudioContext, drive: number): WaveShaperNode {
   const shaper = ctx.createWaveShaper();
@@ -158,8 +169,8 @@ function sizzle(ctx: AudioContext, out: AudioNode, at: number, len: number, leve
  * 下に、細かい粉の息と、黒板の板が鳴る低めのこもりを敷く。len 秒続き、level（1が標準）で強さが変わる
  */
 function chalk(ctx: AudioContext, out: AudioNode, at: number, len: number, level: number) {
-  hiss(ctx, out, at, { type: 'highpass', from: 5200, q: 0.5, len, gain: 0.1 * level, attack: Math.min(0.08, len / 3), offset: Math.random() * 0.5 });
-  hiss(ctx, out, at, { type: 'bandpass', from: 1100, q: 0.7, len, gain: 0.12 * level, attack: Math.min(0.1, len / 3), offset: Math.random() * 0.5 });
+  hiss(ctx, out, at, { type: 'highpass', from: 5200, q: 0.5, len, gain: 0.07 * level, attack: Math.min(0.08, len / 3), offset: Math.random() * 0.5 });
+  hiss(ctx, out, at, { type: 'bandpass', from: 1100, q: 0.7, len, gain: 0.085 * level, attack: Math.min(0.1, len / 3), offset: Math.random() * 0.5 });
   let t = 0;
   while (t < len) {
     const dur = Math.min(len - t + 0.04, 0.14 + Math.random() * 0.2); // 1画の長さ
@@ -170,7 +181,7 @@ function chalk(ctx: AudioContext, out: AudioNode, at: number, len: number, level
       to: up ? 3900 + Math.random() * 700 : 2300 + Math.random() * 500,
       q: 0.5 + Math.random() * 0.5,
       len: dur,
-      gain: (0.5 + Math.random() * 0.2) * level,
+      gain: (0.35 + Math.random() * 0.14) * level,
       attack: Math.min(0.045, dur * 0.4),
       offset: Math.random() * 0.8,
     });

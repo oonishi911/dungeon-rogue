@@ -5,7 +5,7 @@
 import type { Body, SpellId, TraitId, WeaponType } from '../game/types';
 import { loadSoundSettings, writeSoundSettings } from '../storage';
 import { gainOf, type SoundSettings } from './settings';
-import { synthSfx, type SynthKind } from './synth';
+import { sceneLimiter, synthSfx, type SynthKind } from './synth';
 
 // 特性ごとの足音（一歩ごとにこの中から選ぶ。scripts/build-sounds.py の VARIATIONS と数を合わせる）。
 // 無属性は土（低く重い音）、炎は焼けて尖った細かい石（先端が砕けるゴリッという音）、
@@ -257,14 +257,18 @@ export function openSoundBus(): { ctx: AudioContext; out: AudioNode; close: () =
   if (!context || !effects || gainOf(settings) === 0) return null;
   const ctx = context;
   const bus = ctx.createGain();
-  bus.connect(effects);
+  const limiter = sceneLimiter(ctx); // 重なった音が割れないように
+  bus.connect(limiter).connect(effects);
   return {
     ctx,
     out: bus,
     close: () => {
       bus.gain.cancelScheduledValues(ctx.currentTime);
       bus.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
-      setTimeout(() => bus.disconnect(), 600);
+      setTimeout(() => {
+        bus.disconnect();
+        limiter.disconnect();
+      }, 600);
     },
   };
 }

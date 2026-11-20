@@ -36,7 +36,7 @@ export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps
   useEffect(() => {
     const bus = openSoundBus();
     if (!bus) return;
-    const now = bus.ctx.currentTime + 0.05;
+    const now = bus.ctx.currentTime + 0.02; // 画面の時計と同じ瞬間に始まるよう、予約の余裕は小さく
     for (const cue of soundCues(movie, writes)) synthSfx(bus.ctx, bus.out, cue.kind, now + cue.at, cue.power);
     return bus.close;
   }, [movie, writes]);
