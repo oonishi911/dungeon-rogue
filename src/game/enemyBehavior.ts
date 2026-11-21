@@ -6,6 +6,7 @@
 //   主人公に当たればダメージ、避けられて壁にぶつかれば、自分が動けなくなる
 // - 盾持ち（shield）：最後に歩いた向き（facing）の正面にいる相手からの武器の攻撃を、大きく防ぐ。側面・背中、呪文には効かない
 // - 召喚（summoner）：主人公が見えているあいだ、一定のターンごとに、近くのあいている床に、道中でいちばん弱い敵を呼ぶ
+// - 見張り（alarm）：主人公に気付いたとき、近くのまだ気付いていない仲間を、一斉に気付かせる
 
 import { enemyBase } from './data';
 import { ENEMY_CONFIG as C, key, type MapEnemy } from './enemies';
@@ -93,4 +94,22 @@ export function weakestOf(pool: readonly EnemyId[]): EnemyId {
     const [x, y] = [enemyBase(a), enemyBase(b)];
     return y.hp * y.atk < x.hp * x.atk ? b : a;
   });
+}
+
+/**
+ * 見張りの合図が届く仲間（並びの番号）：叫んだ敵から縦横斜め range マス以内（壁ごしでも届く）で、まだ主人公を追っていない敵を、近い順に max 体まで
+ * （同じ近さなら、並びの先のほう）。叫んだ本人・ボス（自分の部屋で待つ）・動けない敵（気絶・凍結）は除く
+ */
+export function alarmTargets(enemies: readonly MapEnemy[], from: MapEnemy, range: number, max: number): number[] {
+  const near: { i: number; d: number }[] = [];
+  enemies.forEach((e, i) => {
+    if (e.uid === from.uid || e.mode === 'chase' || (e.stun ?? 0) > 0 || enemyBase(e.id).boss) return;
+    const d = Math.max(Math.abs(e.pos.x - from.pos.x), Math.abs(e.pos.y - from.pos.y));
+    if (d <= range) near.push({ i, d });
+  });
+  return near
+    .sort((a, b) => a.d - b.d || a.i - b.i)
+    .slice(0, max)
+    .map((n) => n.i)
+    .sort((a, b) => a - b);
 }

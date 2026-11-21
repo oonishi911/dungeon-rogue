@@ -71,7 +71,8 @@ export const FOE_FX = {
     slam: { ms: 340, from: 0.4, to: 1.9, y: 0.06, color: 0xffd27a }, // 槌の地響き：輪が広がる時間・はじめと終わりの半径（マス）・床からの高さ・色
     bolt: { color: 0xb48cff, scale: 1.7 }, // 杖の魔力弾：玉の色・矢の玉に対する大きさ
   },
-  marks: { charge: '#ff5a4a', bump: '#ffe27a', summon: '#c08aff', blocked: '#9fb4c8' }, // 突進の構え・壁にぶつかった・召喚・盾に防がれたときの色
+  marks: { charge: '#ff5a4a', bump: '#ffe27a', summon: '#c08aff', blocked: '#9fb4c8', alarm: '#ffb347' }, // 突進の構え・壁にぶつかった・召喚・盾に防がれた・見張りが叫んだときの色
+  alarm: { color: 0xffb347, ms: 700, ringRadius: 0.44 }, // 見張りの叫びの輪：色・広がりきるまで（ミリ秒）・輪の元の半径（マス。shared.ring の太さの真ん中）
   phase: { colors: [0xb48d35, 0xe07a30, 0xd03030], grow: 0.08, ringGrow: 0.25, roarMs: 900, roarReach: 2.2, shake: 0.3 }, // ボスの段階：足元の輪の色（第1〜3段階）・体の大きくなり方・輪の大きくなり方・咆哮の輪の時間と広がり・揺れ
 } as const;
 // 敵の燃焼・凍結の見た目（2026-11-20）。凍った敵は氷の殻に包まれ、燃えている敵は火の粉を出し続ける
