@@ -22,11 +22,11 @@
     "bossMinions": 0
   },
   "growth": {
-    "startHp": 60,
-    "startMaxHp": 60,
+    "startHp": 10,
+    "startMaxHp": 10,
     "expBase": 5,
     "expStep": 3,
-    "hpPerLevel": 2,
+    "hpPerLevel": 1,
     "atkPerLevel": 1,
     "magPerLevel": 1,
     "maxLevel": 99,
