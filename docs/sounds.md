@@ -57,3 +57,5 @@ python3 scripts/build-sounds.py
 ## 合成の効果音（ファイルなし。2026-11-20）
 
 凍る・燃える・砕く・焼き斬り・杖の共鳴・蒸気・持ち替え・倒した、の8つは、音のファイルを持たず、ゲームの中で Web Audio の発振器とノイズから鳴らす（`src/audio/synth.ts`。鳴らす入口は `playSynth`）。効果音の音量に従う。倒した音は、連続で倒すと高くなる（`src/ui/explore3dConfig.ts` の `KILL_CHAIN`）。
+
+記憶の動く場面（炎の魔獣）の音（炎の音・地鳴り・大きな声・息・心音・耳鳴り・書く音・燃える音・和音など）も、合成で鳴らす。外の音は、布団の中でこもる。左右の広がり・場面の響き・スマホで聞こえる倍音を足してある（作りは `src/audio/sceneSynth.ts`・`src/audio/synthParts.ts`）。`docs/memory-movie.md`。

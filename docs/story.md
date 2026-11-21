@@ -106,7 +106,7 @@
 | 相談窓口 | 厚生労働省「まもろうよ こころ」の電話相談のページで確認した3つ（よりそいホットライン、いのちの電話、こころの健康相談統一ダイヤル）と、119・110。最新の連絡先は、同ページへのリンクで見られる |
 | ダンジョンの見た目・音 | 変えない |
 
-セーブデータに、取り戻した記憶（倒したボスの ID を、思い出した順に）、かけらの数、注意書きを読んだかを残す。文章は src/game/story.ts、記憶の画面は src/ui/MemoryScreen.tsx と src/ui/scrawl.ts、注意書きは src/ui/NoticeScreen.tsx。
+セーブデータに、取り戻した記憶（倒したボスの ID を、思い出した順に）、かけらの数、注意書きを読んだかを残す。文章は src/game/story.ts、記憶の画面は src/ui/MemoryScreen.tsx と src/ui/scrawl.ts（炎の魔獣は、時間で動く場面。docs/memory-movie.md）、注意書きは src/ui/NoticeScreen.tsx。
 
 ## 店と情報屋（物語に寄せた。2026-11-17）
 

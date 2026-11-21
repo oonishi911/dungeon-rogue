@@ -5,7 +5,7 @@
 import type { Body, SpellId, TraitId, WeaponType } from '../game/types';
 import { loadSoundSettings, writeSoundSettings } from '../storage';
 import { gainOf, type SoundSettings } from './settings';
-import { synthSfx, type SynthKind } from './synth';
+import { sceneLimiter, synthSfx, type SynthKind } from './synth';
 
 // 特性ごとの足音（一歩ごとにこの中から選ぶ。scripts/build-sounds.py の VARIATIONS と数を合わせる）。
 // 無属性は土（低く重い音）、炎は焼けて尖った細かい石（先端が砕けるゴリッという音）、
@@ -247,6 +247,30 @@ export function playFootstep(trait: TraitId) {
 export function playSynth(kind: SynthKind, pitch = 1, delay = 0) {
   if (!context || !effects || gainOf(settings) === 0) return;
   synthSfx(context, effects, kind, context.currentTime + delay, pitch);
+}
+
+/**
+ * 長い場面（記憶の動く場面）の音をまとめて予約するための出口。ctx.currentTime を基準に、synthSfx で好きな時刻の音を予約し、
+ * 場面が終わったら close() で、予約した音ごとすぐ静かにする。音の準備の前や、音がオフのときは null（鳴らさないだけ）
+ */
+export function openSoundBus(): { ctx: AudioContext; out: AudioNode; close: () => void } | null {
+  if (!context || !effects || gainOf(settings) === 0) return null;
+  const ctx = context;
+  const bus = ctx.createGain();
+  const limiter = sceneLimiter(ctx); // 重なった音が割れないように
+  bus.connect(limiter).connect(effects);
+  return {
+    ctx,
+    out: bus,
+    close: () => {
+      bus.gain.cancelScheduledValues(ctx.currentTime);
+      bus.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+      setTimeout(() => {
+        bus.disconnect();
+        limiter.disconnect();
+      }, 600);
+    },
+  };
 }
 
 /** 音量を試すときの音 */
