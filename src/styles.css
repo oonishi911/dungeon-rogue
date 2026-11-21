@@ -3322,6 +3322,18 @@ button {
   animation-delay: calc(2.5s + var(--i, 0) * 0.7s);
 }
 
+/* 折り返してよい区切り（scrawl.ts の phrases）：まとまりの中では折り返さない（「。」が行の頭に来ない・言葉の途中で切れない）。
+   まとまりが画面の幅より長いときだけ、その中で折り返す */
+.scrawl__chunk {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.scrawl__keep {
+  display: inline-block;
+  white-space: nowrap;
+}
+
 /* 一文字ごとに、同じ色の太い縁を付けて、筆でなぞったような太さにする */
 .scrawl__ch {
   -webkit-text-stroke: 0.065em currentColor;
@@ -3497,7 +3509,7 @@ button {
 /* 細い画面の端から文字がはみ出さないよう、少し内側に寄せ、少し小さくし、1行ずつの横ずれ（shift）を半分にする */
 .mm__scrawl {
   padding-inline: 3%;
-  font-size: 1.5rem;
+  font-size: min(1.5rem, 7vw); /* とても狭い画面では、少し小さく（390px 以上は、これまでと同じ） */
 }
 
 .mm__scrawl .scrawl__line,
@@ -3519,6 +3531,8 @@ button {
 /* 倒したボスの一文：ぼやけて広がった字が、静かに焦点を結ぶ */
 .mm__echo {
   color: #d2cabe;
+  line-break: strict; /* 倒したボスの一文は、ふつうの文字なので、ブラウザの折り返しに任せる（句読点を行の頭に置かない・文節で折り返す） */
+  word-break: auto-phrase;
   animation: mm-echo-in 2.8s cubic-bezier(0.2, 0.6, 0.2, 1) forwards;
   animation-delay: calc(var(--at, 0) * 1s);
 }
@@ -3575,7 +3589,7 @@ button {
   animation-delay: calc(var(--at, 0) * 1s), calc(var(--at, 0) * 1s), calc(var(--at, 0) * 1s);
   animation-iteration-count: 1, 1, 60;
   animation-fill-mode: forwards, both, both;
-  font-size: 1.32em;
+  font-size: min(1.32em, 8.6vw); /* とても狭い画面では、大きな声の行も、少し小さく */
   text-shadow: 0 0 0.5em rgba(255, 70, 30, 0.95), 0 0 1.2em rgba(200, 30, 20, 0.7);
 }
 
