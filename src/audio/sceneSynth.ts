@@ -12,7 +12,8 @@ import { grit, hiss, noiseLoop, panTo, presence, roomOf, tone, wobble } from './
 /**
  * 場面の音の種類（pitch の意味）：
  * roar 強さ・rumble 長さ（秒）・blaze 長さ・swell 長さ・heartbeat 強さ・breath_in/breath_out 強さ・ring 長さ・hush（なし）・pad 長さ・
- * sizzle/sizzle_soft 長さ・ignite 強さ・chalk/chalk_bold 長さ・slash 高さの倍率
+ * sizzle/sizzle_soft 長さ・ignite 強さ・chalk/chalk_bold 長さ・slash 高さの倍率・
+ * （氷）wind 長さ・call 強さ・frost 長さ・creak 長さ・crack 高さの倍率・shatter 大きさ（1：言葉、2以上：氷の巨像）・exhale 強さ・bells 長さ
  */
 export type SceneKind =
   | 'roar'
@@ -30,7 +31,15 @@ export type SceneKind =
   | 'ignite'
   | 'chalk'
   | 'chalk_bold'
-  | 'slash';
+  | 'slash'
+  | 'wind'
+  | 'call'
+  | 'frost'
+  | 'creak'
+  | 'crack'
+  | 'shatter'
+  | 'exhale'
+  | 'bells';
 
 /** 長い場面の音の出口に置く、割れ止め：重なった音の合計が大きくなりすぎたときだけ、押さえる */
 export function sceneLimiter(ctx: AudioContext): DynamicsCompressorNode {
@@ -448,6 +457,295 @@ function ignite(ctx: AudioContext, out: AudioNode, when: number, p: number) {
   tone(ctx, presence(ctx, out, 0.3), when, { freq: 58, endFreq: 96, len: 0.75, gain: 0.3 * p, attack: 0.04 });
 }
 
+// ───────── 氷の場面の音 ─────────
+
+/** 冷たい風：左右で違う、ゆっくり吹きつけるノイズの風と、うつろに鳴る細い笛のような音、足もとの低い冷気。len 秒（はじめと終わりは、ゆっくり） */
+function wind(ctx: AudioContext, out: AudioNode, at: number, len: number) {
+  const env = ctx.createGain();
+  env.gain.value = 0; // 最初の予定の前は、音を出さない
+  env.gain.setValueAtTime(0.0001, at);
+  env.gain.linearRampToValueAtTime(0.16, at + Math.min(2, len / 4));
+  env.gain.setValueAtTime(0.16, at + Math.max(0.1, len - 2));
+  env.gain.linearRampToValueAtTime(0.0001, at + len);
+  env.connect(out);
+  const sides: [number, number, number, number][] = [
+    // [左右, 風の帯の揺れの速さ, 吹きつけの速さ, 素材の位置]
+    [-0.6, 0.07, 0.13, 0.3],
+    [0.6, 0.11, 0.19, 2.4],
+  ];
+  for (const [side, sweep, gust, offset] of sides) {
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 0.8;
+    band.frequency.value = 900;
+    wobble(ctx, band.frequency, at, len, sweep, 420);
+    const gusts = ctx.createGain();
+    gusts.gain.value = 0.6;
+    wobble(ctx, gusts.gain, at, len, gust, 0.3);
+    wobble(ctx, gusts.gain, at, len, gust * 2.3, 0.12);
+    noiseLoop(ctx, at, len, offset, 'pink').connect(band).connect(gusts).connect(panTo(ctx, env, side));
+  }
+  const whistle = ctx.createBiquadFilter(); // うつろな笛の音（すき間を抜ける風）
+  whistle.type = 'bandpass';
+  whistle.Q.value = 18;
+  whistle.frequency.value = 1250;
+  wobble(ctx, whistle.frequency, at, len, 0.05, 180);
+  const whistleLevel = ctx.createGain();
+  whistleLevel.gain.value = 0.35;
+  wobble(ctx, whistleLevel.gain, at, len, 0.09, 0.25);
+  noiseLoop(ctx, at, len, 1.3).connect(whistle).connect(whistleLevel).connect(panTo(ctx, env, 0.2));
+  const low = ctx.createBiquadFilter(); // 足もとの、低い冷気
+  low.type = 'lowpass';
+  low.frequency.value = 120;
+  const lowLevel = ctx.createGain();
+  lowLevel.gain.value = 0.22;
+  noiseLoop(ctx, at, len, 3.3, 'brown').connect(low).connect(lowLevel).connect(env);
+}
+
+/**
+ * あの子が呼ぶ声：人の声そのものではなく、息まじりの、笛のようなやわらかい音で「おーい」の抑揚（上がって、のばして、下がる）。
+ * 何も返さない空っぽへ、こだま（左右に跳ね返り、だんだん遠く、こもっていく）だけが返る。p は強さ（弱いほど短く、小さい）
+ */
+function call(ctx: AudioContext, out: AudioNode, at: number, p: number) {
+  const len = 0.65 + 0.35 * p;
+  const end = at + len;
+  const voice = ctx.createGain();
+  voice.gain.value = 0;
+  voice.gain.setValueAtTime(0.0001, at);
+  voice.gain.linearRampToValueAtTime(0.2 * p, at + 0.09);
+  voice.gain.setValueAtTime(0.2 * p, end - 0.3);
+  voice.gain.exponentialRampToValueAtTime(0.0001, end);
+  const soft = ctx.createBiquadFilter();
+  soft.type = 'lowpass';
+  soft.frequency.value = 1900;
+  voice.connect(soft).connect(out);
+  // 高さの動き：ド → レ（上がって）→ のばして → シ♭（下がる）
+  const pitch = (param: AudioParam, k: number) => {
+    param.setValueAtTime(523.25 * k, at);
+    param.exponentialRampToValueAtTime(587.33 * k, at + 0.12);
+    param.setValueAtTime(587.33 * k, end - 0.32);
+    param.exponentialRampToValueAtTime(466.16 * k, end - 0.05);
+  };
+  [
+    ['sine', 1, 1],
+    ['triangle', 1, 0.25],
+    ['sine', 2, 0.12],
+  ].forEach(([type, k, gain]) => {
+    const osc = ctx.createOscillator();
+    osc.type = type as OscillatorType;
+    pitch(osc.frequency, k as number);
+    const depth = ctx.createGain(); // 声のゆれ：のばすところで、少しだけ
+    depth.gain.value = 0;
+    depth.gain.setValueAtTime(0, at + 0.2);
+    depth.gain.linearRampToValueAtTime(10, at + 0.45);
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 5.5;
+    lfo.connect(depth).connect(osc.detune);
+    lfo.start(at);
+    lfo.stop(end + 0.05);
+    const level = ctx.createGain();
+    level.gain.value = gain as number;
+    osc.connect(level).connect(voice);
+    osc.start(at);
+    osc.stop(end + 0.05);
+  });
+  // 息のかすれ：声の高さのあたりのノイズ
+  const breath = ctx.createBiquadFilter();
+  breath.type = 'bandpass';
+  breath.Q.value = 2;
+  pitch(breath.frequency, 2);
+  const breathLevel = ctx.createGain();
+  breathLevel.gain.value = 0.5;
+  noiseLoop(ctx, at, len, 0.8, 'pink').connect(breath).connect(breathLevel).connect(voice);
+  // こだま：左右に跳ね返りながら、だんだん遠く（こもって、小さく）なる
+  const echoIn = ctx.createGain();
+  echoIn.gain.value = 0.55;
+  soft.connect(echoIn);
+  const left = ctx.createDelay(1);
+  const right = ctx.createDelay(1);
+  left.delayTime.value = 0.38;
+  right.delayTime.value = 0.38;
+  const fadeL = ctx.createGain();
+  const fadeR = ctx.createGain();
+  fadeL.gain.value = 0.5;
+  fadeR.gain.value = 0.5;
+  const dullL = ctx.createBiquadFilter();
+  const dullR = ctx.createBiquadFilter();
+  dullL.type = 'lowpass';
+  dullR.type = 'lowpass';
+  dullL.frequency.value = 2200;
+  dullR.frequency.value = 2200;
+  echoIn.connect(left);
+  left.connect(panTo(ctx, out, -0.8));
+  left.connect(dullL).connect(fadeL).connect(right);
+  right.connect(panTo(ctx, out, 0.8));
+  right.connect(dullR).connect(fadeR).connect(left);
+}
+
+/** 霜が広がるきらめき：とても高いノイズと、ゆっくり上がっていく細いガラスの音が、静かにふるえる。len 秒 */
+function frostShimmer(ctx: AudioContext, out: AudioNode, at: number, len: number) {
+  const env = ctx.createGain();
+  env.gain.value = 0;
+  env.gain.setValueAtTime(0.0001, at);
+  env.gain.linearRampToValueAtTime(1, at + len * 0.6);
+  env.gain.linearRampToValueAtTime(0.0001, at + len);
+  env.connect(out);
+  [-0.5, 0.5].forEach((side, i) => {
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 1.2;
+    band.frequency.value = 7500;
+    wobble(ctx, band.frequency, at, len, 0.3 + i * 0.13, 1500);
+    const level = ctx.createGain();
+    level.gain.value = 0.05;
+    noiseLoop(ctx, at, len, 0.6 + i * 1.7).connect(band).connect(level).connect(panTo(ctx, env, side));
+  });
+  [
+    [2637, -0.5, 6.1],
+    [3520, 0.1, 7.3],
+    [4186, 0.6, 8.9],
+  ].forEach(([f, side, rate]) => {
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(f!, at);
+    osc.frequency.linearRampToValueAtTime(f! * 1.02, at + len);
+    const shimmer = ctx.createGain();
+    shimmer.gain.value = 0.006;
+    wobble(ctx, shimmer.gain, at, len, rate!, 0.004);
+    osc.connect(shimmer).connect(panTo(ctx, env, side!));
+    osc.start(at);
+    osc.stop(at + len + 0.05);
+  });
+}
+
+/** 凍りついていく音：ガラスがきしむような高い響き（少しずつ上がり、うなる）と、氷が張る低いうめき。だんだん大きくなり、終わりで、ぴたりと止まる。len 秒 */
+function creak(ctx: AudioContext, out: AudioNode, at: number, len: number) {
+  const end = at + len;
+  const env = ctx.createGain();
+  env.gain.value = 0;
+  env.gain.setValueAtTime(0.0001, at);
+  env.gain.linearRampToValueAtTime(1, end - 0.02);
+  env.gain.linearRampToValueAtTime(0, end + 0.04); // ぴたりと止まる
+  env.connect(out);
+  [
+    [1046.5, -0.4],
+    [1661.2, 0.3],
+    [2349.3, 0.6],
+  ].forEach(([f, side], i) => {
+    [0, 3].forEach((beat) => {
+      const osc = ctx.createOscillator();
+      osc.frequency.setValueAtTime(f! + beat, at);
+      osc.frequency.linearRampToValueAtTime((f! + beat) * 1.04, end);
+      const level = ctx.createGain();
+      level.gain.value = 0.02 / (i + 1);
+      osc.connect(level).connect(panTo(ctx, env, side!));
+      osc.start(at);
+      osc.stop(end + 0.06);
+    });
+  });
+  const groan = ctx.createBiquadFilter(); // 氷が張る、低いうめき
+  groan.type = 'bandpass';
+  groan.Q.value = 3;
+  groan.frequency.setValueAtTime(140, at);
+  groan.frequency.linearRampToValueAtTime(110, end);
+  const groanLevel = ctx.createGain();
+  groanLevel.gain.value = 0.5;
+  wobble(ctx, groanLevel.gain, at, len, 1.7, 0.3);
+  noiseLoop(ctx, at, len + 0.06, 2.2, 'brown').connect(groan).connect(groanLevel).connect(presence(ctx, env, 0.3));
+}
+
+/** ひびが入る音：鋭くはじける音と、ガラスが細く鳴る響き（3つの高さ）と、小さな低い衝撃。1回ずつ（粒を並べない）。p は高さの倍率 */
+function crack(ctx: AudioContext, out: AudioNode, when: number, p: number) {
+  hiss(ctx, out, when, { type: 'highpass', from: 2500, len: 0.035, gain: 0.5, attack: 0.0008 });
+  [3100, 4700, 6300].forEach((f, i) => hiss(ctx, out, when, { type: 'bandpass', from: f * p, to: f * p * 0.97, q: 25, len: 0.45 - i * 0.1, gain: 1.4 - i * 0.3, attack: 0.001, offset: i * 0.7 }));
+  tone(ctx, out, when, { freq: 140 * p, endFreq: 70, len: 0.12, gain: 0.22, attack: 0.002 });
+}
+
+/**
+ * 砕ける音：はじける雑音と、ガラスの欠片が鳴る、たくさんの高い響き（はじめに密に、だんだんまばらに。左右に散らす）。
+ * size が大きい（氷の巨像）ときは、低く重い崩れと、あとから落ちてくる欠片の音が加わる。size は大きさ（1：言葉、2以上：氷の巨像）
+ */
+function shatter(ctx: AudioContext, out: AudioNode, when: number, size: number) {
+  const k = Math.min(size, 1.6);
+  hiss(ctx, panTo(ctx, out, -0.4), when, { type: 'highpass', from: 1800, to: 900, len: 0.26, gain: 0.34 * k, attack: 0.001 });
+  hiss(ctx, panTo(ctx, out, 0.4), when, { type: 'highpass', from: 1900, to: 950, len: 0.26, gain: 0.34 * k, attack: 0.001, offset: 1.9 });
+  const spots = [-0.8, -0.4, 0, 0.4, 0.8].map((side) => panTo(ctx, out, side));
+  const ping = (at: number, gain: number) => {
+    const f = 2200 + Math.random() * 6500;
+    const len = 0.08 + Math.random() * 0.37;
+    const spot = spots[Math.floor(Math.random() * spots.length)]!;
+    tone(ctx, spot, at, { freq: f, endFreq: f * 0.995, len, gain, attack: 0.001 });
+    tone(ctx, spot, at, { freq: f * 2.76, len: len * 0.5, gain: gain * 0.4, attack: 0.001 }); // 鐘のような、ずれた倍音
+  };
+  const n = Math.round(18 * size);
+  for (let i = 0; i < n; i++) {
+    const r = Math.random();
+    ping(when + r * r * (0.5 + 0.3 * size), (0.05 + Math.random() * 0.07) * (1 - 0.6 * r));
+  }
+  if (size >= 1.5) {
+    const body = presence(ctx, out, 0.35);
+    tone(ctx, body, when, { freq: 70, endFreq: 32, len: 1.8, gain: 0.45, attack: 0.004 });
+    hiss(ctx, body, when, { type: 'lowpass', from: 300, to: 80, q: 0.7, len: 2.0, gain: 0.3, attack: 0.004, color: 'brown' });
+    for (let i = 0; i < 14; i++) ping(when + 0.5 + Math.random() * 1.6, 0.02 + Math.random() * 0.03); // あとから落ちてくる欠片
+  }
+}
+
+/** 白い息：静かに、ゆっくり吐く「はぁー」（息の響きの山を2つと、空気のかすれ）。level は強さ */
+function exhale(ctx: AudioContext, out: AudioNode, at: number, level: number) {
+  hiss(ctx, out, at, { type: 'bandpass', from: 1000, to: 700, q: 1, len: 1.6, gain: 0.12 * level, attack: 0.35, offset: 0.4, color: 'pink' });
+  hiss(ctx, out, at, { type: 'bandpass', from: 2600, to: 2000, q: 1.8, len: 1.4, gain: 0.05 * level, attack: 0.4, offset: 1.4, color: 'pink' });
+  hiss(ctx, out, at, { type: 'highpass', from: 5000, len: 1.2, gain: 0.02 * level, attack: 0.4, offset: 2.1 });
+}
+
+/** 最後の、まばらな鐘：澄んだ鐘の音が、間をあけて5つ鳴り（左右にかわるがわる）、下に、冷たく静かな和音が、ゆっくり立ち上がる。len 秒 */
+function bells(ctx: AudioContext, out: AudioNode, at: number, len: number) {
+  const room = ctx.createConvolver();
+  room.buffer = roomOf(ctx);
+  const wet = ctx.createGain();
+  wet.gain.value = 0.4;
+  room.connect(wet).connect(out);
+  const notes: [number, number, number][] = [
+    // [高さ, 鳴る時刻（秒）, 左右]
+    [587.33, 0, -0.3],
+    [880, 0.9, 0.35],
+    [698.46, 1.9, -0.45],
+    [1318.5, 3.2, 0.4],
+    [1174.7, 4.6, 0],
+  ];
+  for (const [f, when, side] of notes) {
+    const dest = panTo(ctx, out, side);
+    const t0 = at + when;
+    tone(ctx, dest, t0, { freq: f, len: 3.4, gain: 0.05, attack: 0.004 });
+    tone(ctx, dest, t0, { freq: f * 2, len: 1.4, gain: 0.018, attack: 0.004 });
+    tone(ctx, dest, t0, { freq: f * 4.07, len: 0.5, gain: 0.008, attack: 0.002 });
+    tone(ctx, room, t0, { freq: f, len: 3.4, gain: 0.05, attack: 0.004 });
+  }
+  const env = ctx.createGain(); // 冷たく静かな和音（レ・ラ・ミ）
+  env.gain.value = 0;
+  env.gain.setValueAtTime(0.0001, at);
+  env.gain.linearRampToValueAtTime(0.022, at + 3);
+  env.gain.setValueAtTime(0.022, at + Math.max(3.2, len - 2.5));
+  env.gain.linearRampToValueAtTime(0.0001, at + len);
+  const soft = ctx.createBiquadFilter();
+  soft.type = 'lowpass';
+  soft.frequency.value = 1200;
+  soft.connect(env).connect(out);
+  env.connect(room);
+  [
+    [293.66, -0.4],
+    [440, 0.4],
+    [659.26, 0],
+  ].forEach(([f, side]) => {
+    [-6, 6].forEach((cents) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = f! * Math.pow(2, cents / 1200);
+      osc.connect(panTo(ctx, soft, side! + (cents < 0 ? -0.25 : 0.25)));
+      osc.start(at);
+      osc.stop(at + len + 0.05);
+    });
+  });
+}
+
 /** 場面の音を1つ鳴らす。when は鳴らし始める時刻（AudioContext の時間） */
 export function sceneSfx(ctx: AudioContext, out: AudioNode, kind: SceneKind, when: number, pitch = 1) {
   switch (kind) {
@@ -504,6 +802,30 @@ export function sceneSfx(ctx: AudioContext, out: AudioNode, kind: SceneKind, whe
       tone(ctx, out, when, { freq: 260 * p, endFreq: 80, len: 0.26, gain: 0.26, attack: 0.006 }); // 空気を切る低い唸り
       break;
     }
+    case 'wind':
+      wind(ctx, out, when, pitch);
+      break;
+    case 'call':
+      call(ctx, out, when, pitch);
+      break;
+    case 'frost':
+      frostShimmer(ctx, out, when, pitch);
+      break;
+    case 'creak':
+      creak(ctx, out, when, pitch);
+      break;
+    case 'crack': // 左右の動きは movieSound.ts（ひびの向き）
+      crack(ctx, out, when, pitch);
+      break;
+    case 'shatter':
+      shatter(ctx, out, when, pitch);
+      break;
+    case 'exhale':
+      exhale(ctx, out, when, pitch);
+      break;
+    case 'bells':
+      bells(ctx, out, when, pitch);
+      break;
     default: {
       const unreachable: never = kind;
       return unreachable;
