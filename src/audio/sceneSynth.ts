@@ -7,13 +7,17 @@
 // - 低い音（心音・地鳴り・声の衝撃）は、倍音を足して、スマホのスピーカーでも聞こえるようにした（presence）
 // - 大きな声は、口の形（母音「お」→「あ」の響き）・声のゆれ・低い唸り・息の混じりを重ね、左右の壁の跳ね返りを足した
 
+import { DARK_KINDS, darkSfx, type DarkKind } from './scenes/darkSynth';
+import { LIGHT_KINDS, lightSfx, type LightKind } from './scenes/lightSynth';
+import { OGRE_KINDS, ogreSfx, type OgreKind } from './scenes/ogreSynth';
 import { grit, hiss, noiseLoop, panTo, presence, roomOf, tone, wobble } from './synthParts';
 
 /**
  * 場面の音の種類（pitch の意味）：
  * roar 強さ・rumble 長さ（秒）・blaze 長さ・swell 長さ・heartbeat 強さ・breath_in/breath_out 強さ・ring 長さ・hush（なし）・pad 長さ・
  * sizzle/sizzle_soft 長さ・ignite 強さ・chalk/chalk_bold 長さ・slash 高さの倍率・
- * （氷）wind 長さ・call 強さ・frost 長さ・creak 長さ・crack 高さの倍率・shatter 大きさ（1：言葉、2以上：氷の巨像）・exhale 強さ・bells 長さ
+ * （氷）wind 長さ・call 強さ・frost 長さ・creak 長さ・crack 高さの倍率・shatter 大きさ（1：言葉、2以上：氷の巨像）・exhale 強さ・bells 長さ・
+ * （鬼・光・闇）scenes/ogreSynth.ts・lightSynth.ts・darkSynth.ts を見る
  */
 export type SceneKind =
   | 'roar'
@@ -39,7 +43,10 @@ export type SceneKind =
   | 'crack'
   | 'shatter'
   | 'exhale'
-  | 'bells';
+  | 'bells'
+  | OgreKind
+  | LightKind
+  | DarkKind;
 
 /** 長い場面の音の出口に置く、割れ止め：重なった音の合計が大きくなりすぎたときだけ、押さえる */
 export function sceneLimiter(ctx: AudioContext): DynamicsCompressorNode {
@@ -747,7 +754,14 @@ function bells(ctx: AudioContext, out: AudioNode, at: number, len: number) {
 }
 
 /** 場面の音を1つ鳴らす。when は鳴らし始める時刻（AudioContext の時間） */
+const isOgre = (k: SceneKind): k is OgreKind => OGRE_KINDS.has(k);
+const isLight = (k: SceneKind): k is LightKind => LIGHT_KINDS.has(k);
+const isDark = (k: SceneKind): k is DarkKind => DARK_KINDS.has(k);
+
 export function sceneSfx(ctx: AudioContext, out: AudioNode, kind: SceneKind, when: number, pitch = 1) {
+  if (isOgre(kind)) return ogreSfx(ctx, out, kind, when, pitch);
+  if (isLight(kind)) return lightSfx(ctx, out, kind, when, pitch);
+  if (isDark(kind)) return darkSfx(ctx, out, kind, when, pitch);
   switch (kind) {
     case 'roar':
       roar(ctx, out, when, pitch);

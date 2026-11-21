@@ -2,7 +2,7 @@
 // 文章は story.ts の MEMORIES をそのまま使い、ここでは「いつ・どう動かすか」だけを決める（時間は秒）。
 // 画面の揺れ・光・炎の勢い・闇・音のこもり方は、時刻 t から決まる関数にしてある（乱数は使わない。同じ時刻なら同じ絵になる）。
 // 炎・煙・火の粉・灰の粒だけは、乱数で出す（乱数の関数は外から渡す。テストでは決まった並びを渡す）。
-// 場面には型がある（style）：炎（炎の魔獣）と氷（氷の巨像）。型ごとに、描き方（flamePainter.ts・icePainter.ts）と音が違う。
+// 場面には型がある（style）：炎（炎の魔獣）・氷（氷の巨像）・鬼（鬼の首領）・光（光の守護者）・闇（闇の王）。型ごとに、描き方（○○Painter.ts）と音が違う。
 // MOVIES にないボスは、これまでの記憶の画面のまま。
 // 表現の約束（docs/story.md）：家の中の場面や人物は描かない。感情の形を、光・炎・闇・揺れ・文字・音で表す。
 
@@ -69,7 +69,34 @@ export interface IceMovie extends MovieBase {
   creak: readonly [number, number]; // 凍りついていくあいだ（音：ガラスがきしむ。終わりで、ぴたりと止まる）
 }
 
-export type MovieDef = FlameMovie | IceMovie;
+/** 鬼の場面（自責）：上下から押しつぶす帯・責める打撃の跡・ほこり。打撃は、だんだん真ん中に寄り、こもって、心音に変わる */
+export interface OgreMovie extends MovieBase {
+  style: 'ogre';
+  press: Keys; // 上下から押しつぶす帯の深さ（0〜1）
+  dust: Keys; // 上から落ちるほこりの勢い（1秒に出る数）
+  mergeAt: number; // 責める声（重なった文字の影）が、ひとつの声（自分の声）に重なりきる時刻
+}
+
+/** 光の場面（裏切られた期待）：上からの光の筋・舞い上がる光の粒。まぶしいほど明るくなったあと、光が崩れ落ちる */
+export interface LightMovie extends MovieBase {
+  style: 'light';
+  rays: Keys; // 光の筋の強さ（0〜1）
+  motes: Keys; // 光の粒が出る勢い（1秒に出る数）
+  fall: Keys; // 光の粒が落ちる度合い（0：舞い上がる〜1：落ちる）
+  collapseAt: number; // 光が崩れ落ちる時刻（大丈夫では、なかった）
+}
+
+/** 闇の場面（消えたい願い）：夜の粒・墨のように迫る闇。小さな光が現れて、最後まで消えない。言葉は墨に溶ける */
+export interface DarkMovie extends MovieBase {
+  style: 'dark';
+  motes: Keys; // 夜の粒が出る勢い（1秒に出る数）
+  lightAt: number; // 小さな光が現れる時刻（あの子は、まだ小さかった）
+  smallLight: Keys; // 小さな光の明るさ（現れてからは、0 にしない）
+  seeps: readonly number[]; // 闇が染み込んでくる音の時刻
+}
+
+export type MovieDef = FlameMovie | IceMovie | OgreMovie | LightMovie | DarkMovie;
+export type MovieStyle = MovieDef['style'];
 
 export const MOVIE_CONFIG = {
   quake: { decay: 0.6, freq: 13, amp: 20, rot: 1.3 }, // 揺れ：減っていく時間（秒）・揺れの速さ（Hz）・大きさ（px）・傾き（度）
@@ -94,6 +121,7 @@ export const MOVIE_CONFIG = {
   write: { perChar: 0.075, min: 0.7, max: 1.8, crossedPerChar: 0.12, crossedMin: 0.5, black: 0.45, strike: 0.5, soundLag: 0.08, soundTrim: 0.12 }, // 文字が書かれていく長さ（秒）：1文字あたり・最短・最長／書いては消した言葉（1文字あたり・最短）／塗りつぶしの帯／取り消し線を引く／チョークの音を、文字の見え始めに合わせて遅らせる秒数と、終わりを縮める秒数（文字が現れる最初の1〜2文字は、まだ見えないため）
   breath: { period: 3.2, depth: 0.18 }, // 息づかい：1回の長さ（秒）・光の増減の深さ
   mist: { lead: 0.8, every: 2.0 }, // 白い息（氷）：息をひそめてから最初の息まで（秒）・息の間隔（秒）
+  glareLead: 0.6, // 光：まぶしさの音が、光の守護者が消える瞬間より前から高まる長さ（秒）
 } as const;
 
 /**
@@ -284,7 +312,250 @@ export const ICE_COLOSSUS: IceMovie = {
   heart: { from: 8.2, to: 14.0, every: [1.05, 1.7], power: [0.55, 0.28] },
 };
 
-export const MOVIES: Readonly<Record<string, MovieDef>> = { flame_beast: FLAME_BEAST, ice_colossus: ICE_COLOSSUS };
+/**
+ * 鬼の首領（自責）：
+ * 錆びた鉄のような暗い赤 → 責める打撃が、左右から次々に（跡が残り、上下から帯が押しつぶしてくる。だんだん速く）→
+ * 責める声は、自分の声になっていた：打撃は真ん中に寄り、こもって、心音に変わる。重なった文字の影が、ひとつに重なる →
+ * 「ごめんなさい」と書いて消す。傷が走り、言葉が押しつぶされる → 鬼の首領が膝をつく：いちばん重い衝撃。押しつぶす帯が離れ、静かな和音
+ */
+export const OGRE_CHIEF: OgreMovie = {
+  style: 'ogre',
+  duration: 21.5,
+  lineAt: [1.2, 8.2],
+  loud: [],
+  crossedAt: 13.2,
+  breakAt: 15.3,
+  breakFor: 0.5,
+  blackDelay: 1.0,
+  echoAt: 17.0,
+  hits: [
+    { at: 3.3, power: 0.75 },
+    { at: 4.4, power: 0.85 },
+    { at: 5.3, power: 0.95 },
+    { at: 6.0, power: 1.0 },
+    { at: 6.6, power: 0.95 },
+    { at: 7.1, power: 1.0 },
+    { at: 8.7, power: 0.7 },
+    { at: 9.5, power: 0.6 },
+    { at: 10.3, power: 0.5 },
+  ],
+  impacts: [
+    { at: 15.3, power: 0.45 },
+    { at: 17.0, power: 1.3 },
+  ],
+  glow: [
+    [0, 0],
+    [1.0, 0.35],
+    [3.3, 0.45],
+    [7.1, 0.65],
+    [8.2, 0.4],
+    [11, 0.28],
+    [13, 0.15],
+    [17, 0.5],
+    [18, 0.25],
+    [21.5, 0.2],
+  ],
+  enclose: [
+    [0, 0],
+    [8.2, 0.1],
+    [11, 0.42],
+    [13, 0.5],
+    [16.9, 0.55],
+    [18, 0.2],
+    [21.5, 0.15],
+  ],
+  muffle: [
+    [0, 16000],
+    [8.2, 16000],
+    [10.6, 700],
+    [16.9, 600],
+    [17.0, 16000],
+  ],
+  press: [
+    [0, 0],
+    [3, 0.05],
+    [7.2, 0.55],
+    [8.2, 0.5],
+    [11, 0.75],
+    [13, 0.8],
+    [16.9, 0.86],
+    [17.05, 0.95],
+    [17.7, 0.1],
+    [18.6, 0],
+    [21.5, 0],
+  ],
+  dust: [
+    [0, 2],
+    [3, 4],
+    [7.1, 10],
+    [8.2, 6],
+    [13, 3],
+    [17, 4],
+    [18.5, 5],
+    [21.5, 2],
+  ],
+  mergeAt: 11.0,
+  breath: null,
+  heart: { from: 9.9, to: 13.0, every: [0.85, 0.8], power: [0.45, 0.65] },
+};
+
+/**
+ * 光の守護者（裏切られた期待）：
+ * 上から、あたたかい光がさす → 「きっと大丈夫」：約束の鐘。光の筋が現れ、光の粒が舞い上がる →
+ * 「あの子は、それを信じた」：あたたかい和音がふくらみ、光は、まぶしすぎるほど明るくなる →
+ * 「大丈夫では、なかった」：光の筋がぷつりと消え、和音はテープが止まるように沈み、光の粒は落ちる。文字が冷める →
+ * 「きっと」と書いて消す。光の傷が走り、言葉は白く飛んで、影だけが残る → 光の守護者が消える：まぶしさ。そのあと、ほのかな光の粒と、余韻の和音
+ */
+export const LIGHT_GUARDIAN: LightMovie = {
+  style: 'light',
+  duration: 22.5,
+  lineAt: [1.2, 5.6, 10.4],
+  loud: [],
+  crossedAt: 13.6,
+  breakAt: 15.8,
+  breakFor: 1.0,
+  blackDelay: 1.0,
+  echoAt: 17.6,
+  hits: [],
+  impacts: [
+    { at: 15.8, power: 0.3 },
+    { at: 17.6, power: 1.1 },
+  ],
+  glow: [
+    [0, 0],
+    [1.0, 0.3],
+    [5.6, 0.45],
+    [10.4, 1.0],
+    [10.6, 0.08],
+    [13, 0.06],
+    [17.6, 0.6],
+    [18.6, 0.18],
+    [22.5, 0.15],
+  ],
+  enclose: [
+    [0, 0],
+    [10.5, 0],
+    [11.2, 0.45],
+    [17.5, 0.5],
+    [18.2, 0.2],
+    [22.5, 0.2],
+  ],
+  muffle: [
+    [0, 16000],
+    [10.5, 16000],
+    [11.2, 2500],
+    [17.5, 2500],
+    [18.0, 16000],
+  ],
+  rays: [
+    [0, 0],
+    [1.3, 0.35],
+    [5.6, 0.5],
+    [10.45, 1.0],
+    [10.7, 0],
+    [17.5, 0],
+    [17.6, 0.9],
+    [18.4, 0.15],
+    [22.5, 0.1],
+  ],
+  motes: [
+    [0, 0],
+    [1.3, 8],
+    [5.6, 14],
+    [10.4, 30],
+    [10.6, 0],
+    [17.6, 0],
+    [18, 6],
+    [22.5, 4],
+  ],
+  fall: [
+    [0, 0],
+    [10.5, 0],
+    [10.7, 1],
+    [17.5, 1],
+    [17.7, 0],
+  ],
+  collapseAt: 10.5,
+  breath: null,
+  heart: null,
+};
+
+/**
+ * 闇の王（消えたい願い。docs/story.md：自害は描かず、方法に触れず、肯定しない）：
+ * 消えることを美しく描かない。闇は迫るが、小さな光は、現れてからは最後まで消えない（闇は、光のまわりを残す）。心音は、弱まらず、静かに続く。
+ * 深い藍色の夜に、かすかな粒 → 「消えてしまいたい、と、はじめて思った夜」：墨のような闇が、ふちから染み込み、粒を呑む →
+ * 「あの子は、まだ小さかった」：下の真ん中に、小さなあたたかい光が灯る。静かな心音 → 「その願いだけが、いまも、あなたの中にある」：闇は深くなるが、光のまわりは残る →
+ * 「だれにも」と書いて消す。言葉は墨のように溶けて広がる → 闇の王が溶ける：闇が引いて、やわらかな藍色に。小さな光が、少しだけあたたかくなる。あたたかい和音
+ */
+export const DARK_LORD: DarkMovie = {
+  style: 'dark',
+  duration: 23.5,
+  lineAt: [1.4, 7.2, 11.4],
+  loud: [],
+  crossedAt: 15.0,
+  breakAt: 17.2,
+  breakFor: 1.4,
+  blackDelay: 1.0,
+  echoAt: 19.0,
+  hits: [],
+  impacts: [],
+  glow: [
+    [0, 0],
+    [1.2, 0.5],
+    [7, 0.4],
+    [11.4, 0.22],
+    [19, 0.14],
+    [20.5, 0.45],
+    [23.5, 0.42],
+  ],
+  enclose: [
+    [0, 0],
+    [1.6, 0.05],
+    [7.2, 0.45],
+    [11.4, 0.65],
+    [14.8, 0.85],
+    [19, 0.88],
+    [21, 0.25],
+    [23.5, 0.2],
+  ],
+  muffle: [
+    [0, 16000],
+    [7.2, 16000],
+    [11.4, 1200],
+    [18.9, 700],
+    [19.6, 16000],
+  ],
+  motes: [
+    [0, 12],
+    [7, 7],
+    [11, 2],
+    [19, 0],
+    [20, 9],
+    [23.5, 9],
+  ],
+  lightAt: 7.6,
+  smallLight: [
+    [0, 0],
+    [7.6, 0],
+    [8.4, 0.6],
+    [11.4, 0.55],
+    [15, 0.5],
+    [19, 0.55],
+    [20.5, 0.9],
+    [23.5, 0.85],
+  ],
+  seeps: [1.8, 5.0, 8.2, 11.4],
+  breath: null,
+  heart: { from: 8.0, to: 14.8, every: [0.92, 0.92], power: [0.35, 0.42] },
+};
+
+export const MOVIES: Readonly<Record<string, MovieDef>> = {
+  flame_beast: FLAME_BEAST,
+  ice_colossus: ICE_COLOSSUS,
+  ogre_chief: OGRE_CHIEF,
+  light_guardian: LIGHT_GUARDIAN,
+  dark_lord: DARK_LORD,
+};
 
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
@@ -433,6 +704,45 @@ export function slashTimes(movie: MovieDef): number[] {
 export function kicksOf(movie: MovieDef): Hit[] {
   const k = MOVIE_CONFIG.kick;
   return [...slashTimes(movie).map((at) => ({ at, power: k })), { at: movie.breakAt, power: k * 1.4 }, ...movie.impacts];
+}
+
+/**
+ * 型ごとの、画面の動き方（MemoryMovie.tsx）：
+ * shakes 揺らす瞬間・pushes ぐっと寄る瞬間・flashes フラッシュの瞬間（色は CSS）・flicker 光がゆらめくか。
+ * 炎は声で大きく揺れて赤く光る。氷は呼ぶ声では揺らさず、砕ける瞬間に白く光る。鬼は打撃で揺れ、打撃と衝撃で暗い赤に光る。
+ * 光は揺らさず、壊れる瞬間とまぶしさで光る。闇は、ほとんど揺らさず（線が走るときだけ、かすかに）、光らない
+ */
+export function motionOf(movie: MovieDef): { shakes: Hit[]; pushes: Hit[]; flashes: Hit[]; flicker: boolean } {
+  const scaled = (hits: readonly Hit[], k: number): Hit[] => hits.map((h) => ({ at: h.at, power: h.power * k }));
+  const kicks = kicksOf(movie);
+  switch (movie.style) {
+    case 'flame':
+      return { shakes: [...movie.hits, ...kicks], pushes: [...movie.hits], flashes: [...movie.hits], flicker: true };
+    case 'ice':
+      return { shakes: kicks, pushes: scaled(movie.hits, 0.3), flashes: [...movie.impacts], flicker: false };
+    case 'ogre':
+      return { shakes: [...scaled(movie.hits, 0.8), ...kicks], pushes: scaled(movie.hits, 0.6), flashes: [...movie.hits, ...movie.impacts], flicker: false };
+    case 'light':
+      return { shakes: scaled(kicks, 0.5), pushes: [], flashes: [...movie.impacts], flicker: false };
+    case 'dark':
+      return { shakes: scaled(kicks, 0.3), pushes: [], flashes: [], flicker: false };
+  }
+}
+
+/**
+ * 鬼：責める打撃の跡の位置（x・y は画面に対する割合）と、音の左右（-1〜1）。
+ * はじめは左右のふちから、かわるがわる。mergeAt に近づくほど、真ん中に寄る（責める声が、自分の声になる）
+ */
+export function markPositions(movie: OgreMovie): { x: number; y: number; pan: number }[] {
+  const first = movie.hits[0]?.at ?? 0;
+  return movie.hits.map((h, i) => {
+    const k = clamp01((h.at - first) / Math.max(0.01, movie.mergeAt - first));
+    const side = i % 2 === 0 ? -1 : 1;
+    const spread = 0.38 * (1 - k);
+    const x = 0.5 + side * spread;
+    const y = 0.32 + 0.36 * (((i * 0.618) % 1) * (1 - k)) + 0.18 * k;
+    return { x, y, pan: side * 0.85 * (1 - k) };
+  });
 }
 
 /** 声の波：大きな声の瞬間に、下の炎から広がる輪。progress は広がり（0〜1）、alpha は濃さ */
@@ -653,15 +963,39 @@ export interface SoundCue {
     | 'shatter'
     | 'exhale'
     | 'bells'
-    // どちらも
+    // 鬼
+    | 'drum'
+    | 'press'
+    | 'crush'
+    | 'kneel'
+    | 'resolve'
+    // 光
+    | 'airy'
+    | 'promise'
+    | 'hope'
+    | 'collapse'
+    | 'flare'
+    | 'overexpose'
+    | 'glare'
+    | 'afterglow'
+    // 闇
+    | 'void'
+    | 'seep'
+    | 'glow'
+    | 'smear'
+    | 'dissolve'
+    | 'melt'
+    | 'dawn'
+    // どれも
     | 'heartbeat'
     | 'chalk'
     | 'chalk_bold';
   power: number;
+  pan?: number; // 左右の位置（-1：左〜1：右）。ないときは、音そのものの位置のまま
 }
 
-/** 外の音（こもる音）：炎の声・地鳴り・炎の音・声の前の高まり、氷の風。ほかの音（心音・息・書く音・燃える音・砕ける音・和音など）は、内側の音で、こもらない */
-const WORLD_SOUNDS: ReadonlySet<SoundCue['kind']> = new Set(['roar', 'rumble', 'blaze', 'swell', 'wind']);
+/** 外の音（こもる音）：炎の声・地鳴り・炎の音・声の前の高まり、氷の風、鬼の責める打撃、光の空気、闇の深い低音。ほかの音（心音・息・書く音・燃える音・砕ける音・和音など）は、内側の音で、こもらない */
+const WORLD_SOUNDS: ReadonlySet<SoundCue['kind']> = new Set(['roar', 'rumble', 'blaze', 'swell', 'wind', 'drum', 'airy', 'void']);
 export const isWorldSound = (kind: SoundCue['kind']): boolean => WORLD_SOUNDS.has(kind);
 
 /** 文字の絵ひとつ。chars は文字数（塗りつぶしの帯は 0） */
@@ -738,12 +1072,68 @@ function iceCues(movie: IceMovie): SoundCue[] {
 }
 
 /**
+ * 鬼の音：上下から押しつぶす圧（press）がだんだん強まり、責める打撃（drum。左右から、だんだん真ん中へ。こもって心音に変わる）。
+ * 言葉が押しつぶされる音（crush）。膝をつく、いちばん重い衝撃（kneel）。最後に、静かな和音（resolve）
+ */
+function ogreCues(movie: OgreMovie): SoundCue[] {
+  const cues: SoundCue[] = [];
+  cues.push({ at: 0.3, kind: 'press', power: movie.echoAt - 0.3 });
+  markPositions(movie).forEach((m, i) => cues.push({ at: movie.hits[i]!.at, kind: 'drum', power: movie.hits[i]!.power, pan: m.pan }));
+  cues.push({ at: movie.breakAt, kind: 'crush', power: 1 });
+  cues.push({ at: movie.echoAt, kind: 'kneel', power: 1 });
+  cues.push({ at: movie.echoAt + 0.8, kind: 'resolve', power: movie.duration - movie.echoAt + 1.5 });
+  return cues;
+}
+
+/**
+ * 光の音：やわらかな空気（airy）。「きっと大丈夫」で約束の鐘（promise）。あたたかい和音（hope）がふくらみ、光が崩れる瞬間に、テープが止まるように沈む。
+ * 崩れる音（collapse）。言葉が白く飛ぶ音（overexpose）。光の守護者が消える、まぶしさ（glare。少し前から高まる）。余韻の和音（afterglow）
+ */
+function lightCues(movie: LightMovie): SoundCue[] {
+  const cues: SoundCue[] = [];
+  const hopeFrom = movie.lineAt[0]! + 1.2;
+  cues.push({ at: 0.1, kind: 'airy', power: movie.duration + 1 });
+  cues.push({ at: movie.lineAt[0]! + 0.1, kind: 'promise', power: 1 });
+  cues.push({ at: hopeFrom, kind: 'hope', power: movie.collapseAt - hopeFrom });
+  cues.push({ at: movie.collapseAt, kind: 'collapse', power: 1 });
+  cues.push({ at: movie.breakAt, kind: 'overexpose', power: movie.breakFor });
+  cues.push({ at: movie.echoAt - MOVIE_CONFIG.glareLead, kind: 'glare', power: MOVIE_CONFIG.glareLead });
+  cues.push({ at: movie.echoAt + 0.4, kind: 'afterglow', power: movie.duration - movie.echoAt + 1.5 });
+  return cues;
+}
+
+/**
+ * 闇の音：深い低音（void。外の音で、闇が深まるとこもる）。闇が染み込む、ゆっくりのふくらみ（seep）。
+ * 小さな光の、細くあたたかい音（glow。現れてから、最後まで鳴りやまない）。言葉が溶ける音（dissolve）。闇が溶ける、長いため息（melt）。あたたかい和音（dawn）
+ */
+function darkCues(movie: DarkMovie): SoundCue[] {
+  const cues: SoundCue[] = [];
+  cues.push({ at: 0.1, kind: 'void', power: movie.duration + 1 });
+  movie.seeps.forEach((at, i) => cues.push({ at, kind: 'seep', power: 0.8 + (0.2 * i) / Math.max(1, movie.seeps.length - 1) }));
+  cues.push({ at: movie.lightAt, kind: 'glow', power: movie.duration - movie.lightAt + 1 });
+  cues.push({ at: movie.breakAt, kind: 'dissolve', power: movie.breakFor });
+  cues.push({ at: movie.echoAt, kind: 'melt', power: 1 });
+  cues.push({ at: movie.echoAt + 0.6, kind: 'dawn', power: movie.duration - movie.echoAt + 1.5 });
+  return cues;
+}
+
+/** 画面を走る線（scrawl の引っかき傷）の音：炎は切り裂く、氷はひび、鬼は重い傷（低い切り裂き）、光は光の筋、闇は墨のにじみ */
+const SCRATCH_SOUND: Readonly<Record<MovieStyle, { kind: SoundCue['kind']; pitch: number }>> = {
+  flame: { kind: 'slash', pitch: 1 },
+  ice: { kind: 'crack', pitch: 1 },
+  ogre: { kind: 'slash', pitch: 0.62 },
+  light: { kind: 'flare', pitch: 1 },
+  dark: { kind: 'smear', pitch: 1 },
+};
+
+/**
  * 場面の音の予定を、時刻の順に作る（乱数は使わない）。
  * どの場面も：心音（heart）、文字を書くチョークの音、取り消し線を引く音、画面を走る線の音（炎：赤い線を切り裂く slash。氷：ひびが入る crack）。
  * そのほかは、場面の型ごと（flameCues・iceCues）。（乾いた「かかか、かこかこ」に聞こえた音は、鳴らさない）
  */
 export function soundCues(movie: MovieDef, writes: readonly Write[]): SoundCue[] {
-  const cues: SoundCue[] = movie.style === 'flame' ? flameCues(movie) : iceCues(movie);
+  const cues: SoundCue[] =
+    movie.style === 'flame' ? flameCues(movie) : movie.style === 'ice' ? iceCues(movie) : movie.style === 'ogre' ? ogreCues(movie) : movie.style === 'light' ? lightCues(movie) : darkCues(movie);
   for (const b of heartTimes(movie)) cues.push({ at: b.at, kind: 'heartbeat', power: b.power });
   // 文字が書かれていくあいだ、チョークで書く音（声の行は力を込めて、強く。書いては消した言葉・塗りつぶしの帯も強く）。取り消し線は、勢いよく引く
   const times = itemTimes(writes.map((w) => w.kind), movie);
@@ -757,9 +1147,9 @@ export function soundCues(movie: MovieDef, writes: readonly Write[]): SoundCue[]
     cues.push({ at: times[i]! + lag, kind: bold ? 'chalk_bold' : 'chalk', power: Math.max(0.3, writeSeconds(w) - trim) });
     if (w.kind === 'crossed') {
       cues.push({ at: times[i]! + MOVIE_CONFIG.strikeDelay, kind: 'chalk_bold', power: MOVIE_CONFIG.write.strike });
-      // 画面を走る線（scrawl の引っかき傷。0.22 秒ごとに1本ずつ出る）が出るたびに：炎は切り裂く音、氷はひびが入る音
-      const kind = movie.style === 'ice' ? 'crack' : 'slash';
-      slashTimes(movie).forEach((at, k) => cues.push({ at, kind, power: MOVIE_CONFIG.slash.pitch[k]! }));
+      // 画面を走る線（scrawl の引っかき傷。0.22 秒ごとに1本ずつ出る）が出るたびに、型ごとの音（SCRATCH_SOUND）
+      const sound = SCRATCH_SOUND[movie.style];
+      slashTimes(movie).forEach((at, k) => cues.push({ at, kind: sound.kind, power: MOVIE_CONFIG.slash.pitch[k]! * sound.pitch }));
     }
   });
   return cues.sort((a, b) => a.at - b.at);

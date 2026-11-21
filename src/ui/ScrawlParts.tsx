@@ -23,8 +23,11 @@ function Glyphs({ glyphs }: { glyphs: Glyph[] }) {
   );
 }
 
-/** 文字の絵を1つ出す。at：動く場面で、出る時刻（秒）。ないときは、番号 index の順に、一定の間をあけて出る。loud：大きな声で、文字がふるえる。write：書かれていく長さ（秒） */
-export function ScrawlItemView({ item, index, at, loud, write }: { item: ScrawlItem; index: number; at?: number; loud?: boolean; write?: number }) {
+/**
+ * 文字の絵を1つ出す。at：動く場面で、出る時刻（秒）。ないときは、番号 index の順に、一定の間をあけて出る。loud：大きな声で、文字がふるえる。write：書かれていく長さ（秒）。
+ * extraClass：動く場面で、行ごとに付ける名前（何行目か。場面の型ごとの動きに使う）
+ */
+export function ScrawlItemView({ item, index, at, loud, write, extraClass }: { item: ScrawlItem; index: number; at?: number; loud?: boolean; write?: number; extraClass?: string }) {
   const style = {
     '--i': index,
     '--tilt': `${item.tilt}deg`,
@@ -51,7 +54,7 @@ export function ScrawlItemView({ item, index, at, loud, write }: { item: ScrawlI
     );
   }
   return (
-    <p className={loud ? 'scrawl__line scrawl__line--loud' : 'scrawl__line'} style={style} aria-hidden="true">
+    <p className={`${loud ? 'scrawl__line scrawl__line--loud' : 'scrawl__line'}${extraClass ? ` ${extraClass}` : ''}`} style={style} aria-hidden="true">
       <Glyphs glyphs={item.glyphs} />
     </p>
   );

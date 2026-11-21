@@ -3,8 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { MEMORIES } from '../game/story';
 import {
   MOVIE_CONFIG,
+  DARK_LORD,
   FLAME_BEAST,
   ICE_COLOSSUS,
+  LIGHT_GUARDIAN,
+  OGRE_CHIEF,
+  markPositions,
+  motionOf,
   MOVIES,
   mistTimes,
   ashLook,
@@ -40,6 +45,7 @@ import {
   valueAt,
   writeSeconds,
   type Ember,
+  type Keys,
   type Flake,
   type Write,
 } from './memoryMovie';
@@ -60,7 +66,16 @@ describe('動く場面の設定', () => {
       expect(m.echoAt).toBeGreaterThan(m.crossedAt);
       expect(m.echoAt).toBeLessThan(m.duration);
       for (const h of m.hits) expect(h.at).toBeLessThan(m.duration);
-      const styleKeys = m.style === 'flame' ? [m.embers, m.fire, m.smoke, m.ash] : [m.snow, m.freeze];
+      const styleKeys: Keys[] =
+        m.style === 'flame'
+          ? [m.embers, m.fire, m.smoke, m.ash]
+          : m.style === 'ice'
+            ? [m.snow, m.freeze]
+            : m.style === 'ogre'
+              ? [m.press, m.dust]
+              : m.style === 'light'
+                ? [m.rays, m.motes, m.fall]
+                : [m.motes, m.smallLight];
       for (const keys of [m.glow, m.enclose, m.muffle, ...styleKeys]) expect(keys.every((k, i) => i === 0 || k[0] >= keys[i - 1]![0])).toBe(true);
       expect(MOVIES[boss]!.style).toBe(m.style);
       if (m.heart) {
@@ -577,5 +592,158 @@ describe('氷の巨像の場面', () => {
     expect(valueAt(ice.freeze, 16)).toBe(0);
     expect(valueAt(ice.freeze, ice.duration)).toBeGreaterThan(0);
     expect(valueAt(ice.snow, 16)).toBe(0); // 止まっているあいだは、新しい雪は降らない
+  });
+});
+
+const cuesOf = (movie: typeof FLAME_BEAST | typeof ICE_COLOSSUS | typeof OGRE_CHIEF | typeof LIGHT_GUARDIAN | typeof DARK_LORD, boss: string) => {
+  const memory = MEMORIES[boss]!;
+  const items = scrawl(memory.lines, memory.crossed, boss);
+  const writes: Write[] = items.map((i) => ({ kind: i.kind, chars: i.kind === 'black' ? 0 : i.glyphs.length }));
+  return { cues: soundCues(movie, writes), writes };
+};
+
+describe('5つの場面に共通の決まり', () => {
+  const all = [
+    [FLAME_BEAST, 'flame_beast'],
+    [ICE_COLOSSUS, 'ice_colossus'],
+    [OGRE_CHIEF, 'ogre_chief'],
+    [LIGHT_GUARDIAN, 'light_guardian'],
+    [DARK_LORD, 'dark_lord'],
+  ] as const;
+
+  it('どの場面も、音は時刻の順で、場面の長さの中に収まり、どの文字の絵も、場面が終わるまでに書き終わる', () => {
+    for (const [movie, boss] of all) {
+      const { cues, writes } = cuesOf(movie, boss);
+      expect(cues.every((c, i) => i === 0 || c.at >= cues[i - 1]!.at)).toBe(true);
+      expect(cues.every((c) => c.at >= 0 && c.at < movie.duration)).toBe(true);
+      const times = itemTimes(writes.map((w) => w.kind), movie);
+      writes.forEach((w, i) => expect(times[i]! + writeSeconds(w)).toBeLessThan(movie.duration));
+      expect(movie.breakAt).toBeGreaterThan(slashTimes(movie)[slashTimes(movie).length - 1]!);
+      expect(movie.breakAt + movie.breakFor).toBeLessThanOrEqual(movie.echoAt);
+    }
+  });
+
+  it('画面を走る線の音は、型ごと（炎：切り裂く・氷：ひび・鬼：低い切り裂き・光：光の筋・闇：墨のにじみ）。線の数だけ', () => {
+    const expected = { flame_beast: 'slash', ice_colossus: 'crack', ogre_chief: 'slash', light_guardian: 'flare', dark_lord: 'smear' } as const;
+    for (const [movie, boss] of all) {
+      const { cues } = cuesOf(movie, boss);
+      const lines = cues.filter((c) => c.at >= slashTimes(movie)[0]! - 1e-9 && c.kind === expected[boss]);
+      expect(lines.map((c) => c.at)).toEqual(slashTimes(movie));
+    }
+    const ogreSlash = cuesOf(OGRE_CHIEF, 'ogre_chief').cues.find((c) => c.kind === 'slash')!;
+    expect(ogreSlash.power).toBeLessThan(MOVIE_CONFIG.slash.pitch[0]!); // 鬼の傷は低い
+  });
+
+  it('動き方：炎は声で揺れて光る。氷・光・闇は声で揺らさない。闇は光らない', () => {
+    expect(motionOf(FLAME_BEAST).shakes.length).toBeGreaterThan(FLAME_BEAST.hits.length);
+    expect(motionOf(FLAME_BEAST).flicker).toBe(true);
+    for (const m of [ICE_COLOSSUS, LIGHT_GUARDIAN, DARK_LORD]) expect(motionOf(m).shakes.some((s) => m.hits.some((h) => h.at === s.at && h.power === s.power))).toBe(false);
+    expect(motionOf(DARK_LORD).flashes).toHaveLength(0);
+    expect(Math.max(...motionOf(DARK_LORD).shakes.map((s) => s.power))).toBeLessThan(0.1); // 闇は、ほとんど揺らさない
+    expect(motionOf(OGRE_CHIEF).flashes.length).toBe(OGRE_CHIEF.hits.length + OGRE_CHIEF.impacts.length);
+  });
+});
+
+describe('鬼の首領の場面', () => {
+  const ogre = OGRE_CHIEF;
+  const { cues } = cuesOf(ogre, 'ogre_chief');
+  const of = (kind: string) => cues.filter((c) => c.kind === kind);
+
+  it('責める打撃は、はじめは左右のふちから、かわるがわる。だんだん真ん中に寄り、音の左右も真ん中へ', () => {
+    const marks = markPositions(ogre);
+    expect(marks).toHaveLength(ogre.hits.length);
+    expect(Math.abs(marks[0]!.x - 0.5)).toBeGreaterThan(0.3);
+    expect(Math.sign(marks[0]!.x - 0.5)).toBe(-Math.sign(marks[1]!.x - 0.5));
+    const last = marks[marks.length - 1]!;
+    expect(Math.abs(last.x - 0.5)).toBeLessThan(Math.abs(marks[0]!.x - 0.5));
+    const drums = of('drum');
+    expect(drums.map((c) => [c.at, c.power])).toEqual(ogre.hits.map((h) => [h.at, h.power]));
+    expect(Math.abs(drums[drums.length - 1]!.pan!)).toBeLessThan(Math.abs(drums[0]!.pan!));
+    expect(isWorldSound('drum')).toBe(true); // こもる（自分の中に入ってくる）
+    expect(muffleAt(ogre, ogre.lineAt[1]! + 3)).toBeLessThan(1500);
+  });
+
+  it('打撃が真ん中に寄るころ、心音が鳴り始める（責める声が、自分の声になる）', () => {
+    const beats = of('heartbeat');
+    expect(beats.length).toBeGreaterThan(2);
+    expect(beats[0]!.at).toBeGreaterThan(ogre.lineAt[1]!);
+    expect(beats[0]!.at).toBeLessThan(ogre.mergeAt);
+    expect(beats[beats.length - 1]!.at).toBeLessThan(ogre.crossedAt);
+  });
+
+  it('押しつぶす圧は、膝をつく瞬間まで。言葉は押しつぶされ、膝をつく衝撃のあと、静かな和音', () => {
+    const [press] = of('press');
+    expect(press!.at + press!.power).toBeCloseTo(ogre.echoAt);
+    expect(of('crush')[0]!.at).toBe(ogre.breakAt);
+    expect(of('kneel')[0]!.at).toBe(ogre.echoAt);
+    expect(of('resolve')[0]!.at).toBeGreaterThan(ogre.echoAt);
+    expect(ogre.impacts[ogre.impacts.length - 1]!.power).toBeGreaterThan(Math.max(...ogre.hits.map((h) => h.power)));
+  });
+});
+
+describe('光の守護者の場面', () => {
+  const light = LIGHT_GUARDIAN;
+  const { cues } = cuesOf(light, 'light_guardian');
+  const of = (kind: string) => cues.filter((c) => c.kind === kind);
+
+  it('約束の鐘は「きっと大丈夫」で。希望の和音は、光が崩れる瞬間に終わり（テープが止まるように沈む）、同じ瞬間に崩れる音', () => {
+    expect(of('promise')[0]!.at).toBeGreaterThanOrEqual(light.lineAt[0]!);
+    const [hope] = of('hope');
+    expect(hope!.at + hope!.power).toBeCloseTo(light.collapseAt);
+    expect(of('collapse')[0]!.at).toBe(light.collapseAt);
+    expect(light.collapseAt).toBeGreaterThanOrEqual(light.lineAt[2]!); // 大丈夫では、なかった
+  });
+
+  it('光は、崩れる前にいちばん明るく、崩れるとすぐ消え、光の粒は落ちる', () => {
+    expect(valueAt(light.rays, light.collapseAt - 0.1)).toBeGreaterThan(0.8);
+    expect(valueAt(light.rays, light.collapseAt + 0.3)).toBeLessThan(0.05);
+    expect(valueAt(light.glow, light.collapseAt + 0.2)).toBeLessThan(0.2);
+    expect(valueAt(light.fall, light.collapseAt - 0.1)).toBe(0);
+    expect(valueAt(light.fall, light.collapseAt + 0.5)).toBe(1);
+    expect(valueAt(light.motes, light.collapseAt + 0.3)).toBe(0);
+  });
+
+  it('言葉は白く飛ぶ（音と同じ長さ）。まぶしさの音は、光の守護者が消える瞬間に高まりきる。心音はない', () => {
+    const [over] = of('overexpose');
+    expect(over!.at).toBe(light.breakAt);
+    expect(over!.power).toBe(light.breakFor);
+    const [glare] = of('glare');
+    expect(glare!.at + glare!.power).toBeCloseTo(light.echoAt);
+    expect(of('heartbeat')).toHaveLength(0);
+    expect(of('afterglow')[0]!.at).toBeGreaterThan(light.echoAt);
+  });
+});
+
+describe('闇の王の場面（消えることを美しく描かない）', () => {
+  const dark = DARK_LORD;
+  const { cues } = cuesOf(dark, 'dark_lord');
+  const of = (kind: string) => cues.filter((c) => c.kind === kind);
+
+  it('小さな光は、現れてからは、場面の終わりまで消えない（あとの方が、少しあたたかい）', () => {
+    for (let t = dark.lightAt + 1; t <= dark.duration + 3; t += 0.1) expect(valueAt(dark.smallLight, t)).toBeGreaterThan(0.4);
+    expect(valueAt(dark.smallLight, dark.duration)).toBeGreaterThan(valueAt(dark.smallLight, dark.echoAt - 1));
+    expect(valueAt(dark.smallLight, dark.lightAt - 0.5)).toBe(0);
+    const [glow] = of('glow');
+    expect(glow!.at).toBe(dark.lightAt);
+    expect(glow!.at + glow!.power).toBeGreaterThan(dark.duration); // 小さな光の音も、鳴りやまない
+  });
+
+  it('心音は、弱まらず、静かに同じ速さで続く', () => {
+    const beats = of('heartbeat');
+    expect(beats.length).toBeGreaterThan(4);
+    const gaps = beats.slice(1).map((b, i) => b.at - beats[i]!.at);
+    expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThan(0.01);
+    expect(beats[beats.length - 1]!.power).toBeGreaterThanOrEqual(beats[0]!.power);
+  });
+
+  it('闇は、だんだん迫り、闇の王が溶けると引いていく。言葉は墨のように溶ける。最後に、あたたかい和音', () => {
+    expect(valueAt(dark.enclose, 3)).toBeLessThan(valueAt(dark.enclose, 14));
+    expect(valueAt(dark.enclose, dark.duration)).toBeLessThan(0.3);
+    expect(dark.seeps.every((t) => t < dark.crossedAt)).toBe(true);
+    expect(of('seep').map((c) => c.at)).toEqual([...dark.seeps]);
+    const [dissolve] = of('dissolve');
+    expect(dissolve!.at).toBe(dark.breakAt);
+    expect(of('melt')[0]!.at).toBe(dark.echoAt);
+    expect(of('dawn')[0]!.at).toBeGreaterThan(dark.echoAt);
   });
 });
