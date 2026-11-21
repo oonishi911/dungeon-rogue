@@ -40,7 +40,8 @@ import {
   type Flake,
   type Write,
 } from './memoryMovie';
-import { SCRAWL_CONFIG, scrawl } from './scrawl';
+import { MIX_DB, SPACE_SEND, slashPans, worldLevel } from './movieSound';
+import { SCRAWL_CONFIG, scrawl, scratches } from './scrawl';
 
 const flame = MOVIES.flame_beast!;
 
@@ -441,5 +442,42 @@ describe('炎・煙・灰の粒', () => {
     const embers: Ember[] = burnEmbers({ x0: 0.2, x1: 0.4, y: 300 }, 12, seq());
     expect(embers).toHaveLength(12);
     expect(embers.every((e) => e.x >= 0.2 && e.x <= 0.4 && e.y === 300 && e.vy > 0)).toBe(true);
+  });
+});
+
+describe('場面の音のまとめ方（movieSound.ts）', () => {
+  const cues = soundCues(flame, flameWrites);
+
+  it('鳴らすどの音にも、大きさ（MIX_DB）と、響きへ送る量（SPACE_SEND）が決まっている。範囲に収まる', () => {
+    for (const c of cues) {
+      expect(MIX_DB[c.kind]).toBeGreaterThanOrEqual(-24);
+      expect(MIX_DB[c.kind]).toBeLessThanOrEqual(6);
+      expect(SPACE_SEND[c.kind]).toBeGreaterThanOrEqual(0);
+      expect(SPACE_SEND[c.kind]).toBeLessThanOrEqual(1);
+    }
+    // 近い音（心音・書く音）は、空間に広がる音（和音・赤い線）より、響きが少ない
+    expect(SPACE_SEND.heartbeat).toBeLessThan(SPACE_SEND.pad);
+    expect(SPACE_SEND.chalk).toBeLessThan(SPACE_SEND.slash);
+  });
+
+  it('赤い線の音は、画面を走る線の向きに、左右を動かす（線の数だけ）', () => {
+    const pans = slashPans('flame_beast');
+    const lines = scratches('flame_beast');
+    expect(pans).toHaveLength(lines.length);
+    expect(pans).toHaveLength(cues.filter((c) => c.kind === 'slash').length);
+    pans.forEach(([from, to], i) => {
+      const pts = lines[i]!.points;
+      const rightward = pts[pts.length - 1]![0] >= pts[0]![0];
+      expect(to > from).toBe(rightward);
+      expect(Math.abs(from)).toBeLessThanOrEqual(1);
+    });
+  });
+
+  it('外の音は、こもるほど小さくなる（0.3〜1）。こもっていなければ、そのまま', () => {
+    expect(worldLevel(16000)).toBeCloseTo(1);
+    expect(worldLevel(600)).toBeLessThan(worldLevel(850));
+    expect(worldLevel(260)).toBeLessThan(worldLevel(600));
+    expect(worldLevel(20)).toBe(0.3);
+    expect(worldLevel(99999)).toBe(1);
   });
 });

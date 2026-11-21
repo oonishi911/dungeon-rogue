@@ -137,9 +137,9 @@ export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps
   useEffect(() => {
     const bus = openSoundBus();
     if (!bus) return;
-    scheduleMovieSound(bus.ctx, bus.out, movie, writes, bus.ctx.currentTime + 0.02); // 画面の時計と同じ瞬間に始まるよう、予約の余裕は小さく
+    scheduleMovieSound(bus.ctx, bus.out, movie, writes, bus.ctx.currentTime + 0.02, { seed }); // 画面の時計と同じ瞬間に始まるよう、予約の余裕は小さく。seed：赤い線の向き
     return bus.close;
-  }, [movie, writes]);
+  }, [movie, writes, seed]);
 
   useEffect(() => {
     const cv = canvas.current;
