@@ -3,11 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { MEMORIES } from '../game/story';
 import {
   MOVIE_CONFIG,
+  FLAME_BEAST,
+  ICE_COLOSSUS,
   MOVIES,
+  mistTimes,
   ashLook,
   burnEmbers,
-  burnLightAt,
-  burnProgress,
+  breakLightAt,
+  breakProgress,
   burstEmbers,
   driftAt,
   emberLook,
@@ -43,7 +46,7 @@ import {
 import { MIX_DB, SPACE_SEND, slashPans, worldLevel } from './movieSound';
 import { SCRAWL_CONFIG, scrawl, scratches } from './scrawl';
 
-const flame = MOVIES.flame_beast!;
+const flame = FLAME_BEAST;
 
 describe('動く場面の設定', () => {
   it('どの場面も、記憶のあるボスのもの。行の数と、時刻の並びが合っている', () => {
@@ -57,10 +60,16 @@ describe('動く場面の設定', () => {
       expect(m.echoAt).toBeGreaterThan(m.crossedAt);
       expect(m.echoAt).toBeLessThan(m.duration);
       for (const h of m.hits) expect(h.at).toBeLessThan(m.duration);
-      for (const keys of [m.glow, m.embers, m.fire, m.smoke, m.ash, m.enclose, m.muffle]) expect(keys.every((k, i) => i === 0 || k[0] >= keys[i - 1]![0])).toBe(true);
+      const styleKeys = m.style === 'flame' ? [m.embers, m.fire, m.smoke, m.ash] : [m.snow, m.freeze];
+      for (const keys of [m.glow, m.enclose, m.muffle, ...styleKeys]) expect(keys.every((k, i) => i === 0 || k[0] >= keys[i - 1]![0])).toBe(true);
+      expect(MOVIES[boss]!.style).toBe(m.style);
+      if (m.heart) {
+        expect(m.heart.to).toBeGreaterThan(m.heart.from);
+        expect(m.heart.to).toBeLessThanOrEqual(m.crossedAt);
+      }
       // 言葉は、取り消し線と赤い線のあとに燃え始め、倒したボスの一文が出る前に燃え尽きる
-      expect(m.burnAt).toBeGreaterThan(slashTimes(m)[slashTimes(m).length - 1]!);
-      expect(m.burnAt + m.burnFor).toBeLessThanOrEqual(m.echoAt);
+      expect(m.breakAt).toBeGreaterThan(slashTimes(m)[slashTimes(m).length - 1]!);
+      expect(m.breakAt + m.breakFor).toBeLessThanOrEqual(m.echoAt);
       expect(m.enclose.every(([, v]) => v >= 0 && v <= 1)).toBe(true);
       expect(m.muffle.every(([, v]) => v >= 20 && v <= MOVIE_CONFIG.muffleOpen.max)).toBe(true);
     }
@@ -186,7 +195,7 @@ describe('音の予定', () => {
   });
 
   it('心音は heart のあいだだけ、だんだん速く、強く。「やめて」を書く前に止む。書く音・取り消し線の音は鳴らさない', () => {
-    const [from, to] = flame.heart!;
+    const { from, to } = flame.heart!;
     const beats = cues.filter((c) => c.kind === 'heartbeat');
     expect(beats.length).toBeGreaterThan(5);
     expect(beats.every((c) => c.at >= from && c.at < to)).toBe(true);
@@ -249,8 +258,8 @@ describe('音の予定', () => {
     expect(burns.map((c) => c.kind)).toEqual(['sizzle', 'sizzle_soft', 'sizzle', 'sizzle_soft']);
     expect(burns[0]!.at).toBeLessThanOrEqual(flame.lineAt[0]!);
     expect(burns[1]!.at).toBe(flame.breath![0]);
-    expect(burns[2]!.at).toBe(flame.burnAt);
-    expect(cues.find((c) => c.kind === 'ignite')!.at).toBe(flame.burnAt);
+    expect(burns[2]!.at).toBe(flame.breakAt);
+    expect(cues.find((c) => c.kind === 'ignite')!.at).toBe(flame.breakAt);
     // 「やめて」を書いてから燃えるまでは、チリチリが止む（静かになる）
     expect(burns[1]!.at + burns[1]!.power).toBeCloseTo(flame.crossedAt);
     for (const b of burns) {
@@ -327,13 +336,13 @@ describe('場面の流れ（光・炎・闇・音のこもり方）', () => {
   });
 
   it('言葉が燃える明るさ：燃え始めにすぐ明るくなり、燃え尽きると収まる。後ろの光も明るくなる', () => {
-    expect(burnLightAt(flame, flame.burnAt - 0.1)).toBe(0);
-    expect(burnLightAt(flame, flame.burnAt + 0.5)).toBe(1);
-    expect(burnLightAt(flame, flame.burnAt + flame.burnFor + 3)).toBeLessThan(0.05);
-    expect(glowAt(flame, flame.burnAt + 0.5)).toBeGreaterThan(valueAt(flame.glow, flame.burnAt + 0.5));
-    expect(burnProgress(flame, flame.burnAt - 1)).toBe(0);
-    expect(burnProgress(flame, flame.burnAt + flame.burnFor / 2)).toBeCloseTo(0.5);
-    expect(burnProgress(flame, flame.burnAt + flame.burnFor + 1)).toBe(1);
+    expect(breakLightAt(flame, flame.breakAt - 0.1)).toBe(0);
+    expect(breakLightAt(flame, flame.breakAt + 0.5)).toBe(1);
+    expect(breakLightAt(flame, flame.breakAt + flame.breakFor + 3)).toBeLessThan(0.05);
+    expect(glowAt(flame, flame.breakAt + 0.5)).toBeGreaterThan(valueAt(flame.glow, flame.breakAt + 0.5));
+    expect(breakProgress(flame, flame.breakAt - 1)).toBe(0);
+    expect(breakProgress(flame, flame.breakAt + flame.breakFor / 2)).toBeCloseTo(0.5);
+    expect(breakProgress(flame, flame.breakAt + flame.breakFor + 1)).toBe(1);
   });
 
   it('心音の脈：拍の瞬間に強く、2拍目でもう一度。拍のないときは0', () => {
@@ -383,7 +392,7 @@ describe('場面の流れ（光・炎・闇・音のこもり方）', () => {
     const kicks = kicksOf(flame);
     expect(kicks).toHaveLength(slashTimes(flame).length + 1);
     expect(kicks.every((k) => k.power < Math.min(...flame.hits.map((h) => h.power)))).toBe(true);
-    expect(kicks.some((k) => k.at === flame.burnAt)).toBe(true);
+    expect(kicks.some((k) => k.at === flame.breakAt)).toBe(true);
   });
 });
 
@@ -479,5 +488,94 @@ describe('場面の音のまとめ方（movieSound.ts）', () => {
     expect(worldLevel(260)).toBeLessThan(worldLevel(600));
     expect(worldLevel(20)).toBe(0.3);
     expect(worldLevel(99999)).toBe(1);
+  });
+});
+
+describe('氷の巨像の場面', () => {
+  const ice = ICE_COLOSSUS;
+  const memory = MEMORIES.ice_colossus!;
+  const items = scrawl(memory.lines, memory.crossed, 'ice_colossus');
+  const writes: Write[] = items.map((i) => ({ kind: i.kind, chars: i.kind === 'black' ? 0 : i.glyphs.length }));
+  const cues = soundCues(ice, writes);
+  const of = (kind: string) => cues.filter((c) => c.kind === kind);
+
+  it('時刻の順で、場面の長さの中に収まる。どの文字の絵も、場面が終わるまでに書き終わる', () => {
+    expect(cues.every((c, i) => i === 0 || c.at >= cues[i - 1]!.at)).toBe(true);
+    expect(cues.every((c) => c.at >= 0 && c.at < ice.duration)).toBe(true);
+    const times = itemTimes(writes.map((w) => w.kind), ice);
+    writes.forEach((w, i) => expect(times[i]! + writeSeconds(w)).toBeLessThan(ice.duration));
+  });
+
+  it('呼ぶ声は、声の数だけ、声と同じ時刻に、だんだん弱く。炎の音（大きな声・炎・チリチリ）は鳴らない', () => {
+    expect(of('call').map((c) => [c.at, c.power])).toEqual(ice.hits.map((h) => [h.at, h.power]));
+    const powers = ice.hits.map((h) => h.power);
+    expect([...powers].sort((a, b) => b - a)).toEqual(powers);
+    for (const k of ['roar', 'blaze', 'sizzle', 'ignite', 'slash', 'pad']) expect(of(k)).toHaveLength(0);
+  });
+
+  it('冷たい風が、場面を通して鳴る（外の音。音が消えていくあいだは、こもって小さくなる）', () => {
+    const [wind] = of('wind');
+    expect(wind!.at).toBeLessThan(0.5);
+    expect(wind!.at + wind!.power).toBeGreaterThan(ice.duration);
+    expect(isWorldSound('wind')).toBe(true);
+    expect(muffleAt(ice, 2)).toBe(MOVIE_CONFIG.muffleOpen.max);
+    expect(muffleAt(ice, 14)).toBeLessThan(500);
+    expect(worldLevel(muffleAt(ice, 14))).toBeLessThan(0.5);
+    expect(muffleAt(ice, ice.duration)).toBe(MOVIE_CONFIG.muffleOpen.max);
+  });
+
+  it('心音は、だんだん遅く、弱くなり、「ここにいるよ」の前に止まる', () => {
+    const beats = of('heartbeat');
+    expect(beats.length).toBeGreaterThan(3);
+    const gaps = beats.slice(1).map((b, i) => b.at - beats[i]!.at);
+    expect(gaps[gaps.length - 1]!).toBeGreaterThan(gaps[0]!);
+    expect(beats[beats.length - 1]!.power).toBeLessThan(beats[0]!.power);
+    expect(beats[beats.length - 1]!.at).toBeLessThan(ice.crossedAt);
+  });
+
+  it('白い息：息をひそめるあいだに、吐く音と、白いもやが、同じ時刻に出る', () => {
+    const puffs = mistTimes(ice);
+    expect(puffs.length).toBeGreaterThan(0);
+    expect(of('exhale').map((c) => c.at)).toEqual(puffs);
+    expect(puffs.every((t) => t >= ice.breath![0] && t < ice.breath![1])).toBe(true);
+    expect(mistTimes(FLAME_BEAST)).toHaveLength(0); // 炎には白い息はない
+  });
+
+  it('凍りついていく音は、雪が宙で止まりきる瞬間に、ぴたりと止まる。そのあとは、ほとんど無音', () => {
+    const [creak] = of('creak');
+    const stop = creak!.at + creak!.power;
+    expect(valueAt(ice.freeze, stop)).toBe(0);
+    expect(valueAt(ice.freeze, stop - 0.6)).toBeGreaterThan(0);
+    expect(ice.frostAt).toBeGreaterThan(ice.lineAt[2]!);
+    expect(ice.frostAt).toBeLessThan(stop);
+    // 止まってから「ここにいるよ」を書くまで、鳴り始める音は、心音だけ
+    expect(cues.filter((c) => c.at > stop && c.at < ice.crossedAt).every((c) => c.kind === 'heartbeat')).toBe(true);
+  });
+
+  it('ひびが入る音は、画面を走るひびの数だけ、同じ時刻に。ひびの向きに、左右を動かす', () => {
+    const cracks = of('crack');
+    expect(cracks.map((c) => c.at)).toEqual(slashTimes(ice));
+    expect(slashPans('ice_colossus')).toHaveLength(cracks.length);
+  });
+
+  it('言葉が砕ける音（小さく）と、氷の巨像が砕ける音（大きく）。そのあと、鐘', () => {
+    const [word, colossus] = of('shatter');
+    expect(word!.at).toBe(ice.breakAt);
+    expect(colossus!.at).toBe(ice.echoAt);
+    expect(colossus!.power).toBeGreaterThan(word!.power);
+    expect(colossus!.power).toBeGreaterThanOrEqual(1.5); // 重く崩れる音が加わる大きさ
+    const [bells] = of('bells');
+    expect(bells!.at).toBeGreaterThan(ice.echoAt);
+    expect(ice.impacts.map((h) => h.at)).toEqual([ice.breakAt, ice.echoAt]);
+  });
+
+  it('霜は、息をひそめると迫り、氷の巨像が砕けると、割れて消える。雪は、凍って止まり、砕けたあと、また降り始める', () => {
+    expect(valueAt(ice.enclose, 3)).toBe(0);
+    expect(valueAt(ice.enclose, 14)).toBeGreaterThan(0.7);
+    expect(valueAt(ice.enclose, ice.echoAt + 1)).toBeLessThan(0.1);
+    expect(valueAt(ice.freeze, 5)).toBe(1);
+    expect(valueAt(ice.freeze, 16)).toBe(0);
+    expect(valueAt(ice.freeze, ice.duration)).toBeGreaterThan(0);
+    expect(valueAt(ice.snow, 16)).toBe(0); // 止まっているあいだは、新しい雪は降らない
   });
 });

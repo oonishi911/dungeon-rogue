@@ -1,23 +1,17 @@
-// 記憶の「動く場面」（docs/memory-movie.md）：文章が出る時刻・画面の揺れ・光・炎・煙・火の粉・灰・闇を、1つの時計で動かす。
+// 記憶の「動く場面」（docs/memory-movie.md）：文章が出る時刻・画面の揺れ・光・粒・闇（霜）を、1つの時計で動かす。
 // 時刻から決まる値は memoryMovie.ts の関数。文字の出方は CSS（--at 秒の遅れ）。
-// 描き直しは React を通さない（requestAnimationFrame で、画面の部品と canvas に直接書く）。
+// 描き直しは React を通さない（requestAnimationFrame で、画面の部品と canvas に直接書く）。canvas の描き方は場面の型ごと（flamePainter.ts・icePainter.ts）。
 // 音は、場面のはじめに、すべての音の予定を Web Audio に予約する（movieSound.ts）。場面を離れたら、予約した音ごと静かにする。
 //
-// 重ね順（下から）：後ろの光（DOM）→ canvas（炎・煙・火の粉・灰 → 四方から迫る闇 → 声の波）→ 文字 → 赤いフラッシュ → 冷めた色 → フィルムの粒
+// 重ね順（下から）：後ろの光（DOM）→ canvas（型ごとの粒 → 四方から迫る闇・霜 → 声の波）→ 文字 → フラッシュ → 冷めた色 → フィルムの粒
 
 import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { openSoundBus } from '../audio/sound';
+import { flamePainter } from './flamePainter';
+import { icePainter } from './icePainter';
 import {
   MOVIE_CONFIG,
-  ashLook,
-  burnEmbers,
-  burnProgress,
-  burstEmbers,
   driftAt,
-  emberLook,
-  encloseAt,
-  fireAt,
-  flameLook,
   flashAt,
   flickerAt,
   glowAt,
@@ -27,21 +21,12 @@ import {
   punchAt,
   pulseAt,
   quakeAt,
-  ringsAt,
-  smokeLook,
-  stepAsh,
-  stepEmbers,
-  stepFlames,
-  stepSmoke,
-  valueAt,
   writeSeconds,
-  type Ember,
-  type Flake,
-  type Flame,
+  type Hit,
   type MovieDef,
-  type Puff,
   type Write,
 } from './memoryMovie';
+import type { WordBox } from './moviePaint';
 import { scheduleMovieSound } from './movieSound';
 import type { ScrawlItem } from './scrawl';
 import { InkFilter, ScrawlItemView, Scratches } from './ScrawlParts';
@@ -53,47 +38,6 @@ interface MemoryMovieProps {
   echo: string;
   seed: string;
 }
-
-/** やわらかい光の粒の絵（炎・煙）。はじめに1度だけ描いておく（毎フレーム、グラデーションを作らない） */
-function sprite(stops: readonly (readonly [number, string])[]): HTMLCanvasElement {
-  const c = document.createElement('canvas');
-  c.width = 64;
-  c.height = 64;
-  const g = c.getContext('2d');
-  if (g) {
-    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    for (const [k, color] of stops) grad.addColorStop(k, color);
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 64, 64);
-  }
-  return c;
-}
-
-/** 炎の粒：熱い（黄色）・燃える（橙）・冷めた（赤）の3段 */
-const FLAME_STOPS = [
-  [
-    [0, 'rgba(255,246,205,1)'],
-    [0.25, 'rgba(255,205,95,0.85)'],
-    [0.55, 'rgba(255,120,30,0.35)'],
-    [1, 'rgba(255,60,10,0)'],
-  ],
-  [
-    [0, 'rgba(255,185,80,0.95)'],
-    [0.3, 'rgba(255,115,30,0.7)'],
-    [0.65, 'rgba(200,50,10,0.25)'],
-    [1, 'rgba(160,30,10,0)'],
-  ],
-  [
-    [0, 'rgba(225,70,20,0.8)'],
-    [0.4, 'rgba(160,30,10,0.4)'],
-    [1, 'rgba(100,15,5,0)'],
-  ],
-] as const;
-const SMOKE_STOPS = [
-  [0, 'rgba(130,80,70,0.6)'],
-  [0.5, 'rgba(85,48,42,0.28)'],
-  [1, 'rgba(40,20,18,0)'],
-] as const;
 
 /** フィルムの粒（細かいノイズの絵）。1度だけ作って、使い回す */
 let grainUrl: string | null = null;
@@ -116,6 +60,8 @@ function grainTile(): string {
   grainUrl = c.toDataURL();
   return grainUrl;
 }
+
+const scaled = (hits: readonly Hit[], k: number): Hit[] => hits.map((h) => ({ at: h.at, power: h.power * k }));
 
 export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps) {
   const body = useRef<HTMLDivElement>(null);
@@ -146,10 +92,21 @@ export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps
     const ctx = cv?.getContext('2d');
     if (!cv || !ctx) return;
     if (grain.current) grain.current.style.backgroundImage = `url(${grainTile()})`;
-    const flameArt = FLAME_STOPS.map((s) => sprite(s));
-    const smokeArt = sprite(SMOKE_STOPS);
-    const shakes = [...movie.hits, ...kicksOf(movie)]; // 声と、赤い線・燃え上がりの小さな揺れ
+    const painter = movie.style === 'flame' ? flamePainter(ctx, movie) : icePainter(ctx, movie);
+    // 揺れ：炎は、声と、赤い線・燃え上がりの小さな揺れ。氷は、呼ぶ声では揺らさず、ひび・砕ける瞬間だけ
+    const shakes = movie.style === 'flame' ? [...movie.hits, ...kicksOf(movie)] : kicksOf(movie);
+    // 迫る：炎は声で大きく、氷は呼ぶ声で、そっと寄る
+    const pushes = movie.style === 'flame' ? movie.hits : scaled(movie.hits, 0.3);
+    // フラッシュ：炎は声で赤く、氷は砕ける瞬間に白く（色は CSS）
+    const flashes = movie.style === 'flame' ? movie.hits : movie.impacts;
     const beats = heartTimes(movie);
+    /** 書いては消した言葉の場所（canvas の左上から px） */
+    const wordBox = (): WordBox | null => {
+      const r = body.current?.querySelector('.scrawl__line--crossed')?.getBoundingClientRect();
+      if (!r) return null;
+      const cr = cv.getBoundingClientRect();
+      return { left: r.left - cr.left, right: r.right - cr.left, top: r.top - cr.top, bottom: r.bottom - cr.top };
+    };
     let w = 0;
     let h = 0;
     const resize = () => {
@@ -163,14 +120,8 @@ export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps
     };
     resize();
     window.addEventListener('resize', resize);
-    let embers: Ember[] = [];
-    let flames: Flame[] = [];
-    let smoke: Puff[] = [];
-    let ash: Flake[] = [];
-    let burnBox: { x0: number; x1: number; y0: number; y1: number } | null = null; // 燃える言葉の場所（燃え始めに測る。x は幅に対する割合、y は下から px）
     const start = performance.now();
     let last = start;
-    let lastT = 0;
     let tick = 0;
     let raf = 0;
     const frame = (now: number) => {
@@ -180,119 +131,19 @@ export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps
       const beat = pulseAt(beats, t);
       const d = driftAt(t, movie.duration);
       const q = quakeAt(shakes, t);
-      const scale = punchAt(movie.hits, t) * d.scale * (1 + beat * 0.008);
+      const scale = punchAt(pushes, t) * d.scale * (1 + beat * 0.008);
       if (body.current) body.current.style.transform = `translate(${(q.x + d.x).toFixed(2)}px, ${(q.y + d.y).toFixed(2)}px) rotate(${q.rot.toFixed(3)}deg) scale(${scale.toFixed(4)})`;
-      const fl = flashAt(movie.hits, t);
-      if (glow.current) glow.current.style.opacity = String(Math.min(1, glowAt(movie, t) * flickerAt(t) * (1 - beat * 0.12) + fl * 0.6));
+      const fl = flashAt(flashes, t);
+      // 後ろの光：炎はゆらめき、声で明るくなる。氷は静かで、呼ぶ声で少しだけ明るくなる
+      const light = movie.style === 'flame' ? glowAt(movie, t) * flickerAt(t) * (1 - beat * 0.12) + fl * 0.6 : glowAt(movie, t) * (1 - beat * 0.08) + flashAt(movie.hits, t) * 0.35 + fl * 0.4;
+      if (glow.current) glow.current.style.opacity = String(Math.min(1, light));
       if (flash.current) flash.current.style.opacity = String(fl);
       // いまに戻る：冷めた色は、倒したボスの一文が出るときに置く（色を混ぜる層は重いので、それまでは置かない）
       if (grade.current && t >= movie.echoAt && grade.current.style.display !== 'block') grade.current.style.display = 'block';
       // フィルムの粒：少しずつ、ずらす（描き直さず、位置だけ動かす）
       if (grain.current && tick++ % 3 === 0) grain.current.style.transform = `translate(${Math.round(Math.random() * 160 - 80)}px, ${Math.round(Math.random() * 160 - 80)}px)`;
 
-      // 粒を進める
-      const fire = fireAt(movie, t);
-      const wide = Math.min(3, Math.max(1, w / 390)); // 広い画面では、炎の数を増やす
-      flames = stepFlames(flames, dt, MOVIE_CONFIG.fire.rate * fire * wide, fire, Math.random, Math.round(MOVIE_CONFIG.fire.max * wide));
-      smoke = stepSmoke(smoke, dt, valueAt(movie.smoke, t), Math.random);
-      embers = stepEmbers(embers, dt, valueAt(movie.embers, t), Math.random);
-      // 声が響いた瞬間に、火の粉が下から噴き上がる
-      for (const hit of movie.hits) if (hit.at > lastT && hit.at <= t) embers = [...embers, ...burstEmbers(hit.power, Math.random)].slice(-MOVIE_CONFIG.ember.max);
-      lastT = t;
-      // 言葉が燃えているあいだ、燃えている縁（下から上へ進む）から火の粉が上る
-      const bp = burnProgress(movie, t);
-      if (bp > 0 && bp < 1) {
-        if (!burnBox) {
-          const word = body.current?.querySelector('.scrawl__line--crossed');
-          const cr = cv.getBoundingClientRect();
-          const r = word?.getBoundingClientRect();
-          if (r && w > 0) burnBox = { x0: (r.left - cr.left) / w, x1: (r.right - cr.left) / w, y0: cr.bottom - r.bottom, y1: cr.bottom - r.top };
-        }
-        if (burnBox) {
-          const n = Math.floor(MOVIE_CONFIG.burn.embers * dt + Math.random());
-          const edge = { x0: burnBox.x0, x1: burnBox.x1, y: burnBox.y0 + (burnBox.y1 - burnBox.y0) * bp };
-          embers = [...embers, ...burnEmbers(edge, n, Math.random)].slice(-MOVIE_CONFIG.ember.max);
-        }
-      }
-      ash = stepAsh(ash, dt, valueAt(movie.ash, t), h, Math.random);
-
-      // 描く
-      ctx.clearRect(0, 0, w, h);
-      ctx.globalCompositeOperation = 'lighter';
-      // 炎の根元：下のふちが、勢いに応じて明るく燃える
-      const base = h * MOVIE_CONFIG.fire.base * Math.min(2, fire);
-      if (base > 1) {
-        const grad = ctx.createLinearGradient(0, h, 0, h - base);
-        grad.addColorStop(0, `rgba(255, 150, 60, ${(0.55 * Math.min(1, fire)).toFixed(3)})`);
-        grad.addColorStop(0.4, `rgba(230, 70, 20, ${(0.3 * Math.min(1, fire)).toFixed(3)})`);
-        grad.addColorStop(1, 'rgba(160, 30, 10, 0)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, h - base, w, base);
-      }
-      // 炎：縦長の舌。熱いうちは黄色く、上るにつれて赤く冷める
-      for (const f of flames) {
-        const look = flameLook(f);
-        if (look.alpha <= 0.004) continue;
-        const art = flameArt[look.heat < 0.35 ? 0 : look.heat < 0.7 ? 1 : 2]!;
-        ctx.globalAlpha = look.alpha;
-        ctx.drawImage(art, look.x * w - look.width / 2, h - f.y - look.height / 2, look.width, look.height);
-      }
-      // 煙：炎に下から照らされた、うすい赤茶のもや
-      ctx.globalCompositeOperation = 'screen';
-      for (const p of smoke) {
-        const look = smokeLook(p);
-        ctx.globalAlpha = look.alpha;
-        ctx.drawImage(smokeArt, look.x * w - look.size / 2, h - p.y - look.size / 2, look.size, look.size);
-      }
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'lighter';
-      for (const e of embers) {
-        const { x, alpha } = emberLook(e);
-        ctx.fillStyle = `rgba(255, ${Math.round(110 + 90 * (1 - e.age / e.life))}, 50, ${(alpha * 0.9).toFixed(3)})`;
-        ctx.beginPath();
-        ctx.arc(x * w, h - e.y, e.size, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      // 灰：上から、くるくる舞い落ちる
-      ctx.globalCompositeOperation = 'source-over';
-      for (const f of ash) {
-        const look = ashLook(f);
-        ctx.save();
-        ctx.translate(f.x * w + look.dx, f.y);
-        ctx.rotate(look.angle);
-        ctx.fillStyle = `rgba(196, 188, 178, ${look.alpha.toFixed(3)})`;
-        ctx.fillRect(-f.size, -f.size * 0.45, f.size * 2, f.size * 0.9);
-        ctx.restore();
-      }
-      // 四方から迫る闇（布団の中）。心音の脈で、さらに少し迫る。文字は、この上にあるので読める
-      const dark = encloseAt(movie, beats, t);
-      if (dark > 0.005) {
-        const outer = Math.hypot(w, h) * 0.62 * (1 - 0.62 * dark);
-        const grad = ctx.createRadialGradient(w / 2, h * 0.42, outer * 0.28, w / 2, h * 0.42, outer);
-        grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-        grad.addColorStop(1, `rgba(0, 0, 0, ${Math.min(0.97, dark * 1.35).toFixed(3)})`);
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, w, h);
-      }
-      // 声の波：下の炎から、横に広い、ぼやけた光の帯が広がる。闇の上に描く（布団の中にいても、声は入ってくる）
-      ctx.globalCompositeOperation = 'lighter';
-      for (const ring of ringsAt(movie.hits, t)) {
-        const r = MOVIE_CONFIG.ring.reach * h * ring.progress;
-        const band = 18 + 60 * ring.progress;
-        const outer = r + band;
-        ctx.save();
-        ctx.translate(w / 2, h + 30);
-        ctx.scale(1, 0.55);
-        const grad = ctx.createRadialGradient(0, 0, Math.max(0, r - band), 0, 0, outer);
-        grad.addColorStop(0, 'rgba(255, 110, 40, 0)');
-        grad.addColorStop(0.5, `rgba(255, 140, 60, ${ring.alpha.toFixed(3)})`);
-        grad.addColorStop(1, 'rgba(255, 110, 40, 0)');
-        ctx.fillStyle = grad;
-        // 輪のある範囲だけ塗る（画面の外に出る部分と、輪の内側の届かない所は塗らない）
-        const top = Math.min(outer, (h + 30) / 0.55);
-        ctx.fillRect(-Math.min(outer, w / 2 + 1), -top, Math.min(outer, w / 2 + 1) * 2, top);
-        ctx.restore();
-      }
+      painter.frame({ t, dt, w, h, wordBox });
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -312,7 +163,14 @@ export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps
         <InkFilter />
         <div
           className="scrawl mm__scrawl"
-          style={{ '--strike-delay': `${MOVIE_CONFIG.strikeDelay}s`, '--burn-at': `${movie.burnAt}s`, '--burn-for': `${movie.burnFor}s` } as CSSProperties}
+          style={
+            {
+              '--strike-delay': `${MOVIE_CONFIG.strikeDelay}s`,
+              '--break-at': `${movie.breakAt}s`,
+              '--break-for': `${movie.breakFor}s`,
+              ...(movie.style === 'ice' ? { '--frost-at': `${movie.frostAt}s` } : {}),
+            } as CSSProperties
+          }
         >
           {items.map((item, i) => (
             <ScrawlItemView key={i} item={item} index={i} at={times[i]} write={writeSeconds(writes[i]!)} loud={movie.loud.includes(lineNo[i]!)} />

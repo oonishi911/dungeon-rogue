@@ -43,7 +43,7 @@ export function MemoryScreen({ scene, onDone }: MemoryScreenProps) {
 
   return (
     <main
-      className={`screen screen--narrow memory memory--${page.kind}${page.kind === 'scrawl' && page.movie ? ' memory--movie' : ''}`}
+      className={`screen screen--narrow memory memory--${page.kind}${page.kind === 'scrawl' && page.movie ? ` memory--movie memory--${page.movie.style}` : ''}`}
       style={page.kind === 'scrawl' && page.movie ? ({ '--mm-duration': page.movie.duration } as CSSProperties) : undefined}
     >
       {/* ページが変わるたびに、最初から1行ずつ出し直す（key） */}

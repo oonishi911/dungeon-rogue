@@ -33,6 +33,14 @@ export const SPACE_SEND: Readonly<Record<SoundCue['kind'], number>> = {
   chalk: 0.1,
   chalk_bold: 0.12,
   slash: 0.4,
+  wind: WORLD_SPACE,
+  call: 0.55,
+  frost: 0.3,
+  creak: 0.35,
+  crack: 0.35,
+  shatter: 0.4,
+  exhale: 0.12,
+  bells: 0.55,
 };
 
 /**
@@ -56,6 +64,15 @@ export const MIX_DB: Readonly<Record<SoundCue['kind'], number>> = {
   chalk: -3.5,
   chalk_bold: -3.5,
   slash: -2.5,
+  // 氷（2026-11-21。炎の場面の釣り合いに合わせた：風は炎の音くらい、呼ぶ声は小さく、凍る音はきしみが目立ちすぎないように）
+  wind: -4,
+  call: -11,
+  frost: -5.5,
+  creak: -9.5,
+  crack: -1,
+  shatter: -2,
+  exhale: -4.7,
+  bells: 0,
 };
 
 /** 外の音は、こもるほど、少し小さくもなる（布団ごしに聞く）：通す高さの上限（Hz）から、大きさの倍率（0.3〜1）を決める */
@@ -128,7 +145,7 @@ export function scheduleMovieSound(ctx: AudioContext, out: AudioNode, movie: Mov
   const pans = opts.seed ? slashPans(opts.seed) : [];
   let slash = 0;
   for (const cue of soundCues(movie, writes)) {
-    const k = cue.kind === 'slash' ? slash++ : -1;
+    const k = cue.kind === 'slash' || cue.kind === 'crack' ? slash++ : -1; // 画面を走る線の音（炎：赤い線、氷：ひび）は、線の向きに動く
     if (opts.only && !opts.only.has(cue.kind)) continue;
     let dest = inletOf(cue.kind);
     const sweep = pans[k];
