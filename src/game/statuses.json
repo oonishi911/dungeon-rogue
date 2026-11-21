@@ -1,26 +1,26 @@
 {
   "poison": {
     "chance": 30,
-    "turns": 3,
+    "turns": 10,
     "damage": 2
   },
   "chill": {
     "chance": 30,
-    "steps": 2
+    "steps": 3
   },
   "hunger": {
     "chance": 30,
-    "amount": 4
+    "amount": 10
   },
   "foe": {
     "burn": {
       "chance": 50,
-      "turns": 3,
+      "turns": 5,
       "damage": 2
     },
     "freeze": {
       "chance": 50,
-      "turns": 2
+      "turns": 3
     },
     "weakBonus": 1,
     "smashPercent": 200,
