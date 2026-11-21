@@ -42,7 +42,10 @@ export function MemoryScreen({ scene, onDone }: MemoryScreenProps) {
   const next = () => (last ? onDone() : setAt(at + 1));
 
   return (
-    <main className={`screen screen--narrow memory memory--${page.kind}${page.kind === 'scrawl' && page.movie ? ' memory--movie' : ''}`}>
+    <main
+      className={`screen screen--narrow memory memory--${page.kind}${page.kind === 'scrawl' && page.movie ? ' memory--movie' : ''}`}
+      style={page.kind === 'scrawl' && page.movie ? ({ '--mm-duration': page.movie.duration } as CSSProperties) : undefined}
+    >
       {/* ページが変わるたびに、最初から1行ずつ出し直す（key） */}
       {page.kind === 'scrawl' && page.movie ? (
         <MemoryMovie key={at} movie={page.movie} items={page.items} text={page.text} echo={page.echo} seed={page.seed} />
