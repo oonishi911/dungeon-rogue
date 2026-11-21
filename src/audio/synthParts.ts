@@ -55,6 +55,7 @@ export function tone(ctx: AudioContext, out: AudioNode, at: number, o: { type?: 
   osc.frequency.setValueAtTime(o.freq, at);
   if (o.endFreq) osc.frequency.exponentialRampToValueAtTime(Math.max(1, o.endFreq), at + o.len);
   const attack = o.attack ?? 0.005;
+  env.gain.value = 0; // 最初の予定の前は、音を出さない（既定の 1 のままだと、鳴り始めの1点が素通りして「プチッ」と鳴ることがある）
   env.gain.setValueAtTime(0.0001, at);
   env.gain.linearRampToValueAtTime(o.gain, at + attack);
   env.gain.exponentialRampToValueAtTime(0.0001, at + o.len);
@@ -78,6 +79,7 @@ export function hiss(
   filter.frequency.setValueAtTime(o.from, at);
   if (o.to) filter.frequency.exponentialRampToValueAtTime(Math.max(20, o.to), at + o.len);
   const env = ctx.createGain();
+  env.gain.value = 0; // 最初の予定の前は、音を出さない（tone と同じ）
   env.gain.setValueAtTime(0.0001, at);
   env.gain.linearRampToValueAtTime(o.gain, at + (o.attack ?? 0.01));
   env.gain.exponentialRampToValueAtTime(0.0001, at + o.len);

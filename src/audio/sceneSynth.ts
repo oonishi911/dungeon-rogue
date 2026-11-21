@@ -89,6 +89,7 @@ export function sceneSpace(ctx: AudioContext): ConvolverNode {
 function growl(ctx: AudioContext, out: AudioNode, at: number, o: { freq: number; len: number; gain: number; seed: number }) {
   const end = at + o.len;
   const env = ctx.createGain();
+  env.gain.value = 0; // 最初の予定の前は、音を出さない
   env.gain.setValueAtTime(0.0001, at);
   env.gain.linearRampToValueAtTime(o.gain, at + 0.05);
   env.gain.exponentialRampToValueAtTime(0.0001, end);
@@ -212,6 +213,7 @@ function rumble(ctx: AudioContext, out: AudioNode, at: number, len: number) {
 /** 燃え続ける炎の低い音：ごうごうと、ゆっくり揺れる。左右で揺れ方を変えて、広がりを出す。len 秒（はじめはゆっくり立ち上がり、終わりはそっと消える） */
 function blaze(ctx: AudioContext, out: AudioNode, at: number, len: number) {
   const env = ctx.createGain();
+  env.gain.value = 0; // 最初の予定の前は、音を出さない
   env.gain.setValueAtTime(0.0001, at);
   env.gain.linearRampToValueAtTime(0.17, at + Math.min(1.2, len / 4));
   env.gain.setValueAtTime(0.17, at + Math.max(0.1, len - 1.2));
@@ -254,6 +256,7 @@ function blaze(ctx: AudioContext, out: AudioNode, at: number, len: number) {
 function swell(ctx: AudioContext, out: AudioNode, at: number, len: number) {
   const end = at + len;
   const env = ctx.createGain();
+  env.gain.value = 0; // 最初の予定の前は、音を出さない
   env.gain.setValueAtTime(0.0001, at);
   env.gain.exponentialRampToValueAtTime(0.3, end);
   env.gain.setValueAtTime(0.3, end);
@@ -311,6 +314,7 @@ function breathOut(ctx: AudioContext, out: AudioNode, at: number, level: number)
 /** 耳鳴り：高く細い音が、ゆっくり大きくなり、ゆっくり消える。左右の耳に少しずれた音を入れて、頭の中でかすかにうなる。len 秒 */
 function tinnitus(ctx: AudioContext, out: AudioNode, at: number, len: number) {
   const env = ctx.createGain();
+  env.gain.value = 0; // 最初の予定の前は、音を出さない
   env.gain.setValueAtTime(0.0001, at);
   env.gain.linearRampToValueAtTime(0.022, at + len * 0.55);
   env.gain.linearRampToValueAtTime(0.0001, at + len);
@@ -330,6 +334,7 @@ function tinnitus(ctx: AudioContext, out: AudioNode, at: number, len: number) {
 /** 最後の、静かな和音：やわらかい音を重ね（音ごとに左右へ散らし、2本ずつ少しずらして広げる）、ゆっくり立ち上がり、部屋に響かせて、len 秒かけて消える。少し遅れて、高い音がひとつ灯る */
 function pad(ctx: AudioContext, out: AudioNode, at: number, len: number) {
   const env = ctx.createGain();
+  env.gain.value = 0; // 最初の予定の前は、音を出さない
   env.gain.setValueAtTime(0.0001, at);
   env.gain.linearRampToValueAtTime(0.042, at + 2.8);
   env.gain.setValueAtTime(0.042, at + Math.max(3, len - 2.5));
@@ -356,6 +361,7 @@ function pad(ctx: AudioContext, out: AudioNode, at: number, len: number) {
   ];
   for (const [freq, gain, delay, side] of voices) {
     const v = ctx.createGain();
+    v.gain.value = 0; // 最初の予定の前は、音を出さない
     v.gain.setValueAtTime(0.0001, at + delay);
     v.gain.linearRampToValueAtTime(gain, at + delay + 1.8);
     v.connect(soft);

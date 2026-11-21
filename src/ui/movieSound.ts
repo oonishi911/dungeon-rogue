@@ -86,9 +86,7 @@ export function scheduleMovieSound(ctx: AudioContext, out: AudioNode, movie: Mov
   glue.ratio.value = 2.2;
   glue.attack.value = 0.025;
   glue.release.value = 0.3;
-  const makeup = ctx.createGain();
-  makeup.gain.value = 1.12;
-  mix.connect(glue).connect(makeup).connect(out);
+  mix.connect(glue).connect(out); // 持ち上げはしない（割れ止めの手前に、ゆとりを残す）
   // 場面の響き
   const space = sceneSpace(ctx);
   space.connect(mix);
