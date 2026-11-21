@@ -173,3 +173,54 @@ export function presence(ctx: AudioContext, out: AudioNode, amount: number): Aud
   input.connect(shaper).connect(high).connect(low).connect(level).connect(out);
   return input;
 }
+
+/** 和音の1音：[高さ(Hz), 大きさ, 鳴り始めの遅れ(秒), 左右] */
+export type ChordNote = readonly [number, number, number, number];
+
+/**
+ * やわらかい和音：音ごとに、少しずらした三角波を2本ずつ重ね（左右に広げる）、こもった音からゆっくり開くフィルタを通し、
+ * attack 秒でゆっくり立ち上がり、len 秒の終わり release 秒で消える。room があれば、部屋の響きを足す。level は全体の大きさ
+ */
+export function chordPad(
+  ctx: AudioContext,
+  out: AudioNode,
+  at: number,
+  len: number,
+  o: { notes: readonly ChordNote[]; level: number; attack: number; release: number; cutoff: readonly [number, number]; room?: number; detune?: number },
+) {
+  const env = ctx.createGain();
+  env.gain.value = 0; // 最初の予定の前は、音を出さない
+  env.gain.setValueAtTime(0.0001, at);
+  env.gain.linearRampToValueAtTime(o.level, at + o.attack);
+  env.gain.setValueAtTime(o.level, at + Math.max(o.attack + 0.1, len - o.release));
+  env.gain.linearRampToValueAtTime(0.0001, at + len);
+  const soft = ctx.createBiquadFilter();
+  soft.type = 'lowpass';
+  soft.Q.value = 0.5;
+  soft.frequency.setValueAtTime(o.cutoff[0], at);
+  soft.frequency.linearRampToValueAtTime(o.cutoff[1], at + Math.min(len, o.attack * 1.5));
+  soft.connect(env).connect(out);
+  if (o.room) {
+    const room = ctx.createConvolver();
+    room.buffer = roomOf(ctx);
+    const wet = ctx.createGain();
+    wet.gain.value = o.room;
+    env.connect(room).connect(wet).connect(out);
+  }
+  const cents = o.detune ?? 5;
+  for (const [freq, gain, delay, side] of o.notes) {
+    const v = ctx.createGain();
+    v.gain.value = 0;
+    v.gain.setValueAtTime(0.0001, at + delay);
+    v.gain.linearRampToValueAtTime(gain, at + delay + Math.min(1.8, o.attack));
+    v.connect(soft);
+    [-cents, cents].forEach((c) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = freq * Math.pow(2, c / 1200);
+      osc.connect(panTo(ctx, v, side + (c < 0 ? -0.3 : 0.3)));
+      osc.start(at + delay);
+      osc.stop(at + len + 0.05);
+    });
+  }
+}

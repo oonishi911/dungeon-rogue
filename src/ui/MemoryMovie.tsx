@@ -7,8 +7,10 @@
 
 import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { openSoundBus } from '../audio/sound';
+import { darkPainter } from './darkPainter';
 import { flamePainter } from './flamePainter';
 import { icePainter } from './icePainter';
+import { lightPainter } from './lightPainter';
 import {
   MOVIE_CONFIG,
   driftAt,
@@ -17,16 +19,16 @@ import {
   glowAt,
   heartTimes,
   itemTimes,
-  kicksOf,
+  motionOf,
   punchAt,
   pulseAt,
   quakeAt,
   writeSeconds,
-  type Hit,
   type MovieDef,
   type Write,
 } from './memoryMovie';
-import type { WordBox } from './moviePaint';
+import type { Painter, WordBox } from './moviePaint';
+import { ogrePainter } from './ogrePainter';
 import { scheduleMovieSound } from './movieSound';
 import type { ScrawlItem } from './scrawl';
 import { InkFilter, ScrawlItemView, Scratches } from './ScrawlParts';
@@ -61,7 +63,30 @@ function grainTile(): string {
   return grainUrl;
 }
 
-const scaled = (hits: readonly Hit[], k: number): Hit[] => hits.map((h) => ({ at: h.at, power: h.power * k }));
+/** 場面の型ごとの、canvas の描き方 */
+function painterOf(ctx: CanvasRenderingContext2D, movie: MovieDef): Painter {
+  switch (movie.style) {
+    case 'flame':
+      return flamePainter(ctx, movie);
+    case 'ice':
+      return icePainter(ctx, movie);
+    case 'ogre':
+      return ogrePainter(ctx, movie);
+    case 'light':
+      return lightPainter(ctx, movie);
+    case 'dark':
+      return darkPainter(ctx, movie);
+  }
+}
+
+/** 型ごとの、CSS に渡す時刻（秒）：光が崩れる・責める声が重なる・いまに戻る */
+function styleVars(movie: MovieDef): Record<string, string> {
+  const vars: Record<string, string> = { '--echo-at': `${movie.echoAt}s` };
+  if (movie.style === 'ice') vars['--frost-at'] = `${movie.frostAt}s`;
+  if (movie.style === 'light') vars['--collapse-at'] = `${movie.collapseAt}s`;
+  if (movie.style === 'ogre') vars['--merge-at'] = `${movie.mergeAt}s`;
+  return vars;
+}
 
 export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps) {
   const body = useRef<HTMLDivElement>(null);
@@ -92,13 +117,9 @@ export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps
     const ctx = cv?.getContext('2d');
     if (!cv || !ctx) return;
     if (grain.current) grain.current.style.backgroundImage = `url(${grainTile()})`;
-    const painter = movie.style === 'flame' ? flamePainter(ctx, movie) : icePainter(ctx, movie);
-    // 揺れ：炎は、声と、赤い線・燃え上がりの小さな揺れ。氷は、呼ぶ声では揺らさず、ひび・砕ける瞬間だけ
-    const shakes = movie.style === 'flame' ? [...movie.hits, ...kicksOf(movie)] : kicksOf(movie);
-    // 迫る：炎は声で大きく、氷は呼ぶ声で、そっと寄る
-    const pushes = movie.style === 'flame' ? movie.hits : scaled(movie.hits, 0.3);
-    // フラッシュ：炎は声で赤く、氷は砕ける瞬間に白く（色は CSS）
-    const flashes = movie.style === 'flame' ? movie.hits : movie.impacts;
+    const painter = painterOf(ctx, movie);
+    // 揺れ・迫り・フラッシュ（色は CSS）は、型ごと（memoryMovie.ts の motionOf）
+    const { shakes, pushes, flashes, flicker } = motionOf(movie);
     const beats = heartTimes(movie);
     /** 書いては消した言葉の場所（canvas の左上から px） */
     const wordBox = (): WordBox | null => {
@@ -135,7 +156,10 @@ export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps
       if (body.current) body.current.style.transform = `translate(${(q.x + d.x).toFixed(2)}px, ${(q.y + d.y).toFixed(2)}px) rotate(${q.rot.toFixed(3)}deg) scale(${scale.toFixed(4)})`;
       const fl = flashAt(flashes, t);
       // 後ろの光：炎はゆらめき、声で明るくなる。氷は静かで、呼ぶ声で少しだけ明るくなる
-      const light = movie.style === 'flame' ? glowAt(movie, t) * flickerAt(t) * (1 - beat * 0.12) + fl * 0.6 : glowAt(movie, t) * (1 - beat * 0.08) + flashAt(movie.hits, t) * 0.35 + fl * 0.4;
+      const light =
+        movie.style === 'flame'
+          ? glowAt(movie, t) * (flicker ? flickerAt(t) : 1) * (1 - beat * 0.12) + fl * 0.6
+          : glowAt(movie, t) * (1 - beat * 0.08) + (movie.style === 'ice' ? flashAt(movie.hits, t) * 0.35 : 0) + fl * 0.4;
       if (glow.current) glow.current.style.opacity = String(Math.min(1, light));
       if (flash.current) flash.current.style.opacity = String(fl);
       // いまに戻る：冷めた色は、倒したボスの一文が出るときに置く（色を混ぜる層は重いので、それまでは置かない）
@@ -168,12 +192,20 @@ export function MemoryMovie({ movie, items, text, echo, seed }: MemoryMovieProps
               '--strike-delay': `${MOVIE_CONFIG.strikeDelay}s`,
               '--break-at': `${movie.breakAt}s`,
               '--break-for': `${movie.breakFor}s`,
-              ...(movie.style === 'ice' ? { '--frost-at': `${movie.frostAt}s` } : {}),
+              ...styleVars(movie),
             } as CSSProperties
           }
         >
           {items.map((item, i) => (
-            <ScrawlItemView key={i} item={item} index={i} at={times[i]} write={writeSeconds(writes[i]!)} loud={movie.loud.includes(lineNo[i]!)} />
+            <ScrawlItemView
+              key={i}
+              item={item}
+              index={i}
+              at={times[i]}
+              write={writeSeconds(writes[i]!)}
+              loud={movie.loud.includes(lineNo[i]!)}
+              extraClass={lineNo[i]! >= 0 ? `mm-line-${lineNo[i]}` : undefined}
+            />
           ))}
           <Scratches seed={seed} at={movie.crossedAt + MOVIE_CONFIG.strikeDelay} />
         </div>

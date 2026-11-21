@@ -5,6 +5,7 @@
 // 赤い線の音は、画面を走る線の向き（左から右・右から左）に、左右を動かす。
 
 import { sceneSpace } from '../audio/sceneSynth';
+import { panTo } from '../audio/synthParts';
 import { synthSfx } from '../audio/synth';
 import { isWorldSound, muffleCurve, soundCues, type MovieDef, type SoundCue, type Write } from './memoryMovie';
 import { scratches } from './scrawl';
@@ -41,6 +42,26 @@ export const SPACE_SEND: Readonly<Record<SoundCue['kind'], number>> = {
   shatter: 0.4,
   exhale: 0.12,
   bells: 0.55,
+  drum: WORLD_SPACE,
+  press: 0.15,
+  crush: 0.25,
+  kneel: 0.3,
+  resolve: 0.45,
+  airy: WORLD_SPACE,
+  promise: 0.5,
+  hope: 0.4,
+  collapse: 0.4,
+  flare: 0.4,
+  overexpose: 0.35,
+  glare: 0.45,
+  afterglow: 0.5,
+  void: WORLD_SPACE,
+  seep: 0.3,
+  glow: 0.35,
+  smear: 0.3,
+  dissolve: 0.45,
+  melt: 0.4,
+  dawn: 0.5,
 };
 
 /**
@@ -73,6 +94,28 @@ export const MIX_DB: Readonly<Record<SoundCue['kind'], number>> = {
   shatter: -2,
   exhale: -4.7,
   bells: 0,
+  // 鬼・光・闇（2026-11-21。音を1つずつ書き出して、炎・氷の釣り合いに合わせた：
+  // 背景の音（押しつぶす圧・空気・深い低音）は炎の音くらい、責める打撃は大きな声くらい、いちばん大きいのは、膝をつく・まぶしさ・闇が溶ける瞬間。和音は炎の和音くらい）
+  drum: 3,
+  press: -12,
+  crush: -4.7,
+  kneel: 0,
+  resolve: -6,
+  airy: 0,
+  promise: 0,
+  hope: 0,
+  collapse: -2,
+  flare: 0,
+  overexpose: 0,
+  glare: 2,
+  afterglow: -1.5,
+  void: -9,
+  seep: -7.5,
+  glow: 1,
+  smear: 0,
+  dissolve: 0,
+  melt: -1,
+  dawn: 0.5,
 };
 
 /** 外の音は、こもるほど、少し小さくもなる（布団ごしに聞く）：通す高さの上限（Hz）から、大きさの倍率（0.3〜1）を決める */
@@ -145,7 +188,8 @@ export function scheduleMovieSound(ctx: AudioContext, out: AudioNode, movie: Mov
   const pans = opts.seed ? slashPans(opts.seed) : [];
   let slash = 0;
   for (const cue of soundCues(movie, writes)) {
-    const k = cue.kind === 'slash' || cue.kind === 'crack' ? slash++ : -1; // 画面を走る線の音（炎：赤い線、氷：ひび）は、線の向きに動く
+    // 画面を走る線の音（炎：赤い線、氷：ひび、鬼：傷、光：光の筋、闇：墨のにじみ）は、線の向きに動く
+    const k = cue.kind === 'slash' || cue.kind === 'crack' || cue.kind === 'flare' || cue.kind === 'smear' ? slash++ : -1;
     if (opts.only && !opts.only.has(cue.kind)) continue;
     let dest = inletOf(cue.kind);
     const sweep = pans[k];
@@ -155,7 +199,7 @@ export function scheduleMovieSound(ctx: AudioContext, out: AudioNode, movie: Mov
       move.pan.linearRampToValueAtTime(sweep[1], start + cue.at + 0.24);
       move.connect(dest);
       dest = move;
-    }
+    } else if (cue.pan !== undefined) dest = panTo(ctx, dest, cue.pan); // 音の予定が決めた左右（鬼の打撃：左右から、だんだん真ん中へ）
     synthSfx(ctx, dest, cue.kind, start + cue.at, cue.power);
   }
 }

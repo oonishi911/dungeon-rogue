@@ -1,30 +1,71 @@
 // 記憶の画面で使う「書きなぐった文字」の部品（MemoryScreen.tsx と、動く場面の MemoryMovie.tsx が使う）。決め方は scrawl.ts
 
 import type { CSSProperties } from 'react';
-import { INK_FILTER, SCRAWL_CONFIG, scratches, type Glyph, type ScrawlItem } from './scrawl';
+import { INK_FILTER, SCRAWL_CONFIG, isClosing, scratches, type Glyph, type ScrawlItem } from './scrawl';
 
 const glyphStyle = (g: Glyph): CSSProperties =>
   ({ '--r': `${g.rot}deg`, '--x': `${g.dx}em`, '--y': `${g.dy}em`, fontSize: `${g.size}em` }) as CSSProperties;
 
-function Glyphs({ glyphs }: { glyphs: Glyph[] }) {
+function Glyph1({ g }: { g: Glyph }) {
+  return (
+    <span className="scrawl__ch" style={glyphStyle(g)} aria-hidden="true">
+      {g.ch}
+      {g.over.map((o, k) => (
+        <span key={k} className="scrawl__over" style={{ '--r': `${o.rot}deg`, '--x': `${o.dx}em`, '--y': `${o.dy}em` } as CSSProperties}>
+          {g.ch}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * 文字を、折り返してよい区切り（chunks。scrawl.ts の phrases）ごとにまとめて並べる。まとまりの中では折り返さない。
+ * まとまりが画面の幅より長いときだけ、その中の細かい区切り（subPhrases）で折り返す
+ */
+function Glyphs({ glyphs, chunks }: { glyphs: Glyph[]; chunks: number[][] }) {
+  let from = 0;
   return (
     <>
-      {glyphs.map((g, i) => (
-        <span key={i} className="scrawl__ch" style={glyphStyle(g)} aria-hidden="true">
-          {g.ch}
-          {g.over.map((o, k) => (
-            <span key={k} className="scrawl__over" style={{ '--r': `${o.rot}deg`, '--x': `${o.dx}em`, '--y': `${o.dy}em` } as CSSProperties}>
-              {g.ch}
-            </span>
-          ))}
+      {chunks.map((subs, c) => (
+        <span key={c} className="scrawl__chunk">
+          {subs.map((n, k) => {
+            const part = glyphs.slice(from, from + n);
+            from += n;
+            // 閉じる記号は、前の文字と一緒にする（どんなに狭くても、「。」が行の頭に来ない）
+            const groups: Glyph[][] = [];
+            for (const g of part) {
+              const last = groups[groups.length - 1];
+              if (last && isClosing(g.ch)) last.push(g);
+              else groups.push([g]);
+            }
+            return (
+              <span key={k} className="scrawl__chunk">
+                {groups.map((group, i) =>
+                  group.length === 1 ? (
+                    <Glyph1 key={i} g={group[0]!} />
+                  ) : (
+                    <span key={i} className="scrawl__keep">
+                      {group.map((g, j) => (
+                        <Glyph1 key={j} g={g} />
+                      ))}
+                    </span>
+                  ),
+                )}
+              </span>
+            );
+          })}
         </span>
       ))}
     </>
   );
 }
 
-/** 文字の絵を1つ出す。at：動く場面で、出る時刻（秒）。ないときは、番号 index の順に、一定の間をあけて出る。loud：大きな声で、文字がふるえる。write：書かれていく長さ（秒） */
-export function ScrawlItemView({ item, index, at, loud, write }: { item: ScrawlItem; index: number; at?: number; loud?: boolean; write?: number }) {
+/**
+ * 文字の絵を1つ出す。at：動く場面で、出る時刻（秒）。ないときは、番号 index の順に、一定の間をあけて出る。loud：大きな声で、文字がふるえる。write：書かれていく長さ（秒）。
+ * extraClass：動く場面で、行ごとに付ける名前（何行目か。場面の型ごとの動きに使う）
+ */
+export function ScrawlItemView({ item, index, at, loud, write, extraClass }: { item: ScrawlItem; index: number; at?: number; loud?: boolean; write?: number; extraClass?: string }) {
   const style = {
     '--i': index,
     '--tilt': `${item.tilt}deg`,
@@ -43,7 +84,7 @@ export function ScrawlItemView({ item, index, at, loud, write }: { item: ScrawlI
     const points = item.zig.map((y, i) => `${(i / (n - 1)) * 100},${y * 100}`).join(' ');
     return (
       <p className="scrawl__line scrawl__line--crossed" style={style} aria-hidden="true">
-        <Glyphs glyphs={item.glyphs} />
+        <Glyphs glyphs={item.glyphs} chunks={item.chunks} />
         <svg className="scrawl__strike" viewBox="0 0 100 100" preserveAspectRatio="none">
           <polyline points={points} fill="none" />
         </svg>
@@ -51,8 +92,8 @@ export function ScrawlItemView({ item, index, at, loud, write }: { item: ScrawlI
     );
   }
   return (
-    <p className={loud ? 'scrawl__line scrawl__line--loud' : 'scrawl__line'} style={style} aria-hidden="true">
-      <Glyphs glyphs={item.glyphs} />
+    <p className={`${loud ? 'scrawl__line scrawl__line--loud' : 'scrawl__line'}${extraClass ? ` ${extraClass}` : ''}`} style={style} aria-hidden="true">
+      <Glyphs glyphs={item.glyphs} chunks={item.chunks} />
     </p>
   );
 }

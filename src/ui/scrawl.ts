@@ -39,9 +39,10 @@ export interface Glyph {
   over: { rot: number; dx: number; dy: number }[]; // 重ね書き（なければ空。多いと、何度もなぞった字になる）
 }
 
+/** chunks：折り返してよい区切り（phrases）ごとの、さらに細かい区切り（subPhrases）の文字数。区切りの中では折り返さない */
 export type ScrawlItem =
-  | { kind: 'line'; glyphs: Glyph[]; tilt: number; shift: number }
-  | { kind: 'crossed'; glyphs: Glyph[]; tilt: number; shift: number; zig: number[] } // 書いたあと、ぐちゃぐちゃに消した言葉。zig：取り消し線の上下（0〜1）
+  | { kind: 'line'; glyphs: Glyph[]; chunks: number[][]; tilt: number; shift: number }
+  | { kind: 'crossed'; glyphs: Glyph[]; chunks: number[][]; tilt: number; shift: number; zig: number[] } // 書いたあと、ぐちゃぐちゃに消した言葉。zig：取り消し線の上下（0〜1）
   | { kind: 'black'; width: number; tilt: number; shift: number; shape: number[] }; // 塗りつぶし。shape：帯の縁のがたつき（%）
 
 const hash = (s: string): number => {
@@ -82,6 +83,110 @@ function glyphsOf(text: string, r: Rng): Glyph[] {
   }));
 }
 
+// ───────── 折り返し（2026-11-21）─────────
+// 書きなぐった文字は1文字ずつ別の箱にするので、そのままでは、ブラウザの日本語の折り返しの決まりが効かない
+// （「。」が行の頭に来たり、「誰／か」のように言葉の途中で切れたり、画面の幅で折り返す場所が変わったりする）。
+// そこで、文を、意味のまとまり（文節に近いもの）に分け、まとまりの中では折り返さない。
+
+const OPEN = '「『（';
+const CLOSE = '」』）、。，．！？…';
+/** 漢字・カタカナの前で、ここで切ってよい、ひらがな1文字（助詞など） */
+const PARTICLES = 'のでをがにはともへや';
+/** 漢字のあいだにはさまる、送り仮名1文字（「振り向く」の「り」など）。ここでは切らない */
+const OKURI = 'りきしちみびひぎじ';
+/** 「の」「な」で終わるまとまりを、次とつなげるときの、長さの上限（文字） */
+const MERGE_MAX = 8;
+
+type CharKind = 'open' | 'close' | 'hira' | 'kanji' | 'other';
+const kindOf = (ch: string): CharKind => {
+  if (OPEN.includes(ch)) return 'open';
+  if (CLOSE.includes(ch)) return 'close';
+  if (/[\u3041-\u3096]/.test(ch)) return 'hira';
+  if (/[\u4e00-\u9fff\u3005\u30a1-\u30fa\u30fc]/.test(ch)) return 'kanji'; // 漢字・々・カタカナ（どれも、言葉の始まりになりうる）
+  return 'other';
+};
+
+/**
+ * 文を、折り返してよい区切り（意味のまとまり）に分ける：
+ * 区切るのは、句読点・閉じかっこのあと、開きかっこの前、ひらがなから漢字（カタカナ）に変わる所（送り仮名1文字の所は除く）。
+ * そのあと、「の」「な」で終わるまとまりは次とつなげ（「あの子は」「大きな声が」）、句読点のあとの短いひらがな（「と、」）は前へ、
+ * 最後の短すぎるまとまり（「夜。」）は前へつなげる
+ */
+export function phrases(text: string): string[] {
+  const chars = [...text];
+  const raw: string[] = [];
+  let cur = '';
+  let hiraRun = 0; // いまの、ひらがなの続き（文字数）
+  let beforeRun: CharKind = 'other'; // ひらがなの続きの前の文字の種類
+  chars.forEach((ch, i) => {
+    const k = kindOf(ch);
+    const prev = i > 0 ? kindOf(chars[i - 1]!) : 'other';
+    let cut = false;
+    if (i > 0 && prev === 'close' && k !== 'close') cut = true;
+    if (i > 0 && k === 'open') cut = true;
+    if (prev === 'hira' && k === 'kanji') {
+      const last = chars[i - 1]!;
+      const okurigana = hiraRun === 1 && beforeRun === 'kanji' && OKURI.includes(last) && !PARTICLES.includes(last);
+      if (!okurigana) cut = true;
+    }
+    if (cut && cur) {
+      raw.push(cur);
+      cur = '';
+    }
+    cur += ch;
+    if (k === 'hira') {
+      if (prev !== 'hira') beforeRun = prev;
+      hiraRun = prev === 'hira' ? hiraRun + 1 : 1;
+    } else hiraRun = 0;
+  });
+  if (cur) raw.push(cur);
+  const bare = (p: string) => [...p].filter((ch) => kindOf(ch) !== 'close' && kindOf(ch) !== 'open').length;
+  const endsClose = (p: string) => kindOf([...p].pop() ?? '') === 'close';
+  const out: string[] = [];
+  for (const p of raw) {
+    const prev = out[out.length - 1];
+    // 句読点のあとの、句読点で終わる短いひらがなだけのまとまり（「と、」）は、前へ
+    if (prev !== undefined && endsClose(prev) && endsClose(p) && bare(p) <= 2 && [...p].every((ch) => kindOf(ch) === 'hira' || kindOf(ch) === 'close')) out[out.length - 1] = prev + p;
+    // 「の」「な」で終わるまとまりは、次とつなげる（長くなりすぎるときは、つなげない）
+    else if (prev !== undefined && /[のな]$/.test(prev) && [...prev + p].length <= MERGE_MAX) out[out.length - 1] = prev + p;
+    else out.push(p);
+  }
+  // 最後の、短すぎるまとまり（「夜。」）は、前へ
+  if (out.length > 1 && bare(out[out.length - 1]!) <= 2) {
+    const last = out.pop()!;
+    out[out.length - 1] += last;
+  }
+  return out;
+}
+
+/**
+ * まとまりが画面の幅に収まらないときだけ使う、さらに細かい区切り：漢字のあとの助詞のあと（「家を｜ゆらしていた。」「人は｜いなかった。」）。
+ * 助詞が続くとき（「では」）は切らない。句読点は、いつも前の文字と一緒
+ */
+export function subPhrases(chunk: string): string[] {
+  const chars = [...chunk];
+  const out: string[] = [];
+  let cur = '';
+  chars.forEach((ch, i) => {
+    cur += ch;
+    const prev = chars[i - 1];
+    const next = chars[i + 1];
+    const afterParticle = PARTICLES.includes(ch) && prev !== undefined && kindOf(prev) === 'kanji';
+    if (afterParticle && next !== undefined && !PARTICLES.includes(next) && kindOf(next) !== 'close' && i < chars.length - 2) {
+      out.push(cur);
+      cur = '';
+    }
+  });
+  if (cur) out.push(cur);
+  return out;
+}
+
+/** 閉じる記号（句読点・閉じかっこ）か。行の頭に来ないよう、いつも前の文字と一緒にする */
+export const isClosing = (ch: string): boolean => kindOf(ch) === 'close';
+
+/** 折り返してよい区切りごとの、細かい区切りの文字数 */
+export const chunkLengths = (text: string): number[][] => phrases(text).map((p) => subPhrases(p).map((s) => [...s].length));
+
 /**
  * 記憶の文章を、書きなぐった画面の部品に並べる。
  * 1行目のあとに「書いては消した言葉」、行のあいだと最後に「塗りつぶしの帯」を入れる
@@ -89,7 +194,7 @@ function glyphsOf(text: string, r: Rng): Glyph[] {
 export function scrawl(lines: readonly string[], crossed: string, seed: string): ScrawlItem[] {
   const c = SCRAWL_CONFIG;
   const r = rngOf(seed);
-  const line = (text: string): ScrawlItem => ({ kind: 'line', glyphs: glyphsOf(text, r), tilt: r.sign(c.tilt), shift: r.sign(c.shift) });
+  const line = (text: string): ScrawlItem => ({ kind: 'line', glyphs: glyphsOf(text, r), chunks: chunkLengths(text), tilt: r.sign(c.tilt), shift: r.sign(c.shift) });
   const black = (): ScrawlItem => ({
     kind: 'black',
     width: r.range(c.black[0], c.black[1]),
@@ -104,6 +209,7 @@ export function scrawl(lines: readonly string[], crossed: string, seed: string):
       items.push({
         kind: 'crossed',
         glyphs: glyphsOf(crossed, r),
+        chunks: chunkLengths(crossed),
         tilt: r.sign(c.tilt * 1.5),
         shift: r.sign(c.shift),
         zig: Array.from({ length: c.strikeZigzag }, () => r.range(0.1, 0.9)),
