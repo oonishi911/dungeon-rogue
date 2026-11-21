@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { enemyBase, ITEMS } from '../game/data';
 import { gearOf } from '../game/itemMaster';
-import { behaviorsOf, enemyDef, isAdjacent, type MapEnemy } from '../game/enemies';
+import { behaviorsOf, ENEMY_CONFIG, enemyDef, isAdjacent, type MapEnemy } from '../game/enemies';
 import { deathKindOf, type DeathKind } from '../game/deathKind';
 import { upStairs } from '../game/explore';
 import { DIR_DELTA, type CastEvent, type Dir, type ExploreState, type FoeEvent } from '../game/exploreTypes';
@@ -131,7 +131,7 @@ export class DungeonView3D {
   private combatZoom = 1; // 戦闘中に寄せている倍率（なめらかに変わる）
   private lastCombatAt = -Infinity; // 最後に戦闘中だった時刻
   private readonly damagePops: { sprite: THREE.Sprite; start: number }[] = [];
-  private readonly roars: { mesh: THREE.Mesh; at: Pos; start: number; phase: number }[] = []; // ボスの咆哮の輪
+  private readonly roars: { mesh: THREE.Mesh; at: Pos; start: number; reach: number; ms: number }[] = []; // ボスの咆哮の輪・見張りの叫びの輪（reach：広がりきったときの倍率）
   private readonly shots: { mesh: THREE.Mesh; from: Pos; to: Pos; start: number; ms: number }[] = []; // 飛んでいる、遠距離の敵の矢
   // 霧：描いている床と壁の1つ1つ（どの入れ物の何番目か・どのマスか・元の色）と、マスごとの今の明るさ
   // 霧：マスごとの「見えている」「一度見た」を1マス1ドットの小さな画像にして、描くときにピクセルごとになめらかに読む
@@ -959,8 +959,20 @@ export class DungeonView3D {
       else if (f.kind === 'summon') this.popText(f.at, '呼', FOE_FX.marks.summon);
       else if (f.kind === 'roar') this.roar(f.at, f.phase);
       else if (f.kind === 'sow') this.sow(f);
+      else if (f.kind === 'alarm') this.alarm(f.at);
     }
     return shotMs;
+  }
+
+  /** 見張りの叫び：頭上に「叫」が浮かび、足元から、声の届く広さ（alarmRange）まで輪が広がる（揺れはない） */
+  private alarm(at: Pos) {
+    this.popText(at, '叫', FOE_FX.marks.alarm);
+    if (this.reduceMotion) return;
+    const mesh = new THREE.Mesh(this.shared.ring, new THREE.MeshBasicMaterial({ color: FOE_FX.alarm.color, transparent: true, depthTest: false, side: THREE.DoubleSide }));
+    mesh.renderOrder = 14;
+    mesh.position.set(at.x, 0.05, at.y);
+    this.scene.add(mesh);
+    this.roars.push({ mesh, at, start: performance.now(), reach: ENEMY_CONFIG.alarmRange / FOE_FX.alarm.ringRadius - 1, ms: FOE_FX.alarm.ms });
   }
 
   /** ボスの咆哮：足元から輪が広がり、画面が揺れる。段階が高いほど大きく、強く揺れる */
@@ -972,15 +984,15 @@ export class DungeonView3D {
     mesh.renderOrder = 14;
     mesh.position.set(at.x, 0.05, at.y);
     this.scene.add(mesh);
-    this.roars.push({ mesh, at, start: performance.now(), phase });
+    this.roars.push({ mesh, at, start: performance.now(), reach: FOE_FX.phase.roarReach + phase, ms: FOE_FX.phase.roarMs });
     this.spellFx.shakeScreen(FOE_FX.phase.shake * (phase - 1));
   }
 
   /** 咆哮の輪を広げながら薄くし、終わったものを片付ける */
   private updateRoars(now: number) {
     for (let k = this.roars.length - 1; k >= 0; k--) {
-      const { mesh, at, start, phase } = this.roars[k]!;
-      const t = (now - start) / FOE_FX.phase.roarMs;
+      const { mesh, at, start, reach, ms } = this.roars[k]!;
+      const t = (now - start) / ms;
       if (t >= 1) {
         this.scene.remove(mesh);
         (mesh.material as THREE.Material).dispose();
@@ -988,7 +1000,7 @@ export class DungeonView3D {
         continue;
       }
       mesh.position.set(at.x, 0.05, at.y);
-      mesh.scale.setScalar(1 + (FOE_FX.phase.roarReach + phase) * t);
+      mesh.scale.setScalar(1 + reach * t);
       (mesh.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - t);
     }
   }

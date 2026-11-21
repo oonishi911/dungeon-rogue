@@ -65,6 +65,7 @@ export type FoeEvent =
   | { kind: 'windup'; at: Pos } // 突進の構え
   | { kind: 'charge'; from: Pos; to: Pos; hit: boolean } // 突進（hit：主人公に当たった）
   | { kind: 'bump'; at: Pos } // 突進が壁にぶつかった
+  | { kind: 'alarm'; at: Pos; to: Pos[] } // 見張りが叫んで、仲間（to）に気付かせた
   | { kind: 'summon'; at: Pos; from: Pos } // 敵が呼ばれた（from：呼んだ敵のいたマス）
   | { kind: 'block'; at: Pos } // 盾で防がれた
   | { kind: 'steam'; at: Pos } // 燃える床と霜の床、または敵の燃焼と凍結がぶつかって、水蒸気になった
