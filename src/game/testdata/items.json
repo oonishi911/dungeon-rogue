@@ -675,6 +675,30 @@
     "book_prism_fan": {
       "name": "虹の扇の呪文書",
       "price": 700
+    },
+    "book_fire_blade": {
+      "name": "炎の刃の呪文書",
+      "price": 350
+    },
+    "book_ice_blade": {
+      "name": "氷の刃の呪文書",
+      "price": 350
+    },
+    "book_light_blade": {
+      "name": "光の刃の呪文書",
+      "price": 350
+    },
+    "book_dark_blade": {
+      "name": "闇の刃の呪文書",
+      "price": 350
+    },
+    "book_drain": {
+      "name": "吸命の呪文書",
+      "price": 500
+    },
+    "book_thunder_chain": {
+      "name": "雷の鎖の呪文書",
+      "price": 700
     }
   },
   "information": {

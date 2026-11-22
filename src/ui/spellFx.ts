@@ -43,6 +43,9 @@ const BOLT_ELEMENT: Partial<Record<SpellId, Element>> = {
 };
 
 // 強化版の呪文（連矢・強衝撃・烈なぎ払い）。ふつうの呪文より演出を派手にする（二重の魔法陣、大きな爆発や輪、画面の閃光と揺れ）
+// 属性の刃の属性
+const BLADE_ELEMENT: Record<'fire_blade' | 'ice_blade' | 'light_blade' | 'dark_blade', Element> = { fire_blade: 'fire', ice_blade: 'ice', light_blade: 'light', dark_blade: 'dark' };
+
 const STRONG_SPELLS: ReadonlySet<SpellId> = new Set<SpellId>(['fire_chain', 'ice_chain', 'light_chain', 'dark_chain', 'shockwave_strong', 'sweep_bleed']);
 
 // 相性による強さ（大きさ・粒の数・揺れ・閃光に掛ける）。何にも当たらなかったときは miss
@@ -68,6 +71,9 @@ const FX = {
   ward: { color: 0x7fd8ff, sparks: 18, rise: 1, ms: 900 },
   poison: { color: 0x7fc46a },
   cleanse: { color: 0xf4f0e4, sparks: 14, rise: 1.1, ms: 800 },
+  blade: { sparks: 16, rise: 1.1, ms: 750, burstMs: 420 },
+  drain: { color: 0xd6283a, back: 0xff8a9a, tileMs: 55, minFlyMs: 160, returnMs: 520, motes: 22 }, // 吸命：飛ぶ玉の色・戻ってくる光の色・1マスの時間・戻ってくるまで・戻る光の数
+  thunder: { color: 0x9fd4ff, core: 0xffffff, hopMs: 95, ms: 280, segments: 9, jag: 0.34, width: 0.022, glow: 0.075 }, // 雷の鎖：色・1回跳ぶ間（ミリ秒）・稲妻が見えている時間・折れ目の数・折れ方
   prism: { chargeMs: 160, rowMs: 90, tileMs: 520, colors: [0xff6a5a, 0xffa64a, 0xffe15a, 0x7fd86a, 0x5ac8ff, 0x7f8aff, 0xc47fff] as readonly number[], flash: 0.3, shake: 0.3 }, // 虹の扇：溜め・奥の段へ進む間（ミリ秒）・1マスの光が消えるまで・7色・閃光・揺れ
   lights: 2, // 照らす光の数（使い回す）
   maxParticles: 320, // 一度に出す粒の上限（重くならないように）
@@ -272,6 +278,24 @@ export class SpellEffects {
       }
       case 'prism_fan':
         return this.prismFan(now, cast, from);
+      case 'fire_blade':
+      case 'ice_blade':
+      case 'light_blade':
+      case 'dark_blade': {
+        // 属性の刃：属性の色の魔法陣と、武器の高さで渦を巻いて上る光、はじける火花
+        const color = ELEMENT_COLORS[BLADE_ELEMENT[cast.spell]];
+        this.castCircle(now, from, color, 0.9);
+        this.rising(now, from, color, FX.blade.sparks, FX.blade.rise, FX.blade.ms);
+        this.later(now + FX.blade.burstMs, () => {
+          this.emit({ at: this.at(from, 0.7), count: 30, color, speed: [0.8, 2], up: 0.5, gravity: 1.5, drag: 1.4, life: [0.3, 0.6], size: [0.08, 0.16], additive: true, texture: 'glow', jitter: 0.1 });
+          this.flash(color, 0.14);
+        });
+        break;
+      }
+      case 'drain':
+        return this.drainFx(now, cast, from);
+      case 'thunder_chain':
+        return this.thunderFx(now, cast, from);
       case 'cleanse': {
         // 解呪：白い魔法陣と、ほどけて上る光
         const c = FX.cleanse;
@@ -1120,6 +1144,109 @@ export class SpellEffects {
     return last + 60;
   }
 
+  /** 吸命：赤黒い玉が飛び、当たった敵から、赤い光の粒が主人公へ戻ってきて、体が淡く光る。当たる時刻（ミリ秒）を返す */
+  private drainFx(now: number, cast: CastEvent, from: Pos): number {
+    const c = FX.drain;
+    this.castCircle(now, from, c.color, 0.8);
+    const end = cast.path.at(-1);
+    if (!end) return 0;
+    const fly = Math.max(c.minFlyMs, cast.path.length * c.tileMs);
+    const a = this.at(from, FX.height);
+    const b = this.at(end, FX.height);
+    const ball = this.orb(c.color, 0.5);
+    this.add(now, fly, [ball], (t) => ball.position.lerpVectors(a, b, easeIn(t)));
+    this.lightUp(now, fly, c.color, 1.4, (t) => new THREE.Vector3().lerpVectors(a, b, t), () => 1);
+    this.later(now + fly, () => {
+      this.onImpact?.(end, 1, c.color);
+      this.emit({ at: b, count: 14, color: c.color, speed: [0.5, 1.2], drag: 1.6, life: [0.3, 0.6], size: [0.06, 0.12], additive: true });
+    });
+    if (cast.drained) {
+      // 戻ってくる光：敵から主人公へ、少しずつずれて、弧を描いて飛ぶ
+      const motes = Array.from({ length: c.motes }, (_, i) => ({ mesh: this.orb(c.back, 0.26), delay: (i / c.motes) * 0.35, lift: 0.3 + (i % 4) * 0.15, side: ((i % 5) - 2) * 0.12 }));
+      this.add(now + fly, c.returnMs, motes.map((m) => m.mesh), (t) => {
+        for (const m of motes) {
+          const u = Math.max(0, Math.min(1, (t - m.delay) / (1 - m.delay)));
+          m.mesh.position.lerpVectors(b, a, easeIn(u));
+          m.mesh.position.y += Math.sin(u * Math.PI) * m.lift;
+          m.mesh.position.x += Math.sin(u * Math.PI) * m.side;
+          m.mesh.material.opacity = u <= 0 || u >= 1 ? 0 : 1;
+        }
+      });
+      this.later(now + fly + c.returnMs, () => this.rising(performance.now(), from, c.back, 10, 0.8, 600));
+    }
+    return fly;
+  }
+
+  /** 雷の鎖：主人公から最初の敵へ、そこから次の敵へと、折れ曲がる稲妻が順に走り、当たるたびに白く光ってはじける。最後に当たる時刻（ミリ秒）を返す */
+  private thunderFx(now: number, cast: CastEvent, from: Pos): number {
+    const c = FX.thunder;
+    this.castCircle(now, from, c.color, 0.9);
+    const links = cast.links ?? [];
+    if (links.length === 0) {
+      const end = cast.path.at(-1);
+      if (end) this.bolt3(now + FX.bolt.chargeMs, this.at(from, FX.height), this.at(end, FX.height), 1);
+      return 0;
+    }
+    const points = [from, ...links];
+    let at = now + FX.bolt.chargeMs;
+    for (let k = 1; k < points.length; k++) {
+      const p0 = this.at(points[k - 1]!, k === 1 ? FX.height : 0.55);
+      const p1 = this.at(points[k]!, 0.55);
+      const strength = Math.pow(0.85, k - 1);
+      this.bolt3(at, p0, p1, strength);
+      const hit = points[k]!;
+      this.later(at, () => {
+        this.onImpact?.(hit, strength, c.color);
+        this.emit({ at: p1, count: Math.round(18 * strength), color: () => (Math.random() < 0.5 ? c.core : c.color), speed: [1, 2.4], up: 0.5, gravity: 2, drag: 1.2, life: [0.15, 0.35], size: [0.04, 0.08], additive: true, texture: 'spark', jitter: 0.1 });
+        this.flash(c.color, 0.22 * strength);
+        this.shakeBy(0.25 * strength);
+      });
+      this.lightUp(at, c.ms, c.color, 3 * strength, () => p1, (t) => 1 - t);
+      at += c.hopMs;
+    }
+    return at - now;
+  }
+
+  /** 折れ曲がる稲妻を1本、a から b へ、c.ms のあいだ走らせる（ちらつきながら消える） */
+  private bolt3(start: number, a: THREE.Vector3, b: THREE.Vector3, strength: number) {
+    const c = FX.thunder;
+    const pts: THREE.Vector3[] = [];
+    for (let i = 0; i <= c.segments; i++) {
+      const p = new THREE.Vector3().lerpVectors(a, b, i / c.segments);
+      if (i > 0 && i < c.segments) p.add(new THREE.Vector3((Math.random() - 0.5) * c.jag, (Math.random() - 0.5) * c.jag, (Math.random() - 0.5) * c.jag));
+      pts.push(p);
+    }
+    // 折れ目ごとに、細い芯（白）と太い光（青白）の棒をつなぐ
+    const glowMat = this.plainGlow(c.color, 0);
+    const coreMat = this.plainGlow(c.core, 0);
+    const sticks: THREE.Mesh[] = [];
+    for (let i = 1; i < pts.length; i++) {
+      const p0 = pts[i - 1]!;
+      const p1 = pts[i]!;
+      const len = p0.distanceTo(p1);
+      const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3().subVectors(p1, p0).normalize());
+      for (const [mat, r] of [[glowMat, c.glow * strength], [coreMat, c.width]] as const) {
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 6, 1, true), mat);
+        m.position.copy(p0).lerp(p1, 0.5);
+        m.quaternion.copy(quat);
+        m.renderOrder = 16;
+        sticks.push(m);
+      }
+    }
+    const orbs = pts.filter((_, i) => i % 2 === 0).map((p) => {
+      const o = this.orb(c.color, 0.4 * strength);
+      o.position.copy(p);
+      return o;
+    });
+    this.add(start, c.ms, [...sticks, ...orbs], (t) => {
+      const flick = (Math.sin(t * 60) * 0.5 + 0.5) * 0.4 + 0.6;
+      const a2 = (1 - t) * flick * strength;
+      glowMat.opacity = a2 * 0.55;
+      coreMat.opacity = Math.min(1, a2 * 1.4);
+      for (const o of orbs) o.material.opacity = a2 * 0.7;
+    });
+  }
+
   /** マス p の、高さ y の位置 */
   private at(p: Pos, y: number): THREE.Vector3 {
     return new THREE.Vector3(p.x, y, p.y);
@@ -1146,8 +1273,8 @@ export class SpellEffects {
   private disposeGroup(group: THREE.Group) {
     this.scene.remove(group);
     group.traverse((c) => {
-      if (c instanceof THREE.Mesh && !(Object.values(this.shared) as THREE.BufferGeometry[]).includes(c.geometry)) c.geometry.dispose();
-      if (c instanceof THREE.Mesh || c instanceof THREE.Sprite) {
+      if ((c instanceof THREE.Mesh || c instanceof THREE.Line) && !(Object.values(this.shared) as THREE.BufferGeometry[]).includes(c.geometry)) c.geometry.dispose();
+      if (c instanceof THREE.Mesh || c instanceof THREE.Sprite || c instanceof THREE.Line) {
         const m = c.material as THREE.Material;
         if (!(m instanceof THREE.MeshPhongMaterial)) m.dispose(); // 氷の結晶の素材は、まとめて片付ける
       }

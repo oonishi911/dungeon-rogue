@@ -63,7 +63,13 @@ export type ItemId =
   | 'book_ward'
   | 'book_poison_mist'
   | 'book_cleanse'
-  | 'book_prism_fan';
+  | 'book_prism_fan'
+  | 'book_fire_blade'
+  | 'book_ice_blade'
+  | 'book_light_blade'
+  | 'book_dark_blade'
+  | 'book_drain'
+  | 'book_thunder_chain';
 
 // ===== 残響（刻印スロットにはめるもの。echoMaster.ts、docs/echo-spec.md） =====
 export type EchoId = 'fire' | 'ice' | 'light' | 'dark' | 'soft' | 'hard' | 'spirit' | 'plain' | 'warmth' | 'pulse';
@@ -116,7 +122,13 @@ export type SpellId =
   | 'ward'
   | 'poison_mist'
   | 'cleanse'
-  | 'prism_fan';
+  | 'prism_fan'
+  | 'fire_blade'
+  | 'ice_blade'
+  | 'light_blade'
+  | 'dark_blade'
+  | 'drain'
+  | 'thunder_chain';
 
 // 呪文の働き。aim は唱えるときに向きを選ぶかどうか
 export type SpellEffect =
@@ -132,6 +144,9 @@ export type SpellEffect =
   | { kind: 'ward' } // 数ターン、敵の攻撃で受けるダメージを減らす
   | { kind: 'poison' } // 向いた方向へ飛び、当たった所のまわり9マスに、数ターン残る毒の霧を置く（上にいる敵は毎ターンダメージ。主人公は受けない）
   | { kind: 'cleanse' } // 自分の毒と鈍足を治す
+  | { kind: 'blade'; element: Element } // 武器に属性を宿す（砥石・聖水・闇の油と同じ。攻撃の回数は設定）
+  | { kind: 'drain' } // 向いた方向へ飛び、最初の敵に属性のないダメージ。与えたダメージの一部だけHPが回復する
+  | { kind: 'thunder' } // 向いた方向へ飛び、最初の敵から、近くの敵へ次々に跳ぶ雷（跳ぶたびに弱くなる。属性なし）
   | { kind: 'fan' }; // 向いた方向に前へ広がる扇形（手前1マス→奥ほど2マスずつ広い）の敵すべてに当たる。属性を持たず、どの敵にも同じダメージ
 
 export interface SpellDef {

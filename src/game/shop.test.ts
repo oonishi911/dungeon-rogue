@@ -36,7 +36,7 @@ describe('店に並ぶもの', () => {
 
   it('道具と呪文書は、すべて並ぶ', () => {
     expect(shelfItems([], 'supply')).toContain('potion');
-    expect(shelfItems([], 'book')).toHaveLength(22);
+    expect(shelfItems([], 'book')).toHaveLength(28);
   });
 });
 

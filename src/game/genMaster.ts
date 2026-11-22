@@ -113,6 +113,7 @@ export const SPELL_FIELDS: Record<SpellId, { key: string; label: string; min: nu
   const power = { key: 'power', label: 'ダメージの倍率', min: 0, max: 10, step: 0.1, integer: false };
   const range = { key: 'range', label: '届くマス数', min: 1, max: 20, step: 1, integer: true };
   const bolt = [cost, power, range];
+  const blade = [cost, { key: 'hits', label: '宿る攻撃の回数', min: 1, max: 20, step: 1, integer: true }];
   const shockwave = [
     cost,
     power,
@@ -154,6 +155,19 @@ export const SPELL_FIELDS: Record<SpellId, { key: string; label: string; min: nu
     poison_mist: [cost, power, range, { key: 'turns', label: '続くターン数', min: 1, max: 99, step: 1, integer: true }],
     cleanse: [cost],
     prism_fan: [cost, power, { key: 'range', label: '届くマス数（扇の奥行き）', min: 1, max: 6, step: 1, integer: true }],
+    fire_blade: blade,
+    ice_blade: blade,
+    light_blade: blade,
+    dark_blade: blade,
+    drain: [cost, power, range, { key: 'drainRate', label: '回復する割合（与えたダメージに対して）', min: 0, max: 2, step: 0.05, integer: false }],
+    thunder_chain: [
+      cost,
+      power,
+      range,
+      { key: 'jumps', label: '跳ぶ回数', min: 0, max: 10, step: 1, integer: true },
+      { key: 'jumpRange', label: '跳べるマス数', min: 1, max: 6, step: 1, integer: true },
+      { key: 'decay', label: '跳ぶたびのダメージの割合', min: 0, max: 1, step: 0.05, integer: false },
+    ],
   };
 })();
 
@@ -181,6 +195,12 @@ export const SPELL_NAMES: Record<SpellId, string> = {
   poison_mist: '毒の霧',
   cleanse: '解呪',
   prism_fan: '虹の扇',
+  fire_blade: '炎の刃',
+  ice_blade: '氷の刃',
+  light_blade: '光の刃',
+  dark_blade: '闇の刃',
+  drain: '吸命',
+  thunder_chain: '雷の鎖',
 };
 
 /** 値の範囲（管理画面の入力欄も、この範囲にする）。step は管理画面で1回に動かす量 */

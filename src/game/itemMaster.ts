@@ -41,6 +41,12 @@ export const SPELLBOOK_IDS = [
   'book_poison_mist',
   'book_cleanse',
   'book_prism_fan',
+  'book_fire_blade',
+  'book_ice_blade',
+  'book_light_blade',
+  'book_dark_blade',
+  'book_drain',
+  'book_thunder_chain',
 ] as const satisfies readonly ItemId[];
 export type SpellbookId = (typeof SPELLBOOK_IDS)[number];
 
@@ -170,6 +176,12 @@ export const SPELLBOOK_TEXT: Record<SpellbookId, string> = {
   book_ward: '数ターン、敵の攻撃で受けるダメージを減らす',
   book_poison_mist: '向いた方向へ飛び、当たった所のまわり9マスに、数ターン残る毒の霧を置く。霧の上にいる敵は、毎ターンダメージを受ける（主人公は受けない）',
   book_cleanse: '自分の毒と鈍足を治す',
+  book_fire_blade: '魔力で、武器に炎の力を宿す（炎の砥石と同じ。攻撃の回数はダンジョンの設定）。氷の敵によく効き、当てた敵の足元に燃える床が残る',
+  book_ice_blade: '魔力で、武器に氷の力を宿す（氷の砥石と同じ）。炎の敵によく効き、当てた敵の足元に霜の床が残る',
+  book_light_blade: '魔力で、武器に光の力を宿す（聖水と同じ）。闇の敵によく効く',
+  book_dark_blade: '魔力で、武器に闇の力を宿す（闇の油と同じ）。光の敵によく効く',
+  book_drain: '向いた方向へ飛び、最初に当たった敵に属性のないダメージ。与えたダメージの一部だけ、HPが回復する',
+  book_thunder_chain: '向いた方向へ飛び、最初に当たった敵から、近くの敵へ次々に跳ぶ雷（跳ぶたびに弱くなる）。属性を持たず、どの敵にも同じダメージ',
   book_prism_fan: '向いた方向に、前へ広がる扇形（手前1マス、奥ほど広い）の敵すべてに当たる。属性を持たない虹の光で、どの属性の敵にも同じダメージ（弱点で増えることも、効きにくくて減ることもない）。壁の向こうには届かない',
 };
 

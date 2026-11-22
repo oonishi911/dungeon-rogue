@@ -79,6 +79,12 @@ export const SPELLS: Record<SpellId, SpellDef> = {
   poison_mist: { id: 'poison_mist', name: '毒の霧', aim: true, effect: { kind: 'poison' } },
   cleanse: { id: 'cleanse', name: '解呪', aim: false, effect: { kind: 'cleanse' } },
   prism_fan: { id: 'prism_fan', name: '虹の扇', aim: true, effect: { kind: 'fan' } },
+  fire_blade: { id: 'fire_blade', name: '炎の刃', aim: false, effect: { kind: 'blade', element: 'fire' } },
+  ice_blade: { id: 'ice_blade', name: '氷の刃', aim: false, effect: { kind: 'blade', element: 'ice' } },
+  light_blade: { id: 'light_blade', name: '光の刃', aim: false, effect: { kind: 'blade', element: 'light' } },
+  dark_blade: { id: 'dark_blade', name: '闇の刃', aim: false, effect: { kind: 'blade', element: 'dark' } },
+  drain: { id: 'drain', name: '吸命', aim: true, effect: { kind: 'drain' } },
+  thunder_chain: { id: 'thunder_chain', name: '雷の鎖', aim: true, effect: { kind: 'thunder' } },
 };
 
 // 数値はすべて仮。遊んでみてバランス調整する

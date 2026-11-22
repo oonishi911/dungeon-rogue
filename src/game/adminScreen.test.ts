@@ -63,6 +63,12 @@ const GEN: GenSettings = {
     poison_mist: { cost: 5, power: 0.4, range: 5, turns: 4 },
     cleanse: { cost: 3 },
     prism_fan: { cost: 8, power: 0.8, range: 3 },
+    fire_blade: { cost: 4, hits: 5 },
+    ice_blade: { cost: 4, hits: 5 },
+    light_blade: { cost: 4, hits: 5 },
+    dark_blade: { cost: 4, hits: 5 },
+    drain: { cost: 6, power: 0.8, range: 4, drainRate: 0.5 },
+    thunder_chain: { cost: 7, power: 0.9, range: 5, jumps: 3, jumpRange: 3, decay: 0.75 },
   },
 };
 const dungeon = (name: string): DungeonFile => ({ name, description: `${name}の説明`, ...copyJson(GEN), encounters: copyJson(sample.encounters) as Encounters });
