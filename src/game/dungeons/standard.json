@@ -158,6 +158,36 @@
       "cost": 8,
       "power": 0.8,
       "range": 3
+    },
+    "fire_blade": {
+      "cost": 4,
+      "hits": 5
+    },
+    "ice_blade": {
+      "cost": 4,
+      "hits": 5
+    },
+    "light_blade": {
+      "cost": 4,
+      "hits": 5
+    },
+    "dark_blade": {
+      "cost": 4,
+      "hits": 5
+    },
+    "drain": {
+      "cost": 6,
+      "power": 0.8,
+      "range": 4,
+      "drainRate": 0.5
+    },
+    "thunder_chain": {
+      "cost": 7,
+      "power": 0.9,
+      "range": 5,
+      "jumps": 3,
+      "jumpRange": 3,
+      "decay": 0.75
     }
   },
   "encounters": {

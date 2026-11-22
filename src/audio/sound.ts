@@ -47,7 +47,8 @@ const ENEMY_ATTACK_SOUNDS: Record<Body | 'boss', string> = {
 // 闇の矢は低くうなる濁った響き、癒しは上がっていく分散和音、再生はあたたかくふくらむ和音、
 // 静寂は音が吸い込まれて消える「スッ」、転移はうねって飛ぶ音、石の壁は地面からせり上がる「ゴゴッ」、眠りの霧はやわらかい下りの和音、
 // 魔力の盾は澄んだ「キィーン」と張る音、毒の霧はぶくぶくとしたもや、解呪はほどけて上がるきらめき、
-// 虹の扇は、きらめく和音が前へ広がって、はじける音
+// 虹の扇は、きらめく和音が前へ広がって、はじける音。属性の刃は、刃が鳴る「シャキン」に属性の響き（炎のゆらぎ・氷の鈴・光の和音・闇のうなり）、
+// 吸命は、吸い込まれて戻ってくる低いうねり、雷の鎖は、はじける「バチバチ」が跳んでいく音
 const SPELL_SOUNDS: Record<SpellId, string> = {
   shockwave: 'spell-shockwave.mp3',
   shockwave_strong: 'spell-shockwave_strong.mp3',
@@ -71,6 +72,12 @@ const SPELL_SOUNDS: Record<SpellId, string> = {
   poison_mist: 'spell-poison_mist.mp3',
   cleanse: 'spell-cleanse.mp3',
   prism_fan: 'spell-prism_fan.mp3',
+  fire_blade: 'spell-fire_blade.mp3',
+  ice_blade: 'spell-ice_blade.mp3',
+  light_blade: 'spell-light_blade.mp3',
+  dark_blade: 'spell-dark_blade.mp3',
+  drain: 'spell-drain.mp3',
+  thunder_chain: 'spell-thunder_chain.mp3',
 };
 // 特性ごとの環境音（ダンジョンにいるあいだ、くり返し流す）。ない特性は流さない
 // 無属性は洞窟を吹き抜ける風のうなり、炎は溶岩の流れる火山の洞窟（地鳴り・溶岩の泡・火のはぜる音・蒸気）、

@@ -702,6 +702,61 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
       }
       break;
     }
+    case 'blade': {
+      // 属性の刃：砥石・聖水・闇の油と同じに、武器に属性を宿す（付けられる属性は1つだけ。新しく付けると上書きする）
+      const hits = cfg.hits ?? 1;
+      const holder = stats.weapon ? ITEMS[stats.weapon].name : '拳';
+      s = { ...s, stats: { ...stats, enchant: { element: def.effect.element, hits } }, log: [...s.log, `${holder}に${TRAITS[def.effect.element].name}の力が宿った（攻撃${hits}回）`] };
+      break;
+    }
+    case 'drain':
+    case 'thunder': {
+      // 向いた方向へ、壁・石の壁に当たるか届くマス数まで飛び、最初の敵に当たる（属性なし）
+      const d = DIR_DELTA[dir!];
+      let first: MapEnemy | undefined;
+      for (let i = 1; i <= (cfg.range ?? 1); i++) {
+        const p = { x: s.player.x + d.x * i, y: s.player.y + d.y * i };
+        if (tileAt(s.map, p) === 'wall' || stoneAt(s.fields, p)) break;
+        event.path.push(p);
+        first = s.enemies.find((e) => samePos(e.pos, p));
+        if (first) break;
+      }
+      if (!first) {
+        s = { ...s, log: [...s.log, '何にも当たらなかった'] };
+        break;
+      }
+      if (def.effect.kind === 'drain') {
+        // 吸命：与えたダメージ（倒したときは、残っていたHPまで）の一部だけ回復する
+        const b = staffBoost(s, first.uid, spellDamage(s.stats, spell, enemyDef(first), settings));
+        const dealt = Math.min(b.dmg, first.hp);
+        s = hurtEnemy(s, first.uid, b.dmg, false, b.combo);
+        const healed = Math.min(s.stats.maxHp - s.stats.hp, Math.round(dealt * (cfg.drainRate ?? 0)));
+        if (healed > 0 && s.outcome === 'ongoing') {
+          event.drained = healed;
+          s = { ...s, stats: { ...s.stats, hp: s.stats.hp + healed }, log: [...s.log, `HPを${healed}吸い取った`] };
+        }
+        break;
+      }
+      // 雷の鎖：当たった敵から、跳べるマス数以内（縦横斜め）で、見通せる、まだ当たっていない、いちばん近い敵へ跳ぶ。跳ぶたびにダメージが decay 倍
+      const chain: MapEnemy[] = [first];
+      for (let j = 0; j < (cfg.jumps ?? 0); j++) {
+        const from = chain[chain.length - 1]!;
+        const next = s.enemies
+          .filter((e) => !chain.some((c) => c.uid === e.uid) && chebyshev(e.pos, from.pos) <= (cfg.jumpRange ?? 1) && canSee(s.map, from.pos, e.pos, (cfg.jumpRange ?? 1) * 1.5))
+          .sort((a, b) => chebyshev(a.pos, from.pos) - chebyshev(b.pos, from.pos) || a.uid - b.uid)[0];
+        if (!next) break;
+        chain.push(next);
+      }
+      event.links = chain.map((e) => e.pos);
+      event.splash = chain.slice(1).map((e) => e.pos);
+      chain.forEach((t, k) => {
+        if (s.outcome !== 'ongoing') return;
+        const base = spellDamage(s.stats, spell, enemyDef(t), settings);
+        const b = staffBoost(s, t.uid, Math.max(1, Math.round(base * Math.pow(cfg.decay ?? 1, k))));
+        s = hurtEnemy(s, t.uid, b.dmg, false, b.combo);
+      });
+      break;
+    }
     case 'cleanse': {
       const cured = cureAll(stats);
       if (!cured) return err('治すものがない');

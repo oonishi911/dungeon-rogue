@@ -252,3 +252,64 @@ describe('中断データ', () => {
   });
 });
 
+
+describe('属性の刃', () => {
+  it('武器に、その属性の力が宿る（攻撃の回数は設定）。上書きする', () => {
+    const s0 = arena({ x: 2, y: 2 }, []);
+    const s0b = { ...s0, spells: [...s0.spells, 'fire_blade', 'ice_blade', 'light_blade', 'dark_blade'] as ExploreState['spells'] };
+    let s = act(s0b, cast('fire_blade'));
+    expect(s.stats.enchant).toEqual({ element: 'fire', hits: cfg.fire_blade!.hits! });
+    s = act(s, cast('dark_blade'));
+    expect(s.stats.enchant).toEqual({ element: 'dark', hits: cfg.dark_blade!.hits! });
+    expect(s.mp).toBe(s0b.mp - cfg.fire_blade!.cost! - cfg.dark_blade!.cost!);
+  });
+});
+
+describe('吸命', () => {
+  const withSpells = (s: ExploreState): ExploreState => ({ ...s, spells: [...s.spells, 'drain', 'thunder_chain'] as ExploreState['spells'] });
+
+  it('最初の敵に属性のないダメージを与え、与えたダメージの一部だけHPが回復する', () => {
+    const s0 = withSpells(arena({ x: 2, y: 2 }, [enemy({ x: 4, y: 2 }, { id: 'fire_imp', mode: 'wander', stun: 9 })]));
+    const hurt = { ...s0, stats: { ...s0.stats, hp: 100 } };
+    const s = act(hurt, cast('drain', 'right'));
+    const dealt = 999 - s.enemies[0]!.hp;
+    expect(dealt).toBe(spellDamage(hurt.stats, 'drain', enemyDef({ id: 'fire_imp', elite: false }), DEFAULT_DUNGEON));
+    expect(s.cast!.drained).toBe(Math.round(dealt * cfg.drain!.drainRate!));
+    expect(s.stats.hp).toBe(100 + s.cast!.drained!); // 敵は動けないので、このターンには攻撃してこない
+    expect(s.log.some((l) => l.includes('吸い取った'))).toBe(true);
+  });
+
+  it('倒したときは、残っていたHPの分だけで回復する。HPが満タンなら回復しない', () => {
+    const s0 = withSpells(arena({ x: 2, y: 2 }, [enemy({ x: 4, y: 2 }, { hp: 2, mode: 'wander' })]));
+    const s = act({ ...s0, stats: { ...s0.stats, hp: 100 } }, cast('drain', 'right'));
+    expect(s.cast!.drained ?? 0).toBe(Math.round(2 * cfg.drain!.drainRate!));
+    const full = act(withSpells(arena({ x: 2, y: 2 }, [enemy({ x: 4, y: 2 }, { mode: 'wander' })])), cast('drain', 'right'));
+    expect(full.cast!.drained).toBeUndefined();
+  });
+});
+
+describe('雷の鎖', () => {
+  const withSpells = (s: ExploreState): ExploreState => ({ ...s, spells: [...s.spells, 'drain', 'thunder_chain'] as ExploreState['spells'] });
+
+  it('最初の敵から、跳べる範囲のいちばん近い敵へ次々に跳び、跳ぶたびにダメージが減る', () => {
+    const foes = [enemy({ x: 5, y: 2 }, { mode: 'wander' }), enemy({ x: 7, y: 2 }, { mode: 'wander' }), enemy({ x: 9, y: 3 }, { mode: 'wander' }), enemy({ x: 15, y: 2 }, { mode: 'wander' })];
+    const s0 = withSpells(arena({ x: 2, y: 2 }, foes));
+    const s = act(s0, cast('thunder_chain', 'right'));
+    expect(s.cast!.links).toEqual([{ x: 5, y: 2 }, { x: 7, y: 2 }, { x: 9, y: 3 }]); // 15 は遠すぎて跳べない
+    const base = spellDamage(s0.stats, 'thunder_chain', enemyDef(foes[0]!), DEFAULT_DUNGEON);
+    const d = cfg.thunder_chain!.decay!;
+    expect(999 - s.enemies[0]!.hp).toBe(base);
+    expect(999 - s.enemies[1]!.hp).toBe(Math.max(1, Math.round(base * d)));
+    expect(999 - s.enemies[2]!.hp).toBe(Math.max(1, Math.round(base * d * d)));
+    expect(s.enemies[3]!.hp).toBe(999);
+  });
+
+  it('跳ぶ回数の上限で止まり、壁の向こうへは跳ばない', () => {
+    const rows = ['#####################', '#.......#...........#', '#.......#...........#', '#...................#', '#####################'];
+    const s = act(withSpells(arena({ x: 2, y: 1 }, [enemy({ x: 6, y: 1 }, { mode: 'wander' }), enemy({ x: 9, y: 1 }, { mode: 'wander' })], rows)), cast('thunder_chain', 'right'));
+    expect(s.cast!.links).toEqual([{ x: 6, y: 1 }]);
+    const many = Array.from({ length: 8 }, (_, i) => enemy({ x: 5 + i, y: 2 }, { mode: 'wander' }));
+    const t = act(withSpells(arena({ x: 2, y: 2 }, many)), cast('thunder_chain', 'right'));
+    expect(t.cast!.links).toHaveLength(1 + cfg.thunder_chain!.jumps!);
+  });
+});

@@ -99,6 +99,15 @@ const chain = (mark: ReactElement) => (
   </>
 );
 
+/** 属性の刃の印：斜めの刃に、属性の印を添える */
+const blade = (edge: string, mark: ReactElement) => (
+  <>
+    <path d="M4.5 19.5 16 8l1.8-3.6L21 3l-1.4 3.2L16 8" fill="none" stroke={edge} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M3.5 17.5l3 3M5.2 15.8l3 3" stroke={C.steelDark} strokeWidth="1.6" strokeLinecap="round" />
+    {place(mark, 16.5, 16.5, 10)}
+  </>
+);
+
 const SPELL_MARKS: Record<SpellId, () => ReactElement> = {
   shockwave: () => rings(),
   shockwave_strong: () => strongRings(),
@@ -169,6 +178,26 @@ const SPELL_MARKS: Record<SpellId, () => ReactElement> = {
       })}
       <circle cx="12" cy="20" r="1.8" fill="#ffffff" stroke="none" />
     </g>
+  ),
+  fire_blade: () => blade('#ffd0a0', flame()),
+  ice_blade: () => blade('#d8f2ff', snowflake(C.iceLight)),
+  light_blade: () => blade('#fff2c0', sparkle()),
+  dark_blade: () => blade('#d8c8f8', moon('#c9b3f0')),
+  // 吸命：赤いしずくと、こちらへ戻る矢印
+  drain: () => (
+    <>
+      <path d="M15 3.5c2.6 3.6 3.8 5.6 3.8 7.4a3.8 3.8 0 0 1-7.6 0c0-1.8 1.2-3.8 3.8-7.4z" fill="#d6283a" />
+      <path d="M11 17H4.5M7.5 14l-3 3 3 3" fill="none" stroke="#ffb0b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  // 雷の鎖：折れ曲がる稲妻と、つながる3つの点
+  thunder_chain: () => (
+    <>
+      <path d="M13.5 2.5 6.5 13h5l-2 8.5 8-11.5h-5.2z" fill="#ffe873" stroke="#fff8c8" strokeWidth="0.6" strokeLinejoin="round" />
+      <circle cx="4" cy="20" r="1.6" fill="#9fd8ff" />
+      <circle cx="20" cy="18" r="1.6" fill="#9fd8ff" />
+      <circle cx="20.5" cy="4.5" r="1.6" fill="#9fd8ff" />
+    </>
   ),
   // 解呪：ほどける鎖と、きらめき
   cleanse: () => (
@@ -352,6 +381,12 @@ const SHAPES: Partial<Record<ItemId, () => ReactElement>> = {
   book_poison_mist: () => book('#3d5a2e', SPELL_MARKS.poison_mist()),
   book_cleanse: () => book('#6a6458', SPELL_MARKS.cleanse()),
   book_prism_fan: () => book('#3a3550', SPELL_MARKS.prism_fan()),
+  book_fire_blade: () => book('#8a3a28', SPELL_MARKS.fire_blade()),
+  book_ice_blade: () => book('#2f5f7f', SPELL_MARKS.ice_blade()),
+  book_light_blade: () => book('#8a7432', SPELL_MARKS.light_blade()),
+  book_dark_blade: () => book(C.darkDeep, SPELL_MARKS.dark_blade()),
+  book_drain: () => book('#5a2430', SPELL_MARKS.drain()),
+  book_thunder_chain: () => book('#4a4a2a', SPELL_MARKS.thunder_chain()),
 };
 
 /** アイテムのアイコン。size は表示の大きさ（px） */

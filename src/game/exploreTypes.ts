@@ -90,6 +90,8 @@ export interface CastEvent {
   affinity: Affinity | null; // 属性の矢が当たった敵との相性（演出の強さを変える）。矢でないとき・何にも当たらなかったときは null
   area?: Pos[]; // 静寂・眠りの霧の効いた敵のいたマス、石の壁・毒の霧を置いたマス（演出で使う）
   warp?: { from: Pos; to: Pos }; // 転移：跳ぶ前と後
+  links?: Pos[]; // 雷の鎖：当たった敵のいたマス（当たった順。演出で、雷をこの順につなぐ）
+  drained?: number; // 吸命：回復したHP（演出で使う）
 }
 
 /**

@@ -1203,6 +1203,55 @@ def spell_prism_fan():
     return finish_spell(y, 0.45)
 
 
+
+def blade_of(element):
+    """属性の刃：刃が鳴る「シャキン」と、属性の響き"""
+    def make():
+        rng = np.random.default_rng({'fire': 151, 'ice': 157, 'light': 163, 'dark': 167}[element])
+        n = int(SR * 1.0)
+        t = np.arange(n) / SR
+        y = sweep_noise(n, 0.0, 0.12, 2500, 9000, rng) * 0.8
+        y += resonate(impulse(n, 0.02), [2200, 3300, 5200], [0.35, 0.25, 0.15], [0.5, 0.35, 0.2])
+        if element == 'fire':
+            y += sweep_noise(n, 0.08, 0.7, 400, 1800, rng) * 0.7 * (1 + 0.4 * np.sin(2 * np.pi * 9 * t))
+        elif element == 'ice':
+            for i, f in enumerate([2637, 3136, 3951]):
+                y += tone(n, f, 0.12 + i * 0.07, 0.35, 0.18)
+        elif element == 'light':
+            for f in [784, 988, 1175]:
+                y += tone(n, f, 0.1, 0.6, 0.18)
+        else:
+            y += np.sin(2 * np.pi * (90 + 15 * np.sin(2 * np.pi * 3 * t)) * t) * np.clip(t / 0.1, 0, 1) * np.exp(-t / 0.5) * 0.7
+        return finish_spell(y, 0.35)
+    return make
+
+
+def spell_drain():
+    """吸命：飛んでいく低いうなりと、吸い込まれて戻ってくる逆回しのような音"""
+    rng = np.random.default_rng(173)
+    n = int(SR * 1.1)
+    t = np.arange(n) / SR
+    y = np.sin(2 * np.pi * np.cumsum(220 - 120 * np.clip(t / 0.3, 0, 1)) / SR) * np.exp(-t / 0.25) * 0.6
+    swell = np.clip((t - 0.35) / 0.45, 0, 1) ** 2 * (t < 0.85)
+    y += sweep_noise(n, 0.35, 0.5, 300, 2500, rng) * 0.5
+    y += np.sin(2 * np.pi * np.cumsum(180 + 400 * np.clip((t - 0.35) / 0.5, 0, 1)) / SR) * swell * 0.5
+    y += tone(n, 523, 0.85, 0.2, 0.2) + tone(n, 784, 0.88, 0.2, 0.12)
+    return finish_spell(y, 0.4)
+
+
+def spell_thunder_chain():
+    """雷の鎖：はじける「バチッ」が、少しずつ間をあけて4回跳ぶ"""
+    rng = np.random.default_rng(179)
+    n = int(SR * 1.0)
+    y = np.zeros(n)
+    for k, at in enumerate([0.08, 0.2, 0.31, 0.41]):
+        g = 0.85 ** k
+        y += grains(n, 900, 0.08, rng, start=at) * 2.2 * g
+        y += sweep_noise(n, at, 0.1, 6000, 1500, rng) * 0.6 * g
+        y += resonate(impulse(n, at), [120, 75], [0.12, 0.2], [0.8 * g, 0.5 * g])
+    return finish_spell(y, 0.4)
+
+
 SPELL_SOUNDS = {
     'shockwave': spell_shockwave,
     'shockwave_strong': spell_shockwave_strong,
@@ -1226,6 +1275,12 @@ SPELL_SOUNDS = {
     'poison_mist': spell_poison_mist,
     'cleanse': spell_cleanse,
     'prism_fan': spell_prism_fan,
+    'fire_blade': blade_of('fire'),
+    'ice_blade': blade_of('ice'),
+    'light_blade': blade_of('light'),
+    'dark_blade': blade_of('dark'),
+    'drain': spell_drain,
+    'thunder_chain': spell_thunder_chain,
 }
 
 STEPS = {'neutral': step_neutral, 'fire': step_fire, 'ice': step_ice, 'light': step_light, 'dark': step_dark}
