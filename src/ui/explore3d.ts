@@ -92,6 +92,8 @@ export class DungeonView3D {
   private appliedAtlas: Atlas | null = null;
   private readonly props = new THREE.Group(); // 階段・宝箱・目印
   private readonly fieldGroup = new THREE.Group(); // 床に残る魔法の跡（燃える床・霜の床）
+  private readonly aimGroup = new THREE.Group(); // 構えた呪文の届く範囲（2026-11-23。setAim）
+  private aimMats: { path: THREE.MeshBasicMaterial; area: THREE.MeshBasicMaterial } | null = null;
   private fieldMats: Record<'fire' | 'fireLast' | 'frost' | 'frostLast' | 'poison' | 'poisonLast', THREE.MeshBasicMaterial> | null = null;
   private stoneLook: { geo: THREE.BoxGeometry; mat: THREE.MeshStandardMaterial; last: THREE.MeshStandardMaterial } | null = null; // 石の壁の呪文の壁
   private readonly slashes: { sprite: THREE.Sprite; start: number; ms?: number; size?: number; aspect?: number }[] = []; // 剣の斬撃の残光（通常攻撃の残光も）
@@ -245,7 +247,7 @@ export class DungeonView3D {
     this.scene.add(new THREE.AmbientLight(0xffffff, AMBIENT));
     const sun = new THREE.DirectionalLight(0xffffff, SUN); // 壁の側面に陰をつける
     sun.position.set(-3, 10, 4);
-    this.scene.add(sun, this.torch, this.props, this.fieldGroup);
+    this.scene.add(sun, this.torch, this.props, this.fieldGroup, this.aimGroup);
     if (this.mist) this.scene.add(this.mist);
 
     // 床と壁は、描く範囲のマス数ぶんの入れ物を最初に用意しておき、1歩ごとに中身を入れ替える。
@@ -409,6 +411,7 @@ export class DungeonView3D {
     this.updateDamagePops(now);
     this.updateShots(now);
     this.updateFieldLook(now);
+    this.updateAimLook(now);
     this.updatePuffs(now);
     this.updateRoars(now);
     this.updateSkillFx(now);
@@ -555,6 +558,52 @@ export class DungeonView3D {
   /** 主人公をその向きに向ける（壁にぶつかって歩けなかったときも向く。向きのある呪文は、この向きに唱える） */
   face(dir: Dir) {
     this.heroDir = dir;
+  }
+
+  /**
+   * 構えた呪文の届く範囲を床に出す（null で消す）。path は飛んでいく道すじ（薄く）、area は効くマス（濃く、枠つき）。
+   * どちらも、ゆっくり明るさが揺れる（updateAimLook。動きを減らす設定では揺らさない）
+   */
+  setAim(preview: { path: readonly Pos[]; area: readonly Pos[] } | null) {
+    this.aimGroup.clear();
+    if (!preview) return;
+    if (!this.aimMats) {
+      const c = FOE_FX.aim;
+      const make = (key: string, draw: (ctx: CanvasRenderingContext2D) => void, opacity: number) =>
+        new THREE.MeshBasicMaterial({ map: this.texture(key, 64, 64, draw), transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -3 });
+      const plate = (fill: string, edge: string) => (ctx: CanvasRenderingContext2D) => {
+        ctx.fillStyle = fill;
+        ctx.fillRect(4, 4, 56, 56);
+        ctx.strokeStyle = edge;
+        ctx.lineWidth = 4;
+        ctx.strokeRect(5, 5, 54, 54);
+      };
+      this.aimMats = { path: make('aim:path', plate('rgba(170,220,255,0.35)', 'rgba(200,235,255,0.5)'), c.pathOpacity), area: make('aim:area', plate('rgba(255,230,160,0.45)', 'rgba(255,245,210,0.95)'), c.areaOpacity) };
+    }
+    const inArea = (p: Pos) => preview.area.some((q) => q.x === p.x && q.y === p.y);
+    for (const p of preview.path) {
+      if (inArea(p)) continue;
+      const m = new THREE.Mesh(this.shared.fieldPlate, this.aimMats.path);
+      m.position.set(p.x, FOE_FX.aim.y, p.y);
+      m.renderOrder = 3;
+      this.aimGroup.add(m);
+    }
+    for (const p of preview.area) {
+      const m = new THREE.Mesh(this.shared.fieldPlate, this.aimMats.area);
+      m.position.set(p.x, FOE_FX.aim.y, p.y);
+      m.renderOrder = 3;
+      this.aimGroup.add(m);
+    }
+  }
+
+  /** 構えた範囲の明るさを、ゆっくり揺らす */
+  private updateAimLook(now: number) {
+    const mats = this.aimMats;
+    if (!mats || this.aimGroup.children.length === 0) return;
+    const c = FOE_FX.aim;
+    const wave = this.reduceMotion ? 0 : Math.sin(now / c.pulseMs);
+    mats.path.opacity = c.pathOpacity * (1 + 0.25 * wave);
+    mats.area.opacity = c.areaOpacity * (1 + 0.25 * wave);
   }
 
   /**

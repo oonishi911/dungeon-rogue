@@ -13,7 +13,8 @@ import { preloadSounds, setAmbient } from '../audio/sound';
 import { SPELLS } from '../game/data';
 import { dungeonOfState, isBossFloor, step, upStairs } from '../game/explore';
 import { DIR_DELTA, type Dir, type ExploreAction, type ExploreState } from '../game/exploreTypes';
-import { samePos, visibleTiles } from '../game/exploreSight';
+import { dirToward, samePos, visibleTiles } from '../game/exploreSight';
+import { spellPreview } from '../game/spellArea';
 import { tileAt, type Pos } from '../game/map';
 import { SoundButton } from './SoundButton';
 import { walkPath, walkToward } from '../game/path';
@@ -29,6 +30,7 @@ import { EndingPanel, LeaveDialog, RetireDialog } from './ExploreDialogs';
 import { playFeedback } from './exploreFeedback';
 import { KEY_ACTIONS, KEY_DIRS, SKILL_KEY, SPELL_KEYS, SWAP_KEY } from './exploreKeys';
 import { LogList } from './ExploreParts';
+import { NearbyFoes } from './NearbyFoes';
 import { ExploreSide } from './ExploreSide';
 import { avoidOnWalk, visibleEnemyIds, type WalkGoal } from './exploreWalk';
 import { chooseDirection, knobOffset, STICK, stickDirections } from './stick';
@@ -40,6 +42,8 @@ const MINI_SHARP_MAX = 96;
 // 1マス動くのにかける時間。なぞり続けたとき・タップで歩くときの速さもこれで決まる（1秒に約2.6マス。以前の270ミリ秒から、速さを3割落とした）
 const STEP_MS = 385;
 const DOUBLE_TAP_MS = 350; // この時間（ミリ秒）以内に主人公を2回タップすると、ダブルタップとしてその場で待つ
+const NOTICE_MS = 2600; // 押せなかった理由などの知らせを出しておく時間（ミリ秒）
+const INFO_MS = 3200; // 説明を出しておく時間（ミリ秒）
 const QUEUE_MAX = 2; // 動いている途中に押した操作を、いくつまで覚えておくか（多すぎると指を止めても歩き続ける）
 
 interface ExploreScreenProps {
@@ -58,6 +62,24 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   // スマホで、装備・敵・記録をまとめた画面を開いているか（PCでは常に横に出ている）
   const [infoOpen, setInfoOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<{ text: string; key: number } | null>(null); // 説明（状態のアイコンを押した・呪文を長押しした）。3D画面の上に短く出す
+  // 知らせと説明は、少しすると消える（押せなかった理由は、その場で読めれば十分。残り続けると3D画面のじゃまになる）
+  useEffect(() => {
+    if (!error) return;
+    const id = window.setTimeout(() => setError(null), NOTICE_MS);
+    return () => window.clearTimeout(id);
+  }, [error]);
+  useEffect(() => {
+    if (!info) return;
+    const id = window.setTimeout(() => setInfo(null), INFO_MS);
+    return () => window.clearTimeout(id);
+  }, [info]);
+  const showInfo = useCallback((text: string) => setInfo((i) => ({ text, key: (i?.key ?? 0) + 1 })), []);
+  // 向きのある呪文の構え（2026-11-23）：1回押すと、届く範囲を床に出して向きを選ぶ。もう一度押すと唱える
+  const [aiming, setAiming] = useState<SpellId | null>(null);
+  const aimingRef = useRef<SpellId | null>(null);
+  const [facing, setFacing] = useState<Dir>('down'); // 構えの範囲を描き直すための、主人公の向き
+  const [miniOpen, setMiniOpen] = useState(false); // 地図を大きく広げているか
   const [hurtKey, setHurtKey] = useState(0); // 敵に攻撃された回数（画面のふちを一瞬赤くする。変わるたびに、赤いふちの動きをやり直す）
   const feel = useSyncExternalStore(subscribeFeel, feelSettings);
   const [mpShake, setMpShake] = useState(0); // 魔力が足りずに唱えられなかった回数（魔力のゲージを震わせる）
@@ -109,6 +131,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     if (action.kind === 'move') {
       facingRef.current = action.dir;
       view3dRef.current?.face(action.dir);
+      setFacing(action.dir);
     }
     // 向きのある呪文は、主人公が向いている方向に唱える
     if (action.kind === 'cast' && SPELLS[action.spell].aim && !action.dir) action = { ...action, dir: facingRef.current };
@@ -152,18 +175,58 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   /** 次に1回だけ行う行動を予約する。歩いている途中なら止まる */
   const request = useCallback((action: ExploreAction) => {
     walkRef.current = null;
+    // 構えているあいだに、ほかの行動をしたら、構えはやめる
+    if (aimingRef.current && action.kind !== 'cast') {
+      aimingRef.current = null;
+      setAiming(null);
+    }
     if (queueRef.current.length < QUEUE_MAX) queueRef.current = [...queueRef.current, action];
   }, []);
 
   /** 呪文を唱える。向きのある呪文（なぎ払い・矢）は、唱えるときに主人公が向いている方向へ飛ぶ（perform で向きを入れる） */
   const chooseSpell = useCallback(
     (spell: SpellId) => {
-      request({ kind: 'cast', spell });
+      const s = stateRef.current;
+      const stop = () => {
+        aimingRef.current = null;
+        setAiming(null);
+      };
+      // 向きのない呪文と、構えている呪文をもう一度押したときは、唱える
+      if (!SPELLS[spell].aim || aimingRef.current === spell) {
+        stop();
+        request({ kind: 'cast', spell });
+        return;
+      }
+      // 魔力が足りなければ、構えずに知らせる
+      if (s.mp < (dungeonOfState(s).spells[spell].cost ?? 0)) {
+        stop();
+        setError('魔力が足りない');
+        setMpShake((n) => n + 1);
+        return;
+      }
+      walkRef.current = null;
+      heldRef.current = [];
+      stickRef.current = null;
+      aimingRef.current = spell;
+      setAiming(spell);
     },
     [request],
   );
+  /** 構えをやめる */
+  const cancelAim = useCallback(() => {
+    aimingRef.current = null;
+    setAiming(null);
+  }, []);
+  /** 主人公の向きだけを変える（1ターンも使わない。構えているあいだの向きの選び直し・近くの敵を押したとき） */
+  const turnTo = useCallback((dir: Dir) => {
+    facingRef.current = dir;
+    view3dRef.current?.face(dir);
+    setFacing(dir);
+  }, []);
   const chooseSpellRef = useRef(chooseSpell);
   chooseSpellRef.current = chooseSpell;
+  const cancelAimRef = useRef(cancelAim);
+  cancelAimRef.current = cancelAim;
 
   /** 武器の固有技を出す（向きのある技は、perform で向きを入れる） */
   const useSkillNow = useCallback(() => request({ kind: 'skill' }), [request]);
@@ -174,12 +237,17 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   swapRef.current = swapNow;
 
   const hold = useCallback((dir: Dir) => {
+    // 構えているあいだは、歩かずに向きだけを変える
+    if (aimingRef.current) {
+      turnTo(dir);
+      return;
+    }
     walkRef.current = null;
     if (heldRef.current.includes(dir)) return;
     heldRef.current = [...heldRef.current, dir];
     // 押してすぐ離しても1歩は進むように、1歩分を予約しておく
     request({ kind: 'move', dir });
-  }, [request]);
+  }, [request, turnTo]);
 
   const release = useCallback((dir: Dir) => {
     heldRef.current = heldRef.current.filter((d) => d !== dir);
@@ -317,8 +385,18 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   }, [state.trait]);
 
   useEffect(() => {
-    if (miniRef.current) drawMinimap(miniRef.current, state, readColors());
-  }, [state]);
+    if (miniRef.current) drawMinimap(miniRef.current, state, readColors(), visible);
+  }, [state, visible]);
+
+  // 構えの範囲：構えている呪文の届くマスを、主人公の向きに合わせて床に出す
+  const preview = useMemo(() => (aiming && state.outcome === 'ongoing' ? spellPreview(state, aiming, facing, dungeonOfState(state).spells) : null), [aiming, facing, state]);
+  useEffect(() => {
+    view3dRef.current?.setAim(preview);
+  }, [preview]);
+  // 探索が終わったら、構えをやめる
+  useEffect(() => {
+    if (state.outcome !== 'ongoing') cancelAim();
+  }, [state.outcome, cancelAim]);
 
   // キーボード：方向キーは押している間ずっと歩く。そのほかのキーは押した回数だけ行う
   useEffect(() => {
@@ -330,6 +408,13 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
         return;
       }
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      // 構えているあいだ：Esc でやめる、Enter で唱える
+      if (aimingRef.current && (key === 'Escape' || key === 'Enter')) {
+        e.preventDefault();
+        if (key === 'Enter') chooseSpellRef.current(aimingRef.current);
+        else cancelAimRef.current();
+        return;
+      }
       const dir = KEY_DIRS[key];
       if (dir) {
         e.preventDefault(); // 矢印キーでページがスクロールしないように
@@ -393,6 +478,15 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       return;
     }
     const target = view3dRef.current?.pickTile(e.clientX, e.clientY);
+    // 構えているあいだ：主人公を押すとやめる。マスを押すと、そちらを向く（歩かない）
+    if (aimingRef.current) {
+      if (view3dRef.current?.hitsPlayer(e.clientX, e.clientY)) cancelAim();
+      else if (target) {
+        const dir = dirToward(s.player, target);
+        if (dir) turnTo(dir);
+      }
+      return;
+    }
     // 主人公をダブルタップ（DOUBLE_TAP_MS 以内に2回タップ）すると、その場で1ターン待つ。
     // 1回だけのタップでは待たない（うっかり触れて、ターンが進まないように）
     const onHero = view3dRef.current?.hitsPlayer(e.clientX, e.clientY);
@@ -429,6 +523,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const touchRef = useRef<{ id: number; x: number; y: number; left: number; top: number; dragging: boolean } | null>(null);
 
   const aimStick = (dirs: Dir[] | null) => {
+    // 構えているあいだは、なぞった向きを向くだけ（歩かない）
+    if (aimingRef.current) {
+      if (dirs?.[0]) turnTo(dirs[0]);
+      return;
+    }
     if (dirs) walkRef.current = null; // なぞり始めたら、タップで向かっていた先は取りやめる
     stickRef.current = dirs;
   };
@@ -558,7 +657,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
             </>
           )}
           {/* その場で1ターン待つ。3D画面の右下に重ねる（スマホでは、下に出る記録の行より上） */}
-          {!ended && (
+          {!ended && !aiming && (
             <button
               type="button"
               className="explore__rest"
@@ -583,6 +682,29 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
           <p className="error explore__notice" role="alert">
             {error}
           </p>
+          {/* 説明（状態のアイコンを押した・呪文を長押しした）。知らせと同じ場所に、少しのあいだ出す */}
+          {info && !error && (
+            <p key={info.key} className="explore__notice explore__notice--info" role="status">
+              {info.text}
+            </p>
+          )}
+          {/* 見えている敵の簡易表示（左上）。押すと、その敵の方を向く（構えているときは、範囲もそちらへ） */}
+          {!ended && <NearbyFoes state={state} visible={visible} onFace={turnTo} />}
+          {/* 呪文の構え：向きの選び方と、唱える・やめるのボタン（3D画面の下に重ねる） */}
+          {aiming && !ended && (
+            <div className="explore__aim" role="group" aria-label={`${SPELLS[aiming].name}の構え`}>
+              <p className="explore__aim-text">
+                <b>{SPELLS[aiming].name}</b>
+                <span>{preview && preview.area.length === 0 && preview.path.length === 0 ? 'この向きは壁で、届かない。向きを変えて' : '向きを選んで、もう一度押すと唱える'}</span>
+              </p>
+              <button type="button" className="explore__aim-cancel" onClick={cancelAim}>
+                やめる
+              </button>
+              <button type="button" className="primary explore__aim-cast" onClick={() => chooseSpell(aiming)}>
+                唱える
+              </button>
+            </div>
+          )}
           {/* 強敵・ボスが初めて見えたときの名前。3D画面の上に重ねて、しばらくして消える */}
           {intro && (
             <p key={intro.key} className={`explore__intro${intro.boss ? ' explore__intro--boss' : ''}`} aria-hidden="true">
@@ -590,15 +712,28 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
               {intro.name}
             </p>
           )}
-          {/* この階の地図。3D画面の右上に、小さく半透明で重ねる。広いマップは縮めて表示するので、なめらかに縮める */}
-          <canvas
-            ref={miniRef}
-            className={`explore__mini${state.map.width * MINI_CELL > MINI_SHARP_MAX ? ' explore__mini--dense' : ''}`}
-            width={state.map.width * MINI_CELL}
-            height={state.map.height * MINI_CELL}
-            role="img"
-            aria-label="この階の地図（歩いて見えた範囲）"
-          />
+          {/* この階の地図。3D画面の右上に、半透明で重ねる。押すと大きく広げ、もう一度押すと戻す。広いマップは縮めて表示するので、なめらかに縮める */}
+          <button
+            type="button"
+            className={`explore__mini-button${miniOpen ? ' explore__mini-button--open' : ''}`}
+            aria-expanded={miniOpen}
+            aria-label={miniOpen ? '地図を小さくする' : '地図を大きくする'}
+            onClick={() => setMiniOpen((o) => !o)}
+          >
+            <canvas
+              ref={miniRef}
+              className={`explore__mini${state.map.width * MINI_CELL > MINI_SHARP_MAX ? ' explore__mini--dense' : ''}`}
+              width={state.map.width * MINI_CELL}
+              height={state.map.height * MINI_CELL}
+              role="img"
+              aria-label="この階の地図（歩いて見えた範囲。緑が自分、白い四角が階段、赤が見えている敵、金色が宝箱）"
+            />
+            {miniOpen && (
+              <span className="explore__mini-legend" aria-hidden="true">
+                <i className="explore__mini-key explore__mini-key--you" />自分 <i className="explore__mini-key explore__mini-key--stairs" />階段 <i className="explore__mini-key explore__mini-key--foe" />敵 <i className="explore__mini-key explore__mini-key--chest" />宝箱
+              </span>
+            )}
+          </button>
           {/* スマホでは記録の欄が画面の外になるので、いちばん新しい1行を画面の上に重ねて出す */}
           {!ended && lastLog && (
             <p className="explore__toast" aria-hidden="true">
@@ -627,6 +762,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
           visibleEnemies={visibleEnemies}
           recentLog={recentLog}
           infoOpen={infoOpen}
+          aiming={aiming}
+          onInfo={showInfo}
           onCast={chooseSpell}
           onSkill={useSkillNow}
           onSwap={swapNow}
@@ -637,14 +774,15 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
             setRetiring(true);
           }}
         />
-      </div>
 
-      <section className="explore__log-panel" aria-labelledby="explore-log">
-        <h2 id="explore-log" className="panel__title">
-          記録
-        </h2>
-        <LogList lines={recentLog} total={state.log.length} />
-      </section>
+        {/* 記録：パソコンでは3D画面の下（スマホでは出さず、いちばん新しい1行を3D画面の上に重ねる） */}
+        <section className="explore__log-panel" aria-labelledby="explore-log">
+          <h2 id="explore-log" className="panel__title">
+            記録
+          </h2>
+          <LogList lines={recentLog} total={state.log.length} />
+        </section>
+      </div>
     </main>
   );
 }

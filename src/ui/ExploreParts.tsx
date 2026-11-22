@@ -23,9 +23,23 @@ interface MeterProps {
   warnBelow?: number; // 残りがこの割合より少ないと、ゲージを点滅させる
   pulse?: boolean; // 増えたとき・減ったときに、ゲージを一瞬光らせる（唱えた魔力・回復した体力）
   shakeKey?: number; // 変わるたびにゲージを震わせる（魔力が足りないとき）
+  trail?: boolean; // 減ったとき、減った分を赤く少し残してから縮める（どれだけ減ったかを見せる）
 }
 
-export function Meter({ label, value, max, tone, unit, gaugeOnly, warnBelow, pulse, shakeKey = 0 }: MeterProps) {
+/** 減った分を残しておく時間（ミリ秒）。そのあと、なめらかに縮む（CSS の .meter__ghost） */
+const TRAIL_MS = 420;
+
+export function Meter({ label, value, max, tone, unit, gaugeOnly, warnBelow, pulse, shakeKey = 0, trail }: MeterProps) {
+  // 減った分：減った直前の値を少しのあいだ残し、そのあと今の値まで縮める
+  const [ghost, setGhost] = useState(value);
+  useEffect(() => {
+    if (!trail || value >= ghost) {
+      setGhost(value);
+      return;
+    }
+    const id = window.setTimeout(() => setGhost(value), TRAIL_MS);
+    return () => window.clearTimeout(id);
+  }, [value, trail, ghost]);
   // 光らせる：値が変わったら、増えた・減ったを少しのあいだ覚える
   const prev = useRef(value);
   const [change, setChange] = useState<{ dir: 'up' | 'down'; n: number } | null>(null);
@@ -50,9 +64,9 @@ export function Meter({ label, value, max, tone, unit, gaugeOnly, warnBelow, pul
       <div className="meter__head">
         <span>{label}</span>
         {!gaugeOnly && (
-          <span>
+          <span className={`meter__num${low ? ' meter__num--low' : ''}`}>
             {unit ? `${unit} ` : ''}
-            {value} / {max}
+            <b>{value}</b> / {max}
           </span>
         )}
       </div>
@@ -67,6 +81,7 @@ export function Meter({ label, value, max, tone, unit, gaugeOnly, warnBelow, pul
         aria-valuenow={value}
         aria-valuetext={gaugeOnly ? `${Math.round((value / max) * 100)}%` : undefined}
       >
+        {trail && <div className="meter__ghost" style={{ width: `${(Math.max(ghost, value) / max) * 100}%` }} aria-hidden="true" />}
         <div className="meter__fill" style={{ width: `${(value / max) * 100}%` }} />
       </div>
     </div>
