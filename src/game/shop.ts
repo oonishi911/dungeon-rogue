@@ -39,6 +39,16 @@ export function shelfOf(id: ItemId): Shelf {
   return slot === 'consumable' ? 'supply' : slot === 'spellbook' ? 'book' : slot;
 }
 
+/**
+ * 装備の画面に並べる、持っているもの（売り場ごと）。武器・防具・指輪・呪文書は買ったもの（指輪は、敵が落とした二重耐性の指輪も）を品物の並び順で、
+ * 道具は倉庫にあるものを道具の並び順で
+ */
+export function ownedOn(save: SaveData, shelf: Shelf): ItemId[] {
+  if (shelf === 'supply') return SUPPLY_IDS.filter((id) => count(save.stock, id) > 0);
+  const owned = new Set(save.owned);
+  return (Object.keys(ITEMS) as ItemId[]).filter((id) => owned.has(id) && shelfOf(id) === shelf);
+}
+
 /** その種類で持っている、いちばん上の段階（持っていなければ0） */
 export function bestTier(owned: readonly ItemId[], base: GearBaseId): number {
   return owned.reduce((best, id) => {

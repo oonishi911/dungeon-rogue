@@ -2,7 +2,10 @@
 // ルールはすべて src/game/shop.ts にあり、ここでは呼び出して表示するだけ。
 // ダンジョンの属性は出さず、情報屋から聞いたことだけを、上にメモとして出す。
 // はっきり聞いたこと（うわさでない）があれば、それに合う品物に「おすすめ」の印を付ける（shop.ts の recommended）。
-// 売り場は「武器・防具・指輪・道具・呪文書」のタブで切り替える（指輪の売り場には、敵が落とした二重耐性の指輪も並ぶ）。下の「持ち物」の欄は、たたんでおける（スマホで品物を多く見るため）。
+// 画面は、上の切り替えで「買い物」と「装備」に分かれる（2026-11-23）。
+// ・買い物：店に並ぶ品物を買うだけ（買った武器・防具は、そのまま装備する。持っているものには「持っている」の印）。売り場は「武器・防具・指輪・道具・呪文書」のタブ
+// ・装備：持っているものから、持っていくものを選ぶ（装備する・付ける・持っていく）。「武器・防具・指輪・道具・呪文書・刻印」のタブ（指輪には、敵が落とした二重耐性の指輪も並ぶ）。
+//   下の「持っていくもの」の欄（たためる）と、出発のボタンは、装備の画面にだけある
 
 import { useMemo, useState } from 'react';
 import { LOST, lost } from '../game/story';
@@ -10,12 +13,11 @@ import { RoomBackdrop } from './RoomBackdrop';
 import { ITEMS, LOADOUT_CONFIG } from '../game/data';
 import type { Intel } from '../game/informant';
 import type { SaveData } from '../game/save';
-import { buy, canTake, count, equip, equipSub, kitLoadout, recommended, shelfItems, SHELVES, takeCount, takeLimit, takeSupply, toggleBook, type Shelf } from '../game/shop';
+import { buy, canTake, count, equip, equipSub, kitLoadout, ownedOn, recommended, shelfItems, SHELVES, takeCount, takeLimit, takeSupply, toggleBook, type Shelf } from '../game/shop';
 import type { ItemId, Result } from '../game/types';
 import { ItemIcon } from './ItemIcon';
 import { EngravePanel } from './EngravePanel';
 import { engravedName } from '../game/engrave';
-import { ringOf } from '../game/itemMaster';
 import { equipRing, fingers, kitRings, unequipRing } from '../game/ring';
 
 interface ShopScreenProps {
@@ -29,8 +31,17 @@ interface ShopScreenProps {
 }
 
 export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, onDepart }: ShopScreenProps) {
+  const [mode, setMode] = useState<'buy' | 'equip'>('buy');
   const [tab, setTab] = useState<Shelf | 'engrave'>('weapon');
   const shelf: Shelf = tab === 'engrave' ? 'weapon' : tab;
+  // 買い物の画面には「刻印」のタブがないので、そこから切り替えたら武器のタブにする
+  const switchMode = (next: 'buy' | 'equip') => {
+    setMode(next);
+    setOpen(null);
+    setError(null);
+    if (next === 'buy' && tab === 'engrave') setTab('weapon');
+  };
+  const items = mode === 'buy' ? [...shelfItems(atEntry, shelf)] : ownedOn(save, shelf);
   const [bagOpen, setBagOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<ItemId | null>(null); // 説明を全部出している品物
@@ -66,7 +77,21 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
         {intel.length === 0 ? <li className="muted">情報屋からは、何も聞いていない（ダンジョンの属性はわからない）</li> : intel.map((h) => <li key={h.topic}>{h.memo}</li>)}
       </ul>
 
-      <div className="shop__tabs" role="tablist" aria-label="売り場">
+      {/* 買い物と装備の切り替え */}
+      <div className="shop__modes" role="tablist" aria-label="画面">
+        {(
+          [
+            ['buy', '買い物'],
+            ['equip', '装備'],
+          ] as const
+        ).map(([id, name]) => (
+          <button key={id} type="button" role="tab" aria-selected={mode === id} className={`shop__mode${mode === id ? ' shop__mode--on' : ''}`} onClick={() => switchMode(id)}>
+            {name}
+          </button>
+        ))}
+      </div>
+
+      <div className="shop__tabs" role="tablist" aria-label={mode === 'buy' ? '売り場' : '持ち物の種類'}>
         {SHELVES.map((s) => (
           <button
             key={s.id}
@@ -79,16 +104,19 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
             {s.name}
           </button>
         ))}
-        {/* 刻印：敵が落とした刻印武器と残響。買えない。装備と付け替えをする（engrave.ts） */}
-        <button type="button" role="tab" aria-selected={tab === 'engrave'} className={`shop__tab${tab === 'engrave' ? ' shop__tab--on' : ''}`} onClick={() => setTab('engrave')}>
-          刻印
-        </button>
+        {/* 刻印：敵が落とした刻印武器と残響。買えない。装備と付け替えをする（engrave.ts）。装備の画面にだけある */}
+        {mode === 'equip' && (
+          <button type="button" role="tab" aria-selected={tab === 'engrave'} className={`shop__tab${tab === 'engrave' ? ' shop__tab--on' : ''}`} onClick={() => setTab('engrave')}>
+            刻印
+          </button>
+        )}
       </div>
 
       {tab === 'engrave' && <EngravePanel save={save} apply={apply} />}
       {tab !== 'engrave' && (
       <ul className="shop__list screen__scroll" aria-label={SHELVES.find((s) => s.id === shelf)!.name}>
-        {[...shelfItems(atEntry, shelf), ...(shelf === 'ring' ? save.owned.filter((id) => ringOf(id)?.kind === 'dual') : [])].map((id) => (
+        {items.length === 0 && <li className="muted shop__empty">{mode === 'buy' ? '並んでいるものはない' : 'まだ持っていない（「買い物」で買える）'}</li>}
+        {items.map((id) => (
           <li key={id} className="shop__row">
             <ItemIcon id={id} size={28} className="shop__icon" />
             {/* 説明は1行に切ってある。押すと全文を出す */}
@@ -100,7 +128,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
               <span className="shop__desc">{ITEMS[id].description}</span>
             </button>
             <div className="shop__deal">
-              <Deal id={id} shelf={shelf} save={save} atEntry={atEntry} apply={apply} />
+              {mode === 'buy' ? <BuyDeal id={id} shelf={shelf} save={save} atEntry={atEntry} apply={apply} /> : <EquipDeal id={id} shelf={shelf} save={save} apply={apply} />}
             </div>
           </li>
         ))}
@@ -111,6 +139,17 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
         {error}
       </p>
 
+      {mode === 'buy' && (
+        // 買い物の画面の下：装備の画面へ（出発は、装備の画面から）
+        <div className="shop__bag shop__next">
+          <p className="muted shop__bag-hint">買った武器・防具は、そのまま装備する。持っていくものは「装備」で選ぶ</p>
+          <button type="button" className="primary shop__go" onClick={() => switchMode('equip')}>
+            装備を選ぶ
+          </button>
+        </div>
+      )}
+
+      {mode === 'equip' && (
       <section className="shop__bag" aria-labelledby="shop-bag">
         <h2 id="shop-bag" className="shop__bag-title">
           <button type="button" className="shop__bag-toggle" aria-expanded={bagOpen} aria-controls="shop-slots" onClick={() => setBagOpen((o) => !o)}>
@@ -175,29 +214,34 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
           {kitLoadout(save).length === 0 ? '何も持たずに出発する' : kit.weapon ? 'この持ち物で出発する' : '武器なしで出発する'}
         </button>
       </section>
+      )}
     </main>
   );
 }
 
-/** 品物の右側：値段と「買う」、または持っているものの「装備する」「持っていく」 */
-function Deal({ id, shelf, save, atEntry, apply }: { id: ItemId; shelf: Shelf; save: SaveData; atEntry: readonly ItemId[]; apply: (r: Result<SaveData>) => void }) {
-  const owned = save.owned.includes(id);
+/** 買い物の画面の、品物の右側：値段と「買う」。持っているもの（道具は倉庫の数）は、その印 */
+function BuyDeal({ id, shelf, save, atEntry, apply }: { id: ItemId; shelf: Shelf; save: SaveData; atEntry: readonly ItemId[]; apply: (r: Result<SaveData>) => void }) {
   const price = ITEMS[id].price;
   const short = price > save.gold;
-  const buyButton = (
+  if (shelf !== 'supply' && save.owned.includes(id)) return <span className="shop__owned">持っている</span>;
+  return (
     <>
+      {shelf === 'supply' && <span className="shop__owned">倉庫{count(save.stock, id)}</span>}
       <span className="shop__price">{lost(price)}</span>
       <button type="button" className={short ? 'shop__buy shop__buy--off' : 'primary shop__buy'} disabled={short} onClick={() => apply(buy(save, id, atEntry))}>
         {short ? '足りない' : '買う'}
       </button>
     </>
   );
+}
+
+/** 装備の画面の、品物の右側：「装備する」「サブにする」「付ける」「持っていく」（道具は、持っていく数の −・＋） */
+function EquipDeal({ id, shelf, save, apply }: { id: ItemId; shelf: Shelf; save: SaveData; apply: (r: Result<SaveData>) => void }) {
   if (shelf === 'supply') {
     const inStock = count(save.stock, id);
     const taking = count(save.kit.take, id);
     return (
       <>
-        {buyButton}
         <span className="shop__stock">
           倉庫{inStock}・持っていく{taking}
           <button type="button" className="shop__step" aria-label={`${ITEMS[id].name}を1つ減らす`} disabled={taking === 0} onClick={() => apply(takeSupply(save, id, -1))}>
@@ -216,12 +260,10 @@ function Deal({ id, shelf, save, atEntry, apply }: { id: ItemId; shelf: Shelf; s
       </>
     );
   }
-  if (!owned) return buyButton;
   if (shelf === 'book') {
     const taking = save.kit.books.includes(id);
     return (
       <>
-        <span className="shop__owned">持っている</span>
         <button type="button" className={taking ? 'shop__buy shop__buy--off' : 'primary shop__buy'} onClick={() => apply(toggleBook(save, id))}>
           {taking ? '外す' : '持っていく'}
         </button>
@@ -232,7 +274,6 @@ function Deal({ id, shelf, save, atEntry, apply }: { id: ItemId; shelf: Shelf; s
     const wearing = kitRings(save).includes(id);
     return (
       <>
-        <span className="shop__owned">持っている</span>
         <button type="button" className={wearing ? 'shop__buy shop__buy--off' : 'primary shop__buy'} onClick={() => apply(wearing ? unequipRing(save, id) : equipRing(save, id))}>
           {wearing ? '外す' : '付ける'}
         </button>
@@ -244,7 +285,6 @@ function Deal({ id, shelf, save, atEntry, apply }: { id: ItemId; shelf: Shelf; s
   const isSub = slot === 'weapon' && save.kit.weapon2 === id;
   return (
     <>
-      <span className="shop__owned">持っている</span>
       {slot === 'weapon' && !wearing && (
         // サブ武器：探索中に持ち替えて使う（メインとちがう種類。道具を持てる数が1つ減る）
         <button

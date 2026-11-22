@@ -2005,6 +2005,41 @@ button {
   color: var(--bone-dim);
 }
 
+/* 買い物と装備の切り替え（2026-11-23）：画面の上に、横いっぱいの2つのボタン */
+.shop__modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--bone-dim);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.shop__mode {
+  min-height: 2.75rem;
+  border: 0;
+  background: transparent;
+  color: var(--bone-dim);
+  font-size: var(--step-0);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+.shop__mode--on {
+  background: var(--bone-dim);
+  color: var(--ink);
+}
+
+.shop__empty {
+  padding: 0.75rem 0.25rem;
+}
+
+.shop__next {
+  display: grid;
+  gap: 0.5rem;
+}
+
 .shop__tabs {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

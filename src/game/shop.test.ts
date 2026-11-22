@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ITEMS, LOADOUT_CONFIG } from './data';
 import { newSave, parseSave, type SaveData } from './save';
-import { recommended, buy, canTake, count, departWith, equip, kitLoadout, returnWith, shelfItems, takeCount, takeLimit, takeSupply, toggleBook } from './shop';
+import { recommended, buy, canTake, count, departWith, equip, kitLoadout, ownedOn, returnWith, shelfItems, takeCount, takeLimit, takeSupply, toggleBook } from './shop';
 import type { ItemId, Result } from './types';
 
 const rich = (gold = 100000): SaveData => ({ ...newSave(), gold });
@@ -104,6 +104,18 @@ describe('持ち物を選ぶ', () => {
     expect(s.kit.take).toEqual([]);
     s = must(takeSupply(s, 'potion', 1));
     expect(takeSupply(s, 'potion', 1).ok).toBe(false);
+  });
+});
+
+describe('装備の画面に並ぶもの', () => {
+  it('持っているものだけが、売り場ごとに品物の並び順で並ぶ。道具は倉庫にあるものだけ', () => {
+    const s = buyAll(rich(), ['plate', 'sword', 'sword_2', 'book_heal', 'potion', 'potion', 'ring_fire_1']);
+    expect(ownedOn(s, 'weapon')).toEqual(['sword', 'sword_2']);
+    expect(ownedOn(s, 'armor')).toEqual(['plate']);
+    expect(ownedOn(s, 'ring')).toEqual(['ring_fire_1']);
+    expect(ownedOn(s, 'book')).toEqual(['book_heal']);
+    expect(ownedOn(s, 'supply')).toEqual(['potion']);
+    expect(ownedOn(rich(), 'weapon')).toEqual([]);
   });
 });
 
