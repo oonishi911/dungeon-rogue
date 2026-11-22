@@ -68,6 +68,7 @@ const FX = {
   ward: { color: 0x7fd8ff, sparks: 18, rise: 1, ms: 900 },
   poison: { color: 0x7fc46a },
   cleanse: { color: 0xf4f0e4, sparks: 14, rise: 1.1, ms: 800 },
+  prism: { chargeMs: 160, rowMs: 90, tileMs: 520, colors: [0xff6a5a, 0xffa64a, 0xffe15a, 0x7fd86a, 0x5ac8ff, 0x7f8aff, 0xc47fff] as readonly number[], flash: 0.3, shake: 0.3 }, // 虹の扇：溜め・奥の段へ進む間（ミリ秒）・1マスの光が消えるまで・7色・閃光・揺れ
   lights: 2, // 照らす光の数（使い回す）
   maxParticles: 320, // 一度に出す粒の上限（重くならないように）
   shake: { amp: 0.42, decay: 2.4 }, // 揺れの大きさ（マス）と、1秒あたりの収まる速さ
@@ -269,6 +270,8 @@ export class SpellEffects {
         for (const p of cast.area ?? []) this.later(now + fly, () => this.emit({ at: this.at(p, 0.15), count: 8, color: c.color, speed: [0.1, 0.4], up: 0.3, gravity: -0.1, drag: 1.5, life: [0.8, 1.4], size: [0.25, 0.5], alpha: 0.45, additive: false, texture: 'smoke', jitter: 0.3 }));
         return fly;
       }
+      case 'prism_fan':
+        return this.prismFan(now, cast, from);
       case 'cleanse': {
         // 解呪：白い魔法陣と、ほどけて上る光
         const c = FX.cleanse;
@@ -1055,6 +1058,66 @@ export class SpellEffects {
         }
       },
     );
+  }
+
+  /**
+   * 虹の扇：白い魔法陣のあと、手前の段から奥の段へ、マスごとに虹の色の光が床から立ち、色とりどりの光の粒がはじける。
+   * 当たった敵は、その段の光が立つ瞬間に光ってのけぞる。いちばん奥の段に届く時刻（ミリ秒）を返す
+   */
+  private prismFan(now: number, cast: CastEvent, from: Pos): number {
+    const c = FX.prism;
+    this.castCircle(now, from, 0xffffff, 1);
+    const end = cast.path.at(-1);
+    if (!end) return 0;
+    const hit = (p: Pos) => cast.splash.some((q) => q.x === p.x && q.y === p.y);
+    let last = 0;
+    for (const p of cast.path) {
+      const row = Math.max(Math.abs(p.x - from.x), Math.abs(p.y - from.y));
+      const side = cast.dir === 'up' || cast.dir === 'down' ? p.x - from.x : p.y - from.y;
+      const color = c.colors[(((side + row * 2) % c.colors.length) + c.colors.length) % c.colors.length]!;
+      const at = now + c.chargeMs + (row - 1) * c.rowMs;
+      last = Math.max(last, at - now);
+      const plate = this.floorPlane(this.tex.glow, color, 0.03);
+      plate.position.set(p.x, 0.03, p.y);
+      const column = new THREE.Mesh(this.shared.column, this.glowMaterial(color, this.tex.column));
+      column.position.set(p.x, 0, p.y);
+      this.add(at, c.tileMs, [plate, column], (t) => {
+        const a = t < 0.15 ? t / 0.15 : (1 - t) / 0.85;
+        plate.scale.setScalar(0.6 + 0.5 * easeOut(Math.min(1, t * 3)));
+        (plate.material as THREE.MeshBasicMaterial).opacity = 0.9 * a;
+        column.scale.set(0.34, 0.2 + 1.4 * easeOut(Math.min(1, t * 2.5)), 0.34);
+        (column.material as THREE.MeshBasicMaterial).opacity = 0.55 * a;
+      });
+      this.later(at, () => {
+        this.emit({ at: this.at(p, 0.3), count: hit(p) ? 22 : 10, color: () => pick(c.colors), speed: [0.6, 1.6], up: 1, gravity: 1.6, drag: 1.3, life: [0.4, 0.8], size: [0.1, 0.2], additive: true, texture: 'glow', jitter: 0.25 });
+        if (hit(p)) this.onImpact?.(p, 1, color);
+      });
+    }
+    // 床を走る虹：足元から扇形に、7色の帯が前へ広がって消える
+    const toward = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[cast.dir ?? 'right'];
+    const yaw = Math.atan2(toward[1]!, toward[0]!); // 向いた方向（扇の真ん中）
+    const reach = Math.max(...cast.path.map((p) => Math.max(Math.abs(p.x - from.x), Math.abs(p.y - from.y)))) + 0.5;
+    const spread = Math.PI / 2;
+    const bands = c.colors.map((color, i) => {
+      const geo = new THREE.RingGeometry(0.2, 1, 24, 1, -spread / 2 + (spread * i) / c.colors.length, spread / c.colors.length).rotateX(-Math.PI / 2);
+      const mesh = new THREE.Mesh(geo, this.plainGlow(color, 0));
+      mesh.position.set(from.x, 0.04, from.y);
+      mesh.rotation.y = -yaw;
+      mesh.renderOrder = 15;
+      return mesh;
+    });
+    this.add(now + c.chargeMs * 0.6, last + c.tileMs * 0.8, bands, (t) => {
+      for (const b of bands) {
+        b.scale.setScalar(0.3 + reach * easeOut(Math.min(1, t * 1.6)));
+        (b.material as THREE.MeshBasicMaterial).opacity = 0.5 * (t < 0.2 ? t / 0.2 : (1 - t) / 0.8);
+      }
+    });
+    this.lightUp(now + c.chargeMs, last + c.tileMs, 0xffffff, 2.2, (t) => this.at({ x: from.x + (end.x - from.x) * t, y: from.y + (end.y - from.y) * t }, 0.8), (t) => Math.sin(Math.PI * t));
+    this.later(now + c.chargeMs, () => {
+      this.flash(0xffffff, c.flash);
+      this.shakeBy(c.shake);
+    });
+    return last + 60;
   }
 
   /** マス p の、高さ y の位置 */

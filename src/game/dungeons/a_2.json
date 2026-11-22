@@ -153,6 +153,11 @@
     },
     "cleanse": {
       "cost": 3
+    },
+    "prism_fan": {
+      "cost": 8,
+      "power": 0.8,
+      "range": 3
     }
   },
   "encounters": {

@@ -1187,6 +1187,22 @@ def spell_cleanse():
     return finish_spell(y, 0.45)
 
 
+
+def spell_prism_fan():
+    """虹の扇：7つの音が重なったきらめく和音が、前へ広がりながら駆け上がり、最後にはじける"""
+    rng = np.random.default_rng(139)
+    n = int(SR * 1.2)
+    y = np.zeros(n)
+    for i, f in enumerate([523, 587, 659, 784, 880, 1047, 1175]):
+        y += tone(n, f, i * 0.035, 0.5, 0.2, glide=0.05)
+        y += tone(n, f * 2, i * 0.035 + 0.01, 0.25, 0.06)
+    y += sweep_noise(n, 0.0, 0.35, 1500, 8000, rng) * 0.6
+    y += resonate(impulse(n, 0.3), [1800, 2700, 3600], [0.15, 0.1, 0.08], [0.5, 0.35, 0.2])
+    for i in range(16):
+        y += tone(n, 2500 + rng.random() * 4000, 0.3 + rng.random() * 0.5, 0.06, 0.06)
+    return finish_spell(y, 0.45)
+
+
 SPELL_SOUNDS = {
     'shockwave': spell_shockwave,
     'shockwave_strong': spell_shockwave_strong,
@@ -1209,6 +1225,7 @@ SPELL_SOUNDS = {
     'ward': spell_ward,
     'poison_mist': spell_poison_mist,
     'cleanse': spell_cleanse,
+    'prism_fan': spell_prism_fan,
 }
 
 STEPS = {'neutral': step_neutral, 'fire': step_fire, 'ice': step_ice, 'light': step_light, 'dark': step_dark}

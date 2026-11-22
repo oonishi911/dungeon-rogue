@@ -671,6 +671,10 @@
     "book_cleanse": {
       "name": "解呪の呪文書",
       "price": 300
+    },
+    "book_prism_fan": {
+      "name": "虹の扇の呪文書",
+      "price": 700
     }
   },
   "information": {

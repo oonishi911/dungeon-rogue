@@ -40,6 +40,7 @@ export const SPELLBOOK_IDS = [
   'book_ward',
   'book_poison_mist',
   'book_cleanse',
+  'book_prism_fan',
 ] as const satisfies readonly ItemId[];
 export type SpellbookId = (typeof SPELLBOOK_IDS)[number];
 
@@ -169,6 +170,7 @@ export const SPELLBOOK_TEXT: Record<SpellbookId, string> = {
   book_ward: '数ターン、敵の攻撃で受けるダメージを減らす',
   book_poison_mist: '向いた方向へ飛び、当たった所のまわり9マスに、数ターン残る毒の霧を置く。霧の上にいる敵は、毎ターンダメージを受ける（主人公は受けない）',
   book_cleanse: '自分の毒と鈍足を治す',
+  book_prism_fan: '向いた方向に、前へ広がる扇形（手前1マス、奥ほど広い）の敵すべてに当たる。属性を持たない虹の光で、どの属性の敵にも同じダメージ（弱点で増えることも、効きにくくて減ることもない）。壁の向こうには届かない',
 };
 
 // ===== 段階と ID =====

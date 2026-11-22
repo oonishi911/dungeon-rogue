@@ -78,6 +78,7 @@ export const SPELLS: Record<SpellId, SpellDef> = {
   ward: { id: 'ward', name: '魔力の盾', aim: false, effect: { kind: 'ward' } },
   poison_mist: { id: 'poison_mist', name: '毒の霧', aim: true, effect: { kind: 'poison' } },
   cleanse: { id: 'cleanse', name: '解呪', aim: false, effect: { kind: 'cleanse' } },
+  prism_fan: { id: 'prism_fan', name: '虹の扇', aim: true, effect: { kind: 'fan' } },
 };
 
 // 数値はすべて仮。遊んでみてバランス調整する
