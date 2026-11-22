@@ -64,3 +64,12 @@ export function dirBetween(from: Pos, to: Pos): Dir {
   if (!dir) throw new Error('隣り合っていないマスです');
   return dir;
 }
+
+/** from から to の方の向き（縦横のうち、離れている方。同じなら横）。同じマスなら null */
+export function dirToward(from: Pos, to: Pos): Dir | null {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (dx === 0 && dy === 0) return null;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx > 0 ? 'right' : 'left';
+  return dy > 0 ? 'down' : 'up';
+}

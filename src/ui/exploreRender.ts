@@ -45,12 +45,18 @@ export function readColors() {
     treasure: c('--hp-enemy'),
     target: c('--hp-you'),
     mini: c('--bone-dim'), // 3D画面の上に半透明で重ねるので、暗い床の上でも見える明るい色にする
+    foe: '#ff6a55', // 見えている敵（2026-11-23）
+    chest: '#f0c050', // 見つけた、まだ開けていない宝箱
   };
 }
 
 export const lerp = (a: Pos, b: Pos, t: number): Pos => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
 
-export function drawMinimap(canvas: HTMLCanvasElement, state: ExploreState, colors: Colors) {
+/**
+ * ミニマップを描く：見えた床、上り・下り階段、まだ開けていない宝箱（見えたもの）、見えている敵（visible は今見えているマス）、主人公。
+ * 2026-11-23：敵と宝箱の印を足し、階段は縁取りして、床と見分けやすくした
+ */
+export function drawMinimap(canvas: HTMLCanvasElement, state: ExploreState, colors: Colors, visible?: ReadonlySet<number>) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const { map, seen, player } = state;
@@ -66,8 +72,16 @@ export function drawMinimap(canvas: HTMLCanvasElement, state: ExploreState, colo
     ctx.fillStyle = color;
     ctx.fillRect(Math.round((p.x + 0.5) * MINI_CELL - mark / 2), Math.round((p.y + 0.5) * MINI_CELL - mark / 2), mark, mark);
   };
-  if (map.stairs && seen[map.stairs.y * map.width + map.stairs.x]) dot(map.stairs, colors.stairs);
+  // 縁取りした印（階段：暗い縁で、床の明るい色と見分ける）
+  const framed = (p: Pos, color: string) => {
+    ctx.fillStyle = 'rgb(11 20 19)';
+    ctx.fillRect(Math.round((p.x + 0.5) * MINI_CELL - mark / 2 - 1), Math.round((p.y + 0.5) * MINI_CELL - mark / 2 - 1), mark + 2, mark + 2);
+    dot(p, color);
+  };
+  for (const c of state.chests) if (!c.opened && seen[c.pos.y * map.width + c.pos.x]) dot(c.pos, colors.chest);
+  if (map.stairs && seen[map.stairs.y * map.width + map.stairs.x]) framed(map.stairs, colors.stairs);
   const up = upStairs(state);
-  if (up && seen[up.y * map.width + up.x]) dot(up, colors.treasure); // 上り階段は、床と見分けられる金色
+  if (up && seen[up.y * map.width + up.x]) framed(up, colors.treasure); // 上り階段は、床と見分けられる金色
+  if (visible) for (const e of state.enemies) if (visible.has(e.pos.y * map.width + e.pos.x)) dot(e.pos, colors.foe);
   dot(player, colors.target);
 }

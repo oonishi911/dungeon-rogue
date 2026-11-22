@@ -1,17 +1,17 @@
 // 探索画面の右側（スマホでは下）。体力などのゲージ、呪文と道具のボタン、装備・見えている敵・記録・リタイア。
 
-import { BODY_NAMES, expToNext, ITEMS, SPELLS, STATUS_MASTER, TRAITS } from '../game/data';
+import { useRef } from 'react';
+import { BODY_NAMES, expToNext, ITEMS, SPELLS, TRAITS } from '../game/data';
 import { enemyDef } from '../game/enemies';
 import type { ExploreState } from '../game/exploreTypes';
 import type { DungeonFile } from '../game/genMaster';
 import type { ItemId, SpellId } from '../game/types';
 import { playerHitDamage, swapWeapons } from '../game/combat';
-import { activeStatuses } from '../game/status';
-import { STATUS_LABELS, STATUS_TEXTS } from '../game/statusMaster';
 import { SKILL_TEXTS, skillOf } from '../game/weaponSkill';
 import { ENEMY_MARK } from './exploreRender';
 import { SKILL_KEY, SPELL_KEYS, SWAP_KEY } from './exploreKeys';
 import { LogList, Meter } from './ExploreParts';
+import { statusChips } from './statusChips';
 import { ItemIcon, ItemLabel, SpellIcon } from './ItemIcon';
 
 interface ExploreSideProps {
@@ -22,6 +22,7 @@ interface ExploreSideProps {
   itemGroups: { id: ItemId; count: number }[]; // 同じ道具はまとめて「回復薬 ×2」のように表示する
   visibleEnemies: ExploreState['enemies'];
   recentLog: string[];
+  aiming: SpellId | null; // 構えている呪文（向きのある呪文を1回押したとき）
   infoOpen: boolean; // スマホで、装備・敵・記録をまとめた画面を開いているか（PCでは常に横に出ている）
   onCast: (spell: SpellId) => void;
   onSkill: () => void;
@@ -29,42 +30,53 @@ interface ExploreSideProps {
   onUseItem: (item: ItemId) => void;
   onCloseInfo: () => void;
   onRetire: () => void;
+  onInfo: (text: string) => void; // 説明を、3D画面の上に短く出す（状態のアイコンを押したとき・呪文を長押ししたとき）
 }
 
 const weaponName = (id: ItemId | null): string => (id ? ITEMS[id].name : '素手');
 
-export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibleEnemies, recentLog, infoOpen, onCast, onSkill, onSwap, onUseItem, onCloseInfo, onRetire }: ExploreSideProps) {
+/** 長押しと見なすまでの時間（ミリ秒） */
+const LONG_PRESS_MS = 480;
+
+export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibleEnemies, recentLog, aiming, infoOpen, onCast, onSkill, onSwap, onUseItem, onCloseInfo, onRetire, onInfo }: ExploreSideProps) {
   const { stats } = state;
   const skill = skillOf(stats.weapon, stats.echoes); // 持っている武器の固有技（素手なら無い）
-  const afflictions = activeStatuses(stats);
+  const chips = statusChips(state);
+  // 長押し：押したまま少し待つと、説明を出す（そのあと指を離しても、唱えない）
+  const pressed = useRef<{ timer: number; long: boolean }>({ timer: 0, long: false });
+  const holdFor = (text: string) => {
+    window.clearTimeout(pressed.current.timer);
+    pressed.current.long = false;
+    pressed.current.timer = window.setTimeout(() => {
+      pressed.current.long = true;
+      onInfo(text);
+    }, LONG_PRESS_MS);
+  };
+  const releaseHold = () => window.clearTimeout(pressed.current.timer);
   const other = swapWeapons(stats, state.skill)?.stats ?? null; // 持ち替えたあとの能力（サブ武器がないときは null）
   return (
     <aside className="explore__side">
       <div className="explore__status">
-        {/* 体力・満腹度・魔力は、数字を出さずゲージだけにする。体力と満腹度は、残りが少ないと点滅する */}
-        <Meter label="HP" value={stats.hp} max={stats.maxHp} tone="hp" gaugeOnly warnBelow={0.25} pulse />
-        <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" gaugeOnly warnBelow={0.25} />
-        {state.ward && (
-          // 魔力の盾：かかっているあいだだけ、残りのターン数と、減らす割合を出す
-          <ul className="explore__ailments" aria-label="魔法の守り">
-            <li className="explore__ailment explore__ailment--ward" title={`敵の攻撃で受けるダメージを${state.ward.cut}%減らす`}>
-              <span className="explore__ailment-name">魔力の盾</span>
-              <span className="explore__ailment-left">{state.ward.turns}ターン</span>
-            </li>
-          </ul>
-        )}
-        {afflictions.length > 0 && (
-          // 状態異常（毒・鈍足）：かかっているあいだだけ、残りのターン数・歩数を出す。空腹はその場で満腹度が減るだけなので出さない
-          <ul className="explore__ailments" aria-label="状態異常">
-            {afflictions.map((a) => (
-              <li key={a.id} className={`explore__ailment explore__ailment--${a.id}`} title={STATUS_TEXTS[a.id](STATUS_MASTER)}>
-                <span className="explore__ailment-name">{STATUS_LABELS[a.id]}</span>
-                <span className="explore__ailment-left">{a.remain}{a.id === 'chill' ? '歩' : 'ターン'}</span>
+        {/* 体力・満腹度・魔力は、数字（今 / 最大）とゲージ。体力と満腹度は、残りが少ないと数字が赤くなり、ゲージが点滅する。体力は、減った分を赤く少し残す（2026-11-23） */}
+        <Meter label="HP" value={stats.hp} max={stats.maxHp} tone="hp" warnBelow={0.25} pulse trail />
+        <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" warnBelow={0.25} />
+        {chips.length > 0 && (
+          // 状態のアイコン（毒・鈍足・空腹・魔力の盾・再生・武器に宿った属性）：短い字と残りの数。押すと説明が出る
+          <ul className="explore__chips" aria-label="状態">
+            {chips.map((c) => (
+              <li key={c.id}>
+                <button type="button" className={`explore__chip explore__chip--${c.id}`} title={`${c.name}：${c.text}`} onClick={() => onInfo(`${c.name}：${c.text}`)}>
+                  <span className="explore__chip-mark" aria-hidden="true">
+                    {c.mark}
+                  </span>
+                  <span className="sr-only">{c.name}</span>
+                  {c.left && <span className="explore__chip-left">{c.left}</span>}
+                </button>
               </li>
             ))}
           </ul>
         )}
-        {state.maxMp > 0 && <Meter label="魔力" value={state.mp} max={state.maxMp} tone="mp" gaugeOnly pulse shakeKey={mpShake} />}
+        {state.maxMp > 0 && <Meter label="魔力" value={state.mp} max={state.maxMp} tone="mp" pulse shakeKey={mpShake} trail />}
         {/* レベルは、この挑戦のあいだだけ。いちばん上のレベルでは経験値の棒を出さない */}
         {state.level < dungeon.growth.maxLevel ? (
           <Meter label={`レベル${state.level}`} value={state.exp} max={expToNext(state.level, dungeon.growth)} tone="exp" unit="経験値" />
@@ -116,19 +128,28 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
           <ul className="explore__items explore__spells" aria-label="呪文">
             {state.spells.map((spell, i) => {
               const cost = dungeon.spells[spell].cost ?? 0;
+              const short = state.mp < cost;
+              const about = `${SPELLS[spell].name}（魔力${cost}）：${ITEMS[`book_${spell}` as ItemId].description}${SPELLS[spell].aim ? '（1回押すと届く範囲が出て、もう一度押すと唱える）' : ''}`;
               return (
                 <li key={spell}>
+                  {/* 魔力が足りないときも押せる（押すと、足りないことを知らせて魔力のゲージを震わせる）。長押しで説明 */}
                   <button
                     type="button"
-                    className="explore__use explore__spell"
-                    onClick={() => onCast(spell)}
-                    disabled={ended || state.mp < cost}
-                    title={`${ITEMS[`book_${spell}` as ItemId].description}${SPELLS[spell].aim ? '（主人公が向いている方向に唱える）' : ''}`}
+                    className={`explore__use explore__spell${short ? ' explore__spell--short' : ''}${aiming === spell ? ' explore__spell--aiming' : ''}`}
+                    onClick={() => (pressed.current.long ? (pressed.current.long = false) : onCast(spell))}
+                    onPointerDown={() => holdFor(about)}
+                    onPointerUp={releaseHold}
+                    onPointerLeave={releaseHold}
+                    onPointerCancel={releaseHold}
+                    disabled={ended}
+                    aria-pressed={aiming === spell}
+                    aria-label={`${SPELLS[spell].name}（魔力${cost}${short ? '、足りない' : ''}）`}
+                    title={about}
                   >
                     <span className="explore__key">{SPELL_KEYS[i]?.toUpperCase()}</span>
                     <SpellIcon spell={spell} size={22} />
-                    {SPELLS[spell].name}
-                    <span className="explore__cost">魔力{cost}</span>
+                    <span className="explore__spell-name">{SPELLS[spell].name}</span>
+                    <span className="explore__cost">{short ? '不足' : `魔力${cost}`}</span>
                   </button>
                 </li>
               );

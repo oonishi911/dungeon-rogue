@@ -29,6 +29,7 @@ import {
 } from './exploreTypes';
 import { alarmTargets, chargeRun, guardsAgainst, minionTile, retreatStep, stepDir, straightLine, weakestOf } from './enemyBehavior';
 import { canSee, samePos, visibleTiles } from './exploreSight';
+import { aimLine, fanTiles, stoneTiles } from './spellArea';
 import { SKILL_CONFIG, skillOf } from './weaponSkill';
 import { afflict, cureAll, statusNames } from './status';
 import { applyFoeStatus, burnRemaining, extinguish, foeImmune, foeKindOf, scaled, thaw, whetstoneChance, type ComboKind, type FoeStatusKind } from './foeStatus';
@@ -501,19 +502,8 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
     case 'bolt':
     case 'sweep': {
       // 向いた方向へ、壁に当たるか届くマス数まで進む。矢は最初の敵で止まり、なぎ払いは貫く
-      const d = DIR_DELTA[dir!];
-      const range = cfg.range ?? 1;
-      const targets: MapEnemy[] = [];
-      for (let i = 1; i <= range; i++) {
-        const p = { x: s.player.x + d.x * i, y: s.player.y + d.y * i };
-        if (tileAt(s.map, p) === 'wall' || stoneAt(s.fields, p)) break; // 石の壁でも止まる
-        event.path.push(p);
-        const enemy = s.enemies.find((e) => samePos(e.pos, p));
-        if (enemy) {
-          targets.push(enemy);
-          if (def.effect.kind === 'bolt') break;
-        }
-      }
+      event.path.push(...aimLine(s, dir!, cfg.range ?? 1, def.effect.kind === 'bolt')); // 石の壁でも止まる
+      const targets: MapEnemy[] = event.path.flatMap((p) => s.enemies.filter((e) => samePos(e.pos, p)));
       if (targets.length === 0) s = { ...s, log: [...s.log, '何にも当たらなかった'] };
       if (def.effect.kind === 'bolt' && targets[0]) event.affinity = spellAffinity(spell, enemyDef(targets[0]));
       // 炎・氷の矢は、当たった敵の足元に燃える床・霜の床を残す（連矢は、まわり8マスにも）
@@ -636,10 +626,8 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
     }
     case 'stone': {
       // 向いた方向の目の前と、その左右の、横3マスに石の壁（敵のいるマス・壁には作らない）
-      const d = DIR_DELTA[dir!];
-      const front = { x: s.player.x + d.x, y: s.player.y + d.y };
-      const side = { x: d.y, y: d.x };
-      const at = [front, { x: front.x + side.x, y: front.y + side.y }, { x: front.x - side.x, y: front.y - side.y }];
+      const at = stoneTiles(s.player, dir!);
+      const front = at[0]!;
       const placed = placeSpellField(s.fields, s.map, at, 'stone', cfg.turns ?? 1, s.player, [...s.enemies.map((e) => e.pos), ...(s.map.stairs ? [s.map.stairs] : [])]);
       if (placed.placed.length === 0) return err('壁を作れる場所がない');
       event.area = placed.placed;
@@ -664,15 +652,8 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
     }
     case 'poison': {
       // 向いた方向へ飛び、最初の敵か、届くマス数の終わり（壁・石の壁の手前）で広がる
-      const d = DIR_DELTA[dir!];
-      let center: Pos | null = null;
-      for (let i = 1; i <= (cfg.range ?? 1); i++) {
-        const p = { x: s.player.x + d.x * i, y: s.player.y + d.y * i };
-        if (tileAt(s.map, p) === 'wall' || stoneAt(s.fields, p)) break;
-        event.path.push(p);
-        center = p;
-        if (s.enemies.some((e) => samePos(e.pos, p))) break;
-      }
+      event.path.push(...aimLine(s, dir!, cfg.range ?? 1, true));
+      const center = event.path.at(-1);
       if (!center) return err('その向きには霧を飛ばせない');
       const amount = Math.max(1, Math.round(magicPower(s.stats, settings.magic) * (cfg.power ?? 0)));
       const placed = placeSpellField(s.fields, s.map, around9(center), 'poison', cfg.turns ?? 1, s.player, [], amount);
@@ -682,16 +663,7 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
     }
     case 'fan': {
       // 虹の扇：向いた方向に、奥へ1マス進むごとに左右へ1マスずつ広がる扇形（壁の向こう・石の壁のマスには届かない）。属性を持たないので、相性で増減しない
-      const d = DIR_DELTA[dir!];
-      const side = { x: d.y, y: d.x };
-      const range = cfg.range ?? 1;
-      const reach = (p: Pos) => tileAt(s.map, p) !== 'wall' && !stoneAt(s.fields, p) && canSee(s.map, s.player, p, range * 1.5); // 扇の角まで届く広さで、見通しだけを確かめる
-      for (let k = 1; k <= range; k++) {
-        for (let w = -(k - 1); w <= k - 1; w++) {
-          const p = { x: s.player.x + d.x * k + side.x * w, y: s.player.y + d.y * k + side.y * w };
-          if (reach(p)) event.path.push(p);
-        }
-      }
+      event.path.push(...fanTiles(s, dir!, cfg.range ?? 1));
       const targets = s.enemies.filter((e) => event.path.some((p) => samePos(p, e.pos)));
       event.splash = targets.map((e) => e.pos);
       if (targets.length === 0) s = { ...s, log: [...s.log, '何にも当たらなかった'] };
@@ -712,15 +684,9 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
     case 'drain':
     case 'thunder': {
       // 向いた方向へ、壁・石の壁に当たるか届くマス数まで飛び、最初の敵に当たる（属性なし）
-      const d = DIR_DELTA[dir!];
-      let first: MapEnemy | undefined;
-      for (let i = 1; i <= (cfg.range ?? 1); i++) {
-        const p = { x: s.player.x + d.x * i, y: s.player.y + d.y * i };
-        if (tileAt(s.map, p) === 'wall' || stoneAt(s.fields, p)) break;
-        event.path.push(p);
-        first = s.enemies.find((e) => samePos(e.pos, p));
-        if (first) break;
-      }
+      event.path.push(...aimLine(s, dir!, cfg.range ?? 1, true));
+      const end = event.path.at(-1);
+      const first = end ? s.enemies.find((e) => samePos(e.pos, end)) : undefined;
       if (!first) {
         s = { ...s, log: [...s.log, '何にも当たらなかった'] };
         break;
