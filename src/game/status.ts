@@ -3,8 +3,10 @@
 //   確率 ＝ 設定の確率 × その敵の攻撃が受けるダメージの倍率（指輪の耐性・弱点。combat.ts の elementRate）。上限は100%
 // ・同じ状態異常にもう一度かかると、残りが設定の長さまで延びる（重なって強くはならない）。ちがう種類は、同時にかかる
 // ・毒：毎ターン、守りに関係なくダメージ（explore.ts の applyPoison）。鈍足：歩くのに2ターンかかる（explore.ts の step）。空腹：その場で満腹度が減る
+// ・毛皮の外套（armor.ts）：鈍足にかからず、空腹の攻撃で減る満腹度が少ない
 // ・万能薬で、毒と鈍足がすべて治る。階を移っても続き、中断データにも保存する。ボスは今のところ与えない
 
+import { hungerLoss, resistsChill } from './armor';
 import { elementRate } from './combat';
 import { STATUS_MASTER } from './data';
 import { behaviorsOf } from './enemies';
@@ -23,8 +25,9 @@ export function activeStatuses(stats: Pick<PlayerStats, 'poisonTurns' | 'chillSt
   return out;
 }
 
-/** その敵の攻撃で、状態異常にかかる確率（0〜1）。指輪の耐性で下がり、弱点で上がる */
+/** その敵の攻撃で、状態異常にかかる確率（0〜1）。指輪の耐性で下がり、弱点で上がる。毛皮の外套なら、鈍足にはかからない */
 export function statusChance(player: PlayerStats, enemy: EnemyDef, id: StatusId): number {
+  if (id === 'chill' && resistsChill(player.armor)) return 0; // 毛皮の外套：鈍足にならない
   return Math.min(1, Math.max(0, (STATUS_MASTER[id].chance / 100) * elementRate(player, enemy)));
 }
 
@@ -58,7 +61,7 @@ export function afflict(from: { stats: PlayerStats; satiety: number; rngState: n
       log.push((stats.chillSteps ?? 0) > 0 ? `${def.name}の攻撃で、足が重いまま` : `${def.name}の攻撃で、足が重くなった（鈍足）`);
       stats = { ...stats, chillSteps: Math.max(stats.chillSteps ?? 0, steps) };
     } else {
-      const lost = Math.min(satiety, STATUS_MASTER.hunger.amount);
+      const lost = Math.min(satiety, hungerLoss(STATUS_MASTER.hunger.amount, stats.armor)); // 毛皮の外套なら、減る量が少ない
       satiety -= lost;
       log.push(`${def.name}の攻撃で、お腹が空いた（満腹度が${lost}減った）`);
     }

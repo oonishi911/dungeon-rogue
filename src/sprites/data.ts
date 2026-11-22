@@ -318,5 +318,15 @@ export const CLOAKS = {
     "H": "#c9c3b3",
     "C": "#8f8977",
     "c": "#5f5a4e"
+  },
+  "robe": {
+    "H": "#7d6bb8",
+    "C": "#4f4290",
+    "c": "#342b63"
+  },
+  "cloak": {
+    "H": "#d9c7a4",
+    "C": "#9a6f45",
+    "c": "#6b4a2c"
   }
 } as const;

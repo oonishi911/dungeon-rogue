@@ -217,6 +217,22 @@ const SHAPES: Partial<Record<ItemId, () => ReactElement>> = {
       <path d="M12 6v14.5" stroke={C.ink} strokeOpacity="0.3" strokeWidth="1.2" />
     </>
   ),
+  robe: () => (
+    <>
+      <path d="M8 3.5h8l1.5 3-1 1.5L20 21H4l3.5-13-1-1.5z" fill="#4f4290" />
+      <path d="M8 3.5h8l1.5 3-1 1.5H7.5l-1-1.5z" fill="#7d6bb8" />
+      <path d="M12 8v13" stroke="#c9b46a" strokeWidth="1.4" />
+      <circle cx="12" cy="12.5" r="1.6" fill="#c9b46a" />
+    </>
+  ),
+  cloak: () => (
+    <>
+      <path d="M7 6.5 4 21h16L17 6.5z" fill="#9a6f45" />
+      <path d="M12 7v14" stroke="#6b4a2c" strokeWidth="1.2" />
+      <path d="M5 6.5c1.5-2.6 4.2-3.5 7-3.5s5.5.9 7 3.5c-1.2 1.4-3 2-4.4 1.6-.8 1-1.6 1.4-2.6 1.4s-1.8-.4-2.6-1.4C7.9 8.5 6.2 7.9 5 6.5z" fill="#d9c7a4" />
+      <path d="M7 9.5l.6-1.2M9.5 9.8l.4-1.3M14.5 9.8l-.4-1.3M17 9.5l-.6-1.2" stroke="#b8a07a" strokeWidth="0.9" strokeLinecap="round" />
+    </>
+  ),
   potion: () => flask(C.heal, heart('#fff')),
   panacea: () => flask(C.green, sparkle('#fff')),
   food: () => (

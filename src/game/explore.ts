@@ -5,10 +5,12 @@
 //
 // 型と数値は exploreTypes.ts、視界の計算は exploreSight.ts、魔法の計算（魔力・ダメージ・相性）は magic.ts にある。
 
+import { armorSaving, regenInterval, resistsChill } from './armor';
 import { BOSS_CONFIG, phaseOf, phaseSow, PHASE_MAX } from './bossPhase';
 import { buildPlayer, enemyHitDamage, hitAffinity, itemCapacity, playerHitDamage, swapWeapons, weaponTypeOf } from './combat';
 import { gearName, lootSeed, noFound, rollLoot, satietySaving, savesSatiety } from './echo';
 import { echoName } from './echo';
+import { ECHO_CAPS } from './echoMaster';
 import { enemyBase, enemyReward, expToNext, ITEMS, REWARD_CONFIG, SPELLS, STATUS_MASTER, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
 import { DEFAULT_DUNGEON_ID, dungeonOf } from './dungeons';
 import {
@@ -151,7 +153,7 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
         next = playerAttack(state, target);
       } else {
         chilled = (state.stats.chillSteps ?? 0) > 0;
-        slowed = chilled || fieldAt(state.fields, state.player)?.kind === 'frost';
+        slowed = chilled || (fieldAt(state.fields, state.player)?.kind === 'frost' && !resistsChill(state.stats.armor)); // 毛皮の外套なら、霜の床でも足が重くならない
         next = backAttacks(state, to);
         if (next.outcome !== 'ongoing') return ok({ ...next, turn: next.turn + 1 });
         next = openChest(reveal({ ...next, player: to }));
@@ -451,7 +453,7 @@ function useItem(state: ExploreState, itemId: ItemId): Result<ExploreState> {
 /** 1行動ごとの、魔力の回復と再生の呪文の回復 */
 function recoverMagic(state: ExploreState, turn: number): ExploreState {
   let { mp, regen, stats } = state;
-  if (state.maxMp > 0 && mp < state.maxMp && turn % dungeonOfState(state).magic.regenEvery === 0) mp++;
+  if (state.maxMp > 0 && mp < state.maxMp && turn % regenInterval(dungeonOfState(state).magic.regenEvery, stats.armor) === 0) mp++; // 法衣なら、回復が速い
   if (regen) {
     stats = { ...stats, hp: Math.min(stats.maxHp, stats.hp + regen.amount) };
     regen = regen.turns > 1 ? { ...regen, turns: regen.turns - 1 } : null;
@@ -1284,8 +1286,9 @@ function spendAction(state: ExploreState): ExploreState {
   const turn = state.turn + 1;
   const { stats } = state;
   if (state.satiety > 0) {
-    // ぬくもりの残響：決まった間隔で、満腹度が減らない行動ができる
-    const spent = savesSatiety(satietySaving(stats.echoes), turn) ? 0 : EXPLORE_CONFIG.satietyPerAction;
+    // ぬくもりの残響・毛皮の外套：決まった間隔で、満腹度が減らない行動ができる（合わせて上限まで）
+    const saving = Math.min(ECHO_CAPS.saving, satietySaving(stats.echoes) + armorSaving(stats.armor));
+    const spent = savesSatiety(saving, turn) ? 0 : EXPLORE_CONFIG.satietyPerAction;
     const satiety = Math.max(0, state.satiety - spent);
     const log = satiety === 0 ? [...state.log, '空腹で力が出ない…'] : state.log;
     return { ...state, turn, satiety, log };
