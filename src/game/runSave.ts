@@ -141,6 +141,8 @@ function isEnemy(map: FloorMap, v: unknown): v is MapEnemy {
   if (!(v.frozen === undefined || typeof v.frozen === 'boolean')) return false;
   if (!(v.phase === undefined || (isCount(v.phase, 1) && v.phase <= PHASE_MAX))) return false;
   if (!(v.summoned === undefined || typeof v.summoned === 'boolean') || !(v.summonedBy === undefined || isCount(v.summonedBy))) return false;
+  // 強さの倍率（できる前の中断データにはない。1倍として読む）
+  if (!(v.power === undefined || (isObject(v.power) && isNumber(v.power.hp) && v.power.hp > 0 && isNumber(v.power.atk) && v.power.atk > 0))) return false;
   const room = v.room;
   return room === undefined || (isObject(room) && isCount(room.x) && isCount(room.y) && isCount(room.width) && isCount(room.height));
 }

@@ -241,6 +241,34 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
             onChange={(v) => setEnemies({ bossMinions: v })}
           />
         </Field>
+        <Field
+          label={GEN_LABELS.hpRate}
+          hint="このダンジョンの敵のHPを、敵の設定（「敵」のタブ）の何倍にするかです。1階目の倍率で、深い階では下の「1階ごとに増える」分が足されます。強敵・ボスにも掛かります。"
+          example="2なら、HP10の敵がHP20に。装備が強くなってから行くダンジョンほど、大きくします。"
+        >
+          <NumberField {...GEN_LIMITS.powerRate} value={e.hpRate} changed={e.hpRate !== be.hpRate} base={be.hpRate} label={GEN_LABELS.hpRate} onChange={(v) => setEnemies({ hpRate: v })} />
+        </Field>
+        <Field
+          label={GEN_LABELS.atkRate}
+          hint="このダンジョンの敵の攻撃を、敵の設定の何倍にするかです。受けるダメージは「敵の攻撃 − 守り」なので、守りの高い防具を着ていても痛いようにするには、ここを上げます。ボスの攻撃には掛かりません（ボスは段階で強くなります）。"
+          example="1.5なら、攻撃8の敵が攻撃12に。守り6の主人公が受けるダメージは、2から6になります。"
+        >
+          <NumberField {...GEN_LIMITS.powerRate} value={e.atkRate} changed={e.atkRate !== be.atkRate} base={be.atkRate} label={GEN_LABELS.atkRate} onChange={(v) => setEnemies({ atkRate: v })} />
+        </Field>
+        <Field
+          label={GEN_LABELS.floorHpRate}
+          hint="1階深くなるごとに、敵のHPの倍率がどれだけ増えるかです（1階目の倍率に対する割合）。ボスの階は、いちばん深い階として数えます。"
+          example="HPの倍率2で、ここが0.1なら、1階目2倍・2階目2.2倍・3階目2.4倍。"
+        >
+          <NumberField {...GEN_LIMITS.floorPowerRate} value={e.floorHpRate} changed={e.floorHpRate !== be.floorHpRate} base={be.floorHpRate} label={GEN_LABELS.floorHpRate} onChange={(v) => setEnemies({ floorHpRate: v })} />
+        </Field>
+        <Field
+          label={GEN_LABELS.floorAtkRate}
+          hint="1階深くなるごとに、敵の攻撃の倍率がどれだけ増えるかです（1階目の倍率に対する割合）。"
+          example="攻撃の倍率1.2で、ここが0.1なら、1階目1.2倍・2階目1.32倍・3階目1.44倍。"
+        >
+          <NumberField {...GEN_LIMITS.floorPowerRate} value={e.floorAtkRate} changed={e.floorAtkRate !== be.floorAtkRate} base={be.floorAtkRate} label={GEN_LABELS.floorAtkRate} onChange={(v) => setEnemies({ floorAtkRate: v })} />
+        </Field>
       </div>
     </section>
   );

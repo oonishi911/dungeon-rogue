@@ -38,12 +38,14 @@ import { magicPower, spellAffinity, spellDamage, startMagic } from './magic';
 import {
   behaviorsOf,
   eliteArea,
+  empower,
   ENEMY_CONFIG,
   enemyDef,
   fromHome,
   isAdjacent,
   key,
   nextStepToward,
+  powerAt,
   spawnBoss,
   spawnBossMinions,
   spawnEnemies,
@@ -300,14 +302,15 @@ function enterFloor(state: ExploreState, floor: number, map: FloorMap): ExploreS
 
   if (map.boss) {
     // ボスは部屋の中を歩き、まわりには道中と同じ種類の雑魚敵がいる
-    const boss = spawnBoss(map.boss, encounter.boss, state.nextUid, map.rooms[0]);
+    const power = powerAt(settings.enemies, floor); // ダンジョンと階の強さ（ボスはHPだけ）
+    const boss = empower(spawnBoss(map.boss, encounter.boss, state.nextUid, map.rooms[0]), power);
     const minions = spawnBossMinions(map, encounter.pool, settings.enemies.bossMinions, state.rngState, state.nextUid + 1, settings.enemies.stayInRoom);
     return reveal({
       ...state,
       floor,
       map,
       player: map.start,
-      enemies: [boss, ...minions.enemies],
+      enemies: [boss, ...minions.enemies.map((e) => empower(e, power))],
       chests: [],
       fields: [],
       nextUid: state.nextUid + 1 + minions.enemies.length,
@@ -324,7 +327,7 @@ function enterFloor(state: ExploreState, floor: number, map: FloorMap): ExploreS
     floor,
     map,
     player: map.start,
-    enemies: spawned.enemies,
+    enemies: spawned.enemies.map((e) => empower(e, powerAt(settings.enemies, floor))), // ダンジョンと階の強さ
     chests: filled.chests,
     fields: [],
     nextUid: state.nextUid + spawned.enemies.length,
@@ -1033,7 +1036,8 @@ function enemiesTurn(state: ExploreState): ExploreState {
           const tile = mine < ENEMY_CONFIG.summonMax ? minionTile(s.map, e.pos, s.player, blocked) : null;
           if (tile) {
             const id = weakestOf(dungeonOfState(s).encounters[s.trait].pool);
-            const minion: MapEnemy = { uid: s.nextUid, id, elite: false, pos: tile, hp: enemyDef({ id, elite: false }).hp, mode: 'chase', justNoticed: true, lastSeen: s.player, searchTurns: 0, summoned: true, summonedBy: e.uid };
+            const called: MapEnemy = { uid: s.nextUid, id, elite: false, pos: tile, hp: 1, mode: 'chase', justNoticed: true, lastSeen: s.player, searchTurns: 0, summoned: true, summonedBy: e.uid };
+            const minion = empower(called, e.power ?? { hp: 1, atk: 1 }); // 呼んだ敵と同じ強さ
             spawned.push(minion);
             enter(key(tile));
             s = { ...s, nextUid: s.nextUid + 1, foes: [...s.foes, { kind: 'summon', at: tile, from: e.pos }], log: [...s.log, `${def.name}が${enemyDef(minion).name}を呼んだ`] };

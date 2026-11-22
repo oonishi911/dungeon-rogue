@@ -39,6 +39,12 @@ export interface EnemySettings {
   nestMax: number; // 群れ部屋に置く敵の数の最大
   stayInRoom: boolean; // 部屋に置いた敵は、主人公に気付くまで部屋の中だけを歩く
   bossMinions: number; // ボスの部屋に、ボスといっしょに置く雑魚敵の数（道中と同じ種類から選ぶ）
+  // 敵の強さ（enemies.ts の powerAt）：敵のHP・攻撃を、敵の設定（enemies.json）の何倍にするか。1階目は hpRate・atkRate 倍、
+  // そこから1階深くなるごとに floorHpRate・floorAtkRate ずつ増える（例：hpRate 2・floorHpRate 0.1 なら、1階目2倍、3階目2×1.2＝2.4倍）。ボスの攻撃は変えない（HPだけ）
+  hpRate: number;
+  atkRate: number;
+  floorHpRate: number;
+  floorAtkRate: number;
 }
 
 /** 敵を倒したときのレベルの上がり方と、強敵の報酬の倍率（data.ts の REWARD_CONFIG） */
@@ -173,6 +179,8 @@ export const GEN_LIMITS = {
   nestChance: { min: 0, max: 1, step: 0.05 },
   nestCount: { min: 1, max: 12, step: 1 },
   bossMinions: { min: 0, max: 40, step: 1 },
+  powerRate: { min: 0.1, max: 10, step: 0.1 },
+  floorPowerRate: { min: 0, max: 1, step: 0.01 },
   startHp: { min: 1, max: 999, step: 1 },
   startMaxHp: { min: 1, max: 999, step: 1 },
   expBase: { min: 1, max: 999, step: 1 },
@@ -200,6 +208,10 @@ export const GEN_LABELS = {
   nestMax: '群れの敵の数（最大）',
   stayInRoom: '部屋の敵は部屋から出ない',
   bossMinions: 'ボスの部屋の雑魚敵の数',
+  hpRate: '敵のHPの倍率',
+  atkRate: '敵の攻撃の倍率',
+  floorHpRate: '1階ごとに増える敵のHPの倍率',
+  floorAtkRate: '1階ごとに増える敵の攻撃の倍率',
   startHp: '入ったときのHP',
   startMaxHp: '入ったときの最大HP',
   expBase: '最初のレベルアップに要る経験値',
@@ -251,6 +263,10 @@ export function genProblems(data: unknown): string[] {
   }
   num(enemies.bossMinions, GEN_LABELS.bossMinions, GEN_LIMITS.bossMinions);
   if (typeof enemies.bossMinions === 'number' && !Number.isInteger(enemies.bossMinions)) problems.push(`${GEN_LABELS.bossMinions}：整数にする`);
+  num(enemies.hpRate, GEN_LABELS.hpRate, GEN_LIMITS.powerRate);
+  num(enemies.atkRate, GEN_LABELS.atkRate, GEN_LIMITS.powerRate);
+  num(enemies.floorHpRate, GEN_LABELS.floorHpRate, GEN_LIMITS.floorPowerRate);
+  num(enemies.floorAtkRate, GEN_LABELS.floorAtkRate, GEN_LIMITS.floorPowerRate);
   const { growth } = data;
   for (const k of ['startHp', 'startMaxHp', 'expBase', 'expStep', 'hpPerLevel', 'atkPerLevel', 'magPerLevel', 'maxLevel'] as const) {
     num(growth[k], GEN_LABELS[k], GEN_LIMITS[k]);

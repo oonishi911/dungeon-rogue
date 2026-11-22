@@ -2,7 +2,7 @@
   "enemies": {
     "goblin": {
       "name": "ゴブリン",
-      "hp": 7,
+      "hp": 14,
       "atk": 4,
       "def": 1,
       "element": "neutral",
@@ -21,7 +21,7 @@
     },
     "giant_rat": {
       "name": "大ネズミ",
-      "hp": 5,
+      "hp": 10,
       "atk": 3,
       "def": 0,
       "element": "neutral",
@@ -47,7 +47,7 @@
     },
     "stone_golem": {
       "name": "石ゴーレム",
-      "hp": 11,
+      "hp": 22,
       "atk": 5,
       "def": 3,
       "element": "neutral",
@@ -72,7 +72,7 @@
     },
     "fire_imp": {
       "name": "火の小鬼",
-      "hp": 6,
+      "hp": 12,
       "atk": 7,
       "def": 0,
       "element": "fire",
@@ -91,7 +91,7 @@
     },
     "flame_hound": {
       "name": "炎の猟犬",
-      "hp": 8,
+      "hp": 16,
       "atk": 7,
       "def": 1,
       "element": "fire",
@@ -110,7 +110,7 @@
     },
     "lava_lizard": {
       "name": "溶岩トカゲ",
-      "hp": 11,
+      "hp": 22,
       "atk": 7,
       "def": 3,
       "element": "fire",
@@ -129,7 +129,7 @@
     },
     "ice_imp": {
       "name": "氷の小鬼",
-      "hp": 6,
+      "hp": 12,
       "atk": 7,
       "def": 0,
       "element": "ice",
@@ -154,7 +154,7 @@
     },
     "ice_slime": {
       "name": "氷のスライム",
-      "hp": 8,
+      "hp": 16,
       "atk": 6,
       "def": 0,
       "element": "ice",
@@ -178,7 +178,7 @@
     },
     "ice_beetle": {
       "name": "氷の甲虫",
-      "hp": 10,
+      "hp": 20,
       "atk": 7,
       "def": 3,
       "element": "ice",
@@ -205,7 +205,7 @@
     },
     "light_bird": {
       "name": "光の鳥",
-      "hp": 6,
+      "hp": 12,
       "atk": 7,
       "def": 0,
       "element": "light",
@@ -231,7 +231,7 @@
     },
     "holy_armor": {
       "name": "聖なる甲冑",
-      "hp": 12,
+      "hp": 24,
       "atk": 7,
       "def": 3,
       "element": "light",
@@ -258,7 +258,7 @@
     },
     "light_wisp": {
       "name": "光の精",
-      "hp": 7,
+      "hp": 14,
       "atk": 7,
       "def": 0,
       "element": "light",
@@ -282,7 +282,7 @@
     },
     "dark_bat": {
       "name": "闇コウモリ",
-      "hp": 5,
+      "hp": 10,
       "atk": 7,
       "def": 0,
       "element": "dark",
@@ -309,7 +309,7 @@
     },
     "shadow": {
       "name": "影",
-      "hp": 8,
+      "hp": 16,
       "atk": 7,
       "def": 1,
       "element": "dark",
@@ -333,7 +333,7 @@
     },
     "phantom": {
       "name": "亡霊",
-      "hp": 9,
+      "hp": 18,
       "atk": 7,
       "def": 1,
       "element": "dark",
@@ -484,7 +484,7 @@
     },
     "lava_slime": {
       "name": "溶岩スライム",
-      "hp": 9,
+      "hp": 18,
       "atk": 7,
       "def": 0,
       "element": "fire",
@@ -508,7 +508,7 @@
     },
     "iwao": {
       "name": "岩鬼イワオ",
-      "hp": 13,
+      "hp": 26,
       "atk": 6,
       "def": 3,
       "element": "neutral",
@@ -533,7 +533,7 @@
     },
     "wraith": {
       "name": "レイス",
-      "hp": 9,
+      "hp": 18,
       "atk": 8,
       "def": 1,
       "element": "dark",
@@ -558,7 +558,7 @@
     },
     "troll": {
       "name": "トロル",
-      "hp": 10,
+      "hp": 20,
       "atk": 5,
       "def": 1,
       "element": "neutral",
@@ -581,7 +581,7 @@
     },
     "yeti": {
       "name": "イエティ",
-      "hp": 10,
+      "hp": 20,
       "atk": 7,
       "def": 1,
       "element": "ice",
@@ -605,7 +605,7 @@
     },
     "dark_knight": {
       "name": "暗黒騎士",
-      "hp": 11,
+      "hp": 22,
       "atk": 8,
       "def": 3,
       "element": "dark",
@@ -632,7 +632,7 @@
     },
     "holy_knight": {
       "name": "聖騎士",
-      "hp": 12,
+      "hp": 24,
       "atk": 7,
       "def": 3,
       "element": "light",
@@ -659,7 +659,7 @@
     },
     "animated_armor": {
       "name": "動く甲冑",
-      "hp": 12,
+      "hp": 24,
       "atk": 6,
       "def": 4,
       "element": "neutral",
@@ -688,7 +688,7 @@
     },
     "gargoyle": {
       "name": "ガーゴイル",
-      "hp": 10,
+      "hp": 20,
       "atk": 7,
       "def": 3,
       "element": "dark",
@@ -715,7 +715,7 @@
     },
     "ice_statue": {
       "name": "氷の彫像",
-      "hp": 11,
+      "hp": 22,
       "atk": 7,
       "def": 3,
       "element": "ice",
@@ -744,7 +744,7 @@
     },
     "cultist": {
       "name": "呪術師",
-      "hp": 6,
+      "hp": 12,
       "atk": 8,
       "def": 0,
       "element": "dark",
@@ -770,7 +770,7 @@
     },
     "goblin_mage": {
       "name": "魔導ゴブリン",
-      "hp": 5,
+      "hp": 10,
       "atk": 6,
       "def": 0,
       "element": "neutral",
@@ -795,7 +795,7 @@
     },
     "fire_mage": {
       "name": "炎のまじない師",
-      "hp": 6,
+      "hp": 12,
       "atk": 8,
       "def": 0,
       "element": "fire",
