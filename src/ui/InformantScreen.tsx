@@ -1,7 +1,7 @@
 // 情報屋との会話：ダンジョンを選んだあと、店に行く前に、これから入るダンジョンのことを聞き出す画面。
 // ルールは src/game/informant.ts。ここでは呼び出して表示するだけ。
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { alreadyAsked, ask, canAskVaguely, INFORMANT_CONFIG, priceOf, questionsLeft, TOPICS, type InformantState, type Intel } from '../game/informant';
 import { VOICES } from '../game/informantVoice';
 import type { SaveData } from '../game/save';
@@ -19,7 +19,16 @@ interface InformantScreenProps {
 
 export function InformantScreen({ run, dungeonName, state, save, onChange, onLeave }: InformantScreenProps) {
   const [error, setError] = useState<string | null>(null);
+  const log = useRef<HTMLOListElement>(null);
   const left = questionsLeft(state);
+  // 聞いたら、いちばん新しいやりとり（聞いたこと）が会話の枠のいちばん上に来るよう、自動で送る（長い答えでも、指でスクロールしなくても読み始められる）
+  useEffect(() => {
+    const asked = log.current?.querySelectorAll<HTMLElement>('.talk__line--hero');
+    const latest = asked?.[asked.length - 1];
+    if (!latest) return;
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    latest.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
+  }, [state.heard.length]);
   const vagueOk = canAskVaguely(state);
 
   const go = (topic: (typeof TOPICS)[number]['id'], clear: boolean) => {
@@ -46,7 +55,7 @@ export function InformantScreen({ run, dungeonName, state, save, onChange, onLea
       </header>
 
       {/* 会話：情報屋のあいさつと、聞いたことの答え。スマホでは、この枠の中だけを動かす */}
-      <ol className="talk__log screen__scroll" aria-label="会話" aria-live="polite">
+      <ol className="talk__log screen__scroll" aria-label="会話" aria-live="polite" ref={log}>
         <Line who="informant">
           {VOICES[state.tone ?? 0].greeting(dungeonName, INFORMANT_CONFIG.questions)}
         </Line>
