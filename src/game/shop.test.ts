@@ -88,13 +88,14 @@ describe('持ち物を選ぶ', () => {
     expect(must(equip(s, 'weapon', null)).kit.weapon).toBeNull();
   });
 
-  it('呪文書は3冊まで持っていける', () => {
-    let s = buyAll(rich(), ['book_heal', 'book_sweep', 'book_fire_bolt', 'book_ice_bolt']);
-    expect(s.kit.books).toEqual(['book_heal', 'book_sweep', 'book_fire_bolt']);
+  it('呪文書は5冊まで持っていける', () => {
+    expect(LOADOUT_CONFIG.maxSpellbooks).toBe(5);
+    let s = buyAll(rich(), ['book_heal', 'book_sweep', 'book_fire_bolt', 'book_regen', 'book_ward', 'book_ice_bolt']);
+    expect(s.kit.books).toEqual(['book_heal', 'book_sweep', 'book_fire_bolt', 'book_regen', 'book_ward']);
     expect(toggleBook(s, 'book_ice_bolt').ok).toBe(false);
     s = must(toggleBook(s, 'book_heal'));
     s = must(toggleBook(s, 'book_ice_bolt'));
-    expect(s.kit.books).toEqual(['book_sweep', 'book_fire_bolt', 'book_ice_bolt']);
+    expect(s.kit.books).toEqual(['book_sweep', 'book_fire_bolt', 'book_regen', 'book_ward', 'book_ice_bolt']);
   });
 
   it('道具は倉庫にある数までしか持っていけない', () => {

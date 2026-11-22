@@ -13,8 +13,8 @@ export const KEY_DIRS: Record<string, Dir> = {
   d: 'right',
 };
 
-// 呪文は z・x・c キーで唱える（持ってきた順）
-export const SPELL_KEYS = ['z', 'x', 'c'] as const;
+// 呪文は z・x・c・v・b キーで唱える（持ってきた順。持っていける呪文書の数 LOADOUT_CONFIG.maxSpellbooks と同じ数）
+export const SPELL_KEYS = ['z', 'x', 'c', 'v', 'b'] as const;
 
 // 武器の固有技（技ゲージが満タンのとき）は f キー
 export const SKILL_KEY = 'f';
