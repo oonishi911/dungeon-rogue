@@ -211,7 +211,8 @@
       "element": "light",
       "body": "soft",
       "behaviors": [
-        "charger"
+        "charger",
+        "alarm"
       ],
       "look": {
         "sprite": "fire_imp",
@@ -287,6 +288,7 @@
       "element": "dark",
       "body": "soft",
       "behaviors": [
+        "alarm",
         "hunger"
       ],
       "look": {

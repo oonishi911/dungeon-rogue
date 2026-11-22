@@ -12,8 +12,8 @@ export const ELEMENTS = ['neutral', 'fire', 'ice', 'light', 'dark'] as const sat
 export const BODIES = ['normal', 'soft', 'hard', 'spirit'] as const satisfies readonly Body[];
 export const MASTER_TRAITS: readonly TraitId[] = ELEMENTS;
 /** 敵の行動の個性（types.ts の EnemyBehavior）の一覧と、管理画面に出す名前・説明 */
-export const BEHAVIORS = ['ranged', 'charger', 'shield', 'summoner', 'trail', 'ambush', 'poison', 'chill', 'hunger'] as const satisfies readonly EnemyBehavior[];
-export const BEHAVIOR_LABELS: Record<EnemyBehavior, string> = { ranged: '遠距離', charger: '突進', shield: '盾持ち', summoner: '召喚', trail: '炎の足跡', ambush: '待ち伏せ', poison: '毒', chill: '鈍足', hunger: '空腹' };
+export const BEHAVIORS = ['ranged', 'charger', 'shield', 'summoner', 'trail', 'ambush', 'alarm', 'poison', 'chill', 'hunger'] as const satisfies readonly EnemyBehavior[];
+export const BEHAVIOR_LABELS: Record<EnemyBehavior, string> = { ranged: '遠距離', charger: '突進', shield: '盾持ち', summoner: '召喚', trail: '炎の足跡', ambush: '待ち伏せ', alarm: '見張り', poison: '毒', chill: '鈍足', hunger: '空腹' };
 export const BEHAVIOR_TEXTS: Record<EnemyBehavior, string> = {
   ranged: 'まっすぐ4マス以内で見通せれば、離れたところから撃ってくる（ダメージは通常の0.8倍）。隣に来られると、撃てる位置へ1歩下がる',
   charger: 'まっすぐ3マス以内にいると身構え、次のターンに一直線に走ってくる（当たれば通常の1.5倍。避けられて壁にぶつかると、1ターン動けなくなる）',
@@ -21,6 +21,7 @@ export const BEHAVIOR_TEXTS: Record<EnemyBehavior, string> = {
   summoner: '5ターンごとに、近くに道中でいちばん弱い敵を呼ぶ（同時に2体まで。呼ばれた敵を倒しても、報酬はない）',
   trail: '歩いたあとのマスに、燃える床を3ターン残す（炎の敵は燃えない。主人公にも、ほかの敵にも、乗ると毎ターン2ダメージ）。霜の床と隣り合うと、水蒸気になって消える',
   ambush: '気付かれていないあいだは、その場から動かない。2マス以内に近づくと、気付いたターンの猶予なしで襲いかかってくる（遠くから呪文で先に撃てば、不意打ちになる）',
+  alarm: '主人公に気付くと叫んで、5マス以内（壁ごしでも）の、まだ気付いていない仲間を、近い順に3体まで一斉に気付かせる（仲間は次のターンから追ってくる）。気付かれる前に倒すか、不意打ちで先に殴れば、叫ばれない',
   poison: '攻撃が当たると、確率で毒にかかる（毎ターンHPが減る。守りは関係ない）。確率・ターン数・ダメージは「状態異常」タブ。この敵の属性への指輪の耐性で、確率が下がる',
   chill: '攻撃が当たると、確率で鈍足にかかる（数歩のあいだ、歩くのに2ターンかかる）。確率・歩数は「状態異常」タブ。この敵の属性への指輪の耐性で、確率が下がる',
   hunger: '攻撃が当たると、確率で空腹にさせられる（満腹度がその場で減る）。確率・減る数は「状態異常」タブ。この敵の属性への指輪の耐性で、確率が下がる',

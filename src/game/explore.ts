@@ -25,7 +25,7 @@ import {
   type Field,
   type HitEvent,
 } from './exploreTypes';
-import { chargeRun, guardsAgainst, minionTile, retreatStep, stepDir, straightLine, weakestOf } from './enemyBehavior';
+import { alarmTargets, chargeRun, guardsAgainst, minionTile, retreatStep, stepDir, straightLine, weakestOf } from './enemyBehavior';
 import { canSee, samePos, visibleTiles } from './exploreSight';
 import { SKILL_CONFIG, skillOf } from './weaponSkill';
 import { afflict, cureAll, statusNames } from './status';
@@ -909,6 +909,7 @@ function sowFields(state: ExploreState, boss: MapEnemy, kind: FieldKind): Explor
 /**
  * 敵が1体ずつ行動する。
  * 1. プレイヤーが見えるか調べ、状態（うろつき・追跡・探索）を切り替える。気付いたターンは動かない
+ *    （見張りは、気付くと叫んで、近くの仲間も気付かせる。気付かされた仲間も、そのターンは動かない）
  * 2. 追跡中・探索中で隣にいれば攻撃し、そうでなければ移動する（強敵は持ち場の近くだけを動く。ボスは歩く）
  */
 function enemiesTurn(state: ExploreState): ExploreState {
@@ -930,8 +931,10 @@ function enemiesTurn(state: ExploreState): ExploreState {
     blocked.add(k);
   };
   const spawned: MapEnemy[] = []; // このターンに呼ばれた敵（次のターンから動く）
+  const roused = new Set<number>(); // このターンに、見張りの合図で気付かされた敵（uid）。気付いたターンは身構えるだけで、次のターンから動く
   for (let i = 0; i < enemies.length; i++) {
     const current = enemies[i]!;
+    if (roused.has(current.uid)) continue;
     // 動けない敵は、このターンは何もしない（気付くことも、動くことも、攻撃することも）。突進の構えも解ける
     if ((current.stun ?? 0) > 0) {
       const { stun, charge: _charge, frozen, ...rest } = current;
@@ -946,6 +949,19 @@ function enemiesTurn(state: ExploreState): ExploreState {
     let e: MapEnemy = { ...current, justNoticed: false };
 
     if (sees) {
+      if (e.mode !== 'chase' && behaviorsOf(def).includes('alarm')) {
+        // 見張りの合図：叫んで、近くのまだ気付いていない仲間を（近い順に3体まで）、一斉に気付かせる（壁ごしでも届く。仲間は、自分で見つけるのを待たずに追ってくる）
+        const heard = alarmTargets(enemies, current, ENEMY_CONFIG.alarmRange, ENEMY_CONFIG.alarmMax);
+        for (const j of heard) {
+          enemies[j] = { ...enemies[j]!, mode: 'chase', justNoticed: true, lastSeen: s.player, searchTurns: 0 };
+          if (j > i) roused.add(enemies[j]!.uid);
+        }
+        s = {
+          ...s,
+          foes: [...s.foes, { kind: 'alarm', at: current.pos, to: heard.map((j) => enemies[j]!.pos) }],
+          log: [...s.log, heard.length > 0 ? `${def.name}が叫んで、仲間を呼んだ` : `${def.name}が叫んだ`],
+        };
+      }
       if (e.mode !== 'chase') {
         if (!lying) {
           // 気付いたターンは身構えるだけで動かない。プレイヤーに対応する猶予を与える
