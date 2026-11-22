@@ -71,6 +71,13 @@ export const SPELLS: Record<SpellId, SpellDef> = {
   dark_chain: { id: 'dark_chain', name: '闇の連矢', aim: true, effect: { kind: 'bolt', element: 'dark', splash: true } },
   heal: { id: 'heal', name: '癒し', aim: false, effect: { kind: 'heal' } },
   regen: { id: 'regen', name: '再生', aim: false, effect: { kind: 'regen' } },
+  silence: { id: 'silence', name: '静寂', aim: false, effect: { kind: 'silence' } },
+  teleport: { id: 'teleport', name: '転移', aim: false, effect: { kind: 'teleport' } },
+  stone_wall: { id: 'stone_wall', name: '石の壁', aim: true, effect: { kind: 'stone' } },
+  sleep: { id: 'sleep', name: '眠りの霧', aim: false, effect: { kind: 'sleep' } },
+  ward: { id: 'ward', name: '魔力の盾', aim: false, effect: { kind: 'ward' } },
+  poison_mist: { id: 'poison_mist', name: '毒の霧', aim: true, effect: { kind: 'poison' } },
+  cleanse: { id: 'cleanse', name: '解呪', aim: false, effect: { kind: 'cleanse' } },
 };
 
 // 数値はすべて仮。遊んでみてバランス調整する

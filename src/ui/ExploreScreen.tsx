@@ -129,8 +129,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     const impactMs = playFeedback(prev, next, view3dRef.current);
     if (impactMs > 0) busyUntilRef.current = performance.now() + impactMs;
     if (next.hits.some((h) => h.kind === 'taken')) setHurtKey((n) => n + 1);
-    // 階を移ったときは動かさずに切り替える
-    motionRef.current = { from: motionOf(next.map === prev.map ? prev : next), start: performance.now() };
+    // 階を移ったときは動かさずに切り替える。転移の呪文で跳んだときも、主人公は滑らせずに跳んだ先へ置く（敵はふつうに動かす）
+    const from = motionOf(next.map === prev.map ? prev : next);
+    motionRef.current = { from: next.cast?.warp ? { ...from, player: next.player } : from, start: performance.now() };
     stateRef.current = next;
     setError(null);
     setState(next);

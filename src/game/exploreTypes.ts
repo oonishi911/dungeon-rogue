@@ -88,13 +88,19 @@ export interface CastEvent {
   bleeding: Pos[]; // 烈なぎ払いで出血した敵のいたマス（演出で使う）
   splash: Pos[]; // 連矢で、まわりのダメージを受けた敵のいたマス（演出で使う。唱える前の位置）
   affinity: Affinity | null; // 属性の矢が当たった敵との相性（演出の強さを変える）。矢でないとき・何にも当たらなかったときは null
+  area?: Pos[]; // 静寂・眠りの霧の効いた敵のいたマス、石の壁・毒の霧を置いたマス（演出で使う）
+  warp?: { from: Pos; to: Pos }; // 転移：跳ぶ前と後
 }
 
-/** 床に残る魔法の跡。fire：燃える床（乗っていると毎ターンダメージ）、frost：霜の床（乗っていると、次の1歩に2ターンかかる）。turns：あと何ターン残るか */
+/**
+ * 床に残る魔法の跡。fire：燃える床（乗っていると毎ターンダメージ）、frost：霜の床（乗っていると、次の1歩に2ターンかかる）、
+ * stone：石の壁の呪文の壁（主人公も敵も通れず、矢も通らない）、poison：毒の霧（上にいる敵が毎ターン amount のダメージ。主人公は受けない）。turns：あと何ターン残るか
+ */
 export interface Field {
   pos: Pos;
-  kind: 'fire' | 'frost';
+  kind: 'fire' | 'frost' | 'stone' | 'poison';
   turns: number;
+  amount?: number; // 毒の霧の、1ターンのダメージ
 }
 
 /** 一度離れた階の様子。戻ってきたら、倒した敵・開けた宝箱・晴れた霧はそのまま */
@@ -122,6 +128,7 @@ export interface ExploreState {
   mp: number; // 魔力（呪文を唱えると減り、歩くと少しずつ戻る）
   maxMp: number;
   regen: { amount: number; turns: number } | null; // 再生の呪文：あと何ターン、1ターンにどれだけ回復するか
+  ward?: { cut: number; turns: number }; // 魔力の盾：あと何ターン、敵の攻撃のダメージを何%減らすか
   cast: CastEvent | null; // この行動で唱えた呪文（画面用）
   enemies: MapEnemy[];
   chests: Chest[]; // この階の宝箱（開けて空になったものも残す）

@@ -44,6 +44,15 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
         {/* 体力・満腹度・魔力は、数字を出さずゲージだけにする。体力と満腹度は、残りが少ないと点滅する */}
         <Meter label="HP" value={stats.hp} max={stats.maxHp} tone="hp" gaugeOnly warnBelow={0.25} pulse />
         <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" gaugeOnly warnBelow={0.25} />
+        {state.ward && (
+          // 魔力の盾：かかっているあいだだけ、残りのターン数と、減らす割合を出す
+          <ul className="explore__ailments" aria-label="魔法の守り">
+            <li className="explore__ailment explore__ailment--ward" title={`敵の攻撃で受けるダメージを${state.ward.cut}%減らす`}>
+              <span className="explore__ailment-name">魔力の盾</span>
+              <span className="explore__ailment-left">{state.ward.turns}ターン</span>
+            </li>
+          </ul>
+        )}
         {afflictions.length > 0 && (
           // 状態異常（毒・鈍足）：かかっているあいだだけ、残りのターン数・歩数を出す。空腹はその場で満腹度が減るだけなので出さない
           <ul className="explore__ailments" aria-label="状態異常">
@@ -205,11 +214,13 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
                   </span>
                   {enemyDef(e).name}（{TRAITS[enemyDef(e).element].name}・{BODY_NAMES[enemyDef(e).body]}、HP {e.hp}）：
                   {ENEMY_MARK[e.mode].text}
-                  {(e.burn || e.frozen) && (
-                    // 敵の燃焼・凍結：残りのターン数つき
+                  {(e.burn || e.frozen || e.silenced || e.asleep) && (
+                    // 敵の燃焼・凍結・静寂（残りのターン数つき）・眠り
                     <span className="explore__foe-states">
                       {e.burn && <span className="explore__ailment explore__ailment--burn">燃焼 <span className="explore__ailment-left">{e.burn.turns}</span></span>}
                       {e.frozen && <span className="explore__ailment explore__ailment--freeze">凍結 <span className="explore__ailment-left">{e.stun ?? 0}</span></span>}
+                      {e.silenced && <span className="explore__ailment explore__ailment--silence">静寂 <span className="explore__ailment-left">{e.silenced}</span></span>}
+                      {e.asleep && <span className="explore__ailment explore__ailment--sleep">眠り</span>}
                     </span>
                   )}
                   {other && (

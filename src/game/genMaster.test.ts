@@ -41,6 +41,13 @@ const SAMPLE: GenSettings = {
     dark_chain: { cost: 6, power: 1, range: 6, splash: 0.5 },
     heal: { cost: 6, amount: 20 },
     regen: { cost: 5, amount: 3, turns: 8 },
+    silence: { cost: 5, radius: 3, turns: 6 },
+    teleport: { cost: 6, range: 8 },
+    stone_wall: { cost: 4, turns: 6 },
+    sleep: { cost: 5, radius: 3 },
+    ward: { cost: 5, cut: 50, turns: 8 },
+    poison_mist: { cost: 5, power: 0.4, range: 5, turns: 4 },
+    cleanse: { cost: 3 },
   },
 };
 const clone = (): GenSettings => JSON.parse(JSON.stringify(SAMPLE)) as GenSettings;

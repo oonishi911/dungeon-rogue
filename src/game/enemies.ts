@@ -70,6 +70,8 @@ export interface MapEnemy {
   frozen?: boolean; // 凍結（氷の呪文・氷の砥石）。動けないターンは stun で数える（stun が切れると解ける）。ハンマーで殴ると砕ける
   chilled?: boolean; // 霜の床の上で、次の1歩のために1ターン使った（次のターンに歩ける）
   phase?: number; // ボスの段階（1〜3。ない敵は1。bossPhase.ts）
+  silenced?: number; // 静寂の呪文で黙っているターンの残り（叫べない・呼べない・撃てない）
+  asleep?: boolean; // 眠りの霧で眠っている（気付くことも、動くこともしない。殴られるか、気付かされると起きる）
   power?: EnemyPower; // 強さの倍率（ダンジョンと階で決まる。powerAt）。ない敵は1倍（できる前の中断データ）
 }
 

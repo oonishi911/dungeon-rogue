@@ -55,7 +55,14 @@ export type ItemId =
   | 'book_dark_bolt'
   | 'book_dark_chain'
   | 'book_heal'
-  | 'book_regen';
+  | 'book_regen'
+  | 'book_silence'
+  | 'book_teleport'
+  | 'book_stone_wall'
+  | 'book_sleep'
+  | 'book_ward'
+  | 'book_poison_mist'
+  | 'book_cleanse';
 
 // ===== 残響（刻印スロットにはめるもの。echoMaster.ts、docs/echo-spec.md） =====
 export type EchoId = 'fire' | 'ice' | 'light' | 'dark' | 'soft' | 'hard' | 'spirit' | 'plain' | 'warmth' | 'pulse';
@@ -86,7 +93,28 @@ export type ItemEffect =
 
 // ===== 魔法 =====
 // 呪文は呪文書を持っていくと使える。強さと魔力の量は、ダンジョンごとの設定（src/game/dungeons/*.json の magic と spells。管理画面で変えられる）
-export type SpellId = 'shockwave' | 'shockwave_strong' | 'sweep' | 'sweep_bleed' | 'fire_bolt' | 'fire_chain' | 'ice_bolt' | 'ice_chain' | 'light_lance' | 'light_chain' | 'dark_bolt' | 'dark_chain' | 'heal' | 'regen';
+export type SpellId =
+  | 'shockwave'
+  | 'shockwave_strong'
+  | 'sweep'
+  | 'sweep_bleed'
+  | 'fire_bolt'
+  | 'fire_chain'
+  | 'ice_bolt'
+  | 'ice_chain'
+  | 'light_lance'
+  | 'light_chain'
+  | 'dark_bolt'
+  | 'dark_chain'
+  | 'heal'
+  | 'regen'
+  | 'silence'
+  | 'teleport'
+  | 'stone_wall'
+  | 'sleep'
+  | 'ward'
+  | 'poison_mist'
+  | 'cleanse';
 
 // 呪文の働き。aim は唱えるときに向きを選ぶかどうか
 export type SpellEffect =
@@ -94,7 +122,14 @@ export type SpellEffect =
   | { kind: 'sweep'; bleed?: boolean } // 向いた方向の数マスを貫き、そこにいる敵すべてに当たる。bleed なら、当たった敵を出血させる（設定のターン数のあいだ、1ターンごとに、その敵に与えたダメージの設定の割合のダメージ）
   | { kind: 'bolt'; element: Element; splash?: boolean } // 向いた方向へ飛び、最初に当たった敵に属性のダメージ。splash なら、その敵のまわり8マスの敵にも、ダメージの一部（設定の splash の割合）を与える
   | { kind: 'heal' } // すぐにHPを回復する
-  | { kind: 'regen' }; // 数ターンかけて、少しずつHPを回復する
+  | { kind: 'regen' } // 数ターンかけて、少しずつHPを回復する
+  | { kind: 'silence' } // まわりの敵を、数ターン黙らせる（見張りは叫べず、召喚する敵は呼べず、遠距離の敵は撃てない）
+  | { kind: 'teleport' } // 今いる階の、離れた床（見たことのある場所）へ跳ぶ
+  | { kind: 'stone' } // 向いた方向の目の前に、数ターンで崩れる石の壁（横3マス）を作る。主人公も敵も通れず、矢も通らない
+  | { kind: 'sleep' } // まわりの、まだ気付いていない敵を眠らせる（殴られるか、呪文の声で起きる）
+  | { kind: 'ward' } // 数ターン、敵の攻撃で受けるダメージを減らす
+  | { kind: 'poison' } // 向いた方向へ飛び、当たった所のまわり9マスに、数ターン残る毒の霧を置く（上にいる敵は毎ターンダメージ。主人公は受けない）
+  | { kind: 'cleanse' }; // 自分の毒と鈍足を治す
 
 export interface SpellDef {
   id: SpellId;

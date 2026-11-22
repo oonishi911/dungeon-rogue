@@ -32,7 +32,7 @@ import { canSee, samePos, visibleTiles } from './exploreSight';
 import { SKILL_CONFIG, skillOf } from './weaponSkill';
 import { afflict, cureAll, statusNames } from './status';
 import { applyFoeStatus, burnRemaining, extinguish, foeImmune, foeKindOf, scaled, thaw, whetstoneChance, type ComboKind, type FoeStatusKind } from './foeStatus';
-import { around9, FIELD_CONFIG, fieldAt, immuneToField, placeField, tickFields, type FieldKind } from './fields';
+import { around9, FIELD_CONFIG, fieldAt, immuneToField, placeField, placeSpellField, stoneAt, tickFields } from './fields';
 import type { DungeonFile, GrowthSettings, RoomSettings } from './genMaster';
 import { magicPower, spellAffinity, spellDamage, startMagic } from './magic';
 import {
@@ -55,7 +55,7 @@ import {
 import { generateBossFloor, generateFloor, tileAt, type FloorMap, type Pos } from './map';
 import { floorParams } from './floorParams';
 import { nextInt, nextRandom, shuffle } from './rng';
-import type { Element, EnemyDef, EnemyId, ItemId, PlayerStats, Result, SpellId, TraitId } from './types';
+import type { Element, EnemyDef, EnemyId, ItemId, PlayerStats, Result, SpellDef, SpellId, TraitId } from './types';
 import { lost } from './story';
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value });
@@ -150,6 +150,7 @@ export function step(state: ExploreState, action: ExploreAction): Result<Explore
       const d = DIR_DELTA[action.dir];
       const to = { x: state.player.x + d.x, y: state.player.y + d.y };
       if (tileAt(state.map, to) === 'wall') return err('壁があって進めない');
+      if (stoneAt(state.fields, to)) return err('石の壁があって進めない');
       const target = state.enemies.find((e) => samePos(e.pos, to));
       if (target) {
         next = playerAttack(state, target);
@@ -279,7 +280,7 @@ function leaveFloor(state: ExploreState): ExploreState {
 function returnToFloor(state: ExploreState, floor: number, memory: FloorMemory, at: Pos, message: string): ExploreState {
   const visited = { ...state.visited };
   delete visited[floor]; // 今いる階は覚えておく一覧に入れない
-  const enemies = memory.enemies.map(({ stun: _stun, bleed: _bleed, burn: _burn, frozen: _frozen, chilled: _chilled, ...e }) => ({ ...e, mode: 'wander' as const, justNoticed: false, lastSeen: null, searchTurns: 0 }));
+  const enemies = memory.enemies.map(({ stun: _stun, bleed: _bleed, burn: _burn, frozen: _frozen, chilled: _chilled, silenced: _silenced, asleep: _asleep, ...e }) => ({ ...e, mode: 'wander' as const, justNoticed: false, lastSeen: null, searchTurns: 0 }));
   return reveal({
     ...state,
     floor,
@@ -461,8 +462,18 @@ function recoverMagic(state: ExploreState, turn: number): ExploreState {
     stats = { ...stats, hp: Math.min(stats.maxHp, stats.hp + regen.amount) };
     regen = regen.turns > 1 ? { ...regen, turns: regen.turns - 1 } : null;
   }
-  return { ...state, mp, regen, stats };
+  // 魔力の盾：1行動ごとに残りが減り、0で消える
+  const { ward, ...rest } = state;
+  if (!ward) return { ...rest, mp, regen, stats };
+  if (ward.turns > 1) return { ...rest, mp, regen, stats, ward: { ...ward, turns: ward.turns - 1 } };
+  return { ...rest, mp, regen, stats, log: [...state.log, '魔力の盾が消えた'] };
 }
+
+/** 唱えても、まわりの敵が気付かない呪文 */
+const QUIET_SPELLS: ReadonlySet<SpellDef['effect']['kind']> = new Set(['silence', 'teleport', 'sleep']);
+
+/** 縦横斜めの距離（まわり n マス） */
+const chebyshev = (a: Pos, b: Pos): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
 function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result<ExploreState> {
   if (!state.spells.includes(spell)) return err('その呪文書は持っていません');
@@ -495,7 +506,7 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
       const targets: MapEnemy[] = [];
       for (let i = 1; i <= range; i++) {
         const p = { x: s.player.x + d.x * i, y: s.player.y + d.y * i };
-        if (tileAt(s.map, p) === 'wall') break;
+        if (tileAt(s.map, p) === 'wall' || stoneAt(s.fields, p)) break; // 石の壁でも止まる
         event.path.push(p);
         const enemy = s.enemies.find((e) => samePos(e.pos, p));
         if (enemy) {
@@ -558,7 +569,7 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
         let crashed = false;
         for (let i = 0; i < (cfg.push ?? 0); i++) {
           const p = { x: pos.x + d.x, y: pos.y + d.y };
-          if (tileAt(s.map, p) === 'wall' || s.enemies.some((e) => e.uid !== target.uid && samePos(e.pos, p)) || samePos(p, s.player)) {
+          if (tileAt(s.map, p) === 'wall' || stoneAt(s.fields, p) || s.enemies.some((e) => e.uid !== target.uid && samePos(e.pos, p)) || samePos(p, s.player)) {
             crashed = true;
             break;
           }
@@ -581,14 +592,108 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
       }
       break;
     }
+    case 'silence': {
+      // まわりの敵（ボスは除く）を、数ターン黙らせる
+      const hit = s.enemies.filter((e) => !enemyDef(e).boss && chebyshev(e.pos, s.player) <= (cfg.radius ?? 1));
+      event.area = hit.map((e) => e.pos);
+      const turns = cfg.turns ?? 1;
+      s = {
+        ...s,
+        enemies: s.enemies.map((e) => {
+          if (!hit.some((h) => h.uid === e.uid)) return e;
+          const { charge: _charge, ...rest } = e; // 突進の構えも解ける
+          return { ...rest, silenced: Math.max(e.silenced ?? 0, turns) };
+        }),
+        log: [...s.log, hit.length > 0 ? `${hit.length}体の敵が声を失った（${turns}ターン）` : 'まわりに敵はいなかった'],
+      };
+      break;
+    }
+    case 'teleport': {
+      // 見たことのある床で、主人公から range マス以上離れ、敵・宝箱・石の壁がなく、敵と隣り合わないマスへ跳ぶ
+      const range = cfg.range ?? 1;
+      const spots: Pos[] = [];
+      for (let y = 0; y < s.map.height; y++) {
+        for (let x = 0; x < s.map.width; x++) {
+          const p = { x, y };
+          if (!s.seen[y * s.map.width + x] || tileAt(s.map, p) === 'wall' || chebyshev(p, s.player) < range) continue;
+          if (stoneAt(s.fields, p) || s.chests.some((c) => !c.opened && samePos(c.pos, p)) || s.enemies.some((e) => chebyshev(e.pos, p) <= 1)) continue;
+          spots.push(p);
+        }
+      }
+      if (spots.length === 0) return err('跳べる場所がない（見たことのある、離れた床がない）');
+      const pick = nextInt(s.rngState, spots.length);
+      const to = spots[pick.value]!;
+      event.warp = { from: s.player, to };
+      // 跳んだ先では、追ってきていた敵は主人公を見失う（見えていれば、次のターンにまた気付く）
+      s = reveal({
+        ...s,
+        player: to,
+        rngState: pick.state,
+        enemies: s.enemies.map((e) => (e.mode === 'chase' ? { ...e, mode: 'search', searchTurns: ENEMY_CONFIG.loseTurns } : e)),
+        log: [...s.log, '離れた場所へ跳んだ'],
+      });
+      break;
+    }
+    case 'stone': {
+      // 向いた方向の目の前と、その左右の、横3マスに石の壁（敵のいるマス・壁には作らない）
+      const d = DIR_DELTA[dir!];
+      const front = { x: s.player.x + d.x, y: s.player.y + d.y };
+      const side = { x: d.y, y: d.x };
+      const at = [front, { x: front.x + side.x, y: front.y + side.y }, { x: front.x - side.x, y: front.y - side.y }];
+      const placed = placeSpellField(s.fields, s.map, at, 'stone', cfg.turns ?? 1, s.player, [...s.enemies.map((e) => e.pos), ...(s.map.stairs ? [s.map.stairs] : [])]);
+      if (placed.placed.length === 0) return err('壁を作れる場所がない');
+      event.area = placed.placed;
+      event.path = [front];
+      s = { ...s, fields: placed.fields, log: [...s.log, `石の壁がせり上がった（${cfg.turns}ターン）`] };
+      break;
+    }
+    case 'sleep': {
+      // まわりの、まだ気付いていない敵（ボスは除く）を眠らせる
+      const hit = s.enemies.filter((e) => e.mode === 'wander' && !enemyDef(e).boss && chebyshev(e.pos, s.player) <= (cfg.radius ?? 1));
+      event.area = hit.map((e) => e.pos);
+      s = {
+        ...s,
+        enemies: s.enemies.map((e) => (hit.some((h) => h.uid === e.uid) ? { ...e, asleep: true } : e)),
+        log: [...s.log, hit.length > 0 ? `${hit.length}体の敵が眠りに落ちた` : '眠らせられる敵はいなかった（気付いている敵には効かない）'],
+      };
+      break;
+    }
+    case 'ward': {
+      s = { ...s, ward: { cut: cfg.cut ?? 0, turns: cfg.turns ?? 1 }, log: [...s.log, `魔力の盾に包まれた（${cfg.turns}ターン、受けるダメージ${cfg.cut}%減）`] };
+      break;
+    }
+    case 'poison': {
+      // 向いた方向へ飛び、最初の敵か、届くマス数の終わり（壁・石の壁の手前）で広がる
+      const d = DIR_DELTA[dir!];
+      let center: Pos | null = null;
+      for (let i = 1; i <= (cfg.range ?? 1); i++) {
+        const p = { x: s.player.x + d.x * i, y: s.player.y + d.y * i };
+        if (tileAt(s.map, p) === 'wall' || stoneAt(s.fields, p)) break;
+        event.path.push(p);
+        center = p;
+        if (s.enemies.some((e) => samePos(e.pos, p))) break;
+      }
+      if (!center) return err('その向きには霧を飛ばせない');
+      const amount = Math.max(1, Math.round(magicPower(s.stats, settings.magic) * (cfg.power ?? 0)));
+      const placed = placeSpellField(s.fields, s.map, around9(center), 'poison', cfg.turns ?? 1, s.player, [], amount);
+      event.area = placed.placed;
+      s = { ...s, fields: placed.fields, log: [...s.log, `毒の霧が広がった（${cfg.turns}ターン、1ターン${amount}のダメージ）`] };
+      break;
+    }
+    case 'cleanse': {
+      const cured = cureAll(stats);
+      if (!cured) return err('治すものがない');
+      s = { ...s, stats: cured.stats, log: [...s.log, `${statusNames(cured.cured)}が治った`] };
+      break;
+    }
     default: {
       const unreachable: never = def.effect;
       return unreachable;
     }
   }
 
-  // 唱える声で、近くのうろついている敵が気付く
-  const radius = dungeonOfState(state).magic.noiseRadius;
+  // 唱える声で、近くのうろついている敵が気付く（静寂・転移・眠りの霧は、声を立てない）
+  const radius = QUIET_SPELLS.has(def.effect.kind) ? 0 : dungeonOfState(state).magic.noiseRadius;
   if (radius > 0 && s.outcome === 'ongoing') {
     s = {
       ...s,
@@ -603,12 +708,12 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
 }
 
 /** 敵に魔法などでダメージを与える。倒したら報酬（ボスなら踏破）、倒れなければこちらに気付く */
-function hurtEnemy(state: ExploreState, uid: number, dmg: number, slip: boolean | 'burn' | 'flame' = false, combo?: ComboKind, affinity?: 'weak' | 'resist'): ExploreState {
+function hurtEnemy(state: ExploreState, uid: number, dmg: number, slip: boolean | 'burn' | 'flame' | 'poison' = false, combo?: ComboKind, affinity?: 'weak' | 'resist'): ExploreState {
   const target = state.enemies.find((e) => e.uid === uid);
   if (!target || state.outcome !== 'ongoing') return state;
   const def = enemyDef(target);
   const hp = target.hp - dmg;
-  const slipName = slip === 'burn' ? '燃える床' : slip === 'flame' ? '燃焼' : '出血';
+  const slipName = slip === 'burn' ? '燃える床' : slip === 'flame' ? '燃焼' : slip === 'poison' ? '毒の霧' : '出血';
   const log = [...state.log, slip ? `${def.name}は${slipName}で${dmg}のダメージ` : combo ? `${COMBO_NAMES[combo]}！ ${def.name}に${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`];
   state = { ...state, hits: [...state.hits, { kind: 'dealt', at: target.pos, amount: dmg, ...(slip ? { slip: true } : {}), ...(combo ? { combo } : {}), ...(affinity ? { affinity } : {}), ...(hp <= 0 ? { killed: true } : {}) }], foes: combo ? [...state.foes, { kind: 'combo', at: target.pos, combo }] : state.foes };
   if (hp <= 0) {
@@ -895,7 +1000,7 @@ function phaseUp(state: ExploreState): ExploreState {
 }
 
 /** ボスが主人公のまわり（縦横 BOSS_CONFIG.sowRadius マス以内）の床に、燃える床・霜の床をまく。まいたマスを返す（まく床がないときは何もしない） */
-function sowFields(state: ExploreState, boss: MapEnemy, kind: FieldKind): ExploreState {
+function sowFields(state: ExploreState, boss: MapEnemy, kind: 'fire' | 'frost'): ExploreState {
   const { x, y } = state.player;
   const r = BOSS_CONFIG.sowRadius;
   const open: Pos[] = [];
@@ -925,7 +1030,7 @@ function enemiesTurn(state: ExploreState): ExploreState {
   const playerKey = key(s.player);
   const crowd = new Map<string, number>(); // マスごとの敵の数
   for (const e of enemies) crowd.set(key(e.pos), (crowd.get(key(e.pos)) ?? 0) + 1);
-  const blocked = new Set<string>([...crowd.keys(), playerKey]); // 通れないマス：敵と主人公
+  const blocked = new Set<string>([...crowd.keys(), playerKey, ...s.fields.filter((f) => f.kind === 'stone').map((f) => key(f.pos))]); // 通れないマス：敵と主人公と石の壁
   const leave = (k: string) => {
     const left = (crowd.get(k) ?? 1) - 1;
     crowd.set(k, left);
@@ -947,14 +1052,27 @@ function enemiesTurn(state: ExploreState): ExploreState {
       enemies[i] = stun! > 1 ? { ...rest, ...(frozen ? { frozen } : {}), stun: stun! - 1, justNoticed: false } : { ...rest, justNoticed: false };
       continue;
     }
-    const def = enemyDef(current);
+    // 眠っている敵は、気付かされる（殴られる・呪文の声・見張りの合図）までは、何もしない
+    if (current.asleep) {
+      if (current.mode === 'wander') {
+        const { silenced: quiet, ...rest } = current;
+        enemies[i] = { ...rest, justNoticed: false, ...(quiet && quiet > 1 ? { silenced: quiet - 1 } : {}) };
+        continue;
+      }
+      const { asleep: _asleep, ...awake } = current;
+      enemies[i] = awake;
+    }
+    const def = enemyDef(enemies[i]!);
     // 待ち伏せ：気付かれていないあいだは、近く（ambushRange）に来るまで気付かない
     const lying = current.mode === 'wander' && behaviorsOf(def).includes('ambush');
     const sees = canSee(s.map, current.pos, s.player, lying ? ENEMY_CONFIG.ambushRange : ENEMY_CONFIG.sight);
-    let e: MapEnemy = { ...current, justNoticed: false };
+    // 静寂：黙っているあいだは、叫べず、呼べず、撃てない（残りのターンは、この敵の番ごとに1減る）
+    const mute = (enemies[i]!.silenced ?? 0) > 0;
+    const { silenced, ...speaking } = enemies[i]!;
+    let e: MapEnemy = { ...speaking, ...(silenced && silenced > 1 ? { silenced: silenced - 1 } : {}), justNoticed: false };
 
     if (sees) {
-      if (e.mode !== 'chase' && behaviorsOf(def).includes('alarm')) {
+      if (e.mode !== 'chase' && behaviorsOf(def).includes('alarm') && !mute) {
         // 見張りの合図：叫んで、近くのまだ気付いていない仲間を（近い順に3体まで）、一斉に気付かせる（壁ごしでも届く。仲間は、自分で見つけるのを待たずに追ってくる）
         const heard = alarmTargets(enemies, current, ENEMY_CONFIG.alarmRange, ENEMY_CONFIG.alarmMax);
         for (const j of heard) {
@@ -1015,7 +1133,7 @@ function enemiesTurn(state: ExploreState): ExploreState {
     }
 
     // 行動の個性（enemyBehavior.ts）：主人公を追っていて見えているあいだ、個性のある行動をしたら、そのターンはほかのことをしない
-    const behaviors = behaviorsOf(def);
+    const behaviors = mute ? behaviorsOf(def).filter((b) => b !== 'summoner' && b !== 'ranged' && b !== 'alarm') : behaviorsOf(def);
     if ((e.cool ?? 0) > 0) e = { ...e, cool: e.cool! - 1 };
     // ボスの床まき：主人公が見えているあいだ、一定のターンごとに、そのターンの行動のかわりに床をまく
     const sow = def.boss ? phaseSow(e.id, e.phase ?? 1) : null;
@@ -1226,12 +1344,12 @@ function useSkill(state: ExploreState, dir: Dir | null): Result<ExploreState> {
 // ===== 床に残る魔法の跡 =====
 
 /** 炎は燃える床、氷は霜の床を残す。光・闇は残さない */
-function fieldOfElement(element: string): FieldKind | null {
+function fieldOfElement(element: string): 'fire' | 'frost' | null {
   return element === 'fire' ? 'fire' : element === 'ice' ? 'frost' : null;
 }
 
 /** 床を置く（主人公のいるマスには置かない）。逆の床とぶつかると水蒸気になる */
-function addFields(state: ExploreState, at: readonly Pos[], kind: FieldKind): ExploreState {
+function addFields(state: ExploreState, at: readonly Pos[], kind: 'fire' | 'frost'): ExploreState {
   let fields: Field[] = state.fields;
   const foes = [...state.foes];
   for (const pos of at) {
@@ -1257,6 +1375,13 @@ function fieldsTurn(state: ExploreState): ExploreState {
     s = hurtEnemy(s, uid, FIELD_CONFIG.fireDamage, 'burn');
     if (s.outcome !== 'ongoing') return s;
   }
+  // 毒の霧：上にいる敵が、毎ターンダメージ（主人公は受けない。こちらに気付きもしない）
+  for (const { uid, pos } of state.enemies) {
+    const mist = s.fields.find((f) => f.kind === 'poison' && samePos(f.pos, pos));
+    if (!mist) continue;
+    s = hurtEnemy(s, uid, mist.amount ?? 1, 'poison');
+    if (s.outcome !== 'ongoing') return s;
+  }
   return { ...s, fields: tickFields(s.fields) };
 }
 
@@ -1273,6 +1398,8 @@ function damagePlayer(state: ExploreState, dmg: number, message: string, by: str
 
 /** 敵の攻撃を受ける。ダメージのあと、生きていれば、その敵の状態異常（毒・鈍足・空腹。status.ts）にかかることがある */
 function hitByEnemy(state: ExploreState, dmg: number, message: string, def: EnemyDef, ranged = false): ExploreState {
+  // 魔力の盾：受けるダメージを減らす（1より少なくはならない）
+  if (state.ward) dmg = Math.max(1, Math.round((dmg * (100 - state.ward.cut)) / 100));
   const hit = damagePlayer(state, dmg, message, def.name, def.id, ranged);
   if (hit.outcome !== 'ongoing') return hit;
   const a = afflict(hit, def);

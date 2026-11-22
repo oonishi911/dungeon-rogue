@@ -1099,6 +1099,94 @@ def spell_regen():
     return finish_spell(y, 0.5)
 
 
+def spell_silence():
+    """静寂：息を吸い込むような「スッ」が、すっと消えて無音になる"""
+    rng = np.random.default_rng(107)
+    n = int(SR * 0.9)
+    t = np.arange(n) / SR
+    y = sweep_noise(n, 0.0, 0.45, 5000, 600, rng) * 1.2
+    y *= np.clip(1 - t / 0.5, 0, 1) ** 2
+    y += tone(n, 880, 0.0, 0.25, 0.25, glide=-0.4)
+    y += tone(n, 1320, 0.02, 0.18, 0.12, glide=-0.4)
+    return finish_spell(y, 0.25)
+
+
+def spell_teleport():
+    """転移：うねりながら上がって消え、離れた所で下りて現れる"""
+    rng = np.random.default_rng(109)
+    n = int(SR * 1.0)
+    t = np.arange(n) / SR
+    up = np.clip(t / 0.4, 0, 1)
+    f1 = 300 + 1500 * up ** 2
+    a1 = np.sin(np.pi * np.clip(t / 0.45, 0, 1)) * (t < 0.45)
+    y = np.sin(2 * np.pi * np.cumsum(f1) / SR) * a1 * (1 + 0.3 * np.sin(2 * np.pi * 14 * t)) * 0.8
+    t2 = np.clip(t - 0.5, 0, None)
+    f2 = 1800 - 1400 * np.clip(t2 / 0.4, 0, 1) ** 0.5
+    a2 = np.sin(np.pi * np.clip(t2 / 0.45, 0, 1)) * (t >= 0.5)
+    y += np.sin(2 * np.pi * np.cumsum(f2) / SR) * a2 * 0.6
+    y += sweep_noise(n, 0.0, 0.4, 800, 6000, rng) * 0.4
+    y += sweep_noise(n, 0.5, 0.4, 6000, 900, rng) * 0.35
+    return finish_spell(y, 0.45)
+
+
+def spell_stone_wall():
+    """石の壁：地面が鳴る低い「ゴゴッ」と、石のこすれ、止まる「ドン」"""
+    rng = np.random.default_rng(113)
+    n = int(SR * 0.9)
+    t = np.arange(n) / SR
+    rumble = low(rng.standard_normal(n), 180) * np.clip(t / 0.05, 0, 1) * np.exp(-np.clip(t - 0.35, 0, None) / 0.12) * 3
+    y = rumble
+    y += grains(n, 70, 0.4, rng) * 0.5
+    y += resonate(impulse(n, 0.38), [90, 160, 260], [0.12, 0.08, 0.05], [1.6, 0.8, 0.4]) * 1.4
+    return finish_spell(y, 0.35)
+
+
+def spell_sleep():
+    """眠りの霧：やわらかく下りていく和音と、ふわっとした息"""
+    rng = np.random.default_rng(127)
+    n = int(SR * 1.3)
+    y = np.zeros(n)
+    for i, f in enumerate([880, 740, 587, 494]):
+        y += tone(n, f, i * 0.12, 0.6, 0.25)
+    y += sweep_noise(n, 0.0, 1.0, 1500, 500, rng) * 0.35
+    return finish_spell(y, 0.55)
+
+
+def spell_ward():
+    """魔力の盾：澄んだ「キィーン」と張る音が、ふくらんで残る"""
+    n = int(SR * 1.2)
+    t = np.arange(n) / SR
+    swell = np.clip(t / 0.15, 0, 1) * np.exp(-t / 0.6)
+    y = np.zeros(n)
+    for f, g in [(1046, 0.5), (1568, 0.3), (2093, 0.2), (3136, 0.1)]:
+        y += np.sin(2 * np.pi * f * t) * g * swell * (1 + 0.2 * np.sin(2 * np.pi * 6 * t))
+    y += resonate(impulse(n, 0.0), [2400, 3600], [0.3, 0.2], [0.4, 0.2])
+    return finish_spell(y, 0.4)
+
+
+def spell_poison_mist():
+    """毒の霧：ぶくぶくと湧く泡と、広がるもやの「シュー」"""
+    rng = np.random.default_rng(131)
+    n = int(SR * 1.1)
+    y = sweep_noise(n, 0.05, 0.9, 700, 2500, rng) * 0.7
+    for i in range(14):
+        at = 0.05 + rng.random() * 0.8
+        y += tone(n, 200 + rng.random() * 300, at, 0.05, 0.35, glide=0.8)
+    return finish_spell(y, 0.4)
+
+
+def spell_cleanse():
+    """解呪：鎖がほどける軽い「チャリッ」と、上がっていくきらめき"""
+    rng = np.random.default_rng(137)
+    n = int(SR * 1.0)
+    y = np.zeros(n)
+    for i in range(5):
+        y += resonate(impulse(n, 0.01 + i * 0.025), [2800 + rng.random() * 1500], [0.04], [0.5])
+    for i, f in enumerate([784, 988, 1175, 1568, 1976]):
+        y += tone(n, f, 0.15 + i * 0.06, 0.3, 0.22)
+    return finish_spell(y, 0.45)
+
+
 SPELL_SOUNDS = {
     'shockwave': spell_shockwave,
     'shockwave_strong': spell_shockwave_strong,
@@ -1114,6 +1202,13 @@ SPELL_SOUNDS = {
     'dark_chain': lambda: chain_of(spell_dark_bolt),
     'heal': spell_heal,
     'regen': spell_regen,
+    'silence': spell_silence,
+    'teleport': spell_teleport,
+    'stone_wall': spell_stone_wall,
+    'sleep': spell_sleep,
+    'ward': spell_ward,
+    'poison_mist': spell_poison_mist,
+    'cleanse': spell_cleanse,
 }
 
 STEPS = {'neutral': step_neutral, 'fire': step_fire, 'ice': step_ice, 'light': step_light, 'dark': step_dark}

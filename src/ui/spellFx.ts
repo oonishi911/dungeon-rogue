@@ -61,6 +61,13 @@ const FX = {
   sweep: { ms: 320, width: 0.55, color: 0xf2ecd8 },
   heal: { ms: 900, sparks: 18, rise: 1.2, color: 0x8dffb4 },
   regen: { ms: 1000, sparks: 14, rise: 0.9, color: 0xd8ffa0 },
+  silence: { color: 0xc8d4ea, delayMs: 220 },
+  teleport: { color: 0xb9a6ff, sparks: 20, rise: 1.6, ms: 700, arriveMs: 380 },
+  stoneWall: { color: 0xc8a878, dust: 0xa99b84, shake: 0.35 },
+  sleep: { color: 0xb8b0e8, delayMs: 300 },
+  ward: { color: 0x7fd8ff, sparks: 18, rise: 1, ms: 900 },
+  poison: { color: 0x7fc46a },
+  cleanse: { color: 0xf4f0e4, sparks: 14, rise: 1.1, ms: 800 },
   lights: 2, // 照らす光の数（使い回す）
   maxParticles: 320, // 一度に出す粒の上限（重くならないように）
   shake: { amp: 0.42, decay: 2.4 }, // 揺れの大きさ（マス）と、1秒あたりの収まる速さ
@@ -199,6 +206,76 @@ export class SpellEffects {
         this.castCircle(now, from, FX[cast.spell].color, 0.9);
         this.sparkles(now, from, cast.spell);
         break;
+      case 'silence': {
+        // 静寂：青白い魔法陣のあと、黙らせた敵の上に、音のかけらが静かに落ちて消える。少しだけ暗くなる
+        const c = FX.silence;
+        this.castCircle(now, from, c.color, 1);
+        this.darken(0.12);
+        for (const p of cast.area ?? []) this.later(now + c.delayMs, () => this.emit({ at: this.at(p, 1.1), count: 10, color: c.color, speed: [0.1, 0.35], gravity: -0.6, drag: 1.5, life: [0.5, 0.9], size: [0.05, 0.12], alpha: 0.8, additive: true, jitter: 0.2 }));
+        break;
+      }
+      case 'teleport': {
+        // 転移：足元の魔法陣から光が立ちのぼって消え、跳んだ先に魔法陣が開いて、光が降りてくる
+        const c = FX.teleport;
+        const warp = cast.warp;
+        this.castCircle(now, from, c.color, 1.1);
+        this.rising(now, from, c.color, c.sparks, c.rise, c.ms);
+        if (warp) {
+          this.later(now + c.arriveMs, () => {
+            const t = performance.now();
+            this.castCircle(t, warp.to, c.color, 1.1);
+            this.emit({ at: this.at(warp.to, 1.4), count: 24, color: c.color, speed: [0.3, 0.8], gravity: 1.2, drag: 1.2, life: [0.4, 0.8], size: [0.05, 0.12], additive: true, jitter: 0.3 });
+            this.flash(c.color, 0.18);
+          });
+        }
+        break;
+      }
+      case 'stone_wall': {
+        // 石の壁：足元から砂ぼこりが上がり、地面が揺れる（壁そのものは、床の跡として explore3d.ts が描く）
+        const c = FX.stoneWall;
+        this.castCircle(now, from, c.color, 0.8);
+        this.shakeBy(c.shake);
+        for (const p of cast.area ?? []) this.emit({ at: this.at(p, 0.1), count: 14, color: c.dust, speed: [0.2, 0.6], up: 0.6, gravity: 0.4, drag: 2, life: [0.6, 1.1], size: [0.18, 0.4], alpha: 0.55, additive: false, texture: 'smoke', jitter: 0.35 });
+        break;
+      }
+      case 'sleep': {
+        // 眠りの霧：薄紫の魔法陣から、やわらかいもやが広がり、眠った敵の上に、ゆっくり上る光の粒
+        const c = FX.sleep;
+        this.castCircle(now, from, c.color, 1.1);
+        this.emit({ at: this.at(from, 0.2), count: 26, color: c.color, speed: [0.6, 1.4], flat: true, drag: 1.6, life: [0.8, 1.3], size: [0.3, 0.6], alpha: 0.35, additive: true, texture: 'smoke' });
+        for (const p of cast.area ?? []) this.later(now + c.delayMs, () => this.emit({ at: this.at(p, 1), count: 6, color: c.color, speed: [0.05, 0.15], gravity: -0.3, drag: 0.6, life: [1, 1.5], size: [0.08, 0.14], additive: true, jitter: 0.15 }));
+        break;
+      }
+      case 'ward': {
+        // 魔力の盾：水色の魔法陣と、主人公を包むように回りながら上る光
+        const c = FX.ward;
+        this.castCircle(now, from, c.color, 1);
+        this.rising(now, from, c.color, c.sparks, c.rise, c.ms);
+        this.flash(c.color, 0.15);
+        break;
+      }
+      case 'poison_mist': {
+        // 毒の霧：緑の玉が飛び、当たった所に、緑のもやが湧く（もやの床は explore3d.ts が描く）
+        const c = FX.poison;
+        this.castCircle(now, from, c.color, 0.8);
+        const end = cast.path.at(-1);
+        const fly = Math.max(FX.bolt.minFlyMs, (cast.path.length || 1) * FX.bolt.tileMs);
+        if (end) {
+          const ball = this.orb(c.color, 0.35);
+          const a = this.at(from, FX.height);
+          const b = this.at(end, FX.height);
+          this.add(now, fly, [ball], (t) => ball.position.lerpVectors(a, b, t));
+        }
+        for (const p of cast.area ?? []) this.later(now + fly, () => this.emit({ at: this.at(p, 0.15), count: 8, color: c.color, speed: [0.1, 0.4], up: 0.3, gravity: -0.1, drag: 1.5, life: [0.8, 1.4], size: [0.25, 0.5], alpha: 0.45, additive: false, texture: 'smoke', jitter: 0.3 }));
+        return fly;
+      }
+      case 'cleanse': {
+        // 解呪：白い魔法陣と、ほどけて上る光
+        const c = FX.cleanse;
+        this.castCircle(now, from, c.color, 0.9);
+        this.rising(now, from, c.color, c.sparks, c.rise, c.ms);
+        break;
+      }
     }
     return 0;
   }
@@ -960,6 +1037,29 @@ export class SpellEffects {
       },
     );
     this.flash(cfg.color, 0.12);
+  }
+
+  /** 足元から、まわりを回りながら上る光の粒（癒し・再生と同じ動き。色・数・高さ・時間を選べる） */
+  private rising(now: number, at: Pos, color: number, count: number, rise: number, ms: number) {
+    const sparks = Array.from({ length: count }, (_, i) => ({ mesh: this.orb(color, 0.24), angle: (i / count) * Math.PI * 2, radius: 0.22 + (i % 3) * 0.08, delay: (i % 4) * 0.08 }));
+    this.add(
+      now,
+      ms,
+      sparks.map((s) => s.mesh),
+      (t) => {
+        for (const s of sparks) {
+          const u = Math.max(0, Math.min(1, (t - s.delay) / (1 - s.delay)));
+          const a = s.angle + u * 1.6;
+          s.mesh.position.set(at.x + Math.cos(a) * s.radius, 0.1 + u * rise, at.y + Math.sin(a) * s.radius);
+          s.mesh.material.opacity = u <= 0 ? 0 : Math.sin(u * Math.PI);
+        }
+      },
+    );
+  }
+
+  /** マス p の、高さ y の位置 */
+  private at(p: Pos, y: number): THREE.Vector3 {
+    return new THREE.Vector3(p.x, y, p.y);
   }
 
   // ===== 部品 =====

@@ -92,7 +92,8 @@ export class DungeonView3D {
   private appliedAtlas: Atlas | null = null;
   private readonly props = new THREE.Group(); // 階段・宝箱・目印
   private readonly fieldGroup = new THREE.Group(); // 床に残る魔法の跡（燃える床・霜の床）
-  private fieldMats: Record<'fire' | 'fireLast' | 'frost' | 'frostLast', THREE.MeshBasicMaterial> | null = null;
+  private fieldMats: Record<'fire' | 'fireLast' | 'frost' | 'frostLast' | 'poison' | 'poisonLast', THREE.MeshBasicMaterial> | null = null;
+  private stoneLook: { geo: THREE.BoxGeometry; mat: THREE.MeshStandardMaterial; last: THREE.MeshStandardMaterial } | null = null; // 石の壁の呪文の壁
   private readonly slashes: { sprite: THREE.Sprite; start: number; ms?: number; size?: number; aspect?: number }[] = []; // 剣の斬撃の残光（通常攻撃の残光も）
   private readonly rings: { mesh: THREE.Mesh; start: number }[] = []; // 槌の地響きの輪
   private readonly puffs: { sprite: THREE.Sprite; at: Pos; start: number; drift: number }[] = []; // 立ち上る水蒸気
@@ -1180,8 +1181,27 @@ export class DungeonView3D {
         ctx.stroke();
       }
     };
+    const poison = (ctx: CanvasRenderingContext2D) => {
+      // 毒の霧：緑のもやと、ふつふつと浮かぶ泡（決まった並び）
+      const g = ctx.createRadialGradient(32, 32, 4, 32, 32, 31);
+      g.addColorStop(0, 'rgba(170,230,120,0.85)');
+      g.addColorStop(0.6, 'rgba(90,170,70,0.6)');
+      g.addColorStop(1, 'rgba(40,110,40,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 64, 64);
+      ctx.fillStyle = 'rgba(210,255,170,0.7)';
+      for (let i = 0; i < 9; i++) {
+        const a = i * 2.1;
+        const r = 5 + ((i * 11) % 20);
+        ctx.beginPath();
+        ctx.arc(32 + Math.cos(a) * r, 32 + Math.sin(a) * r, 1.5 + (i % 3), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
     const f = FOE_FX.field;
     this.fieldMats = {
+      poison: make('field:poison', poison, false, f.poisonOpacity),
+      poisonLast: make('field:poison', poison, false, f.poisonOpacity * f.lastTurn),
       fire: make('field:fire', fire, true, f.fireOpacity),
       fireLast: make('field:fire', fire, true, f.fireOpacity * f.lastTurn),
       frost: make('field:frost', frost, false, f.frostOpacity),
@@ -1198,11 +1218,34 @@ export class DungeonView3D {
     const mats = this.fieldMaterials();
     for (const f of fields) {
       if (!frame.visible.has(f.pos.y * map.width + f.pos.x)) continue;
+      if (f.kind === 'stone') {
+        // 石の壁：床から立つ石の塊（最後のターンは、ひびが入ったように暗く透ける）
+        const stone = this.stoneMaterials();
+        const block = new THREE.Mesh(stone.geo, f.turns <= 1 ? stone.last : stone.mat);
+        block.position.set(f.pos.x, FOE_FX.stone.height / 2, f.pos.y);
+        block.castShadow = true;
+        block.receiveShadow = true;
+        this.fieldGroup.add(block);
+        continue;
+      }
       const mesh = new THREE.Mesh(this.shared.fieldPlate, mats[`${f.kind}${f.turns <= 1 ? 'Last' : ''}` as keyof typeof mats]);
       mesh.position.set(f.pos.x, FOE_FX.field.y, f.pos.y);
       mesh.renderOrder = 2;
       this.fieldGroup.add(mesh);
     }
+  }
+
+  /** 石の壁の呪文の壁の形と材質（1度だけ作る） */
+  private stoneMaterials() {
+    if (!this.stoneLook) {
+      const c = FOE_FX.stone;
+      this.stoneLook = {
+        geo: new THREE.BoxGeometry(c.size, c.height, c.size),
+        mat: new THREE.MeshStandardMaterial({ color: c.color, roughness: 0.95, metalness: 0 }),
+        last: new THREE.MeshStandardMaterial({ color: c.color, roughness: 0.95, metalness: 0, transparent: true, opacity: c.lastOpacity }),
+      };
+    }
+    return this.stoneLook;
   }
 
   /** 燃える床は、炎のようにちらつかせる（「動きを減らす」設定では止める） */

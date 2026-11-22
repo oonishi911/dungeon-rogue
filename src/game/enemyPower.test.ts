@@ -10,7 +10,9 @@ import { genProblems } from './genMaster';
 import type { PlayerStats } from './types';
 
 const saved = { ...DEFAULT_DUNGEON.enemies };
-afterEach(() => Object.assign(DEFAULT_DUNGEON.enemies, saved));
+afterEach(() => {
+  Object.assign(DEFAULT_DUNGEON.enemies, saved);
+});
 
 const rates = (hpRate: number, atkRate: number, floorHpRate = 0, floorAtkRate = 0) => ({ hpRate, atkRate, floorHpRate, floorAtkRate });
 const foe = (extra: Partial<MapEnemy> = {}): MapEnemy => ({ uid: 0, id: FIELD_ENEMY, elite: false, pos: { x: 1, y: 1 }, hp: 1, mode: 'wander', justNoticed: false, lastSeen: null, searchTurns: 0, ...extra });

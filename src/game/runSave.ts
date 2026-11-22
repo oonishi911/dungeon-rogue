@@ -141,6 +141,8 @@ function isEnemy(map: FloorMap, v: unknown): v is MapEnemy {
   if (!(v.frozen === undefined || typeof v.frozen === 'boolean')) return false;
   if (!(v.phase === undefined || (isCount(v.phase, 1) && v.phase <= PHASE_MAX))) return false;
   if (!(v.summoned === undefined || typeof v.summoned === 'boolean') || !(v.summonedBy === undefined || isCount(v.summonedBy))) return false;
+  // 静寂・眠りの霧（できる前の中断データにはない）
+  if (!(v.silenced === undefined || isCount(v.silenced, 1)) || !(v.asleep === undefined || typeof v.asleep === 'boolean')) return false;
   // 強さの倍率（できる前の中断データにはない。1倍として読む）
   if (!(v.power === undefined || (isObject(v.power) && isNumber(v.power.hp) && v.power.hp > 0 && isNumber(v.power.atk) && v.power.atk > 0))) return false;
   const room = v.room;
@@ -226,6 +228,8 @@ export function parseRun(text: string | null): ResumedRun | null {
   if (!Array.isArray(s.log) || !s.log.every((line) => typeof line === 'string')) return null;
   const regen = s.regen;
   if (!(regen === null || (isObject(regen) && isNumber(regen.amount) && isCount(regen.turns)))) return null;
+  const ward = s.ward; // 魔力の盾（できる前の中断データにはない）
+  if (!(ward === undefined || (isObject(ward) && isNumber(ward.cut) && isCount(ward.turns, 1)))) return null;
 
   // 階の様子：マップを作り直して、保存したときと同じ形かを確かめる
   const floorOf = (floor: number) => mapOfFloor(s.seed as number, s.floors as number, s.mapSize as number, floor, rooms);
@@ -257,6 +261,7 @@ export function parseRun(text: string | null): ResumedRun | null {
     mp: s.mp,
     maxMp: s.maxMp,
     regen: regen as ExploreState['regen'],
+    ...(ward ? { ward: ward as NonNullable<ExploreState['ward']> } : {}),
     cast: null,
     enemies: current.enemies,
     chests: current.chests,
