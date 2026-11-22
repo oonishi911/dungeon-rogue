@@ -192,51 +192,185 @@
       {
         "name": "鎧",
         "def": 1,
+        "mag": 0,
         "price": 40
       },
       {
         "name": "鎧+1",
         "def": 1,
+        "mag": 0,
         "price": 60
       },
       {
         "name": "鎧+2",
         "def": 2,
+        "mag": 0,
         "price": 90
       },
       {
         "name": "鎧+3",
         "def": 2,
+        "mag": 0,
         "price": 140
       },
       {
         "name": "鎧+4",
         "def": 3,
+        "mag": 0,
         "price": 200
       },
       {
         "name": "鎧+5",
         "def": 3,
+        "mag": 0,
         "price": 300
       },
       {
         "name": "鎧+6",
         "def": 4,
+        "mag": 0,
         "price": 460
       },
       {
         "name": "鎧+7",
         "def": 4,
+        "mag": 0,
         "price": 680
       },
       {
         "name": "鎧+8",
         "def": 5,
+        "mag": 0,
         "price": 1030
       },
       {
         "name": "鎧+9",
         "def": 5,
+        "mag": 0,
+        "price": 1540
+      }
+    ],
+    "robe": [
+      {
+        "name": "法衣",
+        "def": 0,
+        "mag": 1,
+        "price": 40
+      },
+      {
+        "name": "法衣+1",
+        "def": 0,
+        "mag": 2,
+        "price": 60
+      },
+      {
+        "name": "法衣+2",
+        "def": 1,
+        "mag": 2,
+        "price": 90
+      },
+      {
+        "name": "法衣+3",
+        "def": 1,
+        "mag": 3,
+        "price": 140
+      },
+      {
+        "name": "法衣+4",
+        "def": 1,
+        "mag": 3,
+        "price": 200
+      },
+      {
+        "name": "法衣+5",
+        "def": 2,
+        "mag": 4,
+        "price": 300
+      },
+      {
+        "name": "法衣+6",
+        "def": 2,
+        "mag": 4,
+        "price": 460
+      },
+      {
+        "name": "法衣+7",
+        "def": 2,
+        "mag": 5,
+        "price": 680
+      },
+      {
+        "name": "法衣+8",
+        "def": 3,
+        "mag": 5,
+        "price": 1030
+      },
+      {
+        "name": "法衣+9",
+        "def": 3,
+        "mag": 6,
+        "price": 1540
+      }
+    ],
+    "cloak": [
+      {
+        "name": "毛皮の外套",
+        "def": 0,
+        "mag": 0,
+        "price": 40
+      },
+      {
+        "name": "毛皮の外套+1",
+        "def": 1,
+        "mag": 0,
+        "price": 60
+      },
+      {
+        "name": "毛皮の外套+2",
+        "def": 1,
+        "mag": 0,
+        "price": 90
+      },
+      {
+        "name": "毛皮の外套+3",
+        "def": 1,
+        "mag": 0,
+        "price": 140
+      },
+      {
+        "name": "毛皮の外套+4",
+        "def": 2,
+        "mag": 0,
+        "price": 200
+      },
+      {
+        "name": "毛皮の外套+5",
+        "def": 2,
+        "mag": 0,
+        "price": 300
+      },
+      {
+        "name": "毛皮の外套+6",
+        "def": 2,
+        "mag": 0,
+        "price": 460
+      },
+      {
+        "name": "毛皮の外套+7",
+        "def": 3,
+        "mag": 0,
+        "price": 680
+      },
+      {
+        "name": "毛皮の外套+8",
+        "def": 3,
+        "mag": 0,
+        "price": 1030
+      },
+      {
+        "name": "毛皮の外套+9",
+        "def": 4,
+        "mag": 0,
         "price": 1540
       }
     ]

@@ -1,5 +1,6 @@
 // 魔法の計算：呪文書から決まる魔力、魔法の強さ、呪文のダメージ、属性の相性。状態は変えず、数を求めるだけ。
 
+import { armorMagic } from './armor';
 import { ENCHANT_VS_ELEMENT, ITEMS, SPELLS } from './data';
 import type { Affinity } from './exploreTypes';
 import type { GenSettings, MagicSettings } from './genMaster';
@@ -23,9 +24,9 @@ export function weaponMagic(weapon: ItemId | null): number {
   return effect?.kind === 'weapon' ? effect.mag : 0;
 }
 
-/** 魔法の強さ（M はダンジョンの設定の魔法）。ダンジョンの魔法の強さに、武器の魔力とレベルで増えた魔力を足し、杖を持っていると、その合計がさらに強くなる */
+/** 魔法の強さ（M はダンジョンの設定の魔法）。ダンジョンの魔法の強さに、武器と防具（法衣）の魔力とレベルで増えた魔力を足し、杖を持っていると、その合計がさらに強くなる */
 export function magicPower(stats: PlayerStats, M: MagicSettings): number {
-  return (M.power + weaponMagic(stats.weapon) + stats.mag) * (stats.weapon && isStaff(stats.weapon) ? M.staffPower : 1);
+  return (M.power + weaponMagic(stats.weapon) + armorMagic(stats.armor) + stats.mag) * (stats.weapon && isStaff(stats.weapon) ? M.staffPower : 1);
 }
 
 export function isStaff(id: ItemId): boolean {

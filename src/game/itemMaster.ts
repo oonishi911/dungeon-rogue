@@ -1,18 +1,18 @@
 // 品物の設定（src/game/items.json）を読み、正しい形かを確かめる。
 // items.json には、店で売るすべての品物の名前と値段がある。武器と防具は種類ごとに10段階あり、段階ごとに性能も決める
-// （武器：攻撃力と魔力［魔法の強さに足される。magic.ts］、防具：守り）。指輪は種類ごとに5段階あり、段階ごとに耐性（何%カットするか）と値段を決める。
+// （武器：攻撃力と魔力［魔法の強さに足される。magic.ts］、防具：守りと魔力）。指輪は種類ごとに5段階あり、段階ごとに耐性（何%カットするか）と値段を決める。
 // 情報屋の情報料（information）もここにある。
 // 品物の働き（回復薬はHPを15回復する、など）と、武器と体質の相性・指輪の効く属性は、ここではなくプログラムで決まっている。
 // items.json は、開発用の管理画面（?view=admin の「品物」タブ。src/ui/ItemPanels.tsx）から書き換えて公開できる。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
 
-import type { DualPair, Element, GearBaseId, GearId, GearTier, Guard, ItemDef, ItemEffect, ItemId, RingId, RingKind, RingLevel, SpellId, WeaponType } from './types';
+import type { ArmorType, DualPair, Element, GearBaseId, GearId, GearTier, Guard, ItemDef, ItemEffect, ItemId, RingId, RingKind, RingLevel, SpellId, WeaponType } from './types';
 
 export const GEAR_TIERS = 10;
 
 export const WEAPON_BASES = ['sword', 'hammer', 'staff'] as const satisfies readonly (GearBaseId & WeaponType)[];
 export type WeaponBaseId = (typeof WEAPON_BASES)[number];
-export const ARMOR_BASES = ['plate'] as const satisfies readonly GearBaseId[];
+export const ARMOR_BASES = ['plate', 'robe', 'cloak'] as const satisfies readonly (GearBaseId & ArmorType)[];
 export type ArmorBaseId = (typeof ARMOR_BASES)[number];
 export const GEAR_BASES: readonly GearBaseId[] = [...WEAPON_BASES, ...ARMOR_BASES];
 
@@ -38,8 +38,8 @@ export type SpellbookId = (typeof SPELLBOOK_IDS)[number];
 
 /** 武器1段分。atk：持つと上がる攻撃力、mag：持つと上がる魔力（魔法の強さに足される。0なら上がらない） */
 export type WeaponTier = { name: string; atk: number; mag: number; price: number };
-/** 防具1段分。def：持つと上がる守り（受けるダメージから引く） */
-export type ArmorTier = { name: string; def: number; price: number };
+/** 防具1段分。def：持つと上がる守り（受けるダメージから引く）、mag：持つと上がる魔力（魔法の強さに足される。鎧と外套は0） */
+export type ArmorTier = { name: string; def: number; mag: number; price: number };
 /** 指輪1段分。cut：効く属性のダメージを何%カットするか（大きいほど強い。100なら受けない） */
 export type RingTier = { name: string; cut: number; price: number };
 
@@ -84,9 +84,11 @@ export const WEAPON_INFO: Record<WeaponBaseId, { label: string; text: string }> 
   staff: { label: '杖', text: '霊体によく効く。柔らかい敵には効きにくい' },
 };
 
-/** 防具の種類の名前と説明（守りだけ。属性の耐性は指輪） */
+/** 防具の種類の名前と説明（属性の耐性は付かない。指輪の役目）。種類ごとの働きの数字は armor.ts の ARMOR_CONFIG */
 export const ARMOR_INFO: Record<ArmorBaseId, { label: string; text: string }> = {
   plate: { label: '鎧', text: '受けるダメージを減らす（属性には関係しない）' },
+  robe: { label: '法衣', text: '守りは低いが、魔法が強くなり、魔力の回復が速い（呪文書を持っていくとき向け）' },
+  cloak: { label: '毛皮の外套', text: '鈍足にならない（霜の床でも足が重くならない）。お腹が空きにくく、空腹の攻撃で減る満腹度も半分' },
 };
 
 /** 属性の逆（炎と氷、光と闇）。指輪の弱点になる。無属性にはない */
@@ -214,7 +216,8 @@ export function itemDefs(master: ItemMaster): Record<ItemId, ItemDef> {
   for (const base of ARMOR_BASES) {
     master.armors[base].forEach((t, i) => {
       const id = gearId(base, i + 1);
-      out[id] = { id, name: t.name, price: t.price, description: `${ARMOR_INFO[base].text}。守り+${t.def}`, effect: { kind: 'armor', def: t.def } };
+      const stats = t.mag > 0 ? `守り+${t.def}、魔力+${t.mag}` : `守り+${t.def}`;
+      out[id] = { id, name: t.name, price: t.price, description: `${ARMOR_INFO[base].text}。${stats}`, effect: { kind: 'armor', armor: base, def: t.def, mag: t.mag } };
     });
   }
   for (const kind of RING_KINDS) {
@@ -280,6 +283,7 @@ export function itemProblems(data: unknown): string[] {
         checkInt(at, '魔力', t.mag, ITEM_LIMITS.mag);
       } else if (kind === 'armor') {
         checkInt(at, '守り', t.def, ITEM_LIMITS.def);
+        checkInt(at, '魔力', t.mag, ITEM_LIMITS.mag);
       } else {
         checkInt(at, '耐性', t.cut, ITEM_LIMITS.cut);
       }
@@ -288,7 +292,7 @@ export function itemProblems(data: unknown): string[] {
       if (!prev) return;
       if (typeof t.price === 'number' && typeof prev.price === 'number' && t.price < prev.price) out.push(`${at}：値段が${i}段目（${prev.price}G）より安い`);
       if (kind === 'weapon' && typeof t.atk === 'number' && typeof prev.atk === 'number' && t.atk < prev.atk) out.push(`${at}：攻撃力が${i}段目より低い`);
-      if (kind === 'weapon' && typeof t.mag === 'number' && typeof prev.mag === 'number' && t.mag < prev.mag) out.push(`${at}：魔力が${i}段目より低い`);
+      if (kind !== 'ring' && typeof t.mag === 'number' && typeof prev.mag === 'number' && t.mag < prev.mag) out.push(`${at}：魔力が${i}段目より低い`);
       if (kind === 'armor' && typeof t.def === 'number' && typeof prev.def === 'number' && t.def < prev.def) out.push(`${at}：守りが${i}段目より低い`);
       if (kind === 'ring' && typeof t.cut === 'number' && typeof prev.cut === 'number' && t.cut < prev.cut) out.push(`${at}：耐性が${i}段目より低い`);
     });

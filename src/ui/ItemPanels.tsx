@@ -104,7 +104,7 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
         </li>
         <li>
           <b>武器と防具の段階</b>：種類ごとに10段階あり、段階ごとに性能も決めます。上の段階ほど高く、強くしてください。
-          <span className="gen__example">例：武器は「攻撃力」と「魔力」。防具は「守り」（受けるダメージから引く数）だけです。守り5の防具なら、敵の攻撃10で受けるダメージは10−5＝5。</span>
+          <span className="gen__example">例：武器は「攻撃力」と「魔力」。防具は「守り」（受けるダメージから引く数）と「魔力」です。守り5の防具なら、敵の攻撃10で受けるダメージは10−5＝5。</span>
         </li>
         <li>
           <b>指輪</b>：属性の耐性は、防具ではなく指輪だけが持ちます。種類ごとに5段階あり、段階ごとに「耐性（%）」（効く属性のダメージを何%カットするか。大きいほど強い）と値段を決めます。
@@ -124,7 +124,10 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
           <b>武器の魔力</b>：持っていくと、魔法の強さ（呪文のダメージのもと。「魔法」タブ）に足される数です。0なら、魔法は強くなりません。杖を持っているときは、足したあとの合計に、杖の倍率が掛かります。
           <span className="gen__example">例：魔法の強さが8で、魔力2の武器を持てば、8＋2＝10。杖で倍率1.5なら、10×1.5＝15です。</span>
         </li>
-        <li>武器と体質の相性、指輪の効く属性、道具の働き（回復量など）は、ここでは変えられません。</li>
+        <li>
+          <b>防具の種類</b>：鎧は守りがいちばん高い防具です。法衣は守りが低いかわりに、魔力（武器の魔力と同じく、魔法の強さに足される）が上がり、魔力の回復が速くなります。毛皮の外套は、鈍足にならず、お腹が空きにくくなります。魔力は、ふつう法衣だけに付けます（鎧と外套は0）。
+        </li>
+        <li>武器と体質の相性、指輪の効く属性、防具の種類ごとの働き（法衣の回復の速さ・外套の空きにくさ）、道具の働き（回復量など）は、ここでは変えられません。</li>
       </ul>
 
       <AdminTabs
@@ -144,6 +147,7 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
               {isWeapon && <th scope="col">攻撃力</th>}
               {isWeapon && <th scope="col">魔力</th>}
               {isArmor && <th scope="col">守り</th>}
+              {isArmor && <th scope="col">魔力</th>}
               {ringKind && <th scope="col">耐性（%）</th>}
               {group !== 'ringExtra' && <th scope="col">値段（G）</th>}
             </tr>
@@ -163,7 +167,7 @@ export function ItemsPanel({ base, draft, setDraft }: ItemPanelProps) {
                         <TextField value={t.name} rule={nameRule(t.name)} changed={t.name !== b?.name} label={`${i + 1}段目の名前`} onChange={(v) => setTier(g, i, { name: v })} />
                       </span>
                     </th>
-                    {(isWeapon ? (['atk', 'mag'] as const) : (['def'] as const)).map((k) => (
+                    {(isWeapon ? (['atk', 'mag'] as const) : (['def', 'mag'] as const)).map((k) => (
                       <td key={k} data-label={{ atk: '攻撃力', mag: '魔力', def: '守り' }[k]} className="admin__c2">
                         <NumberField
                           value={rec[k] as number}

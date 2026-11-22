@@ -16,7 +16,7 @@ const priceOfAll = (ids: ItemId[]) => ids.reduce((sum, id) => sum + ITEMS[id].pr
 describe('店に並ぶもの', () => {
   it('何も持っていなければ、武器・防具は種類ごとに2段目まで', () => {
     expect(shelfItems([], 'weapon')).toEqual(['sword', 'sword_2', 'hammer', 'hammer_2', 'staff', 'staff_2']);
-    expect(shelfItems([], 'armor')).toHaveLength(2); // 防具は鎧1つだけ（守りだけ。属性は指輪）
+    expect(shelfItems([], 'armor')).toEqual(['plate', 'plate_2', 'robe', 'robe_2', 'cloak', 'cloak_2']); // 防具は鎧・法衣・毛皮の外套（属性は指輪）
     // 指輪は、6種類（炎・氷・無属性・光・闇・万能）を、1段目と2段目まで。二重耐性の指輪は並ばない
     expect(shelfItems([], 'ring')).toHaveLength(12);
     expect(shelfItems([], 'ring')).toContain('ring_all_2');

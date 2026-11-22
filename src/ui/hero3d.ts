@@ -77,6 +77,8 @@ const ARMOR_TIER = { trim: 2, pauldron: 3, clasp: 4, pauldronBig: 5, pauldronSpi
 const ARMOR_METAL: Record<CloakId, string> = {
   none: '#8a7a60',
   plate: '#aab2b8',
+  robe: '#c9b46a', // 法衣：くすんだ金
+  cloak: '#8a6a4a', // 毛皮の外套：革と骨の色
 };
 const GOLD = '#d9b14a';
 const HAIR = '#15110f'; // 髪の色：黒（真っ黒だと光の当たりが見えなくなるので、ほんの少しだけ茶を足す）

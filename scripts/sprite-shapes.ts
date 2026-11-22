@@ -296,4 +296,6 @@ export const PALETTE: Record<string, string> = {
 export const CLOAKS = {
   none: { H: '#a88660', C: '#8a6b4a', c: '#6a5038' },
   plate: { H: '#c9c3b3', C: '#8f8977', c: '#5f5a4e' },
+  robe: { H: '#7d6bb8', C: '#4f4290', c: '#342b63' }, // 法衣：深い藍紫
+  cloak: { H: '#d9c7a4', C: '#9a6f45', c: '#6b4a2c' }, // 毛皮の外套：毛皮の明るい縁と、こげ茶
 };
