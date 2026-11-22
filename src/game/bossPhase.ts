@@ -5,7 +5,6 @@
 // 段階ごとの行動は、ここ（コード）で決める。敵のマスター（enemies.json）や管理画面の「敵」の表では変えられない。
 // 行動の個性（遠距離・突進・盾持ち・召喚）は、敵の個性と同じ仕組みで動く。床をまく（sow）だけは、ボスだけの行動
 
-import type { FieldKind } from './fields';
 import type { EnemyBehavior, EnemyId } from './types';
 
 export const BOSS_CONFIG = {
@@ -19,7 +18,7 @@ export const PHASE_MAX = 3;
 
 interface PhaseRule {
   behaviors: readonly EnemyBehavior[]; // この段階で加わる行動の個性
-  sow?: FieldKind; // この段階から、主人公のまわりにこの床をまく
+  sow?: 'fire' | 'frost'; // この段階から、主人公のまわりにこの床をまく
 }
 
 /** ボスごとの、第2段階・第3段階で加わる行動 */
@@ -43,9 +42,9 @@ export function phaseBehaviors(id: EnemyId, phase: number): EnemyBehavior[] {
 }
 
 /** その段階でまいている床の種類（まかないときは null） */
-export function phaseSow(id: EnemyId, phase: number): FieldKind | null {
+export function phaseSow(id: EnemyId, phase: number): 'fire' | 'frost' | null {
   const rules = PHASE_RULES[id] ?? [];
-  return rules.slice(0, Math.max(0, phase - 1)).reduce<FieldKind | null>((sow, r) => r.sow ?? sow, null);
+  return rules.slice(0, Math.max(0, phase - 1)).reduce<'fire' | 'frost' | null>((sow, r) => r.sow ?? sow, null);
 }
 
 /** 段階による攻撃力の倍率 */

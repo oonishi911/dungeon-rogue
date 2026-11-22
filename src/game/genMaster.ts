@@ -146,6 +146,13 @@ export const SPELL_FIELDS: Record<SpellId, { key: string; label: string; min: nu
       { key: 'amount', label: '1ターンに回復するHP', min: 0, max: 99, step: 1, integer: true },
       { key: 'turns', label: '続くターン数', min: 1, max: 99, step: 1, integer: true },
     ],
+    silence: [cost, { key: 'radius', label: '効くマス数（まわり）', min: 1, max: 10, step: 1, integer: true }, { key: 'turns', label: '続くターン数', min: 1, max: 99, step: 1, integer: true }],
+    teleport: [cost, { key: 'range', label: '跳ぶ先までの最低のマス数', min: 1, max: 40, step: 1, integer: true }],
+    stone_wall: [cost, { key: 'turns', label: '続くターン数', min: 1, max: 99, step: 1, integer: true }],
+    sleep: [cost, { key: 'radius', label: '効くマス数（まわり）', min: 1, max: 10, step: 1, integer: true }],
+    ward: [cost, { key: 'cut', label: '減らすダメージの割合（%）', min: 0, max: 100, step: 5, integer: true }, { key: 'turns', label: '続くターン数', min: 1, max: 99, step: 1, integer: true }],
+    poison_mist: [cost, power, range, { key: 'turns', label: '続くターン数', min: 1, max: 99, step: 1, integer: true }],
+    cleanse: [cost],
   };
 })();
 
@@ -165,6 +172,13 @@ export const SPELL_NAMES: Record<SpellId, string> = {
   dark_chain: '闇の連矢',
   heal: '癒し',
   regen: '再生',
+  silence: '静寂',
+  teleport: '転移',
+  stone_wall: '石の壁',
+  sleep: '眠りの霧',
+  ward: '魔力の盾',
+  poison_mist: '毒の霧',
+  cleanse: '解呪',
 };
 
 /** 値の範囲（管理画面の入力欄も、この範囲にする）。step は管理画面で1回に動かす量 */

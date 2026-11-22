@@ -64,7 +64,8 @@ export const FOE_FX = {
   shot: { ms: 260, height: 0.6, size: 0.13 }, // 遠距離の矢：飛ぶ時間・飛ぶ高さ・玉の大きさ（マス）
   shotColors: { fire: 0xff8a3c, ice: 0x9fe8ff, light: 0xfff2a8, dark: 0xa070e0, neutral: 0xe6dcc0 }, // 敵の体質ごとの矢の色
   shield: { size: 0.62, thick: 0.07, reach: 0.4, y: 0.5, color: 0xbfc7d1 }, // 盾持ちの盾：板の大きさ・厚さ・体からの距離・高さ・色
-  field: { y: 0.02, size: 0.94, fireOpacity: 0.85, frostOpacity: 0.8, lastTurn: 0.55, flicker: 0.18 }, // 床の跡：床からの高さ・1マスに対する大きさ・濃さ・最後のターンの薄さ・燃える床のちらつき
+  field: { y: 0.02, size: 0.94, fireOpacity: 0.85, frostOpacity: 0.8, poisonOpacity: 0.75, lastTurn: 0.55, flicker: 0.18 }, // 床の跡：床からの高さ・1マスに対する大きさ・濃さ（燃える床・霜・毒の霧）・最後のターンの薄さ・燃える床のちらつき
+  stone: { size: 0.9, height: 0.85, color: 0x8a7e6a, lastOpacity: 0.6 }, // 石の壁の呪文の壁：1マスに対する幅・高さ（マス）・色・最後のターンの濃さ
   steam: { ms: 800, count: 4, rise: 0.9, size: 0.7 }, // 水蒸気：立ち上る時間・粒の数・立ち上る高さ・粒の大きさ（マス）
   skill: {
     slash: { ms: 220, stagger: 170, size: 1.5, y: 0.55 }, // 剣の連斬り：斬撃の残光が消えるまで・2回目までの間隔・大きさ（マス）・高さ

@@ -33,6 +33,13 @@ export const SPELLBOOK_IDS = [
   'book_dark_chain',
   'book_heal',
   'book_regen',
+  'book_silence',
+  'book_teleport',
+  'book_stone_wall',
+  'book_sleep',
+  'book_ward',
+  'book_poison_mist',
+  'book_cleanse',
 ] as const satisfies readonly ItemId[];
 export type SpellbookId = (typeof SPELLBOOK_IDS)[number];
 
@@ -155,6 +162,13 @@ export const SPELLBOOK_TEXT: Record<SpellbookId, string> = {
   book_dark_chain: '闇の矢を放ち、当たった敵のまわり8マスの敵にも、ダメージの半分を与える。光の敵によく効く',
   book_heal: 'すぐにHPを回復する',
   book_regen: '数ターンかけて、少しずつHPを回復する',
+  book_silence: 'まわりの敵を数ターン黙らせる。見張りは叫べず、召喚する敵は呼べず、遠距離の敵は撃てない（殴りには来る）。唱えても、まわりの敵は気付かない',
+  book_teleport: '今いる階の、離れた床（見たことのある場所）へ跳ぶ。囲まれたときの逃げ道。唱えても、まわりの敵は気付かない',
+  book_stone_wall: '向いた方向の目の前に、横3マスの石の壁を作る。数ターンで崩れる。主人公も敵も通れず、矢も通らない',
+  book_sleep: 'まわりの、まだ気付いていない敵を眠らせる。殴られるか、呪文の声で起きる。唱えても、まわりの敵は気付かない',
+  book_ward: '数ターン、敵の攻撃で受けるダメージを減らす',
+  book_poison_mist: '向いた方向へ飛び、当たった所のまわり9マスに、数ターン残る毒の霧を置く。霧の上にいる敵は、毎ターンダメージを受ける（主人公は受けない）',
+  book_cleanse: '自分の毒と鈍足を治す',
 };
 
 // ===== 段階と ID =====

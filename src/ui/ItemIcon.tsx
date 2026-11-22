@@ -114,6 +114,62 @@ const SPELL_MARKS: Record<SpellId, () => ReactElement> = {
   dark_chain: () => chain(moon('#c9b3f0')),
   heal: () => heart(),
   regen: () => leaf(),
+  // 静寂：口の前に立てた指のかわりに、波紋に斜線（音を消す）
+  silence: () => (
+    <g fill="none" stroke="#c8d4ea" strokeWidth="1.8" strokeLinecap="round">
+      <path d="M8 8.5a5 5 0 0 0 0 7M5 6a8.5 8.5 0 0 0 0 12" strokeOpacity="0.8" />
+      <circle cx="13.5" cy="12" r="2.4" fill="#c8d4ea" />
+      <path d="M4 20 20 4" stroke="#ffffff" strokeWidth="2" />
+    </g>
+  ),
+  // 転移：2つの輪を結ぶ、弧を描いて跳ぶ矢印
+  teleport: () => (
+    <g fill="none" stroke="#b9a6ff" strokeWidth="1.8" strokeLinecap="round">
+      <ellipse cx="6" cy="18" rx="3.6" ry="1.4" />
+      <ellipse cx="18" cy="18" rx="3.6" ry="1.4" />
+      <path d="M6.5 16C8 6 16 6 17.5 15" strokeDasharray="2 2" />
+      <path d="M15.2 13.2 17.6 15.6 19.6 12.8" />
+    </g>
+  ),
+  // 石の壁：積んだ石
+  stone_wall: () => (
+    <g fill="#a99b84" stroke="#5f5647" strokeWidth="1">
+      <rect x="3" y="13" width="8.5" height="6" rx="1" />
+      <rect x="12.5" y="13" width="8.5" height="6" rx="1" />
+      <rect x="7.5" y="6.5" width="9" height="6" rx="1" />
+    </g>
+  ),
+  // 眠りの霧：三日月と「z」
+  sleep: () => (
+    <>
+      <path d="M13 4a7.5 7.5 0 1 0 7 10.5A6 6 0 0 1 13 4z" fill="#b8b0e8" />
+      <path d="M15.5 4.5h4l-4 4.5h4" fill="none" stroke="#ffffff" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    </>
+  ),
+  // 魔力の盾：光る盾
+  ward: () => (
+    <>
+      <path d="M12 3 19.5 6v5.5c0 4.5-3.2 8-7.5 9.5-4.3-1.5-7.5-5-7.5-9.5V6z" fill="#7fd8ff" fillOpacity="0.35" stroke="#a8e6ff" strokeWidth="1.6" />
+      <path d="M12 7.5v9M7.8 12h8.4" stroke="#ffffff" strokeWidth="1.4" strokeLinecap="round" />
+    </>
+  ),
+  // 毒の霧：緑のもやと、しずく
+  poison_mist: () => (
+    <>
+      <path d="M4 15.5a3.5 3.5 0 0 1 3.2-3.5 4.8 4.8 0 0 1 9.2-.8 3.3 3.3 0 1 1 .9 6.5H7.5A3.5 3.5 0 0 1 4 15.5z" fill="#7fc46a" />
+      <path d="M12 4.5c1.4 2 2 3 2 4a2 2 0 0 1-4 0c0-1 .6-2 2-4z" fill="#b6e88f" />
+    </>
+  ),
+  // 解呪：ほどける鎖と、きらめき
+  cleanse: () => (
+    <>
+      <g fill="none" stroke="#e8e2d0" strokeWidth="1.8">
+        <rect x="3" y="11" width="7" height="4.5" rx="2.2" transform="rotate(-25 6.5 13.2)" />
+        <rect x="14" y="8.5" width="7" height="4.5" rx="2.2" transform="rotate(-25 17.5 10.7)" />
+      </g>
+      <path d="M12 14.5 12.6 16.1 14.2 16.7 12.6 17.3 12 18.9 11.4 17.3 9.8 16.7 11.4 16.1z" fill="#ffffff" />
+    </>
+  ),
 };
 
 /** 印を、枠の中の (x, y) を中心に、size の大きさで置く */
@@ -278,6 +334,13 @@ const SHAPES: Partial<Record<ItemId, () => ReactElement>> = {
   book_dark_chain: () => book(C.darkDeep, SPELL_MARKS.dark_chain()),
   book_heal: () => book('#7f3546', SPELL_MARKS.heal()),
   book_regen: () => book('#3f6a3a', SPELL_MARKS.regen()),
+  book_silence: () => book('#46506a', SPELL_MARKS.silence()),
+  book_teleport: () => book('#4a3f7a', SPELL_MARKS.teleport()),
+  book_stone_wall: () => book('#5f5647', SPELL_MARKS.stone_wall()),
+  book_sleep: () => book('#3d3a66', SPELL_MARKS.sleep()),
+  book_ward: () => book('#2f5a72', SPELL_MARKS.ward()),
+  book_poison_mist: () => book('#3d5a2e', SPELL_MARKS.poison_mist()),
+  book_cleanse: () => book('#6a6458', SPELL_MARKS.cleanse()),
 };
 
 /** アイテムのアイコン。size は表示の大きさ（px） */

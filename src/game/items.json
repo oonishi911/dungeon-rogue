@@ -643,6 +643,34 @@
     "book_regen": {
       "name": "再生の呪文書",
       "price": 300
+    },
+    "book_silence": {
+      "name": "静寂の呪文書",
+      "price": 400
+    },
+    "book_teleport": {
+      "name": "転移の呪文書",
+      "price": 500
+    },
+    "book_stone_wall": {
+      "name": "石の壁の呪文書",
+      "price": 300
+    },
+    "book_sleep": {
+      "name": "眠りの霧の呪文書",
+      "price": 400
+    },
+    "book_ward": {
+      "name": "魔力の盾の呪文書",
+      "price": 400
+    },
+    "book_poison_mist": {
+      "name": "毒の霧の呪文書",
+      "price": 400
+    },
+    "book_cleanse": {
+      "name": "解呪の呪文書",
+      "price": 300
     }
   },
   "information": {
