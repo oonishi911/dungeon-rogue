@@ -70,17 +70,48 @@ export interface MapEnemy {
   frozen?: boolean; // 凍結（氷の呪文・氷の砥石）。動けないターンは stun で数える（stun が切れると解ける）。ハンマーで殴ると砕ける
   chilled?: boolean; // 霜の床の上で、次の1歩のために1ターン使った（次のターンに歩ける）
   phase?: number; // ボスの段階（1〜3。ない敵は1。bossPhase.ts）
+  power?: EnemyPower; // 強さの倍率（ダンジョンと階で決まる。powerAt）。ない敵は1倍（できる前の中断データ）
+}
+
+/** 敵のHP・攻撃の倍率（1：敵の設定 enemies.json のまま） */
+export interface EnemyPower {
+  hp: number;
+  atk: number;
+}
+
+/**
+ * その階の敵の強さ（floor は0から数えた階。ボス階は階の数と同じ）。settings はダンジョンの設定の enemies。
+ * 1階目は hpRate・atkRate 倍で、1階深くなるごとに floorHpRate・floorAtkRate ずつ増える
+ */
+export function powerAt(settings: Pick<EnemySettings, 'hpRate' | 'atkRate' | 'floorHpRate' | 'floorAtkRate'>, floor: number): EnemyPower {
+  const round = (v: number) => Math.round(v * 1000) / 1000;
+  return { hp: round(settings.hpRate * (1 + settings.floorHpRate * floor)), atk: round(settings.atkRate * (1 + settings.floorAtkRate * floor)) };
+}
+
+/** 敵に強さの倍率を付け、HPをその強さでの満タンにする */
+export function empower(enemy: MapEnemy, power: EnemyPower): MapEnemy {
+  const e = { ...enemy, power };
+  return { ...e, hp: enemyDef(e).hp };
 }
 
 /** 敵の行動の個性（なければ空） */
 export const behaviorsOf = (def: Pick<EnemyDef, 'behaviors'>): readonly EnemyBehavior[] => def.behaviors ?? [];
 
 /**
- * 実際に戦うときの敵の能力。敵のマスター（enemies.json）の値のまま。
- * 強敵だけ、HP・攻撃力を上げる（防御力はそのまま）。
+ * 実際に戦うときの敵の能力。敵のマスター（enemies.json）の値に、ダンジョンと階の強さ（power。HPと攻撃）を掛ける。
+ * 強敵は、さらにHP・攻撃力を上げる（防御力はそのまま）。
  * ボスは、段階（phase）が上がるごとに攻撃力が上がり、行動の個性が加わる（bossPhase.ts）
  */
-export function enemyDef(enemy: Pick<MapEnemy, 'id' | 'elite' | 'phase'>): EnemyDef {
+export function enemyDef(enemy: Pick<MapEnemy, 'id' | 'elite' | 'phase' | 'power'>): EnemyDef {
+  const def = unscaledDef(enemy);
+  const p = enemy.power;
+  if (!p || (p.hp === 1 && p.atk === 1)) return def;
+  // ダンジョンと階の強さ：HPと攻撃を掛ける（ボスの攻撃は、段階で上がるので、そのまま）
+  return { ...def, hp: Math.max(1, Math.round(def.hp * p.hp)), atk: def.boss ? def.atk : Math.max(1, Math.round(def.atk * p.atk)) };
+}
+
+/** 強さの倍率を掛ける前の、敵の能力（強敵・ボスの段階は入っている） */
+function unscaledDef(enemy: Pick<MapEnemy, 'id' | 'elite' | 'phase'>): EnemyDef {
   const base = enemyBase(enemy.id);
   if (base.boss) {
     const phase = enemy.phase ?? 1;

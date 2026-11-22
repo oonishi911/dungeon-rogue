@@ -19,7 +19,11 @@
     "nestMin": 3,
     "nestMax": 8,
     "stayInRoom": true,
-    "bossMinions": 10
+    "bossMinions": 10,
+    "hpRate": 1,
+    "atkRate": 1,
+    "floorHpRate": 0,
+    "floorAtkRate": 0
   },
   "growth": {
     "startHp": 60,
