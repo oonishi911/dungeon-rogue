@@ -26,7 +26,7 @@ import type { GrowthSettings } from './genMaster';
 export const LOADOUT_CONFIG = {
   maxItems: 8, // 道具（消耗品）を持てる数。防具は1つ、武器はメインとサブの2本まで
   subWeaponSlots: 1, // サブ武器を持っていくと、道具を持てる数がこれだけ減る
-  maxSpellbooks: 3, // 持っていける呪文書の数（同じ呪文書は1冊まで）
+  maxSpellbooks: 5, // 持っていける呪文書の数（同じ呪文書は1冊まで。2026-11-23 に3冊から増やした。探索のキーは Z・X・C・V・B）
 } as const;
 
 export const TRAITS: Record<TraitId, TraitDef> = {

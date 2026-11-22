@@ -5,7 +5,7 @@
 // - 防具：受けるダメージの合計がいちばん少ないもの（守りだけで比べる。法衣・外套の働きは数えない）
 // - 指輪：店で買える指輪から、受けるダメージの合計がいちばん減るものを、3つまで（同じ種類は重ねない。減らないなら付けない）
 // - 属性を付ける道具：付けたときに与えるダメージの合計がいちばん多いもの（同じものを2つ）
-// - 呪文書：属性の矢（強化版の連矢を含む。同じ属性なら強化版）のうちダメージの合計がいちばん多いもの、なぎ払い、癒しの3冊
+// - 呪文書：属性の矢（強化版の連矢を含む。同じ属性なら強化版）のうちダメージの合計がいちばん多いもの、烈なぎ払い、雷の鎖、魔力の盾、癒しの5冊
 // - そのほかの道具：回復薬3つ、食料3つ（道具は全部で8つ）
 
 import { buildPlayer, enemyHitDamage, itemSlot, playerHitDamage } from './combat';
@@ -20,7 +20,17 @@ const MAX_RINGS = 3; // 付けられる指輪の数（記憶を4つ以上思い�
 const BOSS_WEIGHT = 3; // ボスは道中の敵の何体分として数えるか（最後に必ず戦うので重く見る）
 // 敵にダメージを与える呪文（有利な呪文書を選ぶ候補）。同じ系統（矢と、その強化版の連矢）は、強化版を先に書く。
 // 同じ点数なら先にあるものを選ぶので、強化版が選ばれる。同じ系統は2冊選ばない
-const SPELL_FAMILIES: SpellId[][] = [['fire_chain', 'fire_bolt'], ['ice_chain', 'ice_bolt'], ['light_chain', 'light_lance'], ['dark_chain', 'dark_bolt'], ['sweep_bleed', 'sweep'], ['shockwave_strong', 'shockwave']];
+const SPELL_FAMILIES: SpellId[][] = [
+  ['fire_chain', 'fire_bolt'],
+  ['ice_chain', 'ice_bolt'],
+  ['light_chain', 'light_lance'],
+  ['dark_chain', 'dark_bolt'],
+  ['sweep_bleed', 'sweep'],
+  ['shockwave_strong', 'shockwave'],
+  ['thunder_chain'],
+  ['prism_fan'],
+  ['drain'],
+];
 const ATTACK_SPELLS: SpellId[] = SPELL_FAMILIES.flat();
 const BOLTS: SpellId[] = ATTACK_SPELLS.filter((spell) => SPELLS[spell].effect.kind === 'bolt');
 
@@ -80,6 +90,6 @@ export function bestLoadout(trait: TraitId, dungeon: DungeonFile): ItemId[] {
   const bolt = best(BOLTS, (spell) => total((stats, enemy) => spellDamage(stats, spell, enemy, dungeon), buildPlayer([weapon])));
 
   const consumables: ItemId[] = [enchant, enchant, 'potion', 'potion', 'potion', 'food', 'food', 'food'].slice(0, LOADOUT_CONFIG.maxItems) as ItemId[];
-  const books = [`book_${bolt}`, 'book_sweep_bleed', 'book_heal'].slice(0, LOADOUT_CONFIG.maxSpellbooks) as ItemId[];
+  const books = [`book_${bolt}`, 'book_sweep_bleed', 'book_thunder_chain', 'book_ward', 'book_heal'].slice(0, LOADOUT_CONFIG.maxSpellbooks) as ItemId[];
   return [weapon, armor, ...rings, ...consumables, ...books];
 }
