@@ -8,7 +8,7 @@ import { enemyDef, type MapEnemy } from './enemies';
 import { startExplore, step } from './explore';
 import type { ExploreAction, ExploreState } from './exploreTypes';
 import type { FloorMap, Pos } from './map';
-import { magicPower } from './magic';
+import { magicPower, spellDamage } from './magic';
 import { packRun, parseRun } from './runSave';
 import { newSave } from './save';
 import type { EnemyDef, ItemId, Result } from './types';
@@ -21,7 +21,7 @@ const act = (state: ExploreState, ...actions: ExploreAction[]) => actions.reduce
 const WAIT: ExploreAction = { kind: 'wait' };
 const cast = (spell: string, dir?: 'up' | 'down' | 'left' | 'right'): ExploreAction => ({ kind: 'cast', spell, ...(dir ? { dir } : {}) }) as ExploreAction;
 
-const BOOKS: ItemId[] = ['book_silence', 'book_teleport', 'book_stone_wall', 'book_sleep', 'book_ward', 'book_poison_mist', 'book_cleanse', 'book_heal'];
+const BOOKS: ItemId[] = ['book_silence', 'book_teleport', 'book_stone_wall', 'book_sleep', 'book_ward', 'book_poison_mist', 'book_cleanse', 'book_heal', 'book_prism_fan'];
 const cfg = DEFAULT_DUNGEON.spells;
 
 // 横21マス×縦5マス（中は3行）の部屋。WIDE は真ん中に縦の壁があり、いちばん下の段だけ通れる
@@ -207,6 +207,37 @@ describe('解呪', () => {
     const s = act({ ...s0, stats: { ...s0.stats, poisonTurns: 5, chillSteps: 2 } }, cast('cleanse'));
     expect(s.stats.poisonTurns).toBe(0);
     expect(s.stats.chillSteps).toBeUndefined();
+  });
+});
+
+describe('虹の扇', () => {
+  it('向いた方向に、奥ほど広がる扇形（1・3・5マス…）のマスに届き、その中の敵すべてに当たる', () => {
+    const range = cfg.prism_fan!.range!;
+    const s = act(arena({ x: 5, y: 2 }, [enemy({ x: 6, y: 2 }), enemy({ x: 7, y: 1 }), enemy({ x: 4, y: 2 })]), cast('prism_fan', 'right'));
+    // 部屋の高さ（中は3行）の外は壁なので、上下は切れる
+    const want = [];
+    for (let k = 1; k <= range; k++) for (let w = -(k - 1); w <= k - 1; w++) if (2 + w >= 1 && 2 + w <= 3) want.push({ x: 5 + k, y: 2 + w });
+    expect(s.cast!.path).toEqual(want);
+    expect(s.enemies[0]!.hp).toBeLessThan(999);
+    expect(s.enemies[1]!.hp).toBeLessThan(999);
+    expect(s.enemies[2]!.hp).toBe(999); // 後ろの敵には当たらない
+  });
+
+  it('属性を持たないので、どの属性の敵にも同じダメージ（矢は、属性で増減する）', () => {
+    const s0 = arena({ x: 2, y: 2 }, []);
+    const ids = ['fire_imp', 'ice_imp', 'goblin', 'light_bird', 'shadow'];
+    const fan = ids.map((id) => spellDamage(s0.stats, 'prism_fan', enemyDef({ id, elite: false }), DEFAULT_DUNGEON));
+    expect(new Set(fan).size).toBe(1);
+    expect(fan[0]).toBe(Math.max(1, Math.round(magicPower(s0.stats, DEFAULT_DUNGEON.magic) * cfg.prism_fan!.power!)));
+    const bolt = ids.map((id) => spellDamage(s0.stats, 'fire_bolt', enemyDef({ id, elite: false }), DEFAULT_DUNGEON));
+    expect(new Set(bolt).size).toBeGreaterThan(1);
+  });
+
+  it('壁と石の壁の向こうには届かない', () => {
+    const rows = ['#####################', '#.......#...........#', '#.......#...........#', '#.......#...........#', '#####################'];
+    const s = act(arena({ x: 6, y: 2 }, [enemy({ x: 9, y: 2 })], rows), cast('prism_fan', 'right'));
+    expect(s.cast!.path.every((p) => p.x < 8)).toBe(true);
+    expect(s.enemies[0]!.hp).toBe(999);
   });
 });
 

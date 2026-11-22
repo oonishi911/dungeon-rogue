@@ -62,7 +62,8 @@ export type ItemId =
   | 'book_sleep'
   | 'book_ward'
   | 'book_poison_mist'
-  | 'book_cleanse';
+  | 'book_cleanse'
+  | 'book_prism_fan';
 
 // ===== 残響（刻印スロットにはめるもの。echoMaster.ts、docs/echo-spec.md） =====
 export type EchoId = 'fire' | 'ice' | 'light' | 'dark' | 'soft' | 'hard' | 'spirit' | 'plain' | 'warmth' | 'pulse';
@@ -114,7 +115,8 @@ export type SpellId =
   | 'sleep'
   | 'ward'
   | 'poison_mist'
-  | 'cleanse';
+  | 'cleanse'
+  | 'prism_fan';
 
 // 呪文の働き。aim は唱えるときに向きを選ぶかどうか
 export type SpellEffect =
@@ -129,7 +131,8 @@ export type SpellEffect =
   | { kind: 'sleep' } // まわりの、まだ気付いていない敵を眠らせる（殴られるか、呪文の声で起きる）
   | { kind: 'ward' } // 数ターン、敵の攻撃で受けるダメージを減らす
   | { kind: 'poison' } // 向いた方向へ飛び、当たった所のまわり9マスに、数ターン残る毒の霧を置く（上にいる敵は毎ターンダメージ。主人公は受けない）
-  | { kind: 'cleanse' }; // 自分の毒と鈍足を治す
+  | { kind: 'cleanse' } // 自分の毒と鈍足を治す
+  | { kind: 'fan' }; // 向いた方向に前へ広がる扇形（手前1マス→奥ほど2マスずつ広い）の敵すべてに当たる。属性を持たず、どの敵にも同じダメージ
 
 export interface SpellDef {
   id: SpellId;

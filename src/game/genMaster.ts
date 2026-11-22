@@ -153,6 +153,7 @@ export const SPELL_FIELDS: Record<SpellId, { key: string; label: string; min: nu
     ward: [cost, { key: 'cut', label: '減らすダメージの割合（%）', min: 0, max: 100, step: 5, integer: true }, { key: 'turns', label: '続くターン数', min: 1, max: 99, step: 1, integer: true }],
     poison_mist: [cost, power, range, { key: 'turns', label: '続くターン数', min: 1, max: 99, step: 1, integer: true }],
     cleanse: [cost],
+    prism_fan: [cost, power, { key: 'range', label: '届くマス数（扇の奥行き）', min: 1, max: 6, step: 1, integer: true }],
   };
 })();
 
@@ -179,6 +180,7 @@ export const SPELL_NAMES: Record<SpellId, string> = {
   ward: '魔力の盾',
   poison_mist: '毒の霧',
   cleanse: '解呪',
+  prism_fan: '虹の扇',
 };
 
 /** 値の範囲（管理画面の入力欄も、この範囲にする）。step は管理画面で1回に動かす量 */

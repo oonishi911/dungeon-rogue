@@ -62,6 +62,7 @@ const GEN: GenSettings = {
     ward: { cost: 5, cut: 50, turns: 8 },
     poison_mist: { cost: 5, power: 0.4, range: 5, turns: 4 },
     cleanse: { cost: 3 },
+    prism_fan: { cost: 8, power: 0.8, range: 3 },
   },
 };
 const dungeon = (name: string): DungeonFile => ({ name, description: `${name}の説明`, ...copyJson(GEN), encounters: copyJson(sample.encounters) as Encounters });

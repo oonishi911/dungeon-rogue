@@ -680,6 +680,28 @@ function castSpell(state: ExploreState, spell: SpellId, dir: Dir | null): Result
       s = { ...s, fields: placed.fields, log: [...s.log, `毒の霧が広がった（${cfg.turns}ターン、1ターン${amount}のダメージ）`] };
       break;
     }
+    case 'fan': {
+      // 虹の扇：向いた方向に、奥へ1マス進むごとに左右へ1マスずつ広がる扇形（壁の向こう・石の壁のマスには届かない）。属性を持たないので、相性で増減しない
+      const d = DIR_DELTA[dir!];
+      const side = { x: d.y, y: d.x };
+      const range = cfg.range ?? 1;
+      const reach = (p: Pos) => tileAt(s.map, p) !== 'wall' && !stoneAt(s.fields, p) && canSee(s.map, s.player, p, range * 1.5); // 扇の角まで届く広さで、見通しだけを確かめる
+      for (let k = 1; k <= range; k++) {
+        for (let w = -(k - 1); w <= k - 1; w++) {
+          const p = { x: s.player.x + d.x * k + side.x * w, y: s.player.y + d.y * k + side.y * w };
+          if (reach(p)) event.path.push(p);
+        }
+      }
+      const targets = s.enemies.filter((e) => event.path.some((p) => samePos(p, e.pos)));
+      event.splash = targets.map((e) => e.pos);
+      if (targets.length === 0) s = { ...s, log: [...s.log, '何にも当たらなかった'] };
+      for (const t of targets) {
+        const b = staffBoost(s, t.uid, spellDamage(s.stats, spell, enemyDef(t), settings));
+        s = hurtEnemy(s, t.uid, b.dmg, false, b.combo);
+        if (s.outcome !== 'ongoing') break;
+      }
+      break;
+    }
     case 'cleanse': {
       const cured = cureAll(stats);
       if (!cured) return err('治すものがない');

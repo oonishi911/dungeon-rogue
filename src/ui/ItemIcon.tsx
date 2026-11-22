@@ -160,6 +160,16 @@ const SPELL_MARKS: Record<SpellId, () => ReactElement> = {
       <path d="M12 4.5c1.4 2 2 3 2 4a2 2 0 0 1-4 0c0-1 .6-2 2-4z" fill="#b6e88f" />
     </>
   ),
+  // 虹の扇：要から広がる、7色の扇
+  prism_fan: () => (
+    <g strokeLinecap="round" strokeWidth="2.2" fill="none">
+      {['#ff6a5a', '#ffa64a', '#ffe15a', '#7fd86a', '#5ac8ff', '#7f8aff', '#c47fff'].map((c, i) => {
+        const a = (-150 + i * 20) * (Math.PI / 180);
+        return <path key={c} d={`M12 20L${(12 + Math.cos(a) * 10).toFixed(1)} ${(20 + Math.sin(a) * 10).toFixed(1)}`} stroke={c} />;
+      })}
+      <circle cx="12" cy="20" r="1.8" fill="#ffffff" stroke="none" />
+    </g>
+  ),
   // 解呪：ほどける鎖と、きらめき
   cleanse: () => (
     <>
@@ -341,6 +351,7 @@ const SHAPES: Partial<Record<ItemId, () => ReactElement>> = {
   book_ward: () => book('#2f5a72', SPELL_MARKS.ward()),
   book_poison_mist: () => book('#3d5a2e', SPELL_MARKS.poison_mist()),
   book_cleanse: () => book('#6a6458', SPELL_MARKS.cleanse()),
+  book_prism_fan: () => book('#3a3550', SPELL_MARKS.prism_fan()),
 };
 
 /** アイテムのアイコン。size は表示の大きさ（px） */
