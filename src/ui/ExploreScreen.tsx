@@ -191,6 +191,14 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
         aimingRef.current = null;
         setAiming(null);
       };
+      // 構えている向きが壁で、どこにも届かないときは、唱えずに知らせる（魔力をむだにしない）
+      if (SPELLS[spell].aim && aimingRef.current === spell) {
+        const reach = spellPreview(s, spell, facingRef.current, dungeonOfState(s).spells);
+        if (reach && reach.path.length === 0 && reach.area.length === 0) {
+          setError('この向きは壁で、届かない');
+          return;
+        }
+      }
       // 向きのない呪文と、構えている呪文をもう一度押したときは、唱える
       if (!SPELLS[spell].aim || aimingRef.current === spell) {
         stop();
@@ -211,6 +219,39 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       setAiming(spell);
     },
     [request],
+  );
+  // 押したままの構え（呪文のボタンを押しているあいだ）。構えの欄の案内を変える
+  const [holding, setHolding] = useState(false);
+  /** 呪文のボタンを押したとき：向きのある呪文なら構える（魔力が足りなければ知らせて、構えない） */
+  const aimStart = useCallback((spell: SpellId): boolean => {
+    const s = stateRef.current;
+    if (!SPELLS[spell].aim || s.outcome !== 'ongoing') return false;
+    if (s.mp < (dungeonOfState(s).spells[spell].cost ?? 0)) {
+      setError('魔力が足りない');
+      setMpShake((n) => n + 1);
+      return false;
+    }
+    walkRef.current = null;
+    heldRef.current = [];
+    stickRef.current = null;
+    aimingRef.current = spell;
+    setAiming(spell);
+    setHolding(true);
+    return true;
+  }, []);
+  /** 呪文のボタンを離したとき：唱える（cancel なら、やめる） */
+  const aimRelease = useCallback(
+    (spell: SpellId, cancel: boolean) => {
+      setHolding(false);
+      if (cancel) {
+        aimingRef.current = null;
+        setAiming(null);
+        return;
+      }
+      aimingRef.current = spell;
+      chooseSpell(spell);
+    },
+    [chooseSpell],
   );
   /** 構えをやめる */
   const cancelAim = useCallback(() => {
@@ -695,7 +736,13 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
             <div className="explore__aim" role="group" aria-label={`${SPELLS[aiming].name}の構え`}>
               <p className="explore__aim-text">
                 <b>{SPELLS[aiming].name}</b>
-                <span>{preview && preview.area.length === 0 && preview.path.length === 0 ? 'この向きは壁で、届かない。向きを変えて' : '向きを選んで、もう一度押すと唱える'}</span>
+                <span>
+                  {preview && preview.area.length === 0 && preview.path.length === 0
+                    ? 'この向きは壁で、届かない。向きを変えて'
+                    : holding
+                      ? '指をずらして向きを選び、離すと唱える（「やめる」の上で離すとやめる）'
+                      : '向きを選んで、もう一度押すと唱える'}
+                </span>
               </p>
               <button type="button" className="explore__aim-cancel" onClick={cancelAim}>
                 やめる
@@ -765,6 +812,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
           aiming={aiming}
           onInfo={showInfo}
           onCast={chooseSpell}
+          onAimStart={aimStart}
+          onAimDir={turnTo}
+          onAimRelease={aimRelease}
           onSkill={useSkillNow}
           onSwap={swapNow}
           onUseItem={(item) => request({ kind: 'use_item', item })}

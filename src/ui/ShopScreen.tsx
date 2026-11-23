@@ -7,12 +7,13 @@
 // ・装備：持っているものから、持っていくものを選ぶ（装備する・付ける・持っていく）。「武器・防具・指輪・道具・呪文書・刻印」のタブ（指輪には、敵が落とした二重耐性の指輪も並ぶ）。
 //   下の「持っていくもの」の欄（たためる）と、出発のボタンは、装備の画面にだけある
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LOST, lost } from '../game/story';
 import { RoomBackdrop } from './RoomBackdrop';
 import { ITEMS, LOADOUT_CONFIG } from '../game/data';
 import type { Intel } from '../game/informant';
 import type { SaveData } from '../game/save';
+import { equipForIntel } from '../game/autoEquip';
 import { buy, canTake, count, equip, equipSub, kitLoadout, ownedOn, recommended, shelfItems, SHELVES, takeCount, takeLimit, takeSupply, toggleBook, type Shelf } from '../game/shop';
 import type { ItemId, Result } from '../game/types';
 import { ItemIcon } from './ItemIcon';
@@ -41,11 +42,36 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
     setError(null);
     if (next === 'buy' && tab === 'engrave') setTab('weapon');
   };
-  const items = mode === 'buy' ? [...shelfItems(atEntry, shelf)] : ownedOn(save, shelf);
   const [bagOpen, setBagOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<ItemId | null>(null); // 説明を全部出している品物
   const { kit } = save;
+  // 装備の画面では、装備している・持っていくものを先に並べる
+  const inKit = (id: ItemId) => kit.weapon === id || kit.weapon2 === id || kit.armor === id || kitRings(save).includes(id) || kit.books.includes(id) || kit.take.includes(id);
+  const items = mode === 'buy' ? [...shelfItems(atEntry, shelf)] : [...ownedOn(save, shelf)].sort((a, b) => Number(inKit(b)) - Number(inKit(a)));
+  // 情報屋の話からのおすすめの装備：選んだ理由と、元に戻すための前の状態
+  const [auto, setAuto] = useState<{ notes: string[]; before: SaveData } | null>(null);
+  // 買ったときの知らせ（少しすると消える）
+  const [bought, setBought] = useState<string | null>(null);
+  useEffect(() => {
+    if (!bought) return;
+    const id = window.setTimeout(() => setBought(null), 2400);
+    return () => window.clearTimeout(id);
+  }, [bought]);
+  /** 装備の画面のタブに添える、今の数（指輪 1/2・道具 6/8・呪文書 3/5。武器・防具は、装備していれば ✓） */
+  const tabCount = (id: Shelf): string => {
+    if (id === 'weapon') return kit.weapon ? '✓' : '';
+    if (id === 'armor') return kit.armor ? '✓' : '';
+    if (id === 'ring') return `${kitRings(save).length}/${fingers(save.memories.length)}`;
+    if (id === 'supply') return `${takeCount(kit.take)}/${takeLimit(kit.take, Boolean(kit.weapon2))}`;
+    return `${kit.books.length}/${LOADOUT_CONFIG.maxSpellbooks}`;
+  };
+  const autoEquip = () => {
+    const r = equipForIntel(save, intel);
+    setAuto({ notes: r.notes, before: save });
+    setError(null);
+    onChange(r.save);
+  };
   const rings = kitRings(save);
   const fingerCount = fingers(save.memories.length);
   // 情報屋からはっきり聞いたことに合う品物（うわさだけでは付けない）
@@ -91,6 +117,39 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
         ))}
       </div>
 
+      {mode === 'equip' && (
+        // 情報屋の話から、持っているものでおすすめの装備にする（autoEquip.ts）。選んだ理由を出し、元に戻せる
+        <div className="shop__auto">
+          <button type="button" className="primary shop__auto-go" onClick={autoEquip}>
+            情報屋の話から、おすすめを装備する
+          </button>
+          {auto && (
+            <div className="shop__auto-notes" role="status">
+              <ul>
+                {auto.notes.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+              <div className="shop__auto-actions">
+                <button
+                  type="button"
+                  className="shop__buy"
+                  onClick={() => {
+                    onChange(auto.before);
+                    setAuto(null);
+                  }}
+                >
+                  元に戻す
+                </button>
+                <button type="button" className="shop__buy" onClick={() => setAuto(null)}>
+                  閉じる
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="shop__tabs" role="tablist" aria-label={mode === 'buy' ? '売り場' : '持ち物の種類'}>
         {SHELVES.map((s) => (
           <button
@@ -102,6 +161,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
             onClick={() => setTab(s.id)}
           >
             {s.name}
+            {mode === 'equip' && tabCount(s.id) && <span className="shop__tab-count">{tabCount(s.id)}</span>}
           </button>
         ))}
         {/* 刻印：敵が落とした刻印武器と残響。買えない。装備と付け替えをする（engrave.ts）。装備の画面にだけある */}
@@ -117,18 +177,32 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
       <ul className="shop__list screen__scroll" aria-label={SHELVES.find((s) => s.id === shelf)!.name}>
         {items.length === 0 && <li className="muted shop__empty">{mode === 'buy' ? '並んでいるものはない' : 'まだ持っていない（「買い物」で買える）'}</li>}
         {items.map((id) => (
-          <li key={id} className="shop__row">
+          <li key={id} className={`shop__row${mode === 'equip' && inKit(id) ? ' shop__row--on' : ''}`}>
             <ItemIcon id={id} size={28} className="shop__icon" />
             {/* 説明は1行に切ってある。押すと全文を出す */}
             <button type="button" className="shop__about" aria-expanded={open === id} onClick={() => setOpen((o) => (o === id ? null : id))}>
               <span className="shop__name">
                 {ITEMS[id].name}
                 {picks.has(id) && <span className="shop__pick">おすすめ</span>}
+                {(shelf === 'weapon' || shelf === 'armor') && <Compare id={id} save={save} />}
               </span>
               <span className="shop__desc">{ITEMS[id].description}</span>
             </button>
             <div className="shop__deal">
-              {mode === 'buy' ? <BuyDeal id={id} shelf={shelf} save={save} atEntry={atEntry} apply={apply} /> : <EquipDeal id={id} shelf={shelf} save={save} apply={apply} />}
+              {mode === 'buy' ? (
+                <BuyDeal
+                  id={id}
+                  shelf={shelf}
+                  save={save}
+                  atEntry={atEntry}
+                  apply={(r) => {
+                    if (r.ok) setBought(`${ITEMS[id].name}を買った${shelf === 'weapon' || shelf === 'armor' ? '（装備した）' : shelf === 'supply' ? '（倉庫へ）' : ''}`);
+                    apply(r);
+                  }}
+                />
+              ) : (
+                <EquipDeal id={id} shelf={shelf} save={save} apply={apply} />
+              )}
             </div>
           </li>
         ))}
@@ -138,6 +212,11 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
       <p className="error shop__error" role="alert">
         {error}
       </p>
+      {bought && !error && (
+        <p className="shop__bought" role="status">
+          {bought}
+        </p>
+      )}
 
       {mode === 'buy' && (
         // 買い物の画面の下：装備の画面へ（出発は、装備の画面から）
@@ -300,6 +379,38 @@ function EquipDeal({ id, shelf, save, apply }: { id: ItemId; shelf: Shelf; save:
         {wearing ? '装備中' : '装備する'}
       </button>
     </>
+  );
+}
+
+/**
+ * 武器・防具の、今の装備とのちがい（攻撃・魔力・守りの増減）。装備しているもの・何も装備していないときは、上がる数だけ
+ */
+function Compare({ id, save }: { id: ItemId; save: SaveData }) {
+  const e = ITEMS[id].effect;
+  const cur = e.kind === 'weapon' ? save.kit.weapon : e.kind === 'armor' ? save.kit.armor : null;
+  if (cur === id || (e.kind !== 'weapon' && e.kind !== 'armor')) return null;
+  const c = cur ? ITEMS[cur].effect : null;
+  const parts: [string, number][] =
+    e.kind === 'weapon'
+      ? [
+          ['攻撃', e.atk - (c?.kind === 'weapon' ? c.atk : 0)],
+          ['魔力', e.mag - (c?.kind === 'weapon' ? c.mag : 0)],
+        ]
+      : [
+          ['守り', e.def - (c?.kind === 'armor' ? c.def : 0)],
+          ['魔力', e.mag - (c?.kind === 'armor' ? c.mag : 0)],
+        ];
+  const shown = parts.filter(([, d]) => d !== 0);
+  if (shown.length === 0) return null;
+  return (
+    <span className="shop__compare" title={cur ? `今の${ITEMS[cur].name}とくらべて` : '何も装備していないときとくらべて'}>
+      {shown.map(([k, d]) => (
+        <span key={k} className={d > 0 ? 'shop__up' : 'shop__down'}>
+          {k}
+          {d > 0 ? `+${d}` : d}
+        </span>
+      ))}
+    </span>
   );
 }
 

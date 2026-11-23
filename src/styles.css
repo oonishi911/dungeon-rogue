@@ -4742,3 +4742,82 @@ button {
     max-height: calc(100vh - 16rem);
   }
 }
+
+/* ===== 店の装備の画面の使いやすさ（2026-11-23） ===== */
+
+/* 情報屋の話からのおすすめの装備：ボタンと、選んだ理由（元に戻せる） */
+.shop__auto {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.shop__auto-go {
+  min-height: 2.75rem;
+  font-weight: 700;
+}
+
+.shop__auto-notes {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid rgb(240 196 106 / 0.5);
+  border-radius: 8px;
+  background: rgb(240 196 106 / 0.08);
+  font-size: var(--step--1);
+}
+
+.shop__auto-notes ul {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.shop__auto-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* タブの今の数（指輪 1/2 など） */
+.shop__tab-count {
+  margin-left: 0.3rem;
+  color: var(--bone-dim);
+  font-size: 0.78em;
+  font-variant-numeric: tabular-nums;
+}
+
+.shop__tab--on .shop__tab-count {
+  color: inherit;
+}
+
+/* 装備している・持っていくものの行は、左に色の帯 */
+.shop__row--on {
+  box-shadow: inset 3px 0 0 #a8e07a;
+  background: rgb(168 224 122 / 0.06);
+}
+
+/* 今の装備とのちがい */
+.shop__compare {
+  display: inline-flex;
+  gap: 0.35rem;
+  margin-left: 0.4rem;
+  font-size: 0.78em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.shop__up {
+  color: #a8e07a;
+}
+
+.shop__down {
+  color: #ff8a7a;
+}
+
+/* 買ったときの知らせ */
+.shop__bought {
+  margin: 0;
+  color: #a8e07a;
+  font-size: var(--step--1);
+}
