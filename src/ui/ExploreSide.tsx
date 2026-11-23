@@ -1,9 +1,9 @@
 // 探索画面の右側（スマホでは下）。体力などのゲージ、呪文と道具のボタン、装備・見えている敵・記録・リタイア。
 
-import { useRef } from 'react';
+import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { BODY_NAMES, expToNext, ITEMS, SPELLS, TRAITS } from '../game/data';
 import { enemyDef } from '../game/enemies';
-import type { ExploreState } from '../game/exploreTypes';
+import type { Dir, ExploreState } from '../game/exploreTypes';
 import type { DungeonFile } from '../game/genMaster';
 import type { ItemId, SpellId } from '../game/types';
 import { playerHitDamage, swapWeapons } from '../game/combat';
@@ -12,6 +12,7 @@ import { ENEMY_MARK } from './exploreRender';
 import { SKILL_KEY, SPELL_KEYS, SWAP_KEY } from './exploreKeys';
 import { LogList, Meter } from './ExploreParts';
 import { statusChips } from './statusChips';
+import { stickDirections } from './stick';
 import { ItemIcon, ItemLabel, SpellIcon } from './ItemIcon';
 
 interface ExploreSideProps {
@@ -25,6 +26,10 @@ interface ExploreSideProps {
   aiming: SpellId | null; // 構えている呪文（向きのある呪文を1回押したとき）
   infoOpen: boolean; // スマホで、装備・敵・記録をまとめた画面を開いているか（PCでは常に横に出ている）
   onCast: (spell: SpellId) => void;
+  // 向きのある呪文を、押したまま構える（2026-11-23）：押すと構え、指をずらすと向きが変わり、離すと唱える。「やめる」の上で離すとやめる
+  onAimStart: (spell: SpellId) => boolean; // 構えられたか（魔力が足りないときは構えない）
+  onAimDir: (dir: Dir) => void;
+  onAimRelease: (spell: SpellId, cancel: boolean) => void;
   onSkill: () => void;
   onSwap: () => void;
   onUseItem: (item: ItemId) => void;
@@ -37,8 +42,12 @@ const weaponName = (id: ItemId | null): string => (id ? ITEMS[id].name : '素手
 
 /** 長押しと見なすまでの時間（ミリ秒） */
 const LONG_PRESS_MS = 480;
+/** 押したままの構えで、向きを変えるのに指をずらす距離（px） */
+const AIM_DRAG = 40;
+/** これより短く押して離したら「さっと押した」とみなす（ミリ秒）。構えたままにして、もう一度押すと唱える */
+const QUICK_TAP_MS = 260;
 
-export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibleEnemies, recentLog, aiming, infoOpen, onCast, onSkill, onSwap, onUseItem, onCloseInfo, onRetire, onInfo }: ExploreSideProps) {
+export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibleEnemies, recentLog, aiming, infoOpen, onCast, onAimStart, onAimDir, onAimRelease, onSkill, onSwap, onUseItem, onCloseInfo, onRetire, onInfo }: ExploreSideProps) {
   const { stats } = state;
   const skill = skillOf(stats.weapon, stats.echoes); // 持っている武器の固有技（素手なら無い）
   const chips = statusChips(state);
@@ -53,6 +62,42 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
     }, LONG_PRESS_MS);
   };
   const releaseHold = () => window.clearTimeout(pressed.current.timer);
+  // 向きのある呪文の、押したままの構え：押した場所・時刻・ずらしたか・押す前から構えていたか
+  const aimPress = useRef<{ spell: SpellId; x: number; y: number; at: number; moved: boolean; aimed: boolean; was: boolean } | null>(null);
+  const skipClick = useRef(false);
+  const aimDown = (spell: SpellId, e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (ended || e.button !== 0) return;
+    const was = aiming === spell;
+    const aimed = onAimStart(spell);
+    aimPress.current = { spell, x: e.clientX, y: e.clientY, at: performance.now(), moved: false, aimed, was };
+    if (aimed) e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const aimMove = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const p = aimPress.current;
+    if (!p?.aimed) return;
+    const dirs = stickDirections(e.clientX - p.x, e.clientY - p.y, AIM_DRAG);
+    if (!dirs) return;
+    p.moved = true;
+    onAimDir(dirs[0]!);
+  };
+  const aimUp = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const p = aimPress.current;
+    aimPress.current = null;
+    if (!p) return;
+    skipClick.current = true;
+    if (!p.aimed) return;
+    // 「やめる」の上で離したら、やめる
+    if (document.elementFromPoint(e.clientX, e.clientY)?.closest('.explore__aim-cancel')) return onAimRelease(p.spell, true);
+    // さっと押して離しただけ（ずらしていない）：構えたままにする。構えていた呪文をもう一度さっと押したときは唱える
+    const quick = !p.moved && performance.now() - p.at < QUICK_TAP_MS;
+    if (quick && !p.was) return;
+    onAimRelease(p.spell, false);
+  };
+  const aimCancel = () => {
+    const p = aimPress.current;
+    aimPress.current = null;
+    if (p?.aimed && !p.was) onAimRelease(p.spell, true);
+  };
   const other = swapWeapons(stats, state.skill)?.stats ?? null; // 持ち替えたあとの能力（サブ武器がないときは null）
   return (
     <aside className="explore__side">
@@ -136,11 +181,20 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
                   <button
                     type="button"
                     className={`explore__use explore__spell${short ? ' explore__spell--short' : ''}${aiming === spell ? ' explore__spell--aiming' : ''}`}
-                    onClick={() => (pressed.current.long ? (pressed.current.long = false) : onCast(spell))}
-                    onPointerDown={() => holdFor(about)}
-                    onPointerUp={releaseHold}
-                    onPointerLeave={releaseHold}
-                    onPointerCancel={releaseHold}
+                    onClick={() => {
+                      // 指・マウスで押したときは、押したままの構えの方で扱う（キーボードで押したときだけ、ここで唱える・構える）
+                      if (skipClick.current || pressed.current.long) {
+                        skipClick.current = false;
+                        pressed.current.long = false;
+                        return;
+                      }
+                      onCast(spell);
+                    }}
+                    onPointerDown={(e) => (SPELLS[spell].aim ? aimDown(spell, e) : holdFor(about))}
+                    onPointerMove={SPELLS[spell].aim ? aimMove : undefined}
+                    onPointerUp={(e) => (SPELLS[spell].aim ? aimUp(e) : releaseHold())}
+                    onPointerLeave={SPELLS[spell].aim ? undefined : releaseHold}
+                    onPointerCancel={() => (SPELLS[spell].aim ? aimCancel() : releaseHold())}
                     disabled={ended}
                     aria-pressed={aiming === spell}
                     aria-label={`${SPELLS[spell].name}（魔力${cost}${short ? '、足りない' : ''}）`}
