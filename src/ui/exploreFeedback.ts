@@ -18,13 +18,12 @@ const CAST_THEN_HURT_MS = 150; // 呪文の矢が当たってから、敵の攻�
 // 連続で倒した数（間があいたらやり直し）。倒すたびに音が上がる
 let chain = { count: 0, at: 0 };
 
-/** 倒した音を鳴らし、連続なら音を上げて「n連」を出す */
-function killFeedback(at: Pos, view3d: DungeonView3D | null) {
+/** 倒した音を鳴らす。連続で倒すと、音を上げる（「n連」の文字は出さない） */
+function killFeedback() {
   const now = performance.now();
   chain = now - chain.at <= KILL_CHAIN.chainMs ? { count: chain.count + 1, at: now } : { count: 1, at: now };
   const steps = Math.min(KILL_CHAIN.maxSteps, chain.count - 1);
   playSynth('kill', 2 ** ((steps * KILL_CHAIN.stepSemitones) / 12));
-  if (chain.count >= 2) view3d?.popChain(at, chain.count, KILL_CHAIN.color);
 }
 
 /** この一撃の、ヒットストップの長さ（ミリ秒）。弱点・コンボ・倒したときは長め、効きにくいときは短め */
@@ -82,7 +81,7 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
       // 出血のダメージは、数字だけを出す（武器を振る・画面を拡大する・振動はしない）
       if (hit.slip) {
         view3d?.popDamage(hit.at, hit.amount, hit.kind);
-        if (hit.kind === 'dealt' && hit.killed) killFeedback(hit.at, view3d); // 出血・燃焼で倒したときも、倒した音
+        if (hit.kind === 'dealt' && hit.killed) killFeedback(); // 出血・燃焼で倒したときも、倒した音
         return;
       }
       view3d?.hitPulse(hit.kind === 'dealt' ? 'attack' : 'hurt');
@@ -92,7 +91,7 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
       // 当てた一瞬、画面を止める（ヒットストップ）。倒したときは、倒した音も鳴らす
       if (hit.kind === 'dealt') {
         view3d?.hitStop(hitStopMs(hit));
-        if (hit.killed) killFeedback(hit.at, view3d);
+        if (hit.killed) killFeedback();
       }
       // スマホを震わせる（振動に対応したスマホだけ）。踏破したとき・力尽きたときは、長く震わせる
       if (hit.kind === 'dealt') vibrate(next.outcome === 'cleared' ? HAPTICS.cleared : HAPTICS.attack);

@@ -54,8 +54,8 @@ export const DAMAGE_STYLE = {
   arcane: { scale: 1.5, color: '#c8a0ff' },
   kill: { scale: 1.15 }, // 倒した一撃は、さらに少し大きく（相性の大きさに掛ける）
 } as const;
-// 連続で倒したとき：間があいていなければ連続（chainMs）。倒すたびに音を stepSemitones 半音ずつ上げ、maxSteps 回で頭打ち。2連から「n連」を出す
-export const KILL_CHAIN = { chainMs: 2600, stepSemitones: 2, maxSteps: 6, gap: 0.09, color: '#ffe27a' } as const;
+// 連続で倒したとき：間があいていなければ連続（chainMs）。倒すたびに音を stepSemitones 半音ずつ上げ、maxSteps 回で頭打ち（文字は出さない）
+export const KILL_CHAIN = { chainMs: 2600, stepSemitones: 2, maxSteps: 6, gap: 0.09 } as const;
 // 低いHPの画面のふち（赤）：HPの割合がこれ以下で出す。critical 以下では、脈打つ（心音のように）
 export const LOW_HP = { warn: 0.4, critical: 0.2 } as const;
 

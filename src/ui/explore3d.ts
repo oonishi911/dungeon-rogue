@@ -959,11 +959,6 @@ export class DungeonView3D {
     this.popText(at, style.combo || style.affinity === 'weak' ? `${amount}!` : String(amount), color, scale);
   }
 
-  /** 連続で倒したときの「n連」を、倒した場所に出す */
-  popChain(at: Pos, count: number, color: string) {
-    this.popText({ x: at.x, y: at.y - 0.4 }, `${count}連`, color, 1.2);
-  }
-
   /** at のマスの上に、色つきの短い文字を浮かべる（ダメージの数字や、突進・召喚の知らせ） */
   private popText(at: Pos, text: string, color: string, scale = 1) {
     const canvas = document.createElement('canvas');
