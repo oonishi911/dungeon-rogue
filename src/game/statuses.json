@@ -1,8 +1,8 @@
 {
   "poison": {
-    "chance": 30,
-    "turns": 10,
-    "damage": 2
+    "chance": 20,
+    "turns": 5,
+    "damage": 1
   },
   "chill": {
     "chance": 30,
