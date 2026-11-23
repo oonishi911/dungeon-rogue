@@ -8,7 +8,7 @@ import { ECHO_MASTER, ITEMS } from './data';
 import { ECHO_CAPS, GENERAL_ECHOES, HUSH_FLOOR, PULSE_FLOOR, ECHO_INFO, type FoeRank } from './echoMaster';
 import { DUAL_PAIRS, dualRingId, gearId } from './itemMaster';
 import { nextInt, nextRandom } from './rng';
-import type { Body, EchoId, Element, EnemyDef, GearBaseId, ItemId } from './types';
+import type { Body, EchoId, Element, EnemyDef, EnemyId, GearBaseId, ItemId } from './types';
 
 export const echoName = (id: EchoId): string => ECHO_MASTER.effects[id].name;
 
@@ -93,9 +93,10 @@ export interface Found {
   echoes: EchoId[];
   gear: DroppedGear[];
   rings: ItemId[]; // 二重耐性の指輪
+  met: EnemyId[]; // 出会った敵（見えた敵。敵の図鑑に載る。docs/enemy-weakness.md）
 }
 
-export const noFound = (): Found => ({ echoes: [], gear: [], rings: [] });
+export const noFound = (): Found => ({ echoes: [], gear: [], rings: [], met: [] });
 
 /** 刻印武器の名前 */
 export const gearName = (base: ItemId): string => `刻まれた${ITEMS[base].name}`;

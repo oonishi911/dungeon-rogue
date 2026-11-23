@@ -20,7 +20,7 @@ import { mapOfFloor } from './explore';
 import { EXPLORE_CONFIG, type Chest, type ExploreState, type FloorMemory } from './exploreTypes';
 import type { FloorMap, Pos } from './map';
 import { parseSave, type SaveData } from './save';
-import type { Departure, EchoId, ItemId, SpellId, TraitId } from './types';
+import type { Departure, EchoId, EnemyId, ItemId, SpellId, TraitId } from './types';
 
 export const RUN_SAVE_VERSION = 1;
 const LOG_KEEP = 200;
@@ -182,7 +182,8 @@ function parseFound(v: unknown): Found {
   if (!isObject(v) || !isEchoList(v.echoes) || !Array.isArray(v.gear)) return noFound();
   const gear = v.gear.filter((g): g is Found['gear'][number] => isObject(g) && isItem(g.base) && isCount(g.slots, 1) && g.slots <= 3);
   const rings = Array.isArray(v.rings) ? v.rings.filter((id): id is ItemId => isItem(id) && ITEMS[id].effect.kind === 'ring') : []; // 指輪ができる前の中断データには、ない
-  return { echoes: v.echoes, gear, rings };
+  const met = Array.isArray(v.met) ? [...new Set(v.met.filter((id): id is EnemyId => typeof id === 'string' && id in ENEMIES))] : []; // 図鑑ができる前の中断データには、ない
+  return { echoes: v.echoes, gear, rings, met };
 }
 
 /** 中断データのダンジョンの ID。ない・そのダンジョンがもうなければ null */

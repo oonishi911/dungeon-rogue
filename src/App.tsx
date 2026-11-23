@@ -17,6 +17,7 @@ import { receiveLoot, kitEchoes } from './game/engrave';
 import { departWith, fitKit, kitLoadout, returnWith } from './game/shop';
 import type { Departure, ItemId } from './game/types';
 import { clearRun, loadRun, loadSave, writeRun, writeSave } from './storage';
+import { BestiaryScreen } from './ui/BestiaryScreen';
 import { DungeonSelectScreen } from './ui/DungeonSelectScreen';
 import { ExploreScreen } from './ui/ExploreScreen';
 import { ResultScreen } from './ui/ResultScreen';
@@ -63,6 +64,8 @@ export function App() {
   const [loaded, setLoaded] = useState(false);
   // 注意書き：最初に遊ぶときは必ず出す（読んだら進む）。あとからは、ダンジョンを選ぶ画面から読める
   const [notice, setNotice] = useState(!first.save.noticeSeen);
+  // 敵の図鑑：ダンジョンを選ぶ画面から開く
+  const [bestiaryOpen, setBestiaryOpen] = useState(false);
   if (!loaded) return <LoadingScreen onDone={() => setLoaded(true)} />;
   if (notice) {
     return (
@@ -80,12 +83,15 @@ export function App() {
     );
   }
 
+  if (bestiaryOpen && stage.kind === 'choose') return <BestiaryScreen met={save.met} onClose={() => setBestiaryOpen(false)} />;
+
   switch (stage.kind) {
     case 'choose':
       return (
         <DungeonSelectScreen
           run={save.run}
           onNotice={() => setNotice(true)}
+          onBestiary={() => setBestiaryOpen(true)}
           onChoose={(dungeon) => {
             setSave(fitKit(save)); // 前の持ち物の選び方を、倉庫にある数に合わせる
             const seed = newSeed();

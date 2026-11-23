@@ -8,9 +8,10 @@ interface DungeonSelectScreenProps {
   run: number;
   onChoose: (dungeon: string) => void;
   onNotice: () => void; // 注意書きと相談窓口を読む
+  onBestiary: () => void; // 敵の図鑑を開く
 }
 
-export function DungeonSelectScreen({ run, onChoose, onNotice }: DungeonSelectScreenProps) {
+export function DungeonSelectScreen({ run, onChoose, onNotice, onBestiary }: DungeonSelectScreenProps) {
   return (
     <main className="screen screen--narrow screen--fit">
       <header className="top">
@@ -20,6 +21,9 @@ export function DungeonSelectScreen({ run, onChoose, onNotice }: DungeonSelectSc
           </p>
           <h1 className="top__title">ダンジョンを選ぶ</h1>
         </div>
+        <button type="button" className="choose__bestiary" onClick={onBestiary}>
+          敵の図鑑
+        </button>
       </header>
 
       {/* スマホでは、画面全体は動かさず、この一覧の中だけを動かす */}
