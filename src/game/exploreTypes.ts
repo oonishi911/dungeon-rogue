@@ -162,6 +162,7 @@ export interface ExploreOptions {
   trait?: TraitId; // 省略時はシードから決める
   loadout?: readonly ItemId[];
   echoes?: readonly EchoId[]; // 装備した刻印武器にはめた残響
+  subEchoes?: readonly EchoId[]; // サブ武器にした刻印武器にはめた残響
   enemyDensity?: number;
 }
 

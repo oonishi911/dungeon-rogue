@@ -197,7 +197,13 @@ function parseOutcome(v: unknown): Departure | null {
   const dungeon = dungeonIdOf(v.dungeon);
   if (!dungeon) return null;
   if (!Array.isArray(v.loadout) || !v.loadout.every(isItem)) return null;
-  return { dungeon, trait: v.trait as TraitId, loadout: v.loadout, ...(isEchoList(v.echoes) && v.echoes.length ? { echoes: v.echoes } : {}) };
+  return {
+    dungeon,
+    trait: v.trait as TraitId,
+    loadout: v.loadout,
+    ...(isEchoList(v.echoes) && v.echoes.length ? { echoes: v.echoes } : {}),
+    ...(isEchoList(v.subEchoes) && v.subEchoes.length ? { subEchoes: v.subEchoes } : {}), // サブの刻印武器ができる前の中断データには、ない
+  };
 }
 
 /** 文字列から中断データを読む。形が合わない・続きから遊べないときは null */

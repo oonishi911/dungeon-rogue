@@ -5046,3 +5046,21 @@ button {
   margin: 0;
   font-size: var(--step--1);
 }
+
+/* 刻印の売り場：メイン・サブに付けている刻印武器の印 */
+.shop__hand {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--procure);
+  color: var(--ink);
+  font-size: var(--step--1);
+  font-weight: 700;
+  line-height: 1.5;
+  vertical-align: 0.1em;
+}
+
+.shop__hand--sub {
+  background: var(--bone-dim);
+}

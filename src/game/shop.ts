@@ -106,7 +106,10 @@ export function buy(save: SaveData, id: ItemId, atEntry: readonly ItemId[] = sav
   const kit = { ...save.kit };
   if (shelf === 'weapon') {
     delete kit.weaponGear; // 買った武器を装備する（刻印武器は外れる）
-    if (kit.weapon2 && weaponTypeOf(kit.weapon2) === weaponTypeOf(id)) delete kit.weapon2; // サブ武器と同じ種類になったら、サブは外れる
+    if (kit.weapon2 && weaponTypeOf(kit.weapon2) === weaponTypeOf(id)) {
+      delete kit.weapon2; // サブ武器と同じ種類になったら、サブは外れる
+      delete kit.weapon2Gear;
+    }
   }
   if (shelf === 'supply') {
     if (canTake(kit.take, id, Boolean(kit.weapon2))) kit.take = [...kit.take, id];
@@ -130,9 +133,9 @@ export function equip(save: SaveData, slot: 'weapon' | 'armor', id: ItemId | nul
   const { weaponGear: _gear, ...rest } = save.kit;
   if (slot === 'armor') return ok({ ...save, kit: { ...save.kit, armor: id } });
   // メインの武器を外す・同じ種類のサブ武器と入れ替えるときは、サブ武器も外れる（サブはメインとちがう種類）
-  const { weapon2, ...noSub } = rest;
+  const { weapon2, weapon2Gear, ...noSub } = rest;
   const keepSub = weapon2 && id && weaponTypeOf(weapon2) !== weaponTypeOf(id);
-  return ok({ ...save, kit: { ...noSub, weapon: id, ...(keepSub ? { weapon2 } : {}) } });
+  return ok({ ...save, kit: { ...noSub, weapon: id, ...(keepSub ? { weapon2, ...(weapon2Gear ? { weapon2Gear } : {}) } : {}) } });
 }
 
 /**
@@ -140,7 +143,7 @@ export function equip(save: SaveData, slot: 'weapon' | 'armor', id: ItemId | nul
  * サブ武器は、持っていける道具の数を1つ減らす。道具がいっぱいのときは、先に道具を減らしてもらう
  */
 export function equipSub(save: SaveData, id: ItemId | null): Result<SaveData> {
-  const { weapon2: _old, ...rest } = save.kit;
+  const { weapon2: _old, weapon2Gear: _gear, ...rest } = save.kit; // 刻印武器をサブにしていたら、外れる
   if (id === null) return ok({ ...save, kit: rest });
   if (!save.owned.includes(id) || shelfOf(id) !== 'weapon') return err('持っていない');
   if (!save.kit.weapon) return err('先に、メインの武器を決めてください');

@@ -24,6 +24,7 @@ export interface Kit {
   take: ItemId[]; // 倉庫から持っていく道具（同じ道具は何個でも並べる）
   weapon2?: ItemId | null; // サブ武器（買った武器から。メインとちがう種類。道具の枠を1つ使う。ないときは、なし）
   weaponGear?: number | null; // 武器に刻印武器を付けているときの、その番号（engraved の uid。weapon は、その元の武器）
+  weapon2Gear?: number | null; // サブ武器に刻印武器を付けているときの、その番号（weapon2 は、その元の武器。メインと同じ刻印武器にはできない）
   rings?: ItemId[]; // 付けている指輪（owned から。指の数まで、同じ種類は1つ。ring.ts。ないときは、なし）
 }
 
@@ -124,14 +125,16 @@ function parseKit(v: unknown, owned: readonly ItemId[], engraved: readonly Engra
   // 刻印武器を付けているときは、その元の武器が装備になる（買っていなくてよい）
   const wg = engraved.find((g) => g.uid === k.weaponGear);
   const weapon = wg ? wg.base : pick(k.weapon, 'weapon');
-  // サブ武器は、メインの武器があって、ちがう種類のときだけ
-  const sub = pick(k.weapon2, 'weapon');
+  // サブ武器は、メインの武器があって、ちがう種類のときだけ。刻印武器なら、その元の武器（メインと同じ刻印武器にはできない）
+  const sg = engraved.find((g) => g.uid === k.weapon2Gear && g.uid !== wg?.uid);
+  const sub = sg ? sg.base : pick(k.weapon2, 'weapon');
   const weapon2 = weapon && sub && weaponTypeOf(sub) !== weaponTypeOf(weapon) ? sub : null;
   return {
     weapon,
     ...(weapon2 ? { weapon2 } : {}),
     armor: pick(armor, 'armor'),
     ...(wg ? { weaponGear: wg.uid } : {}),
+    ...(weapon2 && sg ? { weapon2Gear: sg.uid } : {}),
     ...(rings.length ? { rings } : {}),
     books: [...new Set(items(k.books).filter((id) => owned.includes(id) && slotIs(id, 'spellbook')))],
     take: items(k.take).filter((id) => slotIs(id, 'consumable')),

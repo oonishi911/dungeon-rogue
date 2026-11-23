@@ -94,7 +94,7 @@ export function startExplore(seed: number, options: ExploreOptions = {}): Explor
     enemyDensity: options.enemyDensity ?? params.enemyDensity,
     map: floorMap(seed, 0, mapSize, settings.rooms),
     player: { x: 0, y: 0 },
-    stats: startStats(buildPlayer(options.loadout ?? [], options.echoes), settings.growth),
+    stats: startStats(buildPlayer(options.loadout ?? [], options.echoes, options.subEchoes), settings.growth),
     satiety: maxSatiety,
     maxSatiety,
     ...startMagic(options.loadout ?? [], settings.magic),
