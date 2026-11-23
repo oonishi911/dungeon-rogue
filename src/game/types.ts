@@ -74,7 +74,8 @@ export type ItemId =
 // ===== 残響（刻印スロットにはめるもの。echoMaster.ts、docs/echo-spec.md） =====
 export type EchoId =
   | 'fire' | 'ice' | 'light' | 'dark' | 'soft' | 'hard' | 'spirit' | 'plain' | 'warmth' | 'pulse'
-  | 'linger' | 'slumber' | 'stagnant' | 'falter' | 'share' | 'hush' | 'whisper' | 'lamp' | 'pocket';
+  | 'linger' | 'slumber' | 'stagnant' | 'falter' | 'share' | 'hush' | 'whisper' | 'lamp' | 'pocket'
+  | 'pierce' | 'sneak' | 'frostwalk' | 'sated' | 'ember' | 'bond' | 'backwater' | 'siphon' | 'recall' | 'learn';
 
 export type ItemSlot = 'weapon' | 'armor' | 'ring' | 'consumable' | 'spellbook';
 export type WeaponType = 'sword' | 'hammer' | 'staff';
@@ -228,6 +229,8 @@ export interface PlayerStats {
   mag: number; // レベルが上がって増えた魔力（魔法の強さに足される。武器の魔力とは別。最初は0）
   poisonTurns: number; // 毒の残りターン（毎ターン、守りに関係なくダメージ）
   chillSteps?: number; // 鈍足の残り歩数（ないときは、0。歩くのに2ターンかかる）
+  rally?: number; // 絆の残響：敵を倒したあと、次の通常攻撃のダメージが増える割合（%。殴ると消える）
+  lastStruck?: number; // 追憶の残響：前の通常攻撃で殴った敵の番号（uid）
   weapon: ItemId | null;
   sub?: SubWeapon; // サブ武器（持ち替えで手に持つ。ないときは、1本だけ。docs/combat-fun-spec.md の②）
   armor: ItemId | null;
