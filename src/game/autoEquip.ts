@@ -83,7 +83,7 @@ export function equipForIntel(save: SaveData, intel: readonly Intel[]): AutoEqui
   const known = facts.elements.length > 0 || facts.bodies.length > 0 || facts.weakness !== null;
   if (!known) notes.push('情報屋から、はっきり聞いたことがない。いつも使えるものを選んだ');
   let s: SaveData = { ...save, kit: { ...save.kit, books: [], take: [] } };
-  const { weapon2: _sub, ...noSub } = s.kit;
+  const { weapon2: _sub, weapon2Gear: _subGear, ...noSub } = s.kit;
   s = { ...s, kit: noSub };
 
   // ===== 武器 =====

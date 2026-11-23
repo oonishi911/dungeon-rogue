@@ -13,7 +13,7 @@ import { packRun } from './game/runSave';
 import { newSave, type SaveData } from './game/save';
 import { bossOf, startInformant, type InformantState, type Intel } from './game/informant';
 import { recall, toneOf, type Scene } from './game/story';
-import { receiveLoot, kitEchoes } from './game/engrave';
+import { receiveLoot, kitEchoes, kitSubEchoes } from './game/engrave';
 import { departWith, fitKit, kitLoadout, returnWith } from './game/shop';
 import type { Departure, ItemId } from './game/types';
 import { clearRun, loadRun, loadSave, writeRun, writeSave } from './storage';
@@ -133,7 +133,7 @@ export function App() {
             const base = departWith(save);
             writeSave({ ...base, run: base.run + 1 });
             setSave(base);
-            setStage({ kind: 'dungeon', outcome: depart(stage.seed, stage.dungeon, kitLoadout(save), kitEchoes(save)), seed: stage.seed });
+            setStage({ kind: 'dungeon', outcome: depart(stage.seed, stage.dungeon, kitLoadout(save), kitEchoes(save), kitSubEchoes(save)), seed: stage.seed });
           }}
         />
       );
@@ -144,7 +144,7 @@ export function App() {
           key={`${save.run}-${seed}`}
           run={save.run}
           // 選んだダンジョンと、出発で決まった特性・持ち物で探索を始める。前に中断した探索があれば、その続きから
-          start={() => resume ?? startExplore(seed, { dungeon: outcome.dungeon, trait: outcome.trait, loadout: outcome.loadout, ...(outcome.echoes ? { echoes: outcome.echoes } : {}) })}
+          start={() => resume ?? startExplore(seed, { dungeon: outcome.dungeon, trait: outcome.trait, loadout: outcome.loadout, ...(outcome.echoes ? { echoes: outcome.echoes } : {}), ...(outcome.subEchoes ? { subEchoes: outcome.subEchoes } : {}) })}
           // 1手ごとに途中の状態を保存する（戻る・再読み込み・ページが閉じられたときに、続きから遊べるように）。
           // 探索が終わったら、金貨と道具を戻した記録を保存して、途中の状態は消す（結果の画面へ進む前に閉じても、持ち帰った分が残るように）
           onProgress={(state) => {

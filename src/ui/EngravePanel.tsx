@@ -5,7 +5,8 @@ import { useState } from 'react';
 import { ECHO_MASTER, ITEMS } from '../game/data';
 import { echoName } from '../game/echo';
 import { ECHO_INFO, echoText } from '../game/echoMaster';
-import { echoStock, engravedName, equipEngraved, isEquipped, setEcho, unequipEngraved } from '../game/engrave';
+import { weaponTypeOf } from '../game/combat';
+import { echoStock, engravedName, equipEngraved, equipSubEngraved, isEquipped, isSubGear, setEcho, unequipEngraved } from '../game/engrave';
 import type { SaveData } from '../game/save';
 import type { Result } from '../game/types';
 import { ItemIcon } from './ItemIcon';
@@ -32,11 +33,18 @@ export function EngravePanel({ save, apply }: { save: SaveData; apply: (r: Resul
       <ul className="shop__engrave-list">
         {save.engraved.map((g) => {
           const on = isEquipped(save, g.uid);
+          const sub = isSubGear(save, g.uid);
+          // サブにできるのは、メインの武器があって、ちがう種類のとき
+          const canSub = !on && !sub && Boolean(save.kit.weapon) && weaponTypeOf(g.base) !== weaponTypeOf(save.kit.weapon);
           return (
-            <li key={g.uid} className="shop__row shop__row--engrave">
+            <li key={g.uid} className={`shop__row shop__row--engrave${on || sub ? ' shop__row--on' : ''}`}>
               <ItemIcon id={g.base} size={28} className="shop__icon" />
               <div className="shop__about shop__about--static">
-                <span className="shop__name">{engravedName(g)}</span>
+                <span className="shop__name">
+                  {engravedName(g)}
+                  {on && <span className="shop__hand">メイン</span>}
+                  {sub && <span className="shop__hand shop__hand--sub">サブ</span>}
+                </span>
                 <span className="shop__desc">{ITEMS[g.base].description}</span>
                 <span className="shop__slots-row">
                   {g.slots.map((s, i) => {
@@ -58,9 +66,23 @@ export function EngravePanel({ save, apply }: { save: SaveData; apply: (r: Resul
                 {g.slots.some((s) => s) && <span className="shop__desc">{g.slots.filter((s) => s).map((s) => echoText(ECHO_MASTER, s!)).join(' ／ ')}</span>}
               </div>
               <div className="shop__deal">
-                <button type="button" className={on ? 'shop__buy shop__buy--off' : 'primary shop__buy'} onClick={() => apply(on ? unequipEngraved(save, g.uid) : equipEngraved(save, g.uid))}>
-                  {on ? '外す' : '装備する'}
-                </button>
+                {sub ? (
+                  <button type="button" className="shop__buy shop__buy--off" onClick={() => apply(equipSubEngraved(save, null))}>
+                    サブを外す
+                  </button>
+                ) : (
+                  canSub && (
+                    // サブ武器：探索中に持ち替えて使う（メインとちがう種類。道具を持てる数が1つ減る）
+                    <button type="button" className="shop__buy" title="持ち替えて使う2本目の武器（メインとちがう種類。道具を持てる数が1つ減る）" onClick={() => apply(equipSubEngraved(save, g.uid))}>
+                      サブにする
+                    </button>
+                  )
+                )}
+                {!sub && (
+                  <button type="button" className={on ? 'shop__buy shop__buy--off' : 'primary shop__buy'} onClick={() => apply(on ? unequipEngraved(save, g.uid) : equipEngraved(save, g.uid))}>
+                    {on ? '外す' : '装備する'}
+                  </button>
+                )}
               </div>
             </li>
           );

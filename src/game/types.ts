@@ -173,6 +173,7 @@ export interface Departure {
   trait: TraitId;
   loadout: ItemId[];
   echoes?: EchoId[]; // 装備している刻印武器にはめた残響（ないときは、残響なし）
+  subEchoes?: EchoId[]; // サブ武器にしている刻印武器にはめた残響（ないときは、残響なし）
 }
 
 // ===== 敵 =====
@@ -215,7 +216,7 @@ export interface Enchant {
 /** サブ武器。持ち替えると、手に持っている武器（weapon・echoes・技ゲージ）と入れ替わる */
 export interface SubWeapon {
   weapon: ItemId;
-  echoes?: EchoId[]; // サブ武器にはめた残響（今は付けられないので、ふつうはなし）
+  echoes?: EchoId[]; // サブ武器にした刻印武器にはめた残響（ふつうの武器なら、なし）
   skill: number; // サブ武器の技ゲージ（武器ごとに別々にたまる）
 }
 

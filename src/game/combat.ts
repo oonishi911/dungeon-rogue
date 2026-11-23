@@ -44,9 +44,9 @@ export function weaponAtk(weapon: ItemId | null, echoes?: readonly EchoId[]): nu
 
 /**
  * 持ち込んだアイテムからプレイヤーの能力を作る。武器は1本目がメイン、メインとちがう種類の2本目がサブ（持ち替えで使う）。防具は1つ、指輪は付けた分だけ装備する。
- * echoes：メインの刻印武器にはめた残響（ない・空なら、残響なし）
+ * echoes：メインの刻印武器にはめた残響、subEchoes：サブ武器の刻印武器にはめた残響（ない・空なら、残響なし）
  */
-export function buildPlayer(loadout: readonly ItemId[], echoes?: readonly EchoId[]): PlayerStats {
+export function buildPlayer(loadout: readonly ItemId[], echoes?: readonly EchoId[], subEchoes?: readonly EchoId[]): PlayerStats {
   const weapons = loadout.filter((id) => itemSlot(ITEMS[id]) === 'weapon');
   const weapon = weapons[0] ?? null;
   const subId = weapons.find((id) => weaponTypeOf(id) !== weaponTypeOf(weapon)) ?? null;
@@ -62,7 +62,7 @@ export function buildPlayer(loadout: readonly ItemId[], echoes?: readonly EchoId
     mag: weapon ? echoMag(echoes) : 0, // ささやきの残響の分
     poisonTurns: 0,
     weapon,
-    ...(subId ? { sub: { weapon: subId, skill: 0 } } : {}),
+    ...(subId ? { sub: { weapon: subId, skill: 0, ...(subEchoes?.length ? { echoes: [...subEchoes] } : {}) } } : {}),
     armor,
     ...(rings.length ? { rings } : {}),
     // 持っていくだけで効く道具（ランタン・大きな袋）は、ダンジョンでは使わないので持ち物に入れない（持ち帰らず、なくなる）

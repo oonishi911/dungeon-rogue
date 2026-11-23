@@ -250,7 +250,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
             </div>
             <div>
               <dt>サブ武器</dt>
-              <dd>{kit.weapon2 ? <Chip id={kit.weapon2} title="外す" onClick={() => apply(equipSub(save, null))} /> : <span className="shop__none">なし</span>}</dd>
+              <dd>{kit.weapon2 ? <Chip id={kit.weapon2} label={gearLabel(save, 'sub')} title="外す" onClick={() => apply(equipSub(save, null))} /> : <span className="shop__none">なし</span>}</dd>
             </div>
             <div>
               <dt>防具</dt>
@@ -360,8 +360,9 @@ function EquipDeal({ id, shelf, save, apply }: { id: ItemId; shelf: Shelf; save:
     );
   }
   const slot = shelf === 'weapon' ? 'weapon' : 'armor';
-  const wearing = save.kit[slot] === id;
-  const isSub = slot === 'weapon' && save.kit.weapon2 === id;
+  // 刻印武器を付けているときは、元の武器（ふつうの武器）は装備していない扱い（刻印の売り場で付け外しする）
+  const wearing = save.kit[slot] === id && !(slot === 'weapon' && save.kit.weaponGear);
+  const isSub = slot === 'weapon' && save.kit.weapon2 === id && !save.kit.weapon2Gear;
   return (
     <>
       {slot === 'weapon' && !wearing && (
@@ -414,9 +415,9 @@ function Compare({ id, save }: { id: ItemId; save: SaveData }) {
   );
 }
 
-/** 装備している武器の名前（刻印武器なら、その名前とはめた残響の数） */
-function gearLabel(save: SaveData): string | undefined {
-  const g = save.engraved.find((x) => x.uid === save.kit.weaponGear);
+/** 装備している武器（hand：メインかサブか）の名前（刻印武器なら、その名前とはめた残響の数） */
+function gearLabel(save: SaveData, hand: 'main' | 'sub' = 'main'): string | undefined {
+  const g = save.engraved.find((x) => x.uid === (hand === 'main' ? save.kit.weaponGear : save.kit.weapon2Gear));
   return g ? `${engravedName(g)}（残響${g.slots.filter((s) => s).length}/${g.slots.length}）` : undefined;
 }
 
