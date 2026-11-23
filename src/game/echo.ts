@@ -1,11 +1,11 @@
 // 残響と刻印武器の働き。設計は docs/echo-spec.md、数字は echoes.json（管理画面の「残響」タブ。echoMaster.ts）。
-// ・効果：装備している刻印武器にはめた残響（PlayerStats.echoes）から、攻撃力・ダメージの増減・属性の力・満腹度・技ゲージを決める
-// ・落とし物：敵を倒したとき、ごく稀に刻印武器を、少し稀に残響を落とす。残響は、敵の属性・体質に合うものが落ちる
+// ・効果：装備している刻印武器にはめた残響（PlayerStats.echoes）から、攻撃力・魔力・ダメージの増減・属性の力・通常攻撃のおまけ（追加ダメージ・毒の霧・足止め・回復）・満腹度・技ゲージ・視界・敵に気付かれる距離・お金を決める
+// ・落とし物：敵を倒したとき、ごく稀に刻印武器を、少し稀に残響を落とす。残響は、敵の属性・体質・行動の個性・ランク・眠っていたかに合うものが落ちる
 // 落とすくじは、探索の乱数を使わない（シードと行動の回数と敵の番号から決める）。今までの探索の流れを変えないため。
 // ほかのロジックと同じく、状態を受け取って値を返す純粋関数でできている。
 
 import { ECHO_MASTER, ITEMS } from './data';
-import { ECHO_CAPS, PULSE_FLOOR, ECHO_INFO, type FoeRank } from './echoMaster';
+import { ECHO_CAPS, GENERAL_ECHOES, HUSH_FLOOR, PULSE_FLOOR, ECHO_INFO, type FoeRank } from './echoMaster';
 import { DUAL_PAIRS, dualRingId, gearId } from './itemMaster';
 import { nextInt, nextRandom } from './rng';
 import type { Body, EchoId, Element, EnemyDef, GearBaseId, ItemId } from './types';
@@ -20,6 +20,39 @@ const total = (ids: readonly EchoId[], match: (id: EchoId) => boolean): number =
 
 /** 「ただの残響」の分の攻撃力 */
 export const echoAtk = (echoes?: readonly EchoId[]): number => total(echoes ?? [], (id) => id === 'plain');
+
+/** 「ささやきの残響」の分の魔力 */
+export const echoMag = (echoes?: readonly EchoId[]): number => total(echoes ?? [], (id) => id === 'whisper');
+
+/** その残響の数字の合計（はめた数だけ足し算。linger・slumber・stagnant・falter・share・lamp・pocket などに使う） */
+export const echoSum = (echoes: readonly EchoId[] | undefined, id: EchoId): number => total(echoes ?? [], (x) => x === id);
+
+/** 眠っている敵へのダメージの倍率（寝息の残響。足し算） */
+export const slumberRate = (echoes: readonly EchoId[] | undefined, asleep: boolean | undefined): number => (asleep ? 1 + echoSum(echoes, 'slumber') / 100 : 1);
+
+/** 余韻の残響の追加ダメージ（当てたダメージの割合。残響がなければ0、あれば1より減らない） */
+export function lingerDamage(echoes: readonly EchoId[] | undefined, dealt: number): number {
+  const rate = echoSum(echoes, 'linger');
+  return rate > 0 && dealt > 0 ? Math.max(1, Math.round((dealt * rate) / 100)) : 0;
+}
+
+/** 分け合いの残響で回復するHP（与えたダメージの割合。残響がなければ0、あれば1より減らない） */
+export function shareHeal(echoes: readonly EchoId[] | undefined, dealt: number): number {
+  const rate = echoSum(echoes, 'share');
+  return rate > 0 && dealt > 0 ? Math.max(1, Math.round((dealt * rate) / 100)) : 0;
+}
+
+/** ひそやかの残響を付けたあとの、敵に気付かれる距離（HUSH_FLOOR マスより縮まない。もとから短ければそのまま） */
+export function hushedRange(range: number, echoes?: readonly EchoId[]): number {
+  const cut = echoSum(echoes, 'hush');
+  return cut > 0 ? Math.max(Math.min(range, HUSH_FLOOR), range - cut) : range;
+}
+
+/** 灯の残響で広がる視界（マス） */
+export const lampRadius = (echoes?: readonly EchoId[]): number => echoSum(echoes, 'lamp');
+
+/** 拾い癖の残響を付けたあとの、敵が落とすお金 */
+export const pocketGold = (gold: number, echoes?: readonly EchoId[]): number => (gold > 0 ? Math.round(gold * (1 + echoSum(echoes, 'pocket') / 100)) : gold);
 
 /** 残響が付ける属性（なければ null。複数あれば、先にはめたもの）。砥石などの力が付いているときは、そちらが先に効く */
 export function imbuedElement(echoes?: readonly EchoId[]): Element | null {
@@ -70,9 +103,29 @@ export const gearName = (base: ItemId): string => `刻まれた${ITEMS[base].nam
 /** 敵の体質に効く武器の種類（普通の体は、どれでも）。刻印武器は、倒した敵に合う種類が落ちる */
 const WEAPON_FOR_BODY: Record<Body, readonly GearBaseId[]> = { soft: ['sword'], hard: ['hammer'], spirit: ['staff'], normal: ['sword', 'hammer', 'staff'] };
 
-/** 敵が落とす残響の候補：属性に合うものと、体質に合うもの（無属性・普通の体は、ただの残響） */
-export function echoesFor(enemy: Pick<EnemyDef, 'element' | 'body'>): [EchoId, EchoId] {
-  return [enemy.element === 'neutral' ? 'plain' : enemy.element, enemy.body === 'normal' ? 'plain' : enemy.body];
+/** 倒したときの敵のようす（落とす残響の候補に効く） */
+export interface LootContext {
+  rank?: FoeRank; // 強敵・ボスは、余韻の残響も落とす
+  asleep?: boolean; // 眠っているあいだに倒すと、寝息の残響も落とす
+}
+
+/** 行動の個性に合う残響（毒→澱み、突進→ためらい、見張り→ひそやか、遠距離→ささやき） */
+const ECHO_FOR_BEHAVIOR: Partial<Record<NonNullable<EnemyDef['behaviors']>[number], EchoId>> = { poison: 'stagnant', charger: 'falter', alarm: 'hush', ranged: 'whisper' };
+
+/**
+ * 敵が落とす残響の候補（この中から同じ割合で1つ選ぶ）。
+ * 属性に合うものと、体質に合うもの（無属性・普通の体は、ただの残響）。そのうえで、闇の敵は分け合い、行動の個性に合うもの、強敵・ボスは余韻、眠っていたら寝息も加わる
+ */
+export function echoesFor(enemy: Pick<EnemyDef, 'element' | 'body' | 'behaviors'>, context: LootContext = {}): EchoId[] {
+  const out: EchoId[] = [enemy.element === 'neutral' ? 'plain' : enemy.element, enemy.body === 'normal' ? 'plain' : enemy.body];
+  if (enemy.element === 'dark') out.push('share');
+  for (const b of enemy.behaviors ?? []) {
+    const id = ECHO_FOR_BEHAVIOR[b];
+    if (id && !out.includes(id)) out.push(id);
+  }
+  if (context.rank === 'elite' || context.rank === 'boss') out.push('linger');
+  if (context.asleep) out.push('slumber');
+  return out;
 }
 
 /** 落とすくじに使う種。探索の乱数とは別に、シードと階・行動の回数・敵の番号から決める */
@@ -87,7 +140,7 @@ export interface Loot {
 }
 
 /** 倒した敵が落とすもの（刻印武器と残響。どちらも落とさないこともあれば、両方落とすこともある） */
-export function rollLoot(seed: number, enemy: Pick<EnemyDef, 'element' | 'body'>, rank: FoeRank): Loot {
+export function rollLoot(seed: number, enemy: Pick<EnemyDef, 'element' | 'body' | 'behaviors'>, rank: FoeRank, context: Omit<LootContext, 'rank'> = {}): Loot {
   const { engraved, echo, ring } = ECHO_MASTER;
   let state = seed;
   const roll = () => {
@@ -114,7 +167,7 @@ export function rollLoot(seed: number, enemy: Pick<EnemyDef, 'element' | 'body'>
 
   let found: EchoId | null = null;
   if (roll() * 100 < echo.drop[rank]) {
-    found = roll() * 100 < echo.generalShare ? pick<EchoId>(['warmth', 'pulse']) : pick<EchoId>(echoesFor(enemy));
+    found = roll() * 100 < echo.generalShare ? pick<EchoId>(GENERAL_ECHOES) : pick<EchoId>(echoesFor(enemy, { ...context, rank }));
   }
 
   // 二重耐性の指輪：倒した敵の属性と、もう1つの属性（くじ）の組み合わせ。ここは最後に引く（前のくじの結果を変えないため）

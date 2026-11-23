@@ -143,7 +143,7 @@ export function EchoPanel({ base, draft, setDraft }: EchoPanelProps) {
                   {RANK_LABELS[r]}
                 </th>
               ))}
-              <th scope="col">ぬくもり・鼓動の割合（%）</th>
+              <th scope="col">どの敵でも落とす残響の割合（%）</th>
             </tr>
           </thead>
           <tbody>
@@ -163,14 +163,14 @@ export function EchoPanel({ base, draft, setDraft }: EchoPanelProps) {
                   />
                 </td>
               ))}
-              <td data-label="ぬくもり・鼓動の割合（%）" className="admin__c2">
+              <td data-label="どの敵でも落とす残響の割合（%）" className="admin__c2">
                 <NumberField
                   value={draft.echo.generalShare}
                   min={ECHO_LIMITS.share.min}
                   max={ECHO_LIMITS.share.max}
                   changed={draft.echo.generalShare !== base.echo.generalShare}
                   base={base.echo.generalShare}
-                  label="ぬくもり・鼓動を落とす割合"
+                  label="どの敵でも落とす残響の割合"
                   onChange={(v) => setDraft((d) => ({ ...d, echo: { ...d.echo, generalShare: v } }))}
                 />
               </td>
@@ -179,7 +179,7 @@ export function EchoPanel({ base, draft, setDraft }: EchoPanelProps) {
         </table>
       </div>
       <p className="muted">
-        「ぬくもり・鼓動の割合」：残響を落とすとき、そのうち何%を、敵に関係なく「ぬくもりの残響」か「鼓動の残響」にするか。残りは、敵の属性・体質に合う残響です（無属性・普通の体の敵は、ただの残響）。
+        「どの敵でも落とす残響の割合」：残響を落とすとき、そのうち何%を、敵に関係なく「ぬくもり・鼓動・灯・拾い癖」のどれかにするか。残りは、その敵に合う残響です（属性・体質に合うもの。無属性・普通の体の敵は、ただの残響。闇の敵は分け合い、毒の敵は澱み、突進する敵はためらい、見張りはひそやか、遠くから撃つ敵はささやき、強敵・ボスは余韻、眠っているあいだに倒すと寝息も候補に入る）。
       </p>
 
       <h3 className="gen__subheading">二重耐性の指輪を落とす確率（%）</h3>

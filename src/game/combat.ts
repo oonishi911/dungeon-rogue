@@ -3,7 +3,7 @@
 // 戦闘の進行（誰がいつ攻撃するか）は explore.ts にある。
 
 import { COMBAT_CONFIG as C, ELEMENT_COMPONENTS, ENCHANT_VS_ELEMENT, ITEMS, LOADOUT_CONFIG, WEAPON_VS_BODY } from './data';
-import { bodyDamageRate, echoAtk, imbuedElement } from './echo';
+import { bodyDamageRate, echoAtk, echoMag, imbuedElement } from './echo';
 import type { EchoId, ElementComponent, EnemyDef, Guard, ItemDef, ItemId, ItemSlot, PlayerStats, WeaponType } from './types';
 
 export function itemSlot(item: ItemDef): ItemSlot {
@@ -59,7 +59,7 @@ export function buildPlayer(loadout: readonly ItemId[], echoes?: readonly EchoId
     // 武器は攻撃力を、防具は守りを上げる（段階が上がるほど大きい。品物の設定 items.json）
     atk: C.playerAtk + weaponAtk(weapon, echoes),
     def: C.playerDef + (a?.kind === 'armor' ? a.def : 0),
-    mag: 0,
+    mag: weapon ? echoMag(echoes) : 0, // ささやきの残響の分
     poisonTurns: 0,
     weapon,
     ...(subId ? { sub: { weapon: subId, skill: 0 } } : {}),
@@ -159,9 +159,10 @@ export function swapWeapons(stats: PlayerStats, skill: number): { stats: PlayerS
   if (!sub || !stats.weapon) return null;
   const { echoes: heldEchoes, ...rest } = stats;
   const atk = stats.atk - weaponAtk(stats.weapon, heldEchoes) + weaponAtk(sub.weapon, sub.echoes);
+  const mag = stats.mag - echoMag(heldEchoes) + echoMag(sub.echoes); // ささやきの残響の分も、持ち替えた武器のものになる
   const held: PlayerStats['sub'] = { weapon: stats.weapon, skill, ...(heldEchoes?.length ? { echoes: heldEchoes } : {}) };
   return {
-    stats: { ...rest, atk, weapon: sub.weapon, sub: held!, ...(sub.echoes?.length ? { echoes: sub.echoes } : {}) },
+    stats: { ...rest, atk, mag, weapon: sub.weapon, sub: held!, ...(sub.echoes?.length ? { echoes: sub.echoes } : {}) },
     skill: sub.skill,
   };
 }

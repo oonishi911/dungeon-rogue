@@ -76,6 +76,42 @@
     "pulse": {
       "name": "鼓動の残響",
       "weapon": 1
+    },
+    "linger": {
+      "name": "余韻の残響",
+      "weapon": 25
+    },
+    "slumber": {
+      "name": "寝息の残響",
+      "weapon": 50
+    },
+    "stagnant": {
+      "name": "澱みの残響",
+      "weapon": 10
+    },
+    "falter": {
+      "name": "ためらいの残響",
+      "weapon": 10
+    },
+    "share": {
+      "name": "分け合いの残響",
+      "weapon": 5
+    },
+    "hush": {
+      "name": "ひそやかの残響",
+      "weapon": 1
+    },
+    "whisper": {
+      "name": "ささやきの残響",
+      "weapon": 1
+    },
+    "lamp": {
+      "name": "灯の残響",
+      "weapon": 1
+    },
+    "pocket": {
+      "name": "拾い癖の残響",
+      "weapon": 15
     }
   }
 }
