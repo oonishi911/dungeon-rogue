@@ -4,7 +4,8 @@ import { buildPlayer, swapWeapons } from './combat';
 import { ECHO_MASTER } from './data';
 import { echoesFor, echoMag, hushedRange, lampRadius, lingerDamage, pocketGold, shareHeal, slumberRate } from './echo';
 import { ECHO_IDS, ECHO_INFO, echoText, HUSH_FLOOR, STAGNANT_MIST } from './echoMaster';
-import { FIELD_ENEMY } from './enemies.fixtures';
+import { BOSS_ENEMY, FIELD_ENEMY } from './enemies.fixtures';
+import { DEFAULT_DUNGEON_ID, dungeonOf } from './dungeons';
 import { enemyDef, type MapEnemy } from './enemies';
 import { startExplore, step, viewRadius } from './explore';
 import type { ExploreAction, ExploreState } from './exploreTypes';
@@ -180,5 +181,48 @@ describe('落とす敵', () => {
 
   it('テスト用の敵の定義は読める', () => {
     expect(enemyDef({ id: FIELD_ENEMY, elite: false }).hp).toBeGreaterThan(0);
+  });
+});
+
+describe('ダンジョンの設定で落とさない', () => {
+  /** ボスを1撃で倒すのを、敵の番号を変えて何度もやり、拾った残響・刻印武器の数を数える */
+  const loot = () => {
+    let echoes = 0;
+    let gear = 0;
+    for (let uid = 0; uid < 120; uid++) {
+      const start = arena([], { x: 2, y: 2 }, [enemy({ x: 3, y: 2 }, { id: BOSS_ENEMY, elite: true, hp: 1 })]);
+      const s = must(step({ ...start, enemies: start.enemies.map((e) => ({ ...e, uid: uid + 1 })) }, RIGHT));
+      echoes += s.found.echoes.length;
+      gear += s.found.gear.length;
+    }
+    return { echoes, gear };
+  };
+  const withDrops = (echoDrop: boolean, engravedDrop: boolean, run: () => void) => {
+    const enemies = dungeonOf(DEFAULT_DUNGEON_ID).enemies as { echoDrop: boolean; engravedDrop: boolean };
+    const before = { ...enemies };
+    Object.assign(enemies, { echoDrop, engravedDrop });
+    try {
+      run();
+    } finally {
+      Object.assign(enemies, before);
+    }
+  };
+
+  it('オンなら落とし、残響・刻印武器を、それぞれオフにできる', () => {
+    withDrops(true, true, () => {
+      const got = loot();
+      expect(got.echoes).toBeGreaterThan(0);
+      expect(got.gear).toBeGreaterThan(0);
+    });
+    withDrops(false, true, () => {
+      const got = loot();
+      expect(got.echoes).toBe(0);
+      expect(got.gear).toBeGreaterThan(0);
+    });
+    withDrops(true, false, () => {
+      const got = loot();
+      expect(got.echoes).toBeGreaterThan(0);
+      expect(got.gear).toBe(0);
+    });
   });
 });

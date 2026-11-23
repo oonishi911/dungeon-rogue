@@ -270,6 +270,35 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
           <NumberField {...GEN_LIMITS.floorPowerRate} value={e.floorAtkRate} changed={e.floorAtkRate !== be.floorAtkRate} base={be.floorAtkRate} label={GEN_LABELS.floorAtkRate} onChange={(v) => setEnemies({ floorAtkRate: v })} />
         </Field>
       </div>
+      <h3 className="gen__subheading">落とし物</h3>
+      <div className="gen__fields">
+        <Field
+          label={GEN_LABELS.echoDrop}
+          hint="オンだと、このダンジョンの敵は、倒したときにごく稀に残響を落とします（確率や種類は「残響」タブ）。オフだと、残響は落ちません。"
+          example="はじめてのダンジョンではオフにして、慣れてきたダンジョンでオンにする、といった使い方ができます。"
+        >
+          <input
+            type="checkbox"
+            className={cls('admin__check', e.echoDrop !== be.echoDrop)}
+            checked={e.echoDrop}
+            aria-label={GEN_LABELS.echoDrop}
+            onChange={(ev) => setEnemies({ echoDrop: ev.target.checked })}
+          />
+        </Field>
+        <Field
+          label={GEN_LABELS.engravedDrop}
+          hint="オンだと、このダンジョンの敵は、倒したときにごく稀に刻印武器（刻印スロット付きの武器）を落とします（確率やスロットの数は「残響」タブ）。オフだと、刻印武器は落ちません。"
+          example="オフにすると、このダンジョンでは、店で買える武器だけで戦うことになります。"
+        >
+          <input
+            type="checkbox"
+            className={cls('admin__check', e.engravedDrop !== be.engravedDrop)}
+            checked={e.engravedDrop}
+            aria-label={GEN_LABELS.engravedDrop}
+            onChange={(ev) => setEnemies({ engravedDrop: ev.target.checked })}
+          />
+        </Field>
+      </div>
     </section>
   );
 }
