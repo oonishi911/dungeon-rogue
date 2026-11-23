@@ -219,9 +219,9 @@ describe('二重耐性の指輪の落とし物', () => {
 
   it('拾った指輪は、持ち物に入る（力尽きても失わない）。同じものは重ならない', () => {
     const s0 = withMemories(0);
-    const s1 = receiveLoot(s0, { echoes: [], gear: [], rings: ['ring_dual_fire_ice_3', 'ring_dual_fire_ice_3', 'ring_dual_ice_dark_2'] });
+    const s1 = receiveLoot(s0, { echoes: [], gear: [], rings: ['ring_dual_fire_ice_3', 'ring_dual_fire_ice_3', 'ring_dual_ice_dark_2'], met: [] });
     expect(s1.owned).toEqual(['ring_dual_fire_ice_3', 'ring_dual_ice_dark_2']);
-    const s2 = receiveLoot(s1, { echoes: [], gear: [], rings: ['ring_dual_fire_ice_3', 'ring_dual_fire_ice_4'] });
+    const s2 = receiveLoot(s1, { echoes: [], gear: [], rings: ['ring_dual_fire_ice_3', 'ring_dual_fire_ice_4'], met: [] });
     expect(s2.owned).toEqual(['ring_dual_fire_ice_3', 'ring_dual_ice_dark_2', 'ring_dual_fire_ice_4']);
     expect(receiveLoot(s0, undefined)).toBe(s0);
   });

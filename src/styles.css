@@ -4821,3 +4821,210 @@ button {
   color: #a8e07a;
   font-size: var(--step--1);
 }
+
+/* ===== 敵の図鑑（BestiaryScreen.tsx。docs/enemy-weakness.md） ===== */
+.choose__bestiary,
+.bestiary__close {
+  min-height: 2.75rem;
+  padding: 0.4rem 1.1rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 999px;
+  background: var(--pine-deep);
+  color: var(--bone);
+  cursor: pointer;
+}
+
+.choose__bestiary:hover,
+.bestiary__close:hover {
+  border-color: var(--bone-dim);
+}
+
+.bestiary {
+  --el-fire: #ff8a4a;
+  --el-ice: #8fd8ff;
+  --el-light: #fff0a0;
+  --el-dark: #c98cff;
+  --el-neutral: #d8d2c4;
+  gap: 1rem;
+}
+
+.bestiary__tabs {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.bestiary__tab {
+  flex: none;
+  min-height: 2.5rem;
+  padding: 0.3rem 0.85rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bone-dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bestiary__tab[aria-selected='true'] {
+  background: var(--bone);
+  border-color: var(--bone);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.bestiary__count {
+  margin-left: 0.4rem;
+  font-size: var(--step--1);
+  opacity: 0.75;
+}
+
+.bestiary__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  align-content: start;
+  gap: 0.75rem;
+}
+
+.bestiary__item {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 8px;
+  background: var(--pine-deep);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.bestiary__item--unknown {
+  border-style: dashed;
+  background: transparent;
+  color: var(--bone-dim);
+}
+
+.bestiary__name {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: var(--step-1);
+  line-height: 1.3;
+}
+
+.bestiary__hint {
+  margin: 0;
+  font-size: var(--step--1);
+}
+
+.bestiary__tags {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.bestiary__tag {
+  padding: 0 0.5rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 4px;
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.bestiary__tag--fire { color: var(--el-fire); border-color: currentColor; }
+.bestiary__tag--ice { color: var(--el-ice); border-color: currentColor; }
+.bestiary__tag--light { color: var(--el-light); border-color: currentColor; }
+.bestiary__tag--dark { color: var(--el-dark); border-color: currentColor; }
+.bestiary__tag--behavior { border-style: dashed; }
+
+.bestiary__facts {
+  margin: 0;
+  display: flex;
+  gap: 1.25rem;
+  font-size: var(--step--1);
+}
+
+.bestiary__facts div {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+
+.bestiary__facts dt {
+  color: var(--bone-dim);
+}
+
+.bestiary__facts dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.bestiary__row {
+  display: grid;
+  grid-template-columns: 5.5em 1fr;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bestiary__label {
+  font-size: var(--step--1);
+  font-weight: 700;
+}
+
+.bestiary__label--good { color: var(--hp-enemy); }
+.bestiary__label--bad { color: var(--bone-dim); }
+
+.bestiary__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.bestiary__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.55rem 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(236, 229, 211, 0.12);
+  color: var(--bone);
+  font-weight: 700;
+  font-size: var(--step--1);
+}
+
+.bestiary__chip small {
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.bestiary__icon {
+  width: 1.35em;
+  height: 1.35em;
+  flex: none;
+  align-self: center;
+  margin-left: -0.3rem;
+}
+
+.bestiary__chip--dim {
+  background: transparent;
+  border: 1px solid var(--pine-line);
+  color: var(--bone-dim);
+}
+
+/* 効きにくいもののアイコンは、色を抑える */
+.bestiary__chip--dim .bestiary__icon {
+  filter: saturate(0.35) brightness(0.85);
+}
+
+.bestiary__none {
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.bestiary__note {
+  margin: 0;
+  font-size: var(--step--1);
+}

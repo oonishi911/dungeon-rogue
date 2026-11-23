@@ -12,6 +12,8 @@ import * as THREE from 'three';
 import { enemyBase, ITEMS } from '../game/data';
 import { gearOf } from '../game/itemMaster';
 import { behaviorsOf, ENEMY_CONFIG, enemyDef, isAdjacent, type MapEnemy } from '../game/enemies';
+import { weakMarks, type WeakMark } from '../game/weakness';
+import { drawWeakIcon } from './weakIcons';
 import { deathKindOf, type DeathKind } from '../game/deathKind';
 import { upStairs } from '../game/explore';
 import { DIR_DELTA, type CastEvent, type Dir, type ExploreState, type FoeEvent } from '../game/exploreTypes';
@@ -28,7 +30,7 @@ import { Creature, CREATURE_IDS, type CreatureId } from './creatures';
 import { exposureOf, softWallGeometry } from './softWall';
 import { SpellEffects } from './spellFx';
 import { Stairs3D } from './stairs3d';
-import { AFTERGLOW_FX, AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEATH_FX, DEBRIS, GLOW_FX, INTRO_FX, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, DAMAGE_STYLE, FOE_FX, FOE_STATUS_FX, HIT_STOP, SPLASH_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, QUALITY, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WET_STONE, type HitPulse } from './explore3dConfig';
+import { AFTERGLOW_FX, AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_POP, DEATH_FX, DEBRIS, GLOW_FX, INTRO_FX, DRAW_CAPACITY, DRAW_RANGE, DYING_EXTRA_MS, DAMAGE_STYLE, FOE_FX, FOE_STATUS_FX, HIT_STOP, SPLASH_EXTRA_MS, ENEMY_MOTION, FLOOR_LOOK, FLOOR_KINDS, FOV_LIMIT, HIT_PULSE, MAX_ANISOTROPY, NO_GLOSS, OPENED_CHEST, PATH_CAPACITY, QUALITY, SHADOW_SIDES, SPELL_KNOCK, SUN, SURFACE_BUMP, TEXTURE_FILES, TEXTURE_SPAN, TILE_PX, GROUND_MIST, TORCH, TORCH_FLICKER, TRAIT_COLORS, TRAIT_GLOSS, WALL_HEIGHT, WALL_ROUND, WALL_SHADOW, WALL_SHAPES, WEAK_MARK, WET_STONE, type HitPulse } from './explore3dConfig';
 import { applyFog, createFog, createGroundMist, litBillboard, worldMapped } from './explore3dKit';
 import { asMetal } from './materialLook';
 import { PostFx } from './postFx';
@@ -151,6 +153,8 @@ export class DungeonView3D {
       body: THREE.Object3D; // 絵の板（Mesh）か、立体の模型の入れ物
       model: EnemyModel | null; // 立体の模型で描く敵
       mark: THREE.Sprite;
+      weak: THREE.Sprite; // 頭上の弱点の印（効く武器・属性。弱点がない敵は出さない）
+      hasWeak: boolean;
       hp: THREE.Sprite;
       ring: THREE.Mesh | null;
       shield: THREE.Mesh | null; // 盾持ちの敵の盾（向いている正面に置く）
@@ -465,6 +469,7 @@ export class DungeonView3D {
         view.body.position.z += (dz / len) * lunge;
       }
       view.mark.position.set(at.x, view.top + 0.15, at.y);
+      view.weak.position.set(at.x, view.top + WEAK_MARK.lift, at.y);
       view.hp.position.set(at.x, 0.06, at.y);
       view.ring?.position.set(at.x, 0.02, at.y);
       if (view.glow) {
@@ -725,7 +730,7 @@ export class DungeonView3D {
       this.removeEnemyView(uid);
       return;
     }
-    view.mark.visible = view.hp.visible = false;
+    view.mark.visible = view.weak.visible = view.hp.visible = false;
     if (view.ring) view.ring.visible = false;
     if (view.shield) view.shield.visible = false;
     if (view.glow) view.glow.visible = false;
@@ -1805,6 +1810,7 @@ export class DungeonView3D {
       shown.add(e.uid);
       const view = this.enemies.get(e.uid) ?? this.createEnemyView(e);
       view.body.visible = view.mark.visible = true;
+      view.weak.visible = view.hasWeak;
       if (view.ring) view.ring.visible = true;
       const def = enemyDef(e);
       // ボスの段階：段階が上がると、体が少し大きくなり、足元の輪の色が変わって大きくなる。盾は、持つ段階になってから作る
@@ -1850,13 +1856,13 @@ export class DungeonView3D {
       if (shown.has(uid)) continue;
       if (!alive.has(uid)) {
         // 呪文の矢で倒した敵は、矢が当たるまで残す（頭上のマークと体力の棒は消す）
-        if ((this.dying.get(uid) ?? 0) > performance.now()) view.mark.visible = view.hp.visible = false;
+        if ((this.dying.get(uid) ?? 0) > performance.now()) view.mark.visible = view.weak.visible = view.hp.visible = false;
         // 同じ階で倒した敵は崩れ落ちさせる（階を移ったときは、前の階の敵をすぐ消す）
         else if (this.shownState?.map !== state.map) this.removeEnemyView(uid);
         else if (!this.collapses.has(uid)) this.collapseEnemy(uid);
       }
       else {
-        view.body.visible = view.mark.visible = view.hp.visible = false;
+        view.body.visible = view.mark.visible = view.weak.visible = view.hp.visible = false;
         if (view.ring) view.ring.visible = false;
         if (view.shield) view.shield.visible = false;
         if (view.glow) view.glow.visible = false;
@@ -1917,15 +1923,20 @@ export class DungeonView3D {
     const shield = behaviorsOf(def).includes('shield') ? new THREE.Mesh(this.shared.shieldPlate, this.shared.shieldMat) : null;
     // 炎・光・闇・氷の敵は、自分で光る（足元に光が広がる。強敵・ボスは大きい）
     const glow = this.makeGlow(def.element);
-    const view = { id: e.id, body, model, mark: new THREE.Sprite(), hp: new THREE.Sprite(), ring, shield, glow, glowSize: glow ? this.glowSizeOf(def.element, e.elite || def.boss === true) : 0, glowFlicker: glow ? GLOW_FX.flicker[def.element as keyof typeof GLOW_FX.flicker] : 0, top, facing: 'down' as Dir };
-    view.body.visible = view.mark.visible = view.hp.visible = false;
+    // 頭上の弱点の印（いつでも見える。docs/enemy-weakness.md）
+    const marks = weakMarks(def);
+    const weak = new THREE.Sprite(marks.length ? this.weakMaterial(marks) : undefined);
+    weak.scale.set(WEAK_MARK.size * (marks.length + WEAK_MARK.pad * 2), WEAK_MARK.size, 1);
+    weak.renderOrder = 5;
+    const view = { id: e.id, body, model, mark: new THREE.Sprite(), weak, hasWeak: marks.length > 0, hp: new THREE.Sprite(), ring, shield, glow, glowSize: glow ? this.glowSizeOf(def.element, e.elite || def.boss === true) : 0, glowFlicker: glow ? GLOW_FX.flicker[def.element as keyof typeof GLOW_FX.flicker] : 0, top, facing: 'down' as Dir };
+    view.body.visible = view.mark.visible = view.weak.visible = view.hp.visible = false;
     if (view.ring) view.ring.visible = false;
     if (view.shield) view.shield.visible = false;
     if (view.glow) {
       view.glow.visible = false;
       this.scene.add(view.glow);
     }
-    this.scene.add(view.body, view.mark, view.hp);
+    this.scene.add(view.body, view.mark, view.weak, view.hp);
     if (ring) this.scene.add(ring);
     if (shield) this.scene.add(shield);
     this.enemies.set(e.uid, view);
@@ -2013,7 +2024,7 @@ export class DungeonView3D {
   private removeEnemyView(uid: number) {
     const view = this.enemies.get(uid);
     if (!view) return;
-    this.scene.remove(view.body, view.mark, view.hp);
+    this.scene.remove(view.body, view.mark, view.weak, view.hp);
     if (view.ring) this.scene.remove(view.ring);
     if (view.shield) this.scene.remove(view.shield);
     if (view.glow) this.scene.remove(view.glow);
@@ -2044,6 +2055,23 @@ export class DungeonView3D {
       ctx.strokeText(text, 16, 17);
       ctx.fillStyle = color;
       ctx.fillText(text, 16, 17);
+    });
+    return this.material(key, { map, transparent: true, depthTest: false });
+  }
+
+  /** 頭上の弱点の印：暗い札に、弱点のアイコン（色の丸に白い絵。weakIcons.tsx）を横に並べる。並びが同じなら使い回す */
+  private weakMaterial(marks: readonly WeakMark[]): THREE.SpriteMaterial {
+    const key = `weak:${marks.map((m) => m.icon).join(',')}`;
+    const cell = 64;
+    const pad = Math.round(cell * WEAK_MARK.pad);
+    const icon = Math.round(cell * WEAK_MARK.icon);
+    const w = cell * marks.length + pad * 2;
+    const map = this.texture(key, w, cell, (ctx) => {
+      ctx.fillStyle = WEAK_MARK.plate;
+      ctx.beginPath();
+      ctx.roundRect(1, 1, w - 2, cell - 2, cell / 2 - 1);
+      ctx.fill();
+      marks.forEach((m, i) => drawWeakIcon(ctx, m.icon, pad + cell * i + (cell - icon) / 2, (cell - icon) / 2, icon));
     });
     return this.material(key, { map, transparent: true, depthTest: false });
   }

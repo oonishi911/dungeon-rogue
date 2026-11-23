@@ -140,8 +140,22 @@ export function sightRadiusOf(loadout: readonly ItemId[]): number {
 /** 今の視界の半径：持っていった道具で決まる半径（sightRadius）に、手に持っている武器の灯の残響の分を足す */
 export const viewRadius = (state: Pick<ExploreState, 'sightRadius' | 'stats'>): number => state.sightRadius + lampRadius(state.stats.echoes);
 
-/** 1行動進める。壁への移動など行動にならない操作はエラーを返し、ターンも満腹度も消費しない */
+/** 1行動進める（そのあと、見えている敵を図鑑に載せる）。壁への移動など行動にならない操作はエラーを返し、ターンも満腹度も消費しない */
 export function step(state: ExploreState, action: ExploreAction): Result<ExploreState> {
+  const r = stepOnce(state, action);
+  return r.ok ? ok(noteMet(r.value)) : r;
+}
+
+/** 見えている敵を「出会った敵」に加える（敵の図鑑に載る。終わったとき、力尽きても、セーブに入る） */
+function noteMet(state: ExploreState): ExploreState {
+  if (state.enemies.length === 0) return state;
+  const known = new Set(state.found.met);
+  const visible = new Set(visibleTiles(state.map, state.player, viewRadius(state)));
+  const fresh = [...new Set(state.enemies.filter((e) => !known.has(e.id) && visible.has(e.pos.y * state.map.width + e.pos.x)).map((e) => e.id))];
+  return fresh.length ? { ...state, found: { ...state.found, met: [...state.found.met, ...fresh] } } : state;
+}
+
+function stepOnce(state: ExploreState, action: ExploreAction): Result<ExploreState> {
   if (state.outcome !== 'ongoing') return err('探索は終わっています');
   state = { ...state, hits: [], foes: [], cast: null };
 
@@ -924,7 +938,7 @@ function lootFrom(state: ExploreState, enemy: MapEnemy): ExploreState {
   const got = { ...rolled, gear: drops.engravedDrop ? rolled.gear : null, echo: drops.echoDrop ? rolled.echo : null };
   if (!got.gear && !got.echo && !got.ring) return state;
   const log = [...state.log];
-  const found = { echoes: [...state.found.echoes], gear: [...state.found.gear], rings: [...state.found.rings] };
+  const found = { ...state.found, echoes: [...state.found.echoes], gear: [...state.found.gear], rings: [...state.found.rings] };
   if (got.gear) {
     found.gear.push(got.gear);
     log.push(`${gearName(got.gear.base)}を拾った（刻印スロット${got.gear.slots}つ）。倉庫に送った`);

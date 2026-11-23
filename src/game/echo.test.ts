@@ -20,7 +20,7 @@ const must = <T>(r: Result<T>): T => {
 };
 const foe = (change: Partial<EnemyDef> = {}): EnemyDef => ({ id: 'x', name: 'x', hp: 10, atk: 5, def: 2, element: 'neutral', body: 'normal', ...change });
 const withGear = (slots: number, echoes: EchoId[] = []): SaveData =>
-  receiveLoot({ ...newSave(), echoes }, { echoes: [], gear: [{ base: 'sword_3', slots }], rings: [] });
+  receiveLoot({ ...newSave(), echoes }, { echoes: [], gear: [{ base: 'sword_3', slots }], rings: [], met: [] });
 
 describe('設定の確かめ', () => {
   it('今の設定は正しい形で、書き出すと同じ中身になる', () => {
@@ -168,11 +168,11 @@ describe('倉庫と付け替え', () => {
   it('拾った分は、番号を付けて倉庫に入る（何もなければ、そのまま）', () => {
     const save = newSave();
     expect(receiveLoot(save, undefined)).toBe(save);
-    const got = receiveLoot(save, { echoes: ['fire', 'fire', 'hard'], gear: [{ base: 'sword_3', slots: 2 }, { base: 'staff_2', slots: 1 }], rings: [] });
+    const got = receiveLoot(save, { echoes: ['fire', 'fire', 'hard'], gear: [{ base: 'sword_3', slots: 2 }, { base: 'staff_2', slots: 1 }], rings: [], met: [] });
     expect(got.engraved.map((g) => g.uid)).toEqual([1, 2]);
     expect(got.engraved[0]!.slots).toEqual([null, null]);
     expect(echoStock(got)).toEqual([{ id: 'fire', count: 2 }, { id: 'hard', count: 1 }]);
-    const more = receiveLoot(got, { echoes: [], gear: [{ base: 'hammer', slots: 3 }], rings: [] });
+    const more = receiveLoot(got, { echoes: [], gear: [{ base: 'hammer', slots: 3 }], rings: [], met: [] });
     expect(more.engraved.map((g) => g.uid)).toEqual([1, 2, 3]);
   });
 
@@ -256,7 +256,7 @@ describe('セーブと中断データ', () => {
     const outcome = { dungeon: 'standard', trait: 'fire' as const, loadout: ['sword' as const], echoes: ['fire', 'plain'] as EchoId[] };
     let state = startExplore(7, { dungeon: outcome.dungeon, trait: outcome.trait, loadout: outcome.loadout, echoes: outcome.echoes });
     expect(state.stats.echoes).toEqual(['fire', 'plain']);
-    state = { ...state, found: { echoes: ['hard'], gear: [{ base: 'sword_2', slots: 2 }], rings: [] } };
+    state = { ...state, found: { echoes: ['hard'], gear: [{ base: 'sword_2', slots: 2 }], rings: [], met: [] } };
     const run = parseRun(JSON.stringify(packRun(newSave(), outcome, 7, state)))!;
     expect(run.outcome.echoes).toEqual(['fire', 'plain']);
     expect(run.state.stats.echoes).toEqual(['fire', 'plain']);
@@ -267,7 +267,7 @@ describe('セーブと中断データ', () => {
 describe('探索で拾う', () => {
   it('最初は何も拾っておらず、探索の結果に拾ったものが入る。力尽きても、持ち帰る（結果にも残る）', () => {
     const start = startExplore(1, { loadout: ['sword'] });
-    expect(start.found).toEqual({ echoes: [], gear: [], rings: [] });
+    expect(start.found).toEqual({ echoes: [], gear: [], rings: [], met: [] });
     expect(toResult(start).found).toEqual(start.found);
     let total = 0;
     for (let i = 1; i <= 40 && total === 0; i++) {

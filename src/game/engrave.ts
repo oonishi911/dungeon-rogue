@@ -16,7 +16,11 @@ export const SLOT_MAX = 3;
 
 /** 拾ったものを倉庫に入れる。刻印武器には、新しい番号を付ける。二重耐性の指輪は、持ち物（owned）に入る */
 export function receiveLoot(save: SaveData, found: Found | undefined): SaveData {
-  if (!found || (found.echoes.length === 0 && found.gear.length === 0 && found.rings.length === 0)) return save;
+  if (!found) return save;
+  // 出会った敵は、図鑑に載せる（重ねない。出会った順）
+  const met = [...save.met, ...found.met.filter((id, i, all) => !save.met.includes(id) && all.indexOf(id) === i)];
+  save = met.length === save.met.length ? save : { ...save, met };
+  if (found.echoes.length === 0 && found.gear.length === 0 && found.rings.length === 0) return save;
   let uid = save.engraved.reduce((top, g) => Math.max(top, g.uid), 0);
   const gear: EngravedGear[] = found.gear.map((g) => ({ uid: ++uid, base: g.base, slots: Array.from({ length: g.slots }, () => null) }));
   // 二重耐性の指輪は、同じものを持っていれば重ならない（同じ組み合わせ・段階は1つ。段階がちがえば別のもの）
