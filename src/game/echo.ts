@@ -8,7 +8,7 @@ import { ECHO_MASTER, ITEMS } from './data';
 import { ECHO_CAPS, GENERAL_ECHOES, HUSH_FLOOR, PULSE_FLOOR, ECHO_INFO, type FoeRank } from './echoMaster';
 import { DUAL_PAIRS, dualRingId, gearId } from './itemMaster';
 import { nextInt, nextRandom } from './rng';
-import type { Body, EchoId, Element, EnemyDef, EnemyId, GearBaseId, ItemId } from './types';
+import type { Body, EchoId, Element, EnemyDef, EnemyId, GearBaseId, ItemId, PlayerStats } from './types';
 
 export const echoName = (id: EchoId): string => ECHO_MASTER.effects[id].name;
 
@@ -47,6 +47,18 @@ export function hushedRange(range: number, echoes?: readonly EchoId[]): number {
   const cut = echoSum(echoes, 'hush');
   return cut > 0 ? Math.max(Math.min(range, HUSH_FLOOR), range - cut) : range;
 }
+
+/** 割合で増える残響の倍率（1＋合計%）。ember・sneak・recall・bond・learn などに使う */
+export const echoRate = (echoes: readonly EchoId[] | undefined, id: EchoId): number => 1 + echoSum(echoes, id) / 100;
+
+/** 貫きの残響を付けたあとの、盾がカットする割合（もとの割合から、合計%だけ減る。0より小さくならない） */
+export const piercedCut = (cut: number, echoes?: readonly EchoId[]): number => cut * Math.max(0, 1 - echoSum(echoes, 'pierce') / 100);
+
+/** 霜踏みの残響を付けたあとの、鈍足になる確率（合計%だけ下がる。0より小さくならない） */
+export const frostwalkChance = (chance: number, echoes?: readonly EchoId[]): number => chance * Math.max(0, 1 - echoSum(echoes, 'frostwalk') / 100);
+
+/** 背水の残響：HPが半分以下のときに上がる攻撃力 */
+export const backwaterAtk = (stats: Pick<PlayerStats, 'hp' | 'maxHp' | 'echoes'>): number => (stats.hp * 2 <= stats.maxHp ? echoSum(stats.echoes, 'backwater') : 0);
 
 /** 灯の残響で広がる視界（マス） */
 export const lampRadius = (echoes?: readonly EchoId[]): number => echoSum(echoes, 'lamp');
@@ -111,20 +123,35 @@ export interface LootContext {
 }
 
 /** 行動の個性に合う残響（毒→澱み、突進→ためらい、見張り→ひそやか、遠距離→ささやき） */
-const ECHO_FOR_BEHAVIOR: Partial<Record<NonNullable<EnemyDef['behaviors']>[number], EchoId>> = { poison: 'stagnant', charger: 'falter', alarm: 'hush', ranged: 'whisper' };
+const ECHO_FOR_BEHAVIOR: Partial<Record<NonNullable<EnemyDef['behaviors']>[number], EchoId>> = {
+  poison: 'stagnant',
+  charger: 'falter',
+  alarm: 'hush',
+  ranged: 'whisper',
+  shield: 'pierce',
+  ambush: 'sneak',
+  chill: 'frostwalk',
+  hunger: 'sated',
+  trail: 'ember',
+  summoner: 'bond',
+};
 
 /**
  * 敵が落とす残響の候補（この中から同じ割合で1つ選ぶ）。
- * 属性に合うものと、体質に合うもの（無属性・普通の体は、ただの残響）。そのうえで、闇の敵は分け合い、行動の個性に合うもの、強敵・ボスは余韻、眠っていたら寝息も加わる
+ * 属性に合うものと、体質に合うもの（無属性・普通の体は、ただの残響）。そのうえで、闇の敵は分け合い、硬い敵は追憶、魔法に弱い敵は吸魔、
+ * 行動の個性に合うもの、強敵・ボスは余韻、ボスは背水、眠っていたら寝息も加わる
  */
-export function echoesFor(enemy: Pick<EnemyDef, 'element' | 'body' | 'behaviors'>, context: LootContext = {}): EchoId[] {
+export function echoesFor(enemy: Pick<EnemyDef, 'element' | 'body' | 'behaviors' | 'magic'>, context: LootContext = {}): EchoId[] {
   const out: EchoId[] = [enemy.element === 'neutral' ? 'plain' : enemy.element, enemy.body === 'normal' ? 'plain' : enemy.body];
   if (enemy.element === 'dark') out.push('share');
+  if (enemy.body === 'hard') out.push('recall');
+  if ((enemy.magic ?? 1) > 1) out.push('siphon');
   for (const b of enemy.behaviors ?? []) {
     const id = ECHO_FOR_BEHAVIOR[b];
     if (id && !out.includes(id)) out.push(id);
   }
   if (context.rank === 'elite' || context.rank === 'boss') out.push('linger');
+  if (context.rank === 'boss') out.push('backwater');
   if (context.asleep) out.push('slumber');
   return out;
 }
@@ -141,7 +168,7 @@ export interface Loot {
 }
 
 /** 倒した敵が落とすもの（刻印武器と残響。どちらも落とさないこともあれば、両方落とすこともある） */
-export function rollLoot(seed: number, enemy: Pick<EnemyDef, 'element' | 'body' | 'behaviors'>, rank: FoeRank, context: Omit<LootContext, 'rank'> = {}): Loot {
+export function rollLoot(seed: number, enemy: Pick<EnemyDef, 'element' | 'body' | 'behaviors' | 'magic'>, rank: FoeRank, context: Omit<LootContext, 'rank'> = {}): Loot {
   const { engraved, echo, ring } = ECHO_MASTER;
   let state = seed;
   const roll = () => {

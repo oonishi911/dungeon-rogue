@@ -112,6 +112,46 @@
     "pocket": {
       "name": "拾い癖の残響",
       "weapon": 15
+    },
+    "pierce": {
+      "name": "貫きの残響",
+      "weapon": 25
+    },
+    "sneak": {
+      "name": "不意の残響",
+      "weapon": 50
+    },
+    "frostwalk": {
+      "name": "霜踏みの残響",
+      "weapon": 50
+    },
+    "sated": {
+      "name": "満ち足りの残響",
+      "weapon": 5
+    },
+    "ember": {
+      "name": "残り火の残響",
+      "weapon": 30
+    },
+    "bond": {
+      "name": "絆の残響",
+      "weapon": 25
+    },
+    "backwater": {
+      "name": "背水の残響",
+      "weapon": 3
+    },
+    "siphon": {
+      "name": "吸魔の残響",
+      "weapon": 2
+    },
+    "recall": {
+      "name": "追憶の残響",
+      "weapon": 15
+    },
+    "learn": {
+      "name": "学びの残響",
+      "weapon": 20
     }
   }
 }

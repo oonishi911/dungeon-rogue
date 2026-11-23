@@ -9,6 +9,7 @@
 import { hungerLoss, resistsChill } from './armor';
 import { elementRate } from './combat';
 import { STATUS_MASTER } from './data';
+import { frostwalkChance } from './echo';
 import { behaviorsOf } from './enemies';
 import { nextRandom } from './rng';
 import { STATUS_IDS, STATUS_LABELS, type StatusId } from './statusMaster';
@@ -28,7 +29,8 @@ export function activeStatuses(stats: Pick<PlayerStats, 'poisonTurns' | 'chillSt
 /** その敵の攻撃で、状態異常にかかる確率（0〜1）。指輪の耐性で下がり、弱点で上がる。毛皮の外套なら、鈍足にはかからない */
 export function statusChance(player: PlayerStats, enemy: EnemyDef, id: StatusId): number {
   if (id === 'chill' && resistsChill(player.armor)) return 0; // 毛皮の外套：鈍足にならない
-  return Math.min(1, Math.max(0, (STATUS_MASTER[id].chance / 100) * elementRate(player, enemy)));
+  const chance = Math.min(1, Math.max(0, (STATUS_MASTER[id].chance / 100) * elementRate(player, enemy)));
+  return id === 'chill' ? frostwalkChance(chance, player.echoes) : chance; // 霜踏みの残響：鈍足になりにくい
 }
 
 export interface Affliction {

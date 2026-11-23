@@ -173,7 +173,7 @@ describe('拾い癖の残響', () => {
 describe('落とす敵', () => {
   it('闇の敵は分け合い、行動の個性に合うもの、強敵・ボスは余韻、眠っていたら寝息も候補に入る', () => {
     expect(echoesFor(foe({ element: 'dark', body: 'spirit' }))).toEqual(['dark', 'spirit', 'share']);
-    expect(echoesFor(foe({ behaviors: ['poison', 'charger', 'alarm', 'ranged', 'shield'] }))).toEqual(['plain', 'plain', 'stagnant', 'falter', 'hush', 'whisper']);
+    expect(echoesFor(foe({ behaviors: ['poison', 'charger', 'alarm', 'ranged', 'shield'] }))).toEqual(['plain', 'plain', 'stagnant', 'falter', 'hush', 'whisper', 'pierce']);
     expect(echoesFor(foe(), { rank: 'elite' })).toContain('linger');
     expect(echoesFor(foe(), { rank: 'normal' })).not.toContain('linger');
     expect(echoesFor(foe(), { asleep: true })).toContain('slumber');

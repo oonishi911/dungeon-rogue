@@ -23,14 +23,24 @@ export const ECHO_IDS = [
   'share',
   'hush',
   'whisper',
+  'pierce',
+  'sneak',
+  'frostwalk',
+  'sated',
+  'ember',
+  'bond',
+  'backwater',
+  'siphon',
+  'recall',
   'warmth',
   'pulse',
   'lamp',
   'pocket',
+  'learn',
 ] as const satisfies readonly EchoId[];
 
 /** どの敵でも落とす残響（残響を落とすうちの generalShare %は、この中から選ぶ） */
-export const GENERAL_ECHOES = ['warmth', 'pulse', 'lamp', 'pocket'] as const satisfies readonly EchoId[];
+export const GENERAL_ECHOES = ['warmth', 'pulse', 'lamp', 'pocket', 'learn'] as const satisfies readonly EchoId[];
 
 /** 敵のランク。通常の敵・強敵・ボス */
 export const FOE_RANKS = ['normal', 'elite', 'boss'] as const;
@@ -120,10 +130,20 @@ export const ECHO_INFO: Record<EchoId, EchoInfo> = {
   share: { unit: '%', text: (v) => `通常攻撃で与えたダメージの${v}%だけ、HPが回復する`, flavor: '半分こした日の名残。少しだけ、戻ってくる。' },
   hush: { unit: 'マス', text: (v) => `敵に気付かれる距離が${v}マス縮む（${HUSH_FLOOR}マスより縮まない）`, flavor: '息を殺した夜の名残。足音が、遠い。' },
   whisper: { unit: '', text: (v) => `魔力が${v}上がる`, flavor: '内緒話の名残。耳の奥で、まだ続いている。' },
+  pierce: { unit: '%', text: (v) => `盾に防がれる分が${v}%減る`, flavor: '閉じた扉の名残。それでも、叩いた。' },
+  sneak: { unit: '%', text: (v) => `不意打ち（まだ気付いていない敵への通常攻撃）のダメージが${v}%増える`, flavor: '声をかけそびれた名残。振り向く前に。' },
+  frostwalk: { unit: '%', text: (v) => `敵の攻撃で鈍足になる確率が${v}%下がる`, flavor: '冬の朝の名残。足の裏が、まだ冷たい。' },
+  sated: { unit: '', text: (v) => `敵を倒すと、満腹度が${v}戻る`, flavor: '分け合った食卓の名残。少しだけ、満たされる。' },
+  ember: { unit: '%', text: (v) => `燃えている敵へのダメージが${v}%増える`, flavor: '消えかけた灯の名残。まだ、あたたかい。' },
+  bond: { unit: '%', text: (v) => `敵を倒すと、次の通常攻撃のダメージが${v}%増える`, flavor: '呼べば応えた名残。ひとりでは、なかった。' },
+  backwater: { unit: '', text: (v) => `HPが半分以下のとき、通常攻撃の攻撃力が${v}上がる`, flavor: '崖の縁の名残。引けないから、踏み出す。' },
+  siphon: { unit: '', text: (v) => `敵を倒すと、魔力が${v}戻る`, flavor: '消えた灯りの名残。熱だけを、もらう。' },
+  recall: { unit: '%', text: (v) => `前の通常攻撃と同じ敵を殴ると、ダメージが${v}%増える`, flavor: '何度も思い出した名残。そのたび、深くなる。' },
   warmth: { unit: '%', text: (v) => `満腹度の減りが${v}%遅くなる`, flavor: 'あたたかいものの名残。手のひらに、少しだけ残る。' },
   pulse: { unit: '回', text: (v) => `技ゲージが満タンになるまでの回数が${v}減る（${PULSE_FLOOR}回より減らない）`, flavor: '胸の奥の名残。止まりそうで、止まらない。' },
   lamp: { unit: 'マス', text: (v) => `視界が${v}マス広がる`, flavor: '窓明かりの名残。遠くからでも、わかる。' },
   pocket: { unit: '%', text: (v) => `敵が落とす忘れ物（お金）が${v}%増える`, flavor: 'ポケットの中の名残。いつのまにか、増えている。' },
+  learn: { unit: '%', text: (v) => `敵を倒したときの経験値が${v}%増える`, flavor: '教わったことの名残。忘れても、残っている。' },
 };
 
 /** 残響の効果の説明（武器にはめたとき） */
@@ -164,7 +184,7 @@ export function echoProblems(data: unknown): string[] {
   if (!isObj(echo)) out.push('残響の落とし方の設定が読めない');
   else {
     rates(echo.drop, '残響を落とす確率');
-    if (!intIn(echo.generalShare, ECHO_LIMITS.share)) out.push(`どの敵でも落とす残響（ぬくもり・鼓動・灯・拾い癖）の割合は${ECHO_LIMITS.share.min}〜${ECHO_LIMITS.share.max}%の整数にする`);
+    if (!intIn(echo.generalShare, ECHO_LIMITS.share)) out.push(`どの敵でも落とす残響（ぬくもり・鼓動・灯・拾い癖・学び）の割合は${ECHO_LIMITS.share.min}〜${ECHO_LIMITS.share.max}%の整数にする`);
   }
   const ring = data.ring;
   if (!isObj(ring)) out.push('指輪の設定が読めない');

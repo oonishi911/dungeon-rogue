@@ -165,6 +165,7 @@ function unpackFloor(map: FloorMap, v: unknown): FloorMemory | null {
 function isStats(v: unknown): v is ExploreState['stats'] {
   if (!isObject(v) || !isCount(v.hp, 1) || !isCount(v.maxHp, 1) || !isNumber(v.atk) || !isNumber(v.def) || !isCount(v.poisonTurns)) return false;
   if (!(v.chillSteps === undefined || isCount(v.chillSteps))) return false; // 鈍足の欄ができる前の中断データには、ない（鈍足なし）
+  if (!(v.rally === undefined || isCount(v.rally)) || !(v.lastStruck === undefined || isCount(v.lastStruck))) return false; // 絆・追憶の残響の欄ができる前の中断データには、ない
   if (v.mag !== undefined && !isNumber(v.mag)) return false; // 魔力の欄ができる前の中断データには、ない（0として読む）
   if (!isItemOrNull(v.weapon) || !isItemOrNull(v.armor) || !Array.isArray(v.items) || !v.items.every(isItem)) return false;
   if (!(v.echoes === undefined || isEchoList(v.echoes))) return false; // 残響の欄ができる前の中断データには、ない

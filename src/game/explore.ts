@@ -8,7 +8,7 @@
 import { armorSaving, regenInterval, resistsChill } from './armor';
 import { BOSS_CONFIG, phaseOf, phaseSow, PHASE_MAX } from './bossPhase';
 import { buildPlayer, enemyHitDamage, hitAffinity, itemCapacity, playerHitDamage, swapWeapons, weaponTypeOf } from './combat';
-import { echoSum, gearName, hushedRange, lampRadius, lingerDamage, lootSeed, noFound, pocketGold, rollLoot, satietySaving, savesSatiety, shareHeal, slumberRate } from './echo';
+import { backwaterAtk, echoRate, echoSum, gearName, hushedRange, lampRadius, lingerDamage, lootSeed, noFound, piercedCut, pocketGold, rollLoot, satietySaving, savesSatiety, shareHeal, slumberRate } from './echo';
 import { echoName } from './echo';
 import { ECHO_CAPS, FALTER_TURNS, STAGNANT_MIST } from './echoMaster';
 import { enemyBase, enemyReward, expToNext, ITEMS, REWARD_CONFIG, SPELLS, STATUS_MASTER, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
@@ -905,9 +905,24 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
     log.push(enemy.elite ? '宝箱を落とした' : `${ITEMS[item!].name}を落としたが、持ち物がいっぱいなので宝箱に残した`);
   }
 
-  // 経験値とレベルアップ
+  // 倒したときの残響：満ち足り（満腹度）・吸魔（魔力）・絆（次の通常攻撃）
+  let { satiety, mp } = state;
+  const fed = Math.min(state.maxSatiety - satiety, echoSum(stats.echoes, 'sated'));
+  if (fed > 0) {
+    satiety += fed;
+    log.push(`満ち足りて、満腹度が${fed}戻った`);
+  }
+  const drawn = Math.min(state.maxMp - mp, echoSum(stats.echoes, 'siphon'));
+  if (drawn > 0) {
+    mp += drawn;
+    log.push(`魔力を吸って、${drawn}戻った`);
+  }
+  const bond = echoSum(stats.echoes, 'bond');
+  if (bond > 0) stats = { ...stats, rally: bond };
+
+  // 経験値とレベルアップ（学びの残響で増える）
   let { level, exp } = state;
-  exp += Math.round(reward.exp * rate);
+  exp += Math.round(reward.exp * rate * echoRate(stats.echoes, 'learn'));
   while (level < growth.maxLevel && exp >= expToNext(level, growth)) {
     exp -= expToNext(level, growth);
     level++;
@@ -922,7 +937,7 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
   }
   if (level >= growth.maxLevel) exp = 0;
 
-  return lootFrom({ ...state, gold: state.gold + gold, stats, chests, level, exp, rngState: s, log }, enemy);
+  return lootFrom({ ...state, gold: state.gold + gold, stats, chests, level, exp, satiety, mp, rngState: s, log }, enemy);
 }
 
 /**
@@ -990,9 +1005,19 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
   const surprise = target.mode === 'wander';
   // 盾持ちの敵は、向いている正面からの攻撃を大きく防ぐ（側面・背中からなら、そのまま通る）
   const guarded = behaviorsOf(def).includes('shield') && guardsAgainst(target, state.player);
-  // 寝息の残響：眠っている敵へのダメージが増える
-  const raw = Math.round(playerHitDamage(state.stats, def) * (surprise ? ENEMY_CONFIG.surpriseMultiplier : 1) * slumberRate(state.stats.echoes, target.asleep));
-  let dmg = guarded ? Math.max(1, Math.round(raw * (1 - ENEMY_CONFIG.shieldCut))) : raw;
+  // 残響のおまけ：背水（HPが半分以下で攻撃力が上がる）・不意（不意打ちが強い）・寝息（眠っている敵）・残り火（燃えている敵）・
+  // 追憶（前の通常攻撃と同じ敵）・絆（敵を倒したあとの1回）
+  const echoes = state.stats.echoes;
+  const base = playerHitDamage({ ...state.stats, atk: state.stats.atk + backwaterAtk(state.stats) }, def);
+  const surpriseRate = surprise ? ENEMY_CONFIG.surpriseMultiplier * echoRate(echoes, 'sneak') : 1;
+  const echoBoost =
+    slumberRate(echoes, target.asleep) *
+    (target.burn ? echoRate(echoes, 'ember') : 1) *
+    (state.stats.lastStruck === target.uid ? echoRate(echoes, 'recall') : 1) *
+    (1 + (state.stats.rally ?? 0) / 100);
+  const raw = Math.round(base * surpriseRate * echoBoost);
+  // 貫きの残響：盾に防がれる分が減る
+  let dmg = guarded ? Math.max(1, Math.round(raw * (1 - piercedCut(ENEMY_CONFIG.shieldCut, echoes)))) : raw;
   // コンボ：ハンマー × 凍結 ＝ 砕く（凍結は解ける）／ 剣 × 燃焼 ＝ 焼き斬り（残りの燃焼のダメージを一度に与え、火が消える）
   const weapon = weaponTypeOf(state.stats.weapon);
   let combo: ComboKind | undefined;
@@ -1034,7 +1059,9 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
   // 分け合いの残響：与えたダメージの一部だけ、HPが戻る
   const healed = Math.min(state.stats.maxHp - state.stats.hp, shareHeal(state.stats.echoes, dmg + extra));
   if (healed > 0) log.push(`分け合って、HPが${healed}戻った`);
-  const stats = healed > 0 ? { ...state.stats, hp: state.stats.hp + healed } : state.stats;
+  // 殴った敵を覚え（追憶の残響）、絆の残響の上乗せは使い切る
+  const { rally: _rally, ...held } = state.stats;
+  const stats = { ...held, hp: held.hp + Math.max(0, healed), ...(echoSum(echoes, 'recall') > 0 ? { lastStruck: target.uid } : {}) };
 
   if (hp <= 0) {
     log.push(`${def.name}を倒した`);

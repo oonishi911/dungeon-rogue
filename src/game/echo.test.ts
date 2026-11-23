@@ -120,15 +120,15 @@ describe('落とし物', () => {
     expect(rate('boss', e, (l) => l.echo !== null, 4000)).toBeLessThan(0.55);
   });
 
-  it('残響は、敵に合うものが落ちる（一部は、どの敵でもぬくもり・鼓動・灯・拾い癖）', () => {
+  it('残響は、敵に合うものが落ちる（一部は、どの敵でもぬくもり・鼓動・灯・拾い癖・学び）', () => {
     const e = foe({ element: 'fire', body: 'hard' });
-    expect(echoesFor(e)).toEqual(['fire', 'hard']);
+    expect(echoesFor(e)).toEqual(['fire', 'hard', 'recall']); // 硬い敵は、追憶の残響も落とす
     expect(echoesFor(foe())).toEqual(['plain', 'plain']);
     const got = seeds(3000)
       .map((s) => rollLoot(s, e, 'boss').echo)
       .filter((x): x is EchoId => x !== null);
-    // ボスは、余韻の残響も落とす
-    expect(new Set(got)).toEqual(new Set<EchoId>(['fire', 'hard', 'linger', ...GENERAL_ECHOES]));
+    // ボスは、余韻・背水の残響も落とす。硬い敵は、追憶の残響も落とす
+    expect(new Set(got)).toEqual(new Set<EchoId>(['fire', 'hard', 'recall', 'linger', 'backwater', ...GENERAL_ECHOES]));
     const general = got.filter((x) => (GENERAL_ECHOES as readonly EchoId[]).includes(x)).length / got.length;
     expect(general).toBeGreaterThan(0.12);
     expect(general).toBeLessThan(0.28);
