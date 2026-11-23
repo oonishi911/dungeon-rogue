@@ -3,7 +3,7 @@
 // 書き換える・複製して新しく作る・消すことができる。読み込むのは dungeons.ts。
 // name と description はダンジョンを選ぶ画面に出す名前と説明、
 // floors は階の数と広さ・満腹度、rooms は小部屋の多さと大きさ、enemies は敵の数と置き方（部屋に集める・部屋には置かない・群れ部屋など）、
-// growth は敵を倒したときのレベルの上がり方と強敵の報酬の倍率、magic は魔力と魔法の強さ、spells は呪文ごとの魔力と効き目、
+// （enemies には、敵が残響・刻印武器を落とすかも入る）、growth は敵を倒したときのレベルの上がり方と強敵の報酬の倍率、magic は魔力と魔法の強さ、spells は呪文ごとの魔力と効き目、
 // encounters はダンジョンの属性ごとに出る敵（敵のマスター enemies.json から選ぶ）。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
 
@@ -45,6 +45,9 @@ export interface EnemySettings {
   atkRate: number;
   floorHpRate: number;
   floorAtkRate: number;
+  // 落とし物（echo.ts の rollLoot。docs/echo-spec.md）：このダンジョンの敵が、残響・刻印武器を落とすか。オフなら、くじに当たっても落とさない
+  echoDrop: boolean; // 残響を落とす
+  engravedDrop: boolean; // 刻印武器（刻印スロット付きの武器）を落とす
 }
 
 /** 敵を倒したときのレベルの上がり方と、強敵の報酬の倍率（data.ts の REWARD_CONFIG） */
@@ -248,6 +251,8 @@ export const GEN_LABELS = {
   atkRate: '敵の攻撃の倍率',
   floorHpRate: '1階ごとに増える敵のHPの倍率',
   floorAtkRate: '1階ごとに増える敵の攻撃の倍率',
+  echoDrop: '敵が残響を落とす',
+  engravedDrop: '敵が刻印武器を落とす',
   startHp: '入ったときのHP',
   startMaxHp: '入ったときの最大HP',
   expBase: '最初のレベルアップに要る経験値',
@@ -329,7 +334,9 @@ export function genProblems(data: unknown): string[] {
       if (f.integer && typeof spell[f.key] === 'number' && !Number.isInteger(spell[f.key])) problems.push(`${label}：整数にする`);
     }
   }
-  if (typeof enemies.stayInRoom !== 'boolean') problems.push(`${GEN_LABELS.stayInRoom}：true か false にする`);
+  for (const k of ['stayInRoom', 'echoDrop', 'engravedDrop'] as const) {
+    if (typeof enemies[k] !== 'boolean') problems.push(`${GEN_LABELS[k]}：true か false にする`);
+  }
   return problems;
 }
 

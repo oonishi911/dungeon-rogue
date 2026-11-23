@@ -913,12 +913,15 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
 
 /**
  * 倒した敵が、刻印武器や残響を落とす（ごく稀）。拾ったものは、探索のあいだ持っていて、終わったとき（力尽きても）倉庫に入る。宝箱には入らない。
- * くじは探索の乱数を使わない（lootSeed）。呼ばれた敵は、何も落とさない
+ * くじは探索の乱数を使わない（lootSeed）。呼ばれた敵は、何も落とさない。ダンジョンの設定（enemies の echoDrop・engravedDrop）がオフなら、その分は落とさない
  */
 function lootFrom(state: ExploreState, enemy: MapEnemy): ExploreState {
   if (enemy.summoned) return state;
   const def = enemyDef(enemy);
-  const got = rollLoot(lootSeed(state, enemy.uid), def, def.boss ? 'boss' : enemy.elite ? 'elite' : 'normal', { asleep: enemy.asleep });
+  const rolled = rollLoot(lootSeed(state, enemy.uid), def, def.boss ? 'boss' : enemy.elite ? 'elite' : 'normal', { asleep: enemy.asleep });
+  // ダンジョンの設定で、残響・刻印武器を落とさないことにできる（くじは同じに引き、当たっても捨てる）
+  const drops = dungeonOfState(state).enemies;
+  const got = { ...rolled, gear: drops.engravedDrop ? rolled.gear : null, echo: drops.echoDrop ? rolled.echo : null };
   if (!got.gear && !got.echo && !got.ring) return state;
   const log = [...state.log];
   const found = { echoes: [...state.found.echoes], gear: [...state.found.gear], rings: [...state.found.rings] };

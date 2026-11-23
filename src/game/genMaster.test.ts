@@ -23,7 +23,7 @@ const POOL = [FIELD_ENEMY];
 const SAMPLE: GenSettings = {
   floors: { count: 3, size: 40, satiety: 1600 },
   rooms: { attemptRate: 0.04, minSize: 3, maxSize: 9 },
-  enemies: { amount: 1, placement: 'mixed', roomWeight: 1, nestChance: 0, nestMin: 3, nestMax: 5, stayInRoom: false, bossMinions: 4, hpRate: 1, atkRate: 1, floorHpRate: 0, floorAtkRate: 0 },
+  enemies: { amount: 1, placement: 'mixed', roomWeight: 1, nestChance: 0, nestMin: 3, nestMax: 5, stayInRoom: false, bossMinions: 4, hpRate: 1, atkRate: 1, floorHpRate: 0, floorAtkRate: 0, echoDrop: true, engravedDrop: true },
   growth: { startHp: 60, startMaxHp: 60, expBase: 30, expStep: 20, hpPerLevel: 2, atkPerLevel: 1, magPerLevel: 1, maxLevel: 10, eliteRate: 3 },
   magic: { maxMp: 20, regenEvery: 6, power: 8, staffPower: 1.5, staffMp: 10, noiseRadius: 3 },
   spells: {
@@ -160,6 +160,13 @@ describe('マップと探索の設定', () => {
     expect(genProblems({ ...clone(), floors: undefined })).toEqual(['floors・rooms・enemies・growth・magic・spells のどれかがない']);
   });
 
+  it('落とし物の切り替えは、true か false にする', () => {
+    const bad = clone();
+    (bad.enemies as unknown as Record<string, unknown>).engravedDrop = 'yes';
+    delete (bad.enemies as unknown as Record<string, unknown>).echoDrop;
+    expect(genProblems(bad)).toEqual(['敵が残響を落とす：true か false にする', '敵が刻印武器を落とす：true か false にする']);
+  });
+
   it('変えたところを日本語で説明する', () => {
     const after = clone();
     after.floors.count = 4;
@@ -167,6 +174,7 @@ describe('マップと探索の設定', () => {
     after.floors.satiety = 1200;
     after.rooms.attemptRate = 0.1;
     after.enemies.stayInRoom = true;
+    after.enemies.echoDrop = false;
     after.growth.startMaxHp = 80;
     after.growth.hpPerLevel = 4;
     after.magic.maxMp = 30;
@@ -177,6 +185,7 @@ describe('マップと探索の設定', () => {
       '満腹度：1600 → 1200',
       '部屋の多さ：0.04 → 0.1',
       '部屋の敵は部屋から出ない：しない → する',
+      '敵が残響を落とす：する → しない',
       '入ったときの最大HP：60 → 80',
       '1レベルで増える最大HP：2 → 4',
       '魔力の最大：20 → 30',

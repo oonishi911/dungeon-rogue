@@ -23,7 +23,9 @@
     "hpRate": 1.5,
     "atkRate": 1.2,
     "floorHpRate": 0.15,
-    "floorAtkRate": 0.08
+    "floorAtkRate": 0.08,
+    "echoDrop": true,
+    "engravedDrop": true
   },
   "growth": {
     "startHp": 60,
