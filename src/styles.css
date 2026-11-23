@@ -4985,9 +4985,9 @@ button {
 
 .bestiary__chip {
   display: inline-flex;
-  align-items: baseline;
-  gap: 0.2rem;
-  padding: 0.05rem 0.5rem;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.55rem 0.1rem 0.5rem;
   border-radius: 999px;
   background: rgba(236, 229, 211, 0.12);
   color: var(--bone);
@@ -5000,17 +5000,23 @@ button {
   opacity: 0.8;
 }
 
-.bestiary__chip--fire { color: var(--el-fire); }
-.bestiary__chip--ice { color: var(--el-ice); }
-.bestiary__chip--light { color: var(--el-light); }
-.bestiary__chip--dark { color: var(--el-dark); }
-.bestiary__chip--magic { color: #c6a8ff; }
-.bestiary__chip--physical { color: #ffd27a; }
+.bestiary__icon {
+  width: 1.35em;
+  height: 1.35em;
+  flex: none;
+  align-self: center;
+  margin-left: -0.3rem;
+}
 
 .bestiary__chip--dim {
   background: transparent;
   border: 1px solid var(--pine-line);
-  opacity: 0.85;
+  color: var(--bone-dim);
+}
+
+/* 効きにくいもののアイコンは、色を抑える */
+.bestiary__chip--dim .bestiary__icon {
+  filter: saturate(0.35) brightness(0.85);
 }
 
 .bestiary__none {

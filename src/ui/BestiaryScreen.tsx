@@ -4,7 +4,8 @@
 import { useState } from 'react';
 import { bestiary, bestiaryProgress, type BestiaryEntry } from '../game/bestiary';
 import type { EnemyId } from '../game/types';
-import { BODY_LABELS, ELEMENT_NAMES, rateText, WEAPON_TYPE_NAMES } from '../game/weakness';
+import { BODY_LABELS, ELEMENT_NAMES, elementIcon, rateText, WEAPON_TYPE_NAMES, type WeakIconId } from '../game/weakness';
+import { WeakIcon } from './weakIcons';
 
 interface BestiaryScreenProps {
   met: readonly EnemyId[];
@@ -75,16 +76,16 @@ function Unknown() {
 function Known({ entry }: { entry: BestiaryEntry }) {
   const { def, weakness: w } = entry;
   const good = [
-    ...w.weapons.map((x) => ({ key: x.id, label: WEAPON_TYPE_NAMES[x.id], rate: x.rate, kind: 'weapon' })),
-    ...w.elements.map((x) => ({ key: x.id, label: ELEMENT_NAMES[x.id], rate: x.rate, kind: x.id })),
-    ...(w.magic > 1 ? [{ key: 'magic', label: '魔法', rate: w.magic, kind: 'magic' }] : []),
-    ...(w.physical > 1 ? [{ key: 'physical', label: '武器の攻撃', rate: w.physical, kind: 'physical' }] : []),
+    ...w.weapons.map((x) => ({ key: x.id, label: WEAPON_TYPE_NAMES[x.id], rate: x.rate, icon: x.id as WeakIconId | null })),
+    ...w.elements.map((x) => ({ key: x.id, label: ELEMENT_NAMES[x.id], rate: x.rate, icon: elementIcon(x.id) })),
+    ...(w.magic > 1 ? [{ key: 'magic', label: '魔法', rate: w.magic, icon: 'magic' as WeakIconId | null }] : []),
+    ...(w.physical > 1 ? [{ key: 'physical', label: '武器の攻撃', rate: w.physical, icon: 'physical' as WeakIconId | null }] : []),
   ];
   const bad = [
-    ...w.resistWeapons.map((x) => ({ key: x.id, label: WEAPON_TYPE_NAMES[x.id], rate: x.rate, kind: 'weapon' })),
-    ...w.resistElements.map((x) => ({ key: x.id, label: ELEMENT_NAMES[x.id], rate: x.rate, kind: x.id })),
-    ...(w.magic < 1 ? [{ key: 'magic', label: '魔法', rate: w.magic, kind: 'magic' }] : []),
-    ...(w.physical < 1 ? [{ key: 'physical', label: '武器の攻撃', rate: w.physical, kind: 'physical' }] : []),
+    ...w.resistWeapons.map((x) => ({ key: x.id, label: WEAPON_TYPE_NAMES[x.id], rate: x.rate, icon: x.id as WeakIconId | null })),
+    ...w.resistElements.map((x) => ({ key: x.id, label: ELEMENT_NAMES[x.id], rate: x.rate, icon: elementIcon(x.id) })),
+    ...(w.magic < 1 ? [{ key: 'magic', label: '魔法', rate: w.magic, icon: 'magic' as WeakIconId | null }] : []),
+    ...(w.physical < 1 ? [{ key: 'physical', label: '武器の攻撃', rate: w.physical, icon: 'physical' as WeakIconId | null }] : []),
   ];
   return (
     <>
@@ -117,7 +118,8 @@ function Known({ entry }: { entry: BestiaryEntry }) {
         {good.length ? (
           <span className="bestiary__chips">
             {good.map((g) => (
-              <span key={g.key} className={`bestiary__chip bestiary__chip--${g.kind}`}>
+              <span key={g.key} className="bestiary__chip">
+                {g.icon && <WeakIcon id={g.icon} className="bestiary__icon" />}
                 {g.label}
                 <small>{rateText(g.rate)}</small>
               </span>
@@ -132,7 +134,8 @@ function Known({ entry }: { entry: BestiaryEntry }) {
         {bad.length ? (
           <span className="bestiary__chips">
             {bad.map((g) => (
-              <span key={g.key} className={`bestiary__chip bestiary__chip--dim bestiary__chip--${g.kind}`}>
+              <span key={g.key} className="bestiary__chip bestiary__chip--dim">
+                {g.icon && <WeakIcon id={g.icon} className="bestiary__icon" />}
                 {g.label}
                 <small>{rateText(g.rate)}</small>
               </span>

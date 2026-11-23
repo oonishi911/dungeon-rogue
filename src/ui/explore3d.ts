@@ -13,6 +13,7 @@ import { enemyBase, ITEMS } from '../game/data';
 import { gearOf } from '../game/itemMaster';
 import { behaviorsOf, ENEMY_CONFIG, enemyDef, isAdjacent, type MapEnemy } from '../game/enemies';
 import { weakMarks, type WeakMark } from '../game/weakness';
+import { drawWeakIcon } from './weakIcons';
 import { deathKindOf, type DeathKind } from '../game/deathKind';
 import { upStairs } from '../game/explore';
 import { DIR_DELTA, type CastEvent, type Dir, type ExploreState, type FoeEvent } from '../game/exploreTypes';
@@ -1925,7 +1926,7 @@ export class DungeonView3D {
     // 頭上の弱点の印（いつでも見える。docs/enemy-weakness.md）
     const marks = weakMarks(def);
     const weak = new THREE.Sprite(marks.length ? this.weakMaterial(marks) : undefined);
-    weak.scale.set(WEAK_MARK.size * (marks.length + WEAK_MARK.head), WEAK_MARK.size, 1);
+    weak.scale.set(WEAK_MARK.size * (marks.length + WEAK_MARK.pad * 2), WEAK_MARK.size, 1);
     weak.renderOrder = 5;
     const view = { id: e.id, body, model, mark: new THREE.Sprite(), weak, hasWeak: marks.length > 0, hp: new THREE.Sprite(), ring, shield, glow, glowSize: glow ? this.glowSizeOf(def.element, e.elite || def.boss === true) : 0, glowFlicker: glow ? GLOW_FX.flicker[def.element as keyof typeof GLOW_FX.flicker] : 0, top, facing: 'down' as Dir };
     view.body.visible = view.mark.visible = view.weak.visible = view.hp.visible = false;
@@ -2058,31 +2059,19 @@ export class DungeonView3D {
     return this.material(key, { map, transparent: true, depthTest: false });
   }
 
-  /** 頭上の弱点の印：暗い札に、小さな「弱」の見出しと、効く武器・属性などの1文字を、種類ごとの色で横に並べる。並びが同じなら使い回す */
+  /** 頭上の弱点の印：暗い札に、弱点のアイコン（色の丸に白い絵。weakIcons.tsx）を横に並べる。並びが同じなら使い回す */
   private weakMaterial(marks: readonly WeakMark[]): THREE.SpriteMaterial {
-    const key = `weak:${marks.map((m) => `${m.kind}${m.text}`).join(',')}`;
+    const key = `weak:${marks.map((m) => m.icon).join(',')}`;
     const cell = 64;
-    const head = cell * WEAK_MARK.head;
-    const w = head + cell * marks.length;
+    const pad = Math.round(cell * WEAK_MARK.pad);
+    const icon = Math.round(cell * WEAK_MARK.icon);
+    const w = cell * marks.length + pad * 2;
     const map = this.texture(key, w, cell, (ctx) => {
       ctx.fillStyle = WEAK_MARK.plate;
       ctx.beginPath();
-      ctx.roundRect(2, 6, w - 4, cell - 12, 16);
+      ctx.roundRect(1, 1, w - 2, cell - 2, cell / 2 - 1);
       ctx.fill();
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = '700 34px sans-serif';
-      ctx.fillStyle = WEAK_MARK.headColor;
-      ctx.fillText('弱', head / 2 + 4, cell / 2 + 2);
-      ctx.font = '900 40px sans-serif';
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = '#0b1413';
-      marks.forEach((m, i) => {
-        const x = head + cell * i + cell / 2;
-        ctx.strokeText(m.text, x, cell / 2 + 2);
-        ctx.fillStyle = m.kind === 'element' && m.element ? WEAK_MARK.elements[m.element] : WEAK_MARK.colors[m.kind];
-        ctx.fillText(m.text, x, cell / 2 + 2);
-      });
+      marks.forEach((m, i) => drawWeakIcon(ctx, m.icon, pad + cell * i + (cell - icon) / 2, (cell - icon) / 2, icon));
     });
     return this.material(key, { map, transparent: true, depthTest: false });
   }

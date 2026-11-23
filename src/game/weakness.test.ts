@@ -44,6 +44,9 @@ describe('弱点', () => {
     expect(weakMarks(foe({ element: 'dark', body: 'spirit', magic: 1.5 })).map((m) => m.text)).toEqual(['杖', '光', '魔']);
     expect(weakMarks(foe({ body: 'soft', physical: 1.3 })).map((m) => m.text)).toEqual(['剣', '物']);
     expect(weakMarks(foe({ magic: 0.5 })).map((m) => m.text)).toEqual([]);
+    // アイコンは、武器の種類・属性・魔法・物理
+    expect(weakMarks(foe({ element: 'dark', body: 'spirit', magic: 1.5 })).map((m) => m.icon)).toEqual(['staff', 'light', 'magic']);
+    expect(weakMarks(foe({ body: 'soft', physical: 1.3 })).map((m) => m.icon)).toEqual(['sword', 'physical']);
   });
 
   it('文にする', () => {

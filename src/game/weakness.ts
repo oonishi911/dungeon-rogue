@@ -45,10 +45,17 @@ export function weaknessOf(def: Pick<EnemyDef, 'element' | 'body' | 'physical' |
   };
 }
 
-/** 頭上の印の1つ。kind ごとに色を変える */
+/** 弱点のアイコン（src/ui/weakIcons.tsx。色の丸に白い絵）：武器の種類・攻撃の属性・魔法・物理 */
+export type WeakIconId = WeaponType | 'fire' | 'ice' | 'light' | 'dark' | 'magic' | 'physical';
+
+/** 属性のアイコン（無属性は、攻撃に乗せられないので、ない） */
+export const elementIcon = (e: Element): WeakIconId | null => (e === 'neutral' ? null : e);
+
+/** 頭上の印の1つ */
 export interface WeakMark {
   kind: 'weapon' | 'element' | 'magic' | 'physical';
-  text: string; // 1文字
+  icon: WeakIconId;
+  text: string; // 1文字（読み上げ・テスト用）
   element?: Element; // kind が element のとき
 }
 
@@ -60,11 +67,12 @@ export function weakMarks(def: Pick<EnemyDef, 'element' | 'body' | 'physical' | 
   const w = weaknessOf(def);
   const out: WeakMark[] = [];
   const weapon = w.weapons[0];
-  if (weapon) out.push({ kind: 'weapon', text: WEAPON_TYPE_NAMES[weapon.id] });
+  if (weapon) out.push({ kind: 'weapon', icon: weapon.id, text: WEAPON_TYPE_NAMES[weapon.id] });
   const element = w.elements[0];
-  if (element) out.push({ kind: 'element', text: ELEMENT_MARKS[element.id], element: element.id });
-  if (w.magic > 1 && w.magic > w.physical) out.push({ kind: 'magic', text: '魔' });
-  else if (w.physical > 1 && w.physical > w.magic) out.push({ kind: 'physical', text: '物' });
+  const icon = element ? elementIcon(element.id) : null;
+  if (element && icon) out.push({ kind: 'element', icon, text: ELEMENT_MARKS[element.id], element: element.id });
+  if (w.magic > 1 && w.magic > w.physical) out.push({ kind: 'magic', icon: 'magic', text: '魔' });
+  else if (w.physical > 1 && w.physical > w.magic) out.push({ kind: 'physical', icon: 'physical', text: '物' });
   return out;
 }
 

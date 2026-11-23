@@ -324,14 +324,12 @@ export const FLOOR_LOOK = {
   puddle: { chance: 0.07, size: [0.22, 0.42] as const, color: 0x0b1012, shininess: 70, specular: 0x3a4650, opacity: 0.7 },
 };
 
-// 敵の頭上の弱点の印（weakness.ts の weakMarks）。size は1文字分の高さ（マス）、head は先頭の「弱」の幅（1文字分に対する割合）、
-// lift は敵の頭の上からの高さ（マス）。plate は札の色、headColor は「弱」の色、colors は印の種類ごとの文字の色（属性は elements の色）
+// 敵の頭上の弱点の印（weakness.ts の weakMarks。アイコンの形と色は weakIcons.tsx）。size はアイコン1つ分の枠の高さ（マス）、
+// icon は枠に対するアイコンの丸の大きさ、pad は札の両端の余白（枠に対する割合）、lift は敵の頭の上からの高さ（マス）、plate は札の色
 export const WEAK_MARK = {
-  size: 0.45,
-  head: 0.75,
-  lift: 0.68,
-  headColor: '#b9b29f',
-  plate: 'rgba(11,20,19,0.78)',
-  colors: { weapon: '#f1e4c2', element: '#ffffff', magic: '#c6a8ff', physical: '#ffd27a' },
-  elements: { fire: '#ff8a4a', ice: '#8fd8ff', neutral: '#d8d2c4', light: '#fff0a0', dark: '#c98cff' },
+  size: 0.42,
+  icon: 0.86,
+  pad: 0.12,
+  lift: 0.66,
+  plate: 'rgba(11,20,19,0.72)',
 } as const;
