@@ -7,7 +7,30 @@
 
 import type { Body, EchoId, Element } from './types';
 
-export const ECHO_IDS = ['fire', 'ice', 'light', 'dark', 'soft', 'hard', 'spirit', 'plain', 'warmth', 'pulse'] as const satisfies readonly EchoId[];
+export const ECHO_IDS = [
+  'fire',
+  'ice',
+  'light',
+  'dark',
+  'soft',
+  'hard',
+  'spirit',
+  'plain',
+  'linger',
+  'slumber',
+  'stagnant',
+  'falter',
+  'share',
+  'hush',
+  'whisper',
+  'warmth',
+  'pulse',
+  'lamp',
+  'pocket',
+] as const satisfies readonly EchoId[];
+
+/** どの敵でも落とす残響（残響を落とすうちの generalShare %は、この中から選ぶ） */
+export const GENERAL_ECHOES = ['warmth', 'pulse', 'lamp', 'pocket'] as const satisfies readonly EchoId[];
 
 /** 敵のランク。通常の敵・強敵・ボス */
 export const FOE_RANKS = ['normal', 'elite', 'boss'] as const;
@@ -44,6 +67,12 @@ export const ECHO_LIMITS = {
 export const ECHO_CAPS = { saving: 90 } as const;
 /** 鼓動の残響を付けても、技ゲージが満タンになるまでの回数は、これより減らない */
 export const PULSE_FLOOR = 2;
+/** 澱みの残響が残す毒の霧：残るターン数と、1ターンのダメージ（当てたダメージの何%か。1より減らない） */
+export const STAGNANT_MIST = { turns: 3, share: 25 } as const;
+/** ひそやかの残響を付けても、敵に気付かれる距離は、これより縮まない（マス） */
+export const HUSH_FLOOR = 1;
+/** ためらいの残響で、敵が動けなくなるターン数 */
+export const FALTER_TURNS = 1;
 
 // ===== 種類ごとに決まっていること（プログラムで決める） =====
 
@@ -80,8 +109,21 @@ export const ECHO_INFO: Record<EchoId, EchoInfo> = {
   hard: bodyEcho('hard', 'かたいものの名残。重さだけが残っている。'),
   spirit: bodyEcho('spirit', '輪郭のないものの名残。近づくと、揺れる。'),
   plain: { unit: '', text: (v) => `攻撃力が${v}上がる`, flavor: 'なんでもない日の名残。それでも、手放せない。' },
+  linger: { unit: '%', text: (v) => `通常攻撃のあと、同じ敵に、与えたダメージの${v}%の追加ダメージ`, flavor: '言いそびれた言葉の名残。少し遅れて、届く。' },
+  slumber: { unit: '%', text: (v) => `眠っている敵へのダメージが${v}%増える`, flavor: '静かな夜の名残。起こさないように、そっと。' },
+  stagnant: {
+    unit: '%',
+    text: (v) => `通常攻撃が${v}%の確率で、敵の足元に毒の霧を残す（${STAGNANT_MIST.turns}ターン）`,
+    flavor: '動かない水の名残。ゆっくり、にじむ。',
+  },
+  falter: { unit: '%', text: (v) => `通常攻撃が${v}%の確率で、敵を${FALTER_TURNS}ターン動けなくする（ボスには効かない）`, flavor: '振り上げた手の名残。下ろす先が、決まらない。' },
+  share: { unit: '%', text: (v) => `通常攻撃で与えたダメージの${v}%だけ、HPが回復する`, flavor: '半分こした日の名残。少しだけ、戻ってくる。' },
+  hush: { unit: 'マス', text: (v) => `敵に気付かれる距離が${v}マス縮む（${HUSH_FLOOR}マスより縮まない）`, flavor: '息を殺した夜の名残。足音が、遠い。' },
+  whisper: { unit: '', text: (v) => `魔力が${v}上がる`, flavor: '内緒話の名残。耳の奥で、まだ続いている。' },
   warmth: { unit: '%', text: (v) => `満腹度の減りが${v}%遅くなる`, flavor: 'あたたかいものの名残。手のひらに、少しだけ残る。' },
   pulse: { unit: '回', text: (v) => `技ゲージが満タンになるまでの回数が${v}減る（${PULSE_FLOOR}回より減らない）`, flavor: '胸の奥の名残。止まりそうで、止まらない。' },
+  lamp: { unit: 'マス', text: (v) => `視界が${v}マス広がる`, flavor: '窓明かりの名残。遠くからでも、わかる。' },
+  pocket: { unit: '%', text: (v) => `敵が落とす忘れ物（お金）が${v}%増える`, flavor: 'ポケットの中の名残。いつのまにか、増えている。' },
 };
 
 /** 残響の効果の説明（武器にはめたとき） */
@@ -122,7 +164,7 @@ export function echoProblems(data: unknown): string[] {
   if (!isObj(echo)) out.push('残響の落とし方の設定が読めない');
   else {
     rates(echo.drop, '残響を落とす確率');
-    if (!intIn(echo.generalShare, ECHO_LIMITS.share)) out.push(`ぬくもり・鼓動を落とす割合は${ECHO_LIMITS.share.min}〜${ECHO_LIMITS.share.max}%の整数にする`);
+    if (!intIn(echo.generalShare, ECHO_LIMITS.share)) out.push(`どの敵でも落とす残響（ぬくもり・鼓動・灯・拾い癖）の割合は${ECHO_LIMITS.share.min}〜${ECHO_LIMITS.share.max}%の整数にする`);
   }
   const ring = data.ring;
   if (!isObj(ring)) out.push('指輪の設定が読めない');
@@ -176,7 +218,7 @@ export function describeEchoChanges(before: EchoMaster, after: EchoMaster): stri
   for (const k of SLOT_KEYS) if (before.engraved.slots[k] !== after.engraved.slots[k]) out.push(`${SLOT_LABELS[k]}の割合：${before.engraved.slots[k]} → ${after.engraved.slots[k]}`);
   if (before.engraved.tierMin !== after.engraved.tierMin) out.push(`落とす装備の最小の段階：${before.engraved.tierMin} → ${after.engraved.tierMin}`);
   if (before.engraved.tierMax !== after.engraved.tierMax) out.push(`落とす装備の最大の段階：${before.engraved.tierMax} → ${after.engraved.tierMax}`);
-  if (before.echo.generalShare !== after.echo.generalShare) out.push(`ぬくもり・鼓動を落とす割合：${before.echo.generalShare}% → ${after.echo.generalShare}%`);
+  if (before.echo.generalShare !== after.echo.generalShare) out.push(`どの敵でも落とす残響の割合：${before.echo.generalShare}% → ${after.echo.generalShare}%`);
   for (const r of FOE_RANKS) {
     if (before.ring.dual.drop[r] !== after.ring.dual.drop[r]) out.push(`二重耐性の指輪を落とす確率（${RANK_LABELS[r]}）：${before.ring.dual.drop[r]}% → ${after.ring.dual.drop[r]}%`);
   }

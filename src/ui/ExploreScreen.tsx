@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react';
 import { preloadSounds, setAmbient } from '../audio/sound';
 import { SPELLS } from '../game/data';
-import { dungeonOfState, isBossFloor, step, upStairs } from '../game/explore';
+import { dungeonOfState, isBossFloor, step, upStairs, viewRadius } from '../game/explore';
 import { DIR_DELTA, type Dir, type ExploreAction, type ExploreState } from '../game/exploreTypes';
 import { dirToward, samePos, visibleTiles } from '../game/exploreSight';
 import { spellPreview } from '../game/spellArea';
@@ -105,7 +105,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const view3dRef = useRef<DungeonView3D | null>(null);
 
   const visible = useMemo(
-    () => visibleTiles(state.map, state.player, state.sightRadius),
+    () => visibleTiles(state.map, state.player, viewRadius(state)),
     [state.map, state.player],
   );
 
@@ -343,7 +343,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     observer.observe(canvas);
     view3d.resize(canvas.clientWidth, canvas.clientHeight);
     // 視界の計算は、状態が変わったときだけやり直す
-    let sight = { state: stateRef.current, visible: visibleTiles(stateRef.current.map, stateRef.current.player, stateRef.current.sightRadius) };
+    let sight = { state: stateRef.current, visible: visibleTiles(stateRef.current.map, stateRef.current.player, viewRadius(stateRef.current)) };
     // 歩く道筋は、状態か行き先が変わったときだけ探し直す
     let route: { state: ExploreState | null; goal: Pos | null; path: Pos[] } = { state: null, goal: null, path: [] };
     const routeFor = (st: ExploreState, goal: Pos | null): Pos[] => {

@@ -72,7 +72,9 @@ export type ItemId =
   | 'book_thunder_chain';
 
 // ===== 残響（刻印スロットにはめるもの。echoMaster.ts、docs/echo-spec.md） =====
-export type EchoId = 'fire' | 'ice' | 'light' | 'dark' | 'soft' | 'hard' | 'spirit' | 'plain' | 'warmth' | 'pulse';
+export type EchoId =
+  | 'fire' | 'ice' | 'light' | 'dark' | 'soft' | 'hard' | 'spirit' | 'plain' | 'warmth' | 'pulse'
+  | 'linger' | 'slumber' | 'stagnant' | 'falter' | 'share' | 'hush' | 'whisper' | 'lamp' | 'pocket';
 
 export type ItemSlot = 'weapon' | 'armor' | 'ring' | 'consumable' | 'spellbook';
 export type WeaponType = 'sword' | 'hammer' | 'staff';

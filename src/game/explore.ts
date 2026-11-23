@@ -8,9 +8,9 @@
 import { armorSaving, regenInterval, resistsChill } from './armor';
 import { BOSS_CONFIG, phaseOf, phaseSow, PHASE_MAX } from './bossPhase';
 import { buildPlayer, enemyHitDamage, hitAffinity, itemCapacity, playerHitDamage, swapWeapons, weaponTypeOf } from './combat';
-import { gearName, lootSeed, noFound, rollLoot, satietySaving, savesSatiety } from './echo';
+import { echoSum, gearName, hushedRange, lampRadius, lingerDamage, lootSeed, noFound, pocketGold, rollLoot, satietySaving, savesSatiety, shareHeal, slumberRate } from './echo';
 import { echoName } from './echo';
-import { ECHO_CAPS } from './echoMaster';
+import { ECHO_CAPS, FALTER_TURNS, STAGNANT_MIST } from './echoMaster';
 import { enemyBase, enemyReward, expToNext, ITEMS, REWARD_CONFIG, SPELLS, STATUS_MASTER, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
 import { DEFAULT_DUNGEON_ID, dungeonOf } from './dungeons';
 import {
@@ -136,6 +136,9 @@ export function sightRadiusOf(loadout: readonly ItemId[]): number {
     return e.kind === 'sight' ? Math.max(r, e.radius) : r;
   }, EXPLORE_CONFIG.sightRadius);
 }
+
+/** 今の視界の半径：持っていった道具で決まる半径（sightRadius）に、手に持っている武器の灯の残響の分を足す */
+export const viewRadius = (state: Pick<ExploreState, 'sightRadius' | 'stats'>): number => state.sightRadius + lampRadius(state.stats.echoes);
 
 /** 1行動進める。壁への移動など行動にならない操作はエラーを返し、ターンも満腹度も消費しない */
 export function step(state: ExploreState, action: ExploreAction): Result<ExploreState> {
@@ -763,7 +766,7 @@ function hurtEnemy(state: ExploreState, uid: number, dmg: number, slip: boolean 
     log.push(`${def.name}を倒した`);
     const defeated = { ...state, enemies: state.enemies.filter((e) => e.uid !== uid), defeated: state.defeated + (target.summoned ? 0 : 1) };
     if (def.boss) {
-      const reward = TREASURE_CONFIG.bossGold;
+      const reward = pocketGold(TREASURE_CONFIG.bossGold, state.stats.echoes);
       log.push(`報酬として忘れ物を拾った（${lost(reward)}）`, 'ダンジョンを踏破した');
       return lootFrom({ ...defeated, gold: state.gold + reward, outcome: 'cleared', log }, target);
     }
@@ -859,7 +862,7 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
   let { stats } = state;
   let chests = state.chests;
 
-  const gold = Math.round(reward.gold * rate);
+  const gold = pocketGold(Math.round(reward.gold * rate), stats.echoes); // 拾い癖の残響で増える
   if (gold > 0) log.push(`忘れ物を拾った（${lost(gold)}）`);
 
   // 道具：強敵は必ず宝箱で、通常の敵は確率で落とす
@@ -915,7 +918,7 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
 function lootFrom(state: ExploreState, enemy: MapEnemy): ExploreState {
   if (enemy.summoned) return state;
   const def = enemyDef(enemy);
-  const got = rollLoot(lootSeed(state, enemy.uid), def, def.boss ? 'boss' : enemy.elite ? 'elite' : 'normal');
+  const got = rollLoot(lootSeed(state, enemy.uid), def, def.boss ? 'boss' : enemy.elite ? 'elite' : 'normal', { asleep: enemy.asleep });
   if (!got.gear && !got.echo && !got.ring) return state;
   const log = [...state.log];
   const found = { echoes: [...state.found.echoes], gear: [...state.found.gear], rings: [...state.found.rings] };
@@ -936,13 +939,42 @@ function lootFrom(state: ExploreState, enemy: MapEnemy): ExploreState {
 
 // ===== プレイヤーの攻撃 =====
 
+/**
+ * 通常攻撃が当たって、敵が生き残ったときの残響のおまけ（確率は探索の乱数。残響がなければ乱数を引かない）。
+ * 澱みの残響：敵の足元に毒の霧を残す。ためらいの残響：敵が動けなくなる（ボスには効かない）
+ */
+function echoAfterHit(state: ExploreState, target: MapEnemy, dealt: number): ExploreState {
+  const echoes = state.stats.echoes;
+  const chance = (id: 'stagnant' | 'falter'): boolean => {
+    const rate = echoSum(echoes, id);
+    if (rate <= 0) return false;
+    const roll = nextRandom(state.rngState);
+    state = { ...state, rngState: roll.state };
+    return roll.value * 100 < rate;
+  };
+  if (chance('stagnant')) {
+    const amount = Math.max(1, Math.round((dealt * STAGNANT_MIST.share) / 100));
+    const placed = placeSpellField(state.fields, state.map, [target.pos], 'poison', STAGNANT_MIST.turns, state.player, [], amount);
+    if (placed.placed.length > 0) state = { ...state, fields: placed.fields, log: [...state.log, `${enemyDef(target).name}の足元に、毒の霧がにじんだ`] };
+  }
+  if (chance('falter') && !enemyDef(target).boss) {
+    state = {
+      ...state,
+      enemies: state.enemies.map((e) => (e.uid === target.uid ? { ...e, stun: Math.max(e.stun ?? 0, FALTER_TURNS) } : e)),
+      log: [...state.log, `${enemyDef(target).name}は、ためらって動けない`],
+    };
+  }
+  return state;
+}
+
 /** 体当たりで攻撃する。気付いていない敵なら不意打ちになる */
 function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
   const def = enemyDef(target);
   const surprise = target.mode === 'wander';
   // 盾持ちの敵は、向いている正面からの攻撃を大きく防ぐ（側面・背中からなら、そのまま通る）
   const guarded = behaviorsOf(def).includes('shield') && guardsAgainst(target, state.player);
-  const raw = playerHitDamage(state.stats, def) * (surprise ? ENEMY_CONFIG.surpriseMultiplier : 1);
+  // 寝息の残響：眠っている敵へのダメージが増える
+  const raw = Math.round(playerHitDamage(state.stats, def) * (surprise ? ENEMY_CONFIG.surpriseMultiplier : 1) * slumberRate(state.stats.echoes, target.asleep));
   let dmg = guarded ? Math.max(1, Math.round(raw * (1 - ENEMY_CONFIG.shieldCut))) : raw;
   // コンボ：ハンマー × 凍結 ＝ 砕く（凍結は解ける）／ 剣 × 燃焼 ＝ 焼き斬り（残りの燃焼のダメージを一度に与え、火が消える）
   const weapon = weaponTypeOf(state.stats.weapon);
@@ -957,17 +989,24 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
     combo = 'sear';
     victim = extinguish(target);
   }
-  const hp = target.hp - dmg;
+  // 余韻の残響：倒しきれなかったら、少し遅れて追加のダメージが入る
+  const extra = target.hp - dmg > 0 ? lingerDamage(state.stats.echoes, dmg) : 0;
+  const hp = target.hp - dmg - extra;
   const log = [
     ...state.log,
     combo ? `${COMBO_NAMES[combo]}！ ${def.name}に${dmg}のダメージ` : guarded ? `${def.name}の盾に防がれた（${dmg}のダメージ）` : surprise ? `${def.name}に不意打ち！ ${dmg}のダメージ` : `${def.name}に${dmg}のダメージ`,
+    ...(extra > 0 ? [`余韻が届いて、さらに${extra}のダメージ`] : []),
   ];
   const enchantBefore = state.stats.enchant;
   const affinity = guarded ? null : hitAffinity(state.stats, def);
   state = {
     ...state,
     skill: gaugeUp(state),
-    hits: [...state.hits, { kind: 'dealt', at: target.pos, amount: dmg, ...(guarded ? { blocked: true } : {}), ...(combo ? { combo } : {}), ...(affinity ? { affinity } : {}), ...(hp <= 0 ? { killed: true } : {}) }],
+    hits: [
+      ...state.hits,
+      { kind: 'dealt', at: target.pos, amount: dmg, ...(guarded ? { blocked: true } : {}), ...(combo ? { combo } : {}), ...(affinity ? { affinity } : {}), ...(hp <= 0 && extra === 0 ? { killed: true } : {}) },
+      ...(extra > 0 ? [{ kind: 'dealt' as const, at: target.pos, amount: extra, slip: true, ...(hp <= 0 ? { killed: true } : {}) }] : []),
+    ],
     foes: [...(guarded ? [...state.foes, { kind: 'block' as const, at: target.pos }] : state.foes), ...(combo ? [{ kind: 'combo' as const, at: target.pos, combo }] : [])],
   };
 
@@ -975,13 +1014,16 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
   const used = useEnchant(state, [target.pos]);
   state = used.state;
   if (used.ended) log.push(used.ended);
-  const stats = state.stats;
+  // 分け合いの残響：与えたダメージの一部だけ、HPが戻る
+  const healed = Math.min(state.stats.maxHp - state.stats.hp, shareHeal(state.stats.echoes, dmg + extra));
+  if (healed > 0) log.push(`分け合って、HPが${healed}戻った`);
+  const stats = healed > 0 ? { ...state.stats, hp: state.stats.hp + healed } : state.stats;
 
   if (hp <= 0) {
     log.push(`${def.name}を倒した`);
     const defeated = { ...state, stats, enemies: state.enemies.filter((e) => e.uid !== target.uid), defeated: state.defeated + (target.summoned ? 0 : 1) };
     if (def.boss) {
-      const reward = TREASURE_CONFIG.bossGold;
+      const reward = pocketGold(TREASURE_CONFIG.bossGold, state.stats.echoes);
       log.push(`報酬として忘れ物を拾った（${lost(reward)}）`, 'ダンジョンを踏破した');
       return lootFrom({ ...defeated, gold: state.gold + reward, outcome: 'cleared', log }, target);
     }
@@ -990,6 +1032,7 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
   // 攻撃された敵はこちらに気付く
   const hit: MapEnemy = { ...victim, hp, mode: 'chase', justNoticed: surprise, lastSeen: state.player };
   state = { ...state, stats, enemies: state.enemies.map((e) => (e.uid === target.uid ? hit : e)), log };
+  state = echoAfterHit(state, hit, dmg + extra);
   // 炎・氷の砥石で殴ると、確率で燃える・凍る（かからない敵には、確率も引かない）
   const kind = foeKindOf(enchantBefore?.element);
   if (enchantBefore && kind && !foeImmune(hit, kind)) {
@@ -1108,7 +1151,9 @@ function enemiesTurn(state: ExploreState): ExploreState {
     const def = enemyDef(enemies[i]!);
     // 待ち伏せ：気付かれていないあいだは、近く（ambushRange）に来るまで気付かない
     const lying = current.mode === 'wander' && behaviorsOf(def).includes('ambush');
-    const sees = canSee(s.map, current.pos, s.player, lying ? ENEMY_CONFIG.ambushRange : ENEMY_CONFIG.sight);
+    // ひそやかの残響：まだ気付いていない敵に気付かれる距離が縮む（追ってくる敵の視界は、そのまま）
+    const range = lying ? ENEMY_CONFIG.ambushRange : ENEMY_CONFIG.sight;
+    const sees = canSee(s.map, current.pos, s.player, current.mode === 'wander' ? hushedRange(range, s.stats.echoes) : range);
     // 静寂：黙っているあいだは、叫べず、呼べず、撃てない（残りのターンは、この敵の番ごとに1減る）
     const mute = (enemies[i]!.silenced ?? 0) > 0;
     const { silenced, ...speaking } = enemies[i]!;
@@ -1503,7 +1548,7 @@ export function toResult(state: ExploreState): ExploreResult {
 /** 今の位置から見えるマスを、この階の記憶に加える */
 function reveal(state: ExploreState): ExploreState {
   const seen = [...state.seen];
-  for (const i of visibleTiles(state.map, state.player, state.sightRadius)) seen[i] = true;
+  for (const i of visibleTiles(state.map, state.player, viewRadius(state))) seen[i] = true;
   return { ...state, seen };
 }
 
