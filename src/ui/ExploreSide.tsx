@@ -105,22 +105,21 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
         {/* 体力・満腹度・魔力は、数字（今 / 最大）とゲージ。体力と満腹度は、残りが少ないと数字が赤くなり、ゲージが点滅する。体力は、減った分を赤く少し残す（2026-11-23） */}
         <Meter label="HP" value={stats.hp} max={stats.maxHp} tone="hp" warnBelow={0.25} pulse trail />
         <Meter label="満腹度" value={state.satiety} max={state.maxSatiety} tone="satiety" warnBelow={0.25} />
-        {chips.length > 0 && (
-          // 状態のアイコン（毒・鈍足・空腹・魔力の盾・再生・武器に宿った属性）：短い字と残りの数。押すと説明が出る
-          <ul className="explore__chips" aria-label="状態">
-            {chips.map((c) => (
-              <li key={c.id}>
-                <button type="button" className={`explore__chip explore__chip--${c.id}`} title={`${c.name}：${c.text}`} onClick={() => onInfo(`${c.name}：${c.text}`)}>
-                  <span className="explore__chip-mark" aria-hidden="true">
-                    {c.mark}
-                  </span>
-                  <span className="sr-only">{c.name}</span>
-                  {c.left && <span className="explore__chip-left">{c.left}</span>}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        {/* 状態のアイコン（毒・鈍足・空腹・魔力の盾・再生・武器に宿った属性）：短い字と残りの数。押すと説明が出る。
+            状態がないときも1行分の場所を空けておき、かかったりとけたりしても、欄の縦幅を変えない */}
+        <ul className="explore__chips" aria-label="状態" aria-hidden={chips.length === 0 ? true : undefined}>
+          {chips.map((c) => (
+            <li key={c.id}>
+              <button type="button" className={`explore__chip explore__chip--${c.id}`} title={`${c.name}：${c.text}`} onClick={() => onInfo(`${c.name}：${c.text}`)}>
+                <span className="explore__chip-mark" aria-hidden="true">
+                  {c.mark}
+                </span>
+                <span className="sr-only">{c.name}</span>
+                {c.left && <span className="explore__chip-left">{c.left}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
         {state.maxMp > 0 && <Meter label="魔力" value={state.mp} max={state.maxMp} tone="mp" pulse shakeKey={mpShake} trail />}
         {/* レベルは、この挑戦のあいだだけ。いちばん上のレベルでは経験値の棒を出さない */}
         {state.level < dungeon.growth.maxLevel ? (
