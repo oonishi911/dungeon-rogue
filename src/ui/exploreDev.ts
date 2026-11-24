@@ -39,7 +39,7 @@ export function devFoes(state: ExploreState): ExploreState {
   if ((!burn && !frozen) || !first) return state;
   const spots = (new URLSearchParams(location.search).has('foenear') ? [1] : [2, 3, 1]).flatMap((d) => [[d, 0], [-d, 0], [0, d], [0, -d]] as const).map(([dx, dy]) => ({ x: state.player.x + dx, y: state.player.y + dy })).filter((p) => tileAt(state.map, p) === 'floor');
   const pos = spots[0] ?? first.pos;
-  const foe = { ...first, pos, mode: 'wander' as const, ...(burn ? { burn: { turns: burn, amount: 2 } } : {}), ...(frozen ? { frozen: true, stun: frozen } : {}) };
+  const foe = { ...first, pos, mode: 'wander' as const, ...(burn ? { burn: { turns: burn, amount: 20 } } : {}), ...(frozen ? { frozen: true, stun: frozen } : {}) };
   return { ...state, enemies: [foe, ...state.enemies.slice(1)] };
 }
 

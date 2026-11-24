@@ -41,7 +41,7 @@ describe('敵のマスターデータを扱う関数', () => {
     m.enemies.fire_imp!.look = { sprite: 'hero' as never };
     const problems = masterProblems(m);
     expect(problems).toContain('goblin：名前がない');
-    expect(problems.some((p) => p.includes('HPは1〜999の整数'))).toBe(true);
+    expect(problems.some((p) => p.includes('HPは1〜99999の整数'))).toBe(true);
     expect(problems.some((p) => p.includes('同じ名前の敵がほかにもいる'))).toBe(true);
     expect(problems.some((p) => p.includes('見た目のもとの絵が正しくない'))).toBe(true);
     expect(() => parseEnemyMaster(m)).toThrow();
@@ -68,8 +68,8 @@ describe('敵のマスターデータを扱う関数', () => {
 
   it('変えた内容を、日本語で並べる', () => {
     const m = clone();
-    m.enemies.goblin!.hp = 20;
-    expect(describeChanges(clone(), m)).toEqual(['ゴブリン：HP 14 → 20']);
+    m.enemies.goblin!.hp = 200;
+    expect(describeChanges(clone(), m)).toEqual(['ゴブリン：HP 140 → 200']);
   });
 
   it('物理・魔法の倍率：省略できる。範囲の外はおかしい値。1のときは書き出さない。変えた内容に出る', () => {

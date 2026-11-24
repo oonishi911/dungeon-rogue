@@ -35,7 +35,7 @@ export type FoeMaster = {
 export const STATUS_LIMITS = {
   chance: { min: 0, max: 100 },
   turns: { min: 1, max: 20 },
-  damage: { min: 1, max: 20 },
+  damage: { min: 1, max: 200 },
   steps: { min: 1, max: 20 },
   amount: { min: 1, max: 50 },
   weakBonus: { min: 0, max: 5 },

@@ -41,11 +41,11 @@ describe('刻印武器をサブ武器にする', () => {
     const state = startExplore(3, { loadout: d.loadout, echoes: d.echoes, subEchoes: d.subEchoes });
     expect(state.stats.echoes).toEqual(['fire']);
     expect(state.stats.sub).toEqual({ weapon: 'hammer_2', skill: 0, echoes: ['whisper'] });
-    // 持ち替えると、サブの残響（ささやき：魔力+1）が効き、メインの残響は外れる
+    // 持ち替えると、サブの残響（ささやき：魔力+10）が効き、メインの残響は外れる
     const swapped = swapWeapons(state.stats, 0)!.stats;
     expect(swapped.weapon).toBe('hammer_2');
     expect(swapped.echoes).toEqual(['whisper']);
-    expect(swapped.mag).toBe(state.stats.mag + 1);
+    expect(swapped.mag).toBe(state.stats.mag + 10);
   });
 
   it('メインと同じ種類・メインと同じ刻印武器・メインがないときは、サブにできない', () => {

@@ -22,7 +22,8 @@ import type { FloorMap, Pos } from './map';
 import { parseSave, type SaveData } from './save';
 import type { Departure, EchoId, EnemyId, ItemId, SpellId, TraitId } from './types';
 
-export const RUN_SAVE_VERSION = 1;
+// 2：HP・攻撃・守り・ダメージの数字を10倍にした（2026-11-25、docs/scale-x10.md）。それより前の中断データは、数字の大きさが合わないので読まない（その探索はなかったことになる）
+export const RUN_SAVE_VERSION = 2;
 const LOG_KEEP = 200;
 
 /** 保存する階の様子（マップの代わりに、形を確かめるための数を持つ） */

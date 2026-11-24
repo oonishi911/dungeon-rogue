@@ -8,7 +8,7 @@ import type { EnemyDef } from './types';
 /** 床に残る魔法の跡の数値（仮。遊んでみて調整する） */
 export const FIELD_CONFIG = {
   fireTurns: 3, // 燃える床が残るターン数
-  fireDamage: 2, // 燃える床に乗っているあいだ、毎ターン受けるダメージ（主人公にも敵にも）
+  fireDamage: 20, // 燃える床に乗っているあいだ、毎ターン受けるダメージ（主人公にも敵にも）
   frostTurns: 4, // 霜の床が残るターン数
 } as const;
 

@@ -15,10 +15,10 @@ const player = { x: 3, y: 2 };
 const SKILL = { kind: 'skill', dir: 'right' } as const;
 
 /** 武器を持たせ、技ゲージを満タンにした部屋 */
-function armed(weapon: ItemId | null, enemies = [foe('goblin', { x: 4, y: 2 }, { hp: 99 })], full = true): ExploreState {
+function armed(weapon: ItemId | null, enemies = [foe('goblin', { x: 4, y: 2 }, { hp: 990 })], full = true): ExploreState {
   const base = arena(ROOM, player, enemies);
   const max = skillOf(weapon)?.max ?? 0;
-  return { ...base, stats: { ...base.stats, weapon, hp: 999, maxHp: 999 }, skill: full ? max : 0 };
+  return { ...base, stats: { ...base.stats, weapon, hp: 9990, maxHp: 9990 }, skill: full ? max : 0 };
 }
 
 describe('技ゲージ', () => {
@@ -31,7 +31,7 @@ describe('技ゲージ', () => {
   });
 
   it('通常攻撃を当てるたびに1たまり、満タンを超えない', () => {
-    let s = armed('sword', [foe('goblin', { x: 4, y: 2 }, { hp: 999 })], false);
+    let s = armed('sword', [foe('goblin', { x: 4, y: 2 }, { hp: 9990 })], false);
     for (let i = 1; i <= 6; i++) {
       s = act(s, { kind: 'move', dir: 'right' });
       expect(s.skill).toBe(Math.min(i, 4));
@@ -39,7 +39,7 @@ describe('技ゲージ', () => {
   });
 
   it('素手や、攻撃しない行動では、たまらない', () => {
-    const bare = act(armed(null, [foe('goblin', { x: 4, y: 2 }, { hp: 999 })], false), { kind: 'move', dir: 'right' });
+    const bare = act(armed(null, [foe('goblin', { x: 4, y: 2 }, { hp: 9990 })], false), { kind: 'move', dir: 'right' });
     expect(bare.skill).toBe(0);
     expect(act(armed('sword', undefined, false), WAIT).skill).toBe(0);
   });
@@ -56,7 +56,7 @@ describe('剣「連斬り」', () => {
     const def = enemyDef(s0.enemies[0]!);
     const each = Math.max(1, Math.round((playerHitDamage(s0.stats, def) * SKILL_CONFIG.slashRate) / SKILL_CONFIG.slashHits));
     const s = act(s0, SKILL);
-    expect(s.enemies[0]!.hp).toBe(99 - each * 2);
+    expect(s.enemies[0]!.hp).toBe(990 - each * 2);
     expect(s.hits.filter((h) => h.kind === 'dealt')).toHaveLength(2);
     expect(s.skill).toBe(0);
     expect(s.turn).toBe(s0.turn + 1);
@@ -77,7 +77,7 @@ describe('剣「連斬り」', () => {
   });
 
   it('1回目で倒したら、2回目は出さない（倒した数は1つ）', () => {
-    const s0 = armed('sword', [foe('goblin', { x: 4, y: 2 }, { hp: 1 })]);
+    const s0 = armed('sword', [foe('goblin', { x: 4, y: 2 }, { hp: 10 })]);
     const s = act(s0, SKILL);
     expect(s.enemies).toHaveLength(0);
     expect(s.hits.filter((h) => h.kind === 'dealt')).toHaveLength(1);
@@ -85,32 +85,32 @@ describe('剣「連斬り」', () => {
   });
 
   it('盾持ちの正面からなら、7割防がれる', () => {
-    const s0 = armed('sword', [foe('holy_knight', { x: 4, y: 2 }, { hp: 99, facing: 'left' })]);
+    const s0 = armed('sword', [foe('holy_knight', { x: 4, y: 2 }, { hp: 990, facing: 'left' })]);
     const def = enemyDef(s0.enemies[0]!);
     const each = Math.max(1, Math.round(((playerHitDamage(s0.stats, def) * SKILL_CONFIG.slashRate) / SKILL_CONFIG.slashHits) * (1 - ENEMY_CONFIG.shieldCut)));
-    expect(act(s0, SKILL).enemies[0]!.hp).toBe(99 - each * 2);
+    expect(act(s0, SKILL).enemies[0]!.hp).toBe(990 - each * 2);
   });
 });
 
 describe('槌「地響き」', () => {
-  const ring = [foe('goblin', { x: 4, y: 2 }, { hp: 99 }), foe('goblin', { x: 2, y: 1 }, { hp: 99 }), foe('goblin', { x: 4, y: 3 }, { hp: 99 }), foe('goblin', { x: 6, y: 2 }, { hp: 99 })];
+  const ring = [foe('goblin', { x: 4, y: 2 }, { hp: 990 }), foe('goblin', { x: 2, y: 1 }, { hp: 990 }), foe('goblin', { x: 4, y: 3 }, { hp: 990 }), foe('goblin', { x: 6, y: 2 }, { hp: 990 })];
 
   it('まわり8マスの敵すべてに通常のダメージと、1ターンの気絶。離れた敵は巻き込まない', () => {
     const s0 = armed('hammer', ring);
     const each = playerHitDamage(s0.stats, enemyDef(s0.enemies[0]!));
     const s = act(s0, { kind: 'skill' });
-    expect(s.enemies.map((e) => e.hp)).toEqual([99 - each, 99 - each, 99 - each, 99]);
+    expect(s.enemies.map((e) => e.hp)).toEqual([990 - each, 990 - each, 990 - each, 990]);
     expect(s.skill).toBe(0);
     expect(s.foes.filter((f) => f.kind === 'skill')).toHaveLength(1);
   });
 
   it('気絶した敵は、次のターンに動けない（攻撃してこない）', () => {
-    const s = act(armed('hammer', [foe('goblin', { x: 4, y: 2 }, { hp: 99 })]), { kind: 'skill' });
-    expect(s.stats.hp).toBe(999); // 気絶中なので、同じターンに殴り返されない
+    const s = act(armed('hammer', [foe('goblin', { x: 4, y: 2 }, { hp: 990 })]), { kind: 'skill' });
+    expect(s.stats.hp).toBe(9990); // 気絶中なので、同じターンに殴り返されない
   });
 
   it('まわりに敵がいなければ出せない', () => {
-    expect(() => act(armed('hammer', [foe('goblin', { x: 6, y: 2 }, { hp: 99 })]), { kind: 'skill' })).toThrow('まわりに敵がいない');
+    expect(() => act(armed('hammer', [foe('goblin', { x: 6, y: 2 }, { hp: 990 })]), { kind: 'skill' })).toThrow('まわりに敵がいない');
   });
 
   it('炎の砥石の武器なら、当たった敵すべての足元に燃える床が残り、砥石は1回だけ減る', () => {
@@ -124,17 +124,17 @@ describe('槌「地響き」', () => {
 
 describe('杖「魔力弾」', () => {
   it('向いた方向の最初の敵に、魔法の強さの1.5倍。敵の防御は無視する', () => {
-    const s0 = armed('staff', [foe('goblin', { x: 6, y: 2 }, { hp: 99 }), foe('goblin', { x: 8, y: 2 }, { hp: 99 })]);
+    const s0 = armed('staff', [foe('goblin', { x: 6, y: 2 }, { hp: 990 }), foe('goblin', { x: 8, y: 2 }, { hp: 990 })]);
     const def = enemyDef(s0.enemies[0]!);
     const dmg = Math.max(1, Math.round(magicPower(s0.stats, dungeonOfState(s0).magic) * SKILL_CONFIG.boltRate * (def.magic ?? 1)));
     const s = act(s0, SKILL);
-    expect(s.enemies.map((e) => e.hp)).toEqual([99 - dmg, 99]);
+    expect(s.enemies.map((e) => e.hp)).toEqual([990 - dmg, 990]);
     expect(s.skill).toBe(0);
     expect(s.foes).toContainEqual({ kind: 'skill', weapon: 'staff', from: player, dir: 'right', path: [4, 5, 6].map((x) => ({ x, y: 2 })) });
   });
 
   it('届くマス数を超えた敵と、壁の向こうの敵には当たらない', () => {
-    expect(() => act(armed('staff', [foe('goblin', { x: 3 + SKILL_CONFIG.boltRange + 1, y: 2 }, { hp: 99 })]), SKILL)).toThrow('向いた方向に敵がいない');
-    expect(() => act(armed('staff', [foe('goblin', { x: 4, y: 2 }, { hp: 99 })]), { kind: 'skill', dir: 'up' })).toThrow('向いた方向に敵がいない');
+    expect(() => act(armed('staff', [foe('goblin', { x: 3 + SKILL_CONFIG.boltRange + 1, y: 2 }, { hp: 990 })]), SKILL)).toThrow('向いた方向に敵がいない');
+    expect(() => act(armed('staff', [foe('goblin', { x: 4, y: 2 }, { hp: 990 })]), { kind: 'skill', dir: 'up' })).toThrow('向いた方向に敵がいない');
   });
 });

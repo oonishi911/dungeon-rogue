@@ -35,19 +35,19 @@ describe('入ったときのHP', () => {
     expect(s.maxHp).toBe(40);
   });
 
-  it('初期値は、これまでと同じ（60）', () => {
-    expect(COMBAT_CONFIG.playerHp).toBe(60);
-    expect(saved).toEqual({ startHp: 60, startMaxHp: 60 });
+  it('初期値は、これまでと同じ（600。2026-11-25 に10倍にした）', () => {
+    expect(COMBAT_CONFIG.playerHp).toBe(600);
+    expect(saved).toEqual({ startHp: 600, startMaxHp: 600 });
   });
 
 });
 
 describe('設定の確かめ', () => {
   const check = (patch: Partial<typeof growth>) => genProblems({ ...dungeonOf(DEFAULT_DUNGEON_ID), growth: { ...growth, ...patch } });
-  it('範囲（1〜999の整数）と、HP ≦ 最大HP', () => {
-    expect(check({ startHp: 1, startMaxHp: 999 })).toEqual([]);
-    expect(check({ startHp: 0 })).toEqual(['入ったときのHP：1〜999の数にする']);
-    expect(check({ startMaxHp: 1000, startHp: 10 })).toEqual(['入ったときの最大HP：1〜999の数にする']);
+  it('範囲（1〜99999の整数）と、HP ≦ 最大HP', () => {
+    expect(check({ startHp: 1, startMaxHp: 99999 })).toEqual([]);
+    expect(check({ startHp: 0 })).toEqual(['入ったときのHP：1〜99999の数にする']);
+    expect(check({ startMaxHp: 100000, startHp: 10 })).toEqual(['入ったときの最大HP：1〜99999の数にする']);
     expect(check({ startMaxHp: 10.5, startHp: 10 })).toEqual(['入ったときの最大HP：整数にする']);
     expect(check({ startMaxHp: 40, startHp: 41 })).toEqual(['入ったときのHP：入ったときの最大HP以下にする']);
   });

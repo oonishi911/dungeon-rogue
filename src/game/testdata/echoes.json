@@ -67,7 +67,7 @@
     },
     "plain": {
       "name": "ただの残響",
-      "weapon": 1
+      "weapon": 10
     },
     "warmth": {
       "name": "ぬくもりの残響",
@@ -103,7 +103,7 @@
     },
     "whisper": {
       "name": "ささやきの残響",
-      "weapon": 1
+      "weapon": 10
     },
     "lamp": {
       "name": "灯の残響",
@@ -139,7 +139,7 @@
     },
     "backwater": {
       "name": "背水の残響",
-      "weapon": 3
+      "weapon": 30
     },
     "siphon": {
       "name": "吸魔の残響",

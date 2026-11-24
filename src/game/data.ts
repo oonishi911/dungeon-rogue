@@ -101,9 +101,11 @@ export const STATUS_MASTER: StatusMaster = parseStatusMaster(statusesJson);
 
 // ===== 戦闘の設定値（仮） =====
 export const COMBAT_CONFIG = {
-  playerHp: 60, // 装備だけで組み立てたときの体力（buildPlayer）。ダンジョンに入ったときの値は、ダンジョンの設定 growth.startHp・startMaxHp（管理画面）で決める
-  playerAtk: 6,
-  playerDef: 1,
+  // HP・攻撃・守り・ダメージの数字は、細かく調整できるように、2026-11-25 にすべて10倍にした（docs/scale-x10.md）
+  playerHp: 600, // 装備だけで組み立てたときの体力（buildPlayer）。ダンジョンに入ったときの値は、ダンジョンの設定 growth.startHp・startMaxHp（管理画面）で決める
+  playerAtk: 60,
+  playerDef: 10,
+  minHit: 10, // 攻撃が守り以下でも、通常の攻撃で必ず与える（受ける）ダメージ（10倍にする前の「1」にあたる）
 } as const;
 
 /** 武器と体質の相性。素手はどの体質にも1倍 */

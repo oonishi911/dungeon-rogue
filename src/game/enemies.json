@@ -2,9 +2,9 @@
   "enemies": {
     "goblin": {
       "name": "ゴブリン",
-      "hp": 14,
-      "atk": 4,
-      "def": 1,
+      "hp": 140,
+      "atk": 40,
+      "def": 10,
       "element": "neutral",
       "body": "normal",
       "behaviors": [
@@ -21,8 +21,8 @@
     },
     "giant_rat": {
       "name": "大ネズミ",
-      "hp": 10,
-      "atk": 3,
+      "hp": 100,
+      "atk": 30,
       "def": 0,
       "element": "neutral",
       "body": "soft",
@@ -47,9 +47,9 @@
     },
     "stone_golem": {
       "name": "石ゴーレム",
-      "hp": 22,
-      "atk": 5,
-      "def": 3,
+      "hp": 220,
+      "atk": 50,
+      "def": 30,
       "element": "neutral",
       "body": "hard",
       "behaviors": [
@@ -72,8 +72,8 @@
     },
     "fire_imp": {
       "name": "火の小鬼",
-      "hp": 12,
-      "atk": 7,
+      "hp": 120,
+      "atk": 70,
       "def": 0,
       "element": "fire",
       "body": "normal",
@@ -91,9 +91,9 @@
     },
     "flame_hound": {
       "name": "炎の猟犬",
-      "hp": 16,
-      "atk": 7,
-      "def": 1,
+      "hp": 160,
+      "atk": 70,
+      "def": 10,
       "element": "fire",
       "body": "soft",
       "behaviors": [
@@ -110,9 +110,9 @@
     },
     "lava_lizard": {
       "name": "溶岩トカゲ",
-      "hp": 22,
-      "atk": 7,
-      "def": 3,
+      "hp": 220,
+      "atk": 70,
+      "def": 30,
       "element": "fire",
       "body": "hard",
       "behaviors": [
@@ -129,8 +129,8 @@
     },
     "ice_imp": {
       "name": "氷の小鬼",
-      "hp": 12,
-      "atk": 7,
+      "hp": 120,
+      "atk": 70,
       "def": 0,
       "element": "ice",
       "body": "normal",
@@ -154,8 +154,8 @@
     },
     "ice_slime": {
       "name": "氷のスライム",
-      "hp": 16,
-      "atk": 6,
+      "hp": 160,
+      "atk": 60,
       "def": 0,
       "element": "ice",
       "body": "soft",
@@ -178,9 +178,9 @@
     },
     "ice_beetle": {
       "name": "氷の甲虫",
-      "hp": 20,
-      "atk": 7,
-      "def": 3,
+      "hp": 200,
+      "atk": 70,
+      "def": 30,
       "element": "ice",
       "body": "hard",
       "behaviors": [
@@ -205,8 +205,8 @@
     },
     "light_bird": {
       "name": "光の鳥",
-      "hp": 12,
-      "atk": 7,
+      "hp": 120,
+      "atk": 70,
       "def": 0,
       "element": "light",
       "body": "soft",
@@ -231,9 +231,9 @@
     },
     "holy_armor": {
       "name": "聖なる甲冑",
-      "hp": 24,
-      "atk": 7,
-      "def": 3,
+      "hp": 240,
+      "atk": 70,
+      "def": 30,
       "element": "light",
       "body": "hard",
       "behaviors": [
@@ -258,8 +258,8 @@
     },
     "light_wisp": {
       "name": "光の精",
-      "hp": 14,
-      "atk": 7,
+      "hp": 140,
+      "atk": 70,
       "def": 0,
       "element": "light",
       "body": "spirit",
@@ -282,8 +282,8 @@
     },
     "dark_bat": {
       "name": "闇コウモリ",
-      "hp": 10,
-      "atk": 7,
+      "hp": 100,
+      "atk": 70,
       "def": 0,
       "element": "dark",
       "body": "soft",
@@ -309,9 +309,9 @@
     },
     "shadow": {
       "name": "影",
-      "hp": 16,
-      "atk": 7,
-      "def": 1,
+      "hp": 160,
+      "atk": 70,
+      "def": 10,
       "element": "dark",
       "body": "spirit",
       "behaviors": [
@@ -333,9 +333,9 @@
     },
     "phantom": {
       "name": "亡霊",
-      "hp": 18,
-      "atk": 7,
-      "def": 1,
+      "hp": 180,
+      "atk": 70,
+      "def": 10,
       "element": "dark",
       "body": "spirit",
       "behaviors": [
@@ -358,9 +358,9 @@
     },
     "flame_beast": {
       "name": "炎の魔獣",
-      "hp": 100,
-      "atk": 20,
-      "def": 5,
+      "hp": 1000,
+      "atk": 200,
+      "def": 50,
       "element": "fire",
       "body": "soft",
       "boss": true,
@@ -383,9 +383,9 @@
     },
     "ice_colossus": {
       "name": "氷の巨像",
-      "hp": 100,
-      "atk": 20,
-      "def": 5,
+      "hp": 1000,
+      "atk": 200,
+      "def": 50,
       "element": "ice",
       "body": "hard",
       "boss": true,
@@ -408,9 +408,9 @@
     },
     "ogre_chief": {
       "name": "鬼の首領",
-      "hp": 100,
-      "atk": 20,
-      "def": 5,
+      "hp": 1000,
+      "atk": 200,
+      "def": 50,
       "element": "neutral",
       "body": "normal",
       "boss": true,
@@ -431,9 +431,9 @@
     },
     "light_guardian": {
       "name": "光の守護者",
-      "hp": 100,
-      "atk": 20,
-      "def": 5,
+      "hp": 1000,
+      "atk": 200,
+      "def": 50,
       "element": "light",
       "body": "hard",
       "boss": true,
@@ -458,9 +458,9 @@
     },
     "dark_lord": {
       "name": "闇の王",
-      "hp": 100,
-      "atk": 20,
-      "def": 5,
+      "hp": 1000,
+      "atk": 200,
+      "def": 50,
       "element": "dark",
       "body": "spirit",
       "boss": true,
@@ -484,8 +484,8 @@
     },
     "lava_slime": {
       "name": "溶岩スライム",
-      "hp": 18,
-      "atk": 7,
+      "hp": 180,
+      "atk": 70,
       "def": 0,
       "element": "fire",
       "body": "soft",
@@ -508,9 +508,9 @@
     },
     "iwao": {
       "name": "岩鬼イワオ",
-      "hp": 26,
-      "atk": 6,
-      "def": 3,
+      "hp": 260,
+      "atk": 60,
+      "def": 30,
       "element": "neutral",
       "body": "hard",
       "behaviors": [
@@ -533,9 +533,9 @@
     },
     "wraith": {
       "name": "レイス",
-      "hp": 18,
-      "atk": 8,
-      "def": 1,
+      "hp": 180,
+      "atk": 80,
+      "def": 10,
       "element": "dark",
       "body": "spirit",
       "behaviors": [
@@ -558,9 +558,9 @@
     },
     "troll": {
       "name": "トロル",
-      "hp": 20,
-      "atk": 5,
-      "def": 1,
+      "hp": 200,
+      "atk": 50,
+      "def": 10,
       "element": "neutral",
       "body": "normal",
       "behaviors": [
@@ -581,9 +581,9 @@
     },
     "yeti": {
       "name": "イエティ",
-      "hp": 20,
-      "atk": 7,
-      "def": 1,
+      "hp": 200,
+      "atk": 70,
+      "def": 10,
       "element": "ice",
       "body": "normal",
       "behaviors": [
@@ -605,9 +605,9 @@
     },
     "dark_knight": {
       "name": "暗黒騎士",
-      "hp": 22,
-      "atk": 8,
-      "def": 3,
+      "hp": 220,
+      "atk": 80,
+      "def": 30,
       "element": "dark",
       "body": "hard",
       "behaviors": [
@@ -632,9 +632,9 @@
     },
     "holy_knight": {
       "name": "聖騎士",
-      "hp": 24,
-      "atk": 7,
-      "def": 3,
+      "hp": 240,
+      "atk": 70,
+      "def": 30,
       "element": "light",
       "body": "hard",
       "behaviors": [
@@ -659,9 +659,9 @@
     },
     "animated_armor": {
       "name": "動く甲冑",
-      "hp": 24,
-      "atk": 6,
-      "def": 4,
+      "hp": 240,
+      "atk": 60,
+      "def": 40,
       "element": "neutral",
       "body": "hard",
       "physical": 0.75,
@@ -688,9 +688,9 @@
     },
     "gargoyle": {
       "name": "ガーゴイル",
-      "hp": 20,
-      "atk": 7,
-      "def": 3,
+      "hp": 200,
+      "atk": 70,
+      "def": 30,
       "element": "dark",
       "body": "hard",
       "physical": 0.75,
@@ -715,9 +715,9 @@
     },
     "ice_statue": {
       "name": "氷の彫像",
-      "hp": 22,
-      "atk": 7,
-      "def": 3,
+      "hp": 220,
+      "atk": 70,
+      "def": 30,
       "element": "ice",
       "body": "hard",
       "physical": 0.75,
@@ -744,8 +744,8 @@
     },
     "cultist": {
       "name": "呪術師",
-      "hp": 12,
-      "atk": 8,
+      "hp": 120,
+      "atk": 80,
       "def": 0,
       "element": "dark",
       "body": "normal",
@@ -770,8 +770,8 @@
     },
     "goblin_mage": {
       "name": "魔導ゴブリン",
-      "hp": 10,
-      "atk": 6,
+      "hp": 100,
+      "atk": 60,
       "def": 0,
       "element": "neutral",
       "body": "normal",
@@ -795,8 +795,8 @@
     },
     "fire_mage": {
       "name": "炎のまじない師",
-      "hp": 12,
-      "atk": 8,
+      "hp": 120,
+      "atk": 80,
       "def": 0,
       "element": "fire",
       "body": "normal",

@@ -101,7 +101,7 @@ describe('管理画面の公開（敵のデータと、いくつものダンジ�
     const plan = planPublish(BASE, draft);
     expect(plan.files).toEqual([{ path: ENEMY_FILE, text: serializeEnemyMaster(draft.enemies), base: serializeEnemyMaster(BASE.enemies) }]);
     expect(plan.message.split('\n')[0]).toBe('敵のデータを更新する（管理画面から）');
-    expect(plan.changes).toEqual([`ゴブリン：HP 14 → 15`]);
+    expect(plan.changes).toEqual([`ゴブリン：HP 140 → 141`]);
   });
 
   it('1つのダンジョンだけ変えたら、そのダンジョンのファイルだけを保存する（変えたところの頭に、ダンジョンの名前を付ける）', () => {
@@ -168,7 +168,7 @@ describe('管理画面の公開（敵のデータと、いくつものダンジ�
       d.dungeons.cave!.floors.count = 0;
     });
     const { problems } = planPublish(BASE, bad);
-    expect(problems.some((p) => p.includes('HPは1〜999の整数'))).toBe(true);
+    expect(problems.some((p) => p.includes('HPは1〜99999の整数'))).toBe(true);
     expect(problems).toContain('ほら穴：階の数：1〜10の数にする');
     expect(planPublish(BASE, edited((d) => void (d.dungeons.cave!.name = '標準'))).problems).toContain('標準（cave）：ほかのダンジョン（standard）と同じ名前になっている');
     expect(planPublish(BASE, edited((d) => void (d.dungeons['Bad-Id'] = dungeon('変なID')))).problems.some((p) => p.startsWith('変なID：ID（Bad-Id）'))).toBe(true);
@@ -360,9 +360,9 @@ describe('品物の設定の公開', () => {
   });
 
   it('武器の魔力を変えると、変えた内容に出る。上の段階より低い魔力は、直すところに出る', () => {
-    const draft = edited((d) => void (d.items.weapons.staff[9]!.mag = 12));
-    expect(planPublish(BASE, draft).changes).toEqual(['品物：杖+9（10段目）：魔力 9 → 12']);
-    expect(planPublish(BASE, draft).problems).toEqual([]); // 9段目（8）より高い分には、問題ない
+    const draft = edited((d) => void (d.items.weapons.staff[9]!.mag = 120));
+    expect(planPublish(BASE, draft).changes).toEqual(['品物：杖+9（10段目）：魔力 90 → 120']);
+    expect(planPublish(BASE, draft).problems).toEqual([]); // 9段目（80）より高い分には、問題ない
     const low = edited((d) => void (d.items.weapons.staff[3]!.mag = 0));
     expect(planPublish(BASE, low).problems.some((p) => p.includes('杖の4段目') && p.includes('魔力'))).toBe(true);
     const bad = edited((d) => void (d.items.weapons.sword[0]!.mag = 1.5));
@@ -395,8 +395,8 @@ describe('品物の設定の公開', () => {
   });
 
   it('防具の守りを変えると、変えた内容に出る', () => {
-    const draft = edited((d) => void (d.items.armors.plate[9]!.def = 12));
-    expect(planPublish(BASE, draft).changes).toEqual(['品物：鎧+9（10段目）：守り 9 → 12']);
+    const draft = edited((d) => void (d.items.armors.plate[9]!.def = 120));
+    expect(planPublish(BASE, draft).changes).toEqual(['品物：鎧+9（10段目）：守り 90 → 120']);
   });
 
   it('上の段階より高い・強い段は、直すところに出る', () => {

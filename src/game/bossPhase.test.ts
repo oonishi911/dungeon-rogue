@@ -6,10 +6,10 @@ import { fieldAt } from './fields';
 import type { ExploreState } from './exploreTypes';
 import { act, arena, foe, WAIT } from './testArena';
 
-// テストデータ（src/game/testdata/）のボスは、HP50〜60。HPの段階の境目は、元のHP（enemyBase）の 2/3・1/3
+// テストデータ（src/game/testdata/）のボスは、HP500〜600。HPの段階の境目は、元のHP（enemyBase）の 2/3・1/3
 
 const BIG = ['#############', '#...........#', '#...........#', '#...........#', '#...........#', '#...........#', '#############'];
-const strong = (s: ExploreState): ExploreState => ({ ...s, stats: { ...s.stats, hp: 9999, maxHp: 9999 } });
+const strong = (s: ExploreState): ExploreState => ({ ...s, stats: { ...s.stats, hp: 99999, maxHp: 99999 } });
 // 主人公は (3,3)、ボスは gap マス右（見える距離）
 const fight = (id: string, hp: number, extra = {}, gap = 4) => strong(arena(BIG, { x: 3, y: 3 }, [foe(id, { x: 3 + gap, y: 3 }, { elite: true, hp, ...extra })]));
 const maxHp = (id: string) => enemyBase(id).hp;
@@ -67,7 +67,7 @@ describe('ボスの手番', () => {
   });
 
   it('第2段階の炎の魔獣は、4ターンごとに主人公のまわりへ燃える床をまく', () => {
-    let s = fight('flame_beast', 30, { phase: 2 });
+    let s = fight('flame_beast', 300, { phase: 2 });
     let sown = false;
     for (let i = 0; i < 8 && !sown; i++) {
       s = act({ ...s, enemies: s.enemies.map((e) => ({ ...e, pos: { x: 7, y: 3 }, mode: 'chase' as const, lastSeen: s.player })) }, WAIT);
@@ -93,15 +93,15 @@ describe('ボスの手番', () => {
   });
 
   it('第2段階の鬼の首領は手下を呼び、第3段階では突進の構えもとる', () => {
-    let s = fight('ogre_chief', 30, { phase: 2 });
+    let s = fight('ogre_chief', 300, { phase: 2 });
     for (let i = 0; i < ENEMY_WAIT; i++) s = act(s, WAIT);
     expect(s.enemies.some((e) => e.summoned)).toBe(true);
-    const third = act(fight('ogre_chief', 10, { phase: 3 }, 3), WAIT);
+    const third = act(fight('ogre_chief', 100, { phase: 3 }, 3), WAIT);
     expect(third.foes.some((f) => f.kind === 'windup' || f.kind === 'charge')).toBe(true);
   });
 
   it('第3段階の闇の王は、離れたところから撃ってくる', () => {
-    const s = act(fight('dark_lord', 10, { phase: 3 }, 3), WAIT);
+    const s = act(fight('dark_lord', 100, { phase: 3 }, 3), WAIT);
     expect(s.foes.some((f) => f.kind === 'shot')).toBe(true);
   });
 

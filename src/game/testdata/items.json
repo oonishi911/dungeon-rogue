@@ -3,61 +3,61 @@
     "sword": [
       {
         "name": "剣",
-        "atk": 3,
+        "atk": 30,
         "mag": 0,
         "price": 30
       },
       {
         "name": "剣+1",
-        "atk": 5,
+        "atk": 50,
         "mag": 0,
         "price": 40
       },
       {
         "name": "剣+2",
-        "atk": 7,
+        "atk": 70,
         "mag": 0,
         "price": 70
       },
       {
         "name": "剣+3",
-        "atk": 9,
+        "atk": 90,
         "mag": 0,
         "price": 100
       },
       {
         "name": "剣+4",
-        "atk": 11,
+        "atk": 110,
         "mag": 0,
         "price": 150
       },
       {
         "name": "剣+5",
-        "atk": 13,
+        "atk": 130,
         "mag": 0,
         "price": 230
       },
       {
         "name": "剣+6",
-        "atk": 15,
+        "atk": 150,
         "mag": 0,
         "price": 340
       },
       {
         "name": "剣+7",
-        "atk": 17,
+        "atk": 170,
         "mag": 0,
         "price": 510
       },
       {
         "name": "剣+8",
-        "atk": 19,
+        "atk": 190,
         "mag": 0,
         "price": 770
       },
       {
         "name": "剣+9",
-        "atk": 21,
+        "atk": 210,
         "mag": 0,
         "price": 1150
       }
@@ -65,61 +65,61 @@
     "hammer": [
       {
         "name": "槌",
-        "atk": 3,
+        "atk": 30,
         "mag": 0,
         "price": 30
       },
       {
         "name": "槌+1",
-        "atk": 5,
+        "atk": 50,
         "mag": 0,
         "price": 40
       },
       {
         "name": "槌+2",
-        "atk": 7,
+        "atk": 70,
         "mag": 0,
         "price": 70
       },
       {
         "name": "槌+3",
-        "atk": 9,
+        "atk": 90,
         "mag": 0,
         "price": 100
       },
       {
         "name": "槌+4",
-        "atk": 11,
+        "atk": 110,
         "mag": 0,
         "price": 150
       },
       {
         "name": "槌+5",
-        "atk": 13,
+        "atk": 130,
         "mag": 0,
         "price": 230
       },
       {
         "name": "槌+6",
-        "atk": 15,
+        "atk": 150,
         "mag": 0,
         "price": 340
       },
       {
         "name": "槌+7",
-        "atk": 17,
+        "atk": 170,
         "mag": 0,
         "price": 510
       },
       {
         "name": "槌+8",
-        "atk": 19,
+        "atk": 190,
         "mag": 0,
         "price": 770
       },
       {
         "name": "槌+9",
-        "atk": 21,
+        "atk": 210,
         "mag": 0,
         "price": 1150
       }
@@ -127,62 +127,62 @@
     "staff": [
       {
         "name": "杖",
-        "atk": 3,
+        "atk": 30,
         "mag": 0,
         "price": 30
       },
       {
         "name": "杖+1",
-        "atk": 5,
-        "mag": 1,
+        "atk": 50,
+        "mag": 10,
         "price": 40
       },
       {
         "name": "杖+2",
-        "atk": 7,
-        "mag": 2,
+        "atk": 70,
+        "mag": 20,
         "price": 70
       },
       {
         "name": "杖+3",
-        "atk": 9,
-        "mag": 3,
+        "atk": 90,
+        "mag": 30,
         "price": 100
       },
       {
         "name": "杖+4",
-        "atk": 11,
-        "mag": 4,
+        "atk": 110,
+        "mag": 40,
         "price": 150
       },
       {
         "name": "杖+5",
-        "atk": 13,
-        "mag": 5,
+        "atk": 130,
+        "mag": 50,
         "price": 230
       },
       {
         "name": "杖+6",
-        "atk": 15,
-        "mag": 6,
+        "atk": 150,
+        "mag": 60,
         "price": 340
       },
       {
         "name": "杖+7",
-        "atk": 17,
-        "mag": 7,
+        "atk": 170,
+        "mag": 70,
         "price": 510
       },
       {
         "name": "杖+8",
-        "atk": 19,
-        "mag": 8,
+        "atk": 190,
+        "mag": 80,
         "price": 770
       },
       {
         "name": "杖+9",
-        "atk": 21,
-        "mag": 9,
+        "atk": 210,
+        "mag": 90,
         "price": 1150
       }
     ]
@@ -197,55 +197,55 @@
       },
       {
         "name": "鎧+1",
-        "def": 1,
+        "def": 10,
         "mag": 0,
         "price": 60
       },
       {
         "name": "鎧+2",
-        "def": 2,
+        "def": 20,
         "mag": 0,
         "price": 90
       },
       {
         "name": "鎧+3",
-        "def": 3,
+        "def": 30,
         "mag": 0,
         "price": 140
       },
       {
         "name": "鎧+4",
-        "def": 4,
+        "def": 40,
         "mag": 0,
         "price": 200
       },
       {
         "name": "鎧+5",
-        "def": 5,
+        "def": 50,
         "mag": 0,
         "price": 300
       },
       {
         "name": "鎧+6",
-        "def": 6,
+        "def": 60,
         "mag": 0,
         "price": 460
       },
       {
         "name": "鎧+7",
-        "def": 7,
+        "def": 70,
         "mag": 0,
         "price": 680
       },
       {
         "name": "鎧+8",
-        "def": 8,
+        "def": 80,
         "mag": 0,
         "price": 1030
       },
       {
         "name": "鎧+9",
-        "def": 9,
+        "def": 90,
         "mag": 0,
         "price": 1540
       }
@@ -254,61 +254,61 @@
       {
         "name": "法衣",
         "def": 0,
-        "mag": 1,
+        "mag": 10,
         "price": 40
       },
       {
         "name": "法衣+1",
         "def": 0,
-        "mag": 2,
+        "mag": 20,
         "price": 60
       },
       {
         "name": "法衣+2",
-        "def": 1,
-        "mag": 3,
+        "def": 10,
+        "mag": 30,
         "price": 90
       },
       {
         "name": "法衣+3",
-        "def": 1,
-        "mag": 4,
+        "def": 10,
+        "mag": 40,
         "price": 140
       },
       {
         "name": "法衣+4",
-        "def": 2,
-        "mag": 5,
+        "def": 20,
+        "mag": 50,
         "price": 200
       },
       {
         "name": "法衣+5",
-        "def": 2,
-        "mag": 6,
+        "def": 20,
+        "mag": 60,
         "price": 300
       },
       {
         "name": "法衣+6",
-        "def": 3,
-        "mag": 7,
+        "def": 30,
+        "mag": 70,
         "price": 460
       },
       {
         "name": "法衣+7",
-        "def": 3,
-        "mag": 8,
+        "def": 30,
+        "mag": 80,
         "price": 680
       },
       {
         "name": "法衣+8",
-        "def": 4,
-        "mag": 9,
+        "def": 40,
+        "mag": 90,
         "price": 1030
       },
       {
         "name": "法衣+9",
-        "def": 4,
-        "mag": 10,
+        "def": 40,
+        "mag": 100,
         "price": 1540
       }
     ],
@@ -321,55 +321,55 @@
       },
       {
         "name": "毛皮の外套+1",
-        "def": 1,
+        "def": 10,
         "mag": 0,
         "price": 60
       },
       {
         "name": "毛皮の外套+2",
-        "def": 2,
+        "def": 20,
         "mag": 0,
         "price": 90
       },
       {
         "name": "毛皮の外套+3",
-        "def": 3,
+        "def": 30,
         "mag": 0,
         "price": 140
       },
       {
         "name": "毛皮の外套+4",
-        "def": 4,
+        "def": 40,
         "mag": 0,
         "price": 200
       },
       {
         "name": "毛皮の外套+5",
-        "def": 5,
+        "def": 50,
         "mag": 0,
         "price": 300
       },
       {
         "name": "毛皮の外套+6",
-        "def": 6,
+        "def": 60,
         "mag": 0,
         "price": 460
       },
       {
         "name": "毛皮の外套+7",
-        "def": 7,
+        "def": 70,
         "mag": 0,
         "price": 680
       },
       {
         "name": "毛皮の外套+8",
-        "def": 8,
+        "def": 80,
         "mag": 0,
         "price": 1030
       },
       {
         "name": "毛皮の外套+9",
-        "def": 9,
+        "def": 90,
         "mag": 0,
         "price": 1540
       }
