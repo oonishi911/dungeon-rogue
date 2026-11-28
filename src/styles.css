@@ -5538,6 +5538,39 @@ button {
     align-self: center;
   }
 
+  /* レベルは1段にまとめる：「レベル1」・細い経験値の棒・「0 / 5」を横に並べる（「経験値」の字は出さない） */
+  .explore__status > .meter:last-child {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .explore__status > .meter:last-child .meter__head {
+    display: contents;
+  }
+
+  .explore__status > .meter:last-child .meter__head > :first-child {
+    order: 0;
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .explore__status > .meter:last-child .meter__track {
+    order: 1;
+    flex: 1 1 auto;
+    min-width: 1.5rem;
+  }
+
+  .explore__status > .meter:last-child .meter__num {
+    order: 2;
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .explore__status > .meter:last-child .meter__unit {
+    display: none;
+  }
+
   .explore__status .meter__head {
     font-size: 0.72rem;
     gap: 0.25rem;

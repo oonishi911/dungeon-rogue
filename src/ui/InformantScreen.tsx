@@ -44,7 +44,7 @@ export function InformantScreen({ run, dungeonName, state, save, onChange, onLea
       <header className="top">
         <div>
           <p className="top__run">
-            {run}回目の挑戦 ・ {dungeonName}
+            {dungeonName}
           </p>
           <h1 className="top__title">情報屋</h1>
         </div>

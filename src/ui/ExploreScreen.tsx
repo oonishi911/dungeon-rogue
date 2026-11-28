@@ -753,15 +753,13 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       <header className="top explore-top">
         <div>
           <p className="top__run">
-            {runNumber ? (
-              `${runNumber}回目の挑戦`
-            ) : (
+            {!runNumber && (
               <>
                 開発用（
-                <a href={devBestHref(!devBest, state.trait)}>{devBest ? 'ふつうの装備に戻す' : 'いちばん強い装備で試す'}</a>）
+                <a href={devBestHref(!devBest, state.trait)}>{devBest ? 'ふつうの装備に戻す' : 'いちばん強い装備で試す'}</a>）・{' '}
               </>
-            )}{' '}
-            ・ {dungeon.name} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体 ・ {LOST.name}{' '}
+            )}
+            {dungeon.name} ・ {state.turn}ターン ・ 倒した敵 {state.defeated}体 ・ {LOST.name}{' '}
             {lost(state.gold)}
           </p>
           <h1 className="top__title">{floorName}</h1>
