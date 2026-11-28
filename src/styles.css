@@ -4477,12 +4477,12 @@ button {
   margin: 0;
   padding: 0;
   list-style: none;
-  max-width: min(46%, 13rem);
+  width: min(46%, 15rem);
 }
 
 .explore__foe {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   grid-template-rows: auto auto;
   align-items: center;
   column-gap: 0.3rem;
@@ -4535,7 +4535,7 @@ button {
 }
 
 .explore__foe-hp {
-  grid-column: 1 / -1;
+  grid-column: 1 / 4;
   height: 3px;
   border-radius: 2px;
   background: rgb(236 229 211 / 0.15);
@@ -4546,6 +4546,33 @@ button {
   display: block;
   height: 100%;
   background: #ff6a55;
+}
+
+/* 2026-11-28：HPの数字（ゲージの右）と、弱点のアイコン（名前の右） */
+.explore__foe-hp-num {
+  grid-column: 4;
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.68rem;
+}
+
+.explore__foe-hp-num small {
+  font-weight: 400;
+  color: var(--bone-dim);
+}
+
+.explore__foe-weak {
+  grid-column: 4;
+  grid-row: 1;
+  display: inline-flex;
+  gap: 2px;
+  justify-self: end;
+}
+
+.explore__foe-weak-icon {
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 /* 呪文の構え：3D画面の下に、呪文の名前と、やめる・唱えるのボタン */
@@ -4722,7 +4749,7 @@ button {
   }
 
   .explore__foes {
-    max-width: min(48%, 11rem);
+    width: min(52%, 12.5rem);
   }
 
   /* 構えているあいだは、いちばん新しい記録の行を隠す（構えの欄と重なるため） */
