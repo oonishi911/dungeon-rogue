@@ -5388,3 +5388,31 @@ button {
     flex: 1 0 100%;
   }
 }
+
+/* スマホの呪文のボタンに、名前を小さく出す（2026-11-28。提案 #8）。覚えるまで、どれが何かわかるように。
+   向きのない呪文は長押しで説明、向きのある呪文は押すと構えの欄に名前と案内が出る（今までどおり） */
+@media (max-width: 48rem) {
+  .explore__spells .explore__spell-name {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
+    font-size: 0.56rem;
+    line-height: 1.1;
+    letter-spacing: -0.04em;
+    color: var(--bone);
+  }
+
+  .explore__spells .explore__use {
+    padding-block: 0.2rem;
+  }
+}
+
+/* とても狭いスマホ（360px 幅以下）では、呪文の名前をもう一段小さく（「烈なぎ払い」の5文字が収まるように） */
+@media (max-width: 22.5rem) {
+  .explore__spells .explore__spell-name {
+    font-size: 0.5rem;
+    letter-spacing: -0.06em;
+  }
+}
