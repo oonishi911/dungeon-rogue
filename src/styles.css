@@ -5542,3 +5542,39 @@ button {
 .shop__buy--second:active {
   transform: translateY(1px);
 }
+
+/* 店の装備の画面（広い画面）：右側に「持っていくもの」を常に出す2列の配置（2026-11-28。提案 #13）。
+   左は売り場（タブと品物）、右は持っていくものと出発のボタン。右の欄は、下へスクロールしても上に残る */
+@media (min-width: 64rem) {
+  .shop--equip {
+    max-width: 74rem;
+    grid-template-columns: minmax(0, 1fr) 24rem;
+    column-gap: 1.75rem;
+    row-gap: 1.25rem;
+    align-items: start;
+  }
+
+  .shop--equip > * {
+    grid-column: 1;
+  }
+
+  /* 見出しは、2列にまたがる */
+  .shop--equip > .top {
+    grid-column: 1 / -1;
+  }
+
+  .shop--equip > .shop__bag {
+    grid-column: 2;
+    grid-row: 2 / span 8;
+    position: sticky;
+    top: 1rem;
+    align-self: start;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+  }
+
+  /* 右の欄では、持っていくものを1列に並べる */
+  .shop--equip .shop__slots {
+    grid-template-columns: 1fr;
+  }
+}

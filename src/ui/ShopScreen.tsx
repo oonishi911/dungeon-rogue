@@ -84,7 +84,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
   };
 
   return (
-    <main className="screen screen--narrow screen--fit shop">
+    <main className={`screen screen--narrow screen--fit shop${mode === 'equip' ? ' shop--equip' : ''}`}>
       <RoomBackdrop save={save} />
       <header className="top">
         <div>
