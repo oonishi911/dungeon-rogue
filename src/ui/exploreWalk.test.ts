@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { startExplore } from '../game/explore';
 import type { ExploreState } from '../game/exploreTypes';
-import { avoidOnWalk, knownStairs, walkInterrupt } from './exploreWalk';
+import { avoidOnWalk, knownStairs, sightedEnemyIds, walkInterrupt } from './exploreWalk';
 
 const base = (): ExploreState => {
   const s = startExplore(3, { enemyDensity: 0, loadout: ['sword'] });
@@ -26,6 +26,21 @@ describe('歩き続けているときに立ち止まるわけ', () => {
     const seen = { ...s, enemies: [foe] };
     expect(walkInterrupt(s, seen)).toContain('敵');
     expect(walkInterrupt(seen, seen)).toBeNull();
+  });
+
+  it('壁の向こうの敵が視界の半径に入っても、止まらない', () => {
+    const s = base();
+    const w = s.map.width;
+    // 主人公の右に壁を立て、その向こうに敵を置く
+    const tiles = s.map.tiles.slice();
+    const wall = { x: s.player.x + 1, y: s.player.y };
+    tiles[wall.y * w + wall.x] = 'wall';
+    const walled = { ...s, map: { ...s.map, tiles } };
+    const foe = { uid: 1, id: 'goblin' as const, elite: false, pos: { x: s.player.x + 2, y: s.player.y }, hp: 10, mode: 'wander' as const, justNoticed: false, lastSeen: null, searchTurns: 0 };
+    expect(walkInterrupt(walled, { ...walled, enemies: [foe] })).toBeNull();
+    expect(sightedEnemyIds({ ...walled, enemies: [foe] }).size).toBe(0);
+    // 壁がなければ止まる
+    expect(walkInterrupt(s, { ...s, enemies: [foe] })).toContain('敵');
   });
 
   it('まだ開けていない宝箱を初めて見つけたら止まる', () => {

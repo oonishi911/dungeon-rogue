@@ -412,8 +412,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
           queueRef.current = rest;
           perform(queued);
         } else if (held || stickRef.current) {
-          // 押しっぱなし・なぞりで歩き続けているとき：新しい敵が見えた・宝箱を見つけた・攻撃を受けたら、立ち止まる
-          // （もう一度押す・指を動かすと、また歩き出す）
+          // なぞりで歩き続けているとき：壁にさえぎられずに新しい敵が見えた・宝箱を見つけた・攻撃を受けたら、立ち止まる
+          // （指を動かすと、また歩き出す）。方向キーの押しっぱなしは止めない（離せばすぐ止まるので）
           const s = stateRef.current;
           const dir =
             held ??
@@ -422,10 +422,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
               const to = { x: s.player.x + DIR_DELTA[d].x, y: s.player.y + DIR_DELTA[d].y };
               return tileAt(s.map, to) !== 'wall';
             });
-          if (perform({ kind: 'move', dir })) {
+          if (perform({ kind: 'move', dir }) && !held) {
             const why = walkInterrupt(s, stateRef.current);
             if (why && stateRef.current.outcome === 'ongoing') {
-              heldRef.current = [];
               // なぞっている指は、止まった位置からはっきり動かすまで、歩き出さない（指のわずかな揺れで、すぐ歩き出さないように）
               if (stickRef.current) stickPauseRef.current = lastPointerRef.current;
               stickRef.current = null;
