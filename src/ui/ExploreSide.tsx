@@ -1,6 +1,6 @@
 // 探索画面の右側（スマホでは下）。体力などのゲージ、呪文と道具のボタン、装備・見えている敵・記録・リタイア。
 
-import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
 import { BODY_NAMES, expToNext, ITEMS, SPELLS, TRAITS } from '../game/data';
 import { enemyDef } from '../game/enemies';
 import type { Dir, ExploreState } from '../game/exploreTypes';
@@ -9,7 +9,8 @@ import type { ItemId, SpellId } from '../game/types';
 import { playerHitDamage, swapWeapons } from '../game/combat';
 import { SKILL_TEXTS, skillOf } from '../game/weaponSkill';
 import { ENEMY_MARK } from './exploreRender';
-import { SKILL_KEY, SPELL_KEYS, SWAP_KEY } from './exploreKeys';
+import { feelSettings, subscribeFeel } from './feelSettings';
+import { keyLabel, spellKeys } from './keyBindings';
 import { LogList, Meter } from './ExploreParts';
 import { statusChips } from './statusChips';
 import { stickDirections } from './stick';
@@ -48,6 +49,7 @@ const AIM_DRAG = 40;
 const QUICK_TAP_MS = 260;
 
 export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibleEnemies, recentLog, aiming, infoOpen, onCast, onAimStart, onAimDir, onAimRelease, onSkill, onSwap, onUseItem, onCloseInfo, onRetire, onInfo }: ExploreSideProps) {
+  const keys = useSyncExternalStore(subscribeFeel, feelSettings).keys; // 設定で変えたキーを、ボタンに出す
   const { stats } = state;
   const skill = skillOf(stats.weapon, stats.echoes); // 持っている武器の固有技（素手なら無い）
   const chips = statusChips(state);
@@ -143,7 +145,7 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
             aria-label={`${ITEMS[stats.sub.weapon].name}に持ち替える`}
             title={`${ITEMS[stats.weapon!].name}から${ITEMS[stats.sub.weapon].name}に持ち替える（1ターンかかる。技ゲージは武器ごとにたまる）`}
           >
-            <span className="explore__key">{SWAP_KEY.toUpperCase()}</span>
+            <span className="explore__key">{keyLabel(keys.swap)}</span>
             <ItemIcon id={stats.sub.weapon} size={22} />
             持ち替え
             <span className="explore__cost">{ITEMS[stats.sub.weapon].name}</span>
@@ -159,7 +161,7 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
             aria-label={`${skill.name}（技ゲージ ${state.skill}/${skill.max}）`}
             title={`${skill.name}：${SKILL_TEXTS[skill.weapon]}（通常攻撃を${skill.max}回当てると使える。主人公が向いている方向に出す）`}
           >
-            <span className="explore__key">{SKILL_KEY.toUpperCase()}</span>
+            <span className="explore__key">{keyLabel(keys.skill)}</span>
             {skill.name}
             <span className="explore__pips" aria-hidden="true">
               {Array.from({ length: skill.max }, (_, i) => (
@@ -199,7 +201,7 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
                     aria-label={`${SPELLS[spell].name}（魔力${cost}${short ? '、足りない' : ''}）`}
                     title={about}
                   >
-                    <span className="explore__key">{SPELL_KEYS[i]?.toUpperCase()}</span>
+                    <span className="explore__key">{keyLabel(spellKeys(keys)[i] ?? '')}</span>
                     <SpellIcon spell={spell} size={22} />
                     <span className="explore__spell-name">{SPELLS[spell].name}</span>
                     <span className="explore__cost">{short ? '不足' : `魔力${cost}`}</span>

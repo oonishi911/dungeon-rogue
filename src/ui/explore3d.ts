@@ -470,6 +470,7 @@ export class DungeonView3D {
       }
       view.mark.position.set(at.x, view.top + 0.15, at.y);
       view.weak.position.set(at.x, view.top + WEAK_MARK.lift, at.y);
+      if (!feelSettings().weakMarks) view.weak.visible = false; // 設定で切ったら、すぐ消す（つけたときは、次の手から出る）
       view.hp.position.set(at.x, 0.06, at.y);
       view.ring?.position.set(at.x, 0.02, at.y);
       if (view.glow) {
@@ -1805,7 +1806,7 @@ export class DungeonView3D {
       shown.add(e.uid);
       const view = this.enemies.get(e.uid) ?? this.createEnemyView(e);
       view.body.visible = view.mark.visible = true;
-      view.weak.visible = view.hasWeak;
+      view.weak.visible = view.hasWeak && feelSettings().weakMarks; // 設定で「弱点の印」を切っていれば出さない
       if (view.ring) view.ring.visible = true;
       const def = enemyDef(e);
       // ボスの段階：段階が上がると、体が少し大きくなり、足元の輪の色が変わって大きくなる。盾は、持つ段階になってから作る

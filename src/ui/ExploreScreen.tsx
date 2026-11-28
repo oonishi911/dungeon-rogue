@@ -5,7 +5,7 @@
 // キーを押し続けたときの歩く速さが、OS のキーリピートの設定に左右されず一定になる。
 //
 // このファイルは操作と毎フレームの進行を受け持つ。ほかは次のファイルに分けてある：
-//   exploreFeedback.ts 1手ごとの音・振動・3D の演出 / exploreKeys.ts キーの割り当て / exploreWalk.ts タップで歩く判断
+//   exploreFeedback.ts 1手ごとの音・振動・3D の演出 / keyBindings.ts キーの割り当て（設定の画面で変えられる） / exploreWalk.ts タップで歩く判断
 //   ExploreSide.tsx 右側（下）の欄 / ExploreDialogs.tsx 重ねて出す確かめる画面 / ExploreParts.tsx ゲージと記録 / backGuard.ts 戻るの見張り
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react';
@@ -16,7 +16,7 @@ import { DIR_DELTA, type Dir, type ExploreAction, type ExploreState } from '../g
 import { dirToward, samePos, visibleTiles } from '../game/exploreSight';
 import { spellPreview } from '../game/spellArea';
 import { tileAt, type Pos } from '../game/map';
-import { SoundButton } from './SoundButton';
+import { GearIcon, SettingsDialog } from './SettingsDialog';
 import { walkPath, walkToward } from '../game/path';
 import type { ItemId, SpellId } from '../game/types';
 import { useBackGuard } from './backGuard';
@@ -28,7 +28,7 @@ import { feelSettings, subscribeFeel } from './feelSettings';
 import { devBestHref } from './exploreDev';
 import { EndingPanel, LeaveDialog, RetireDialog } from './ExploreDialogs';
 import { playFeedback } from './exploreFeedback';
-import { KEY_ACTIONS, KEY_DIRS, SKILL_KEY, SPELL_KEYS, STAIRS_KEY, SWAP_KEY } from './exploreKeys';
+import { keyCommand, keyLabel } from './keyBindings';
 import { LogList } from './ExploreParts';
 import { NearbyFoes } from './NearbyFoes';
 import { ExploreSide } from './ExploreSide';
@@ -84,6 +84,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const [miniOpen, setMiniOpen] = useState(false); // 地図を大きく広げているか
   // 操作の説明：初めて探索に入ったときだけ自動で開く（そのあとは「操作」ボタン）
   const [helpOpen, setHelpOpen] = useState(() => shouldAutoOpenHelp());
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const helpOpenRef = useRef(helpOpen);
   helpOpenRef.current = helpOpen;
   const closeHelp = useCallback(() => {
@@ -542,46 +543,47 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
         else cancelAimRef.current();
         return;
       }
-      const dir = KEY_DIRS[key];
-      if (dir) {
+      const cmd = keyCommand(key, feelSettings().keys);
+      if (cmd?.kind === 'dir') {
         e.preventDefault(); // 矢印キーでページがスクロールしないように
-        if (!e.repeat) hold(dir);
+        if (!e.repeat) hold(cmd.dir);
         return;
       }
-      if (key === SWAP_KEY) {
+      if (cmd?.kind === 'swap') {
         e.preventDefault();
         if (!e.repeat && stateRef.current.stats.sub) swapRef.current();
         return;
       }
-      if (key === STAIRS_KEY) {
+      if (cmd?.kind === 'stairs') {
         e.preventDefault();
         if (!e.repeat) goStairsRef.current();
         return;
       }
-      if (key === SKILL_KEY) {
+      if (cmd?.kind === 'skill') {
         e.preventDefault();
         if (!e.repeat) useSkillRef.current();
         return;
       }
-      const spellIndex = SPELL_KEYS.indexOf(key as (typeof SPELL_KEYS)[number]);
-      const spell = spellIndex >= 0 ? stateRef.current.spells[spellIndex] : undefined;
+      if (cmd?.kind === 'wait') {
+        e.preventDefault();
+        if (!e.repeat) request({ kind: 'wait' });
+        return;
+      }
+      const spell = cmd?.kind === 'spell' ? stateRef.current.spells[cmd.index] : undefined;
       if (spell) {
         e.preventDefault();
         if (!e.repeat) chooseSpellRef.current(spell);
         return;
       }
       const n = Number(e.key);
-      const action =
-        Number.isInteger(n) && n >= 1 && n <= itemGroupsRef.current.length
-          ? ({ kind: 'use_item', item: itemGroupsRef.current[n - 1]!.id } as const)
-          : KEY_ACTIONS[e.key];
-      if (!action) return;
+      if (!(Number.isInteger(n) && n >= 1 && n <= itemGroupsRef.current.length)) return;
+      const action = { kind: 'use_item', item: itemGroupsRef.current[n - 1]!.id } as const;
       e.preventDefault();
       if (!e.repeat) request(action);
     };
     const onUp = (e: KeyboardEvent) => {
-      const dir = KEY_DIRS[e.key.length === 1 ? e.key.toLowerCase() : e.key];
-      if (dir) release(dir);
+      const cmd = keyCommand(e.key, feelSettings().keys);
+      if (cmd?.kind === 'dir') release(cmd.dir);
     };
     // ウィンドウから離れるとキーを離した通知が来ないので、押している方向を忘れる
     const onBlur = () => {
@@ -768,7 +770,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
           <button type="button" className="explore__wait explore__help-button" aria-haspopup="dialog" onClick={() => setHelpOpen(true)}>
             操作
           </button>
-          <SoundButton />
+          <button type="button" className="explore__wait explore__settings-button" aria-haspopup="dialog" aria-label="設定" title="設定（音・演出・文字の大きさ・弱点の印・キー）" onClick={() => setSettingsOpen(true)}>
+            <GearIcon />
+          </button>
           <button
             type="button"
             className="explore__wait explore__info-toggle"
@@ -780,6 +784,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
           </button>
         </div>
       </header>
+      {settingsOpen && <SettingsDialog keyboard={!touchDevice} onClose={() => setSettingsOpen(false)} />}
 
       <div className="explore">
         <div
@@ -815,10 +820,10 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
                 className={`explore__go-stairs${walkingStairs ? ' explore__go-stairs--on' : ''}`}
                 onClick={goStairs}
                 aria-pressed={walkingStairs}
-                title={walkingStairs ? '階段へ歩くのを止める（G キー）' : '見つけた階段まで歩く。敵が見えたら立ち止まる（G キー）'}
+                title={walkingStairs ? `階段へ歩くのを止める（${keyLabel(feel.keys.stairs)} キー）` : `見つけた階段まで歩く。敵が見えたら立ち止まる（${keyLabel(feel.keys.stairs)} キー）`}
               >
                 {walkingStairs ? '止める' : '階段へ'}
-                <span className="explore__rest-key">G</span>
+                <span className="explore__rest-key">{keyLabel(feel.keys.stairs)}</span>
               </button>
             )
           )}
@@ -828,13 +833,13 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
               className="explore__rest"
               onClick={() => request({ kind: 'wait' })}
               aria-label="その場で1ターン待つ"
-              title="その場で1ターン待つ（スペースキー）"
+              title={`その場で1ターン待つ（${feel.keys.wait === ' ' ? 'スペース' : keyLabel(feel.keys.wait)}キー）`}
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9" />
               </svg>
               待機
-              <span className="explore__rest-key">スペース</span>
+              <span className="explore__rest-key">{feel.keys.wait === ' ' ? 'スペース' : keyLabel(feel.keys.wait)}</span>
             </button>
           )}
           {/* なぞって歩く目印（2026-11-28。提案 #9）：どこをなぞってもよいが、親指を置きやすい左下に、薄い輪で示す */}

@@ -1,7 +1,7 @@
 // 操作の説明を自動で開くか（controlsHelp.ts）
 import { describe, expect, it } from 'vitest';
-import { COMMON_HELP, countStickUse, KEYBOARD_HELP, markHelpSeen, shouldAutoOpenHelp, shouldShowStickHint, STICK_HINT_UNTIL, TOUCH_HELP } from './controlsHelp';
-import { SKILL_KEY, SPELL_KEYS, STAIRS_KEY, SWAP_KEY } from './exploreKeys';
+import { COMMON_HELP, countStickUse, KEYBOARD_HELP, keyboardHelp, markHelpSeen, shouldAutoOpenHelp, shouldShowStickHint, STICK_HINT_UNTIL, TOUCH_HELP } from './controlsHelp';
+import { DEFAULT_BINDINGS, rebind } from './keyBindings';
 
 const memory = () => {
   const m = new Map<string, string>();
@@ -25,10 +25,13 @@ describe('操作の説明', () => {
 
   it('説明のキーは、実際の割り当てと同じ', () => {
     const keys = KEYBOARD_HELP.map((r) => r.how).join(' ');
-    expect(keys).toContain(SPELL_KEYS.join(' ').toUpperCase());
-    expect(keys).toContain(SKILL_KEY.toUpperCase());
-    expect(keys).toContain(SWAP_KEY.toUpperCase());
-    expect(keys).toContain(STAIRS_KEY.toUpperCase());
+    expect(keys).toContain('Z X C V B');
+    expect(keys).toContain('W A S D');
+    for (const k of ['F', 'Q', 'G']) expect(keys).toContain(k);
+    expect(KEYBOARD_HELP).toEqual(keyboardHelp(DEFAULT_BINDINGS));
+    // 割り当てを変えると、説明も変わる
+    const changed = keyboardHelp(rebind(DEFAULT_BINDINGS, 'stairs', 'e'));
+    expect(changed.find((r) => r.what.startsWith('見つけた階段'))!.how).toBe('E');
     expect(TOUCH_HELP.length).toBeGreaterThan(0);
     expect(COMMON_HELP.length).toBeGreaterThan(0);
   });
