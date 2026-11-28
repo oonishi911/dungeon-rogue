@@ -244,14 +244,14 @@ export function PlacementPanel({ base, draft, setDraft }: GenPanelProps) {
         <Field
           label={GEN_LABELS.hpRate}
           hint="このダンジョンの敵のHPを、敵の設定（「敵」のタブ）の何倍にするかです。1階目の倍率で、深い階では下の「1階ごとに増える」分が足されます。強敵・ボスにも掛かります。"
-          example="2なら、HP10の敵がHP20に。装備が強くなってから行くダンジョンほど、大きくします。"
+          example="2なら、HP100の敵がHP200に。装備が強くなってから行くダンジョンほど、大きくします。"
         >
           <NumberField {...GEN_LIMITS.powerRate} value={e.hpRate} changed={e.hpRate !== be.hpRate} base={be.hpRate} label={GEN_LABELS.hpRate} onChange={(v) => setEnemies({ hpRate: v })} />
         </Field>
         <Field
           label={GEN_LABELS.atkRate}
           hint="このダンジョンの敵の攻撃を、敵の設定の何倍にするかです。受けるダメージは「敵の攻撃 − 守り」なので、守りの高い防具を着ていても痛いようにするには、ここを上げます。ボスの攻撃には掛かりません（ボスは段階で強くなります）。"
-          example="1.5なら、攻撃8の敵が攻撃12に。守り6の主人公が受けるダメージは、2から6になります。"
+          example="1.5なら、攻撃80の敵が攻撃120に。守り60の主人公が受けるダメージは、20から60になります。"
         >
           <NumberField {...GEN_LIMITS.powerRate} value={e.atkRate} changed={e.atkRate !== be.atkRate} base={be.atkRate} label={GEN_LABELS.atkRate} onChange={(v) => setEnemies({ atkRate: v })} />
         </Field>
@@ -318,8 +318,8 @@ export function GrowthPanel({ base, draft, setDraft }: GenPanelProps) {
       <div className="gen__fields">
         {(
           [
-            ['startMaxHp', '入ったときの最大HPです。レベルが上がると、1レベルごとに「1レベルで増える最大HP」だけ増えます。', '60なら、レベル1の最大HPは60。'],
-            ['startHp', '入ったときのHPです。最大HPより小さくすると、傷ついた状態で始まります（回復薬や癒しで回復できます）。', '最大HPが60で、これが40なら、HP40/60で始まります。'],
+            ['startMaxHp', '入ったときの最大HPです。レベルが上がると、1レベルごとに「1レベルで増える最大HP」だけ増えます。', '600なら、レベル1の最大HPは600。'],
+            ['startHp', '入ったときのHPです。最大HPより小さくすると、傷ついた状態で始まります（回復薬や癒しで回復できます）。', '最大HPが600で、これが400なら、HP400/600で始まります。'],
           ] as const
         ).map(([key, hint, example]) => (
           <Field key={key} label={GEN_LABELS[key]} hint={hint} example={example}>
@@ -337,9 +337,9 @@ export function GrowthPanel({ base, draft, setDraft }: GenPanelProps) {
           [
             ['expBase', '経験値がこれだけたまると、レベル1→2に上がります。', '10なら、経験値が10たまった時点でレベル2。'],
             ['expStep', 'レベルが上がるたびに、次のレベルに要る経験値が、これだけ増えます。', '最初が10で、増える分が5なら、1→2は10、2→3は15、3→4は20。下の表でも確かめられます。'],
-            ['hpPerLevel', '1レベル上がるごとに増える最大HPです。上がった分だけ、HPも回復します。', '2なら、レベル3で最大HPが4増えます（2×2レベル分）。'],
-            ['atkPerLevel', '1レベル上がるごとに増える攻撃です。敵に与えるダメージ（攻撃−敵の防御）が、その分だけ増えます。', '1なら、レベル3で攻撃が2増え、毎回のダメージも2増えます。'],
-            ['magPerLevel', '1レベル上がるごとに増える魔力です。魔法の強さに足されるので、呪文のダメージが、その分だけ（呪文の倍率を掛けて）増えます。', '1なら、レベル3で魔力が2増え、倍率1.5の呪文のダメージは3増えます。'],
+            ['hpPerLevel', '1レベル上がるごとに増える最大HPです。上がった分だけ、HPも回復します。', '20なら、レベル3で最大HPが40増えます（20×2レベル分）。'],
+            ['atkPerLevel', '1レベル上がるごとに増える攻撃です。敵に与えるダメージ（攻撃−敵の防御）が、その分だけ増えます。', '10なら、レベル3で攻撃が20増え、毎回のダメージも20増えます。'],
+            ['magPerLevel', '1レベル上がるごとに増える魔力です。魔法の強さに足されるので、呪文のダメージが、その分だけ（呪文の倍率を掛けて）増えます。', '10なら、レベル3で魔力が20増え、倍率1.5の呪文のダメージは30増えます。'],
             ['maxLevel', 'このレベルより上には、上がりません。', '10なら、レベル10が上限です。'],
             ['eliteRate', '強敵を倒したときに得る金貨と経験値が、通常の敵の何倍になるかです。強敵は、必ず宝箱（金貨と良い道具）も落とします。', '2なら、通常の敵が金貨10・経験値5のとき、強敵は金貨20・経験値10。'],
           ] as const

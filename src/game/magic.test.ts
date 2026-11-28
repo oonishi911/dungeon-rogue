@@ -23,7 +23,7 @@ const ROOM = ['###########', '#.........#', '#.........#', '#.........#', '#####
 const BOOKS: ItemId[] = ['book_shockwave', 'book_sweep', 'book_fire_bolt', 'book_heal', 'book_regen'];
 
 function enemy(pos: Pos, overrides: Partial<MapEnemy> = {}): MapEnemy {
-  return { uid: 0, id: FIELD_ENEMY, elite: false, pos, hp: 99, mode: 'chase', justNoticed: false, lastSeen: null, searchTurns: 0, ...overrides };
+  return { uid: 0, id: FIELD_ENEMY, elite: false, pos, hp: 990, mode: 'chase', justNoticed: false, lastSeen: null, searchTurns: 0, ...overrides };
 }
 
 /** 手書きの部屋に、主人公と敵を置いた状態を作る（敵は倒れないよう HP を多めにしている） */
@@ -83,7 +83,7 @@ describe('魔力と呪文書', () => {
   it('レベルで増えた魔力も、魔法の強さに足される（武器の魔力と合わせて。杖なら合計に倍率）', () => {
     const lv = (id: ItemId, levels: number) => ({ ...buildPlayer([id]), mag: GEN.growth.magPerLevel * levels });
     expect(magicPower(lv('sword', 3), GEN.magic)).toBe(GEN.magic.power + GEN.growth.magPerLevel * 3);
-    expect(magicPower(lv('staff_5', 3), GEN.magic)).toBe((GEN.magic.power + 4 + GEN.growth.magPerLevel * 3) * GEN.magic.staffPower);
+    expect(magicPower(lv('staff_5', 3), GEN.magic)).toBe((GEN.magic.power + 40 + GEN.growth.magPerLevel * 3) * GEN.magic.staffPower);
     expect(buildPlayer(['staff']).mag).toBe(0); // 最初は0
   });
 
@@ -121,8 +121,8 @@ describe('呪文の働き', () => {
     expect(s.cast!.moves).toContainEqual({ from: { x: 2, y: 2 }, to: { x: 1, y: 2 } });
     const right = s.enemies.find((e) => e.uid === 0)!;
     const left = s.enemies.find((e) => e.uid === 1)!;
-    expect(right.hp).toBe(99 - dmg);
-    expect(left.hp).toBe(99 - dmg - cfg.shockwave!.crash!);
+    expect(right.hp).toBe(990 - dmg);
+    expect(left.hp).toBe(990 - dmg - cfg.shockwave!.crash!);
   });
 
   it('衝撃波：ほかの敵にぶつかったら、その手前で止まって追加ダメージ', () => {
@@ -130,7 +130,7 @@ describe('呪文の働き', () => {
     const s = act(s0, { kind: 'cast', spell: 'shockwave' });
     expect(s.cast!.moves).toContainEqual({ from: { x: 4, y: 2 }, to: { x: 5, y: 2 } });
     const dmg = spellDamage(s0.stats, 'shockwave', enemyDef(s0.enemies[0]!), GEN);
-    expect(s.enemies.find((e) => e.uid === 0)!.hp).toBe(99 - dmg - cfg.shockwave!.crash!);
+    expect(s.enemies.find((e) => e.uid === 0)!.hp).toBe(990 - dmg - cfg.shockwave!.crash!);
   });
 
   it('なぎ払い：向いた方向の決まったマス数を貫き、並んだ敵すべてに当たる', () => {
@@ -138,13 +138,13 @@ describe('呪文の働き', () => {
     const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 2, y: 2 }), enemy({ x: 3, y: 2 }), enemy({ x: 2 + range, y: 2 })]);
     const s = act(s0, { kind: 'cast', spell: 'sweep', dir: 'right' });
     const dmg = spellDamage(s0.stats, 'sweep', enemyDef(s0.enemies[0]!), GEN);
-    expect(s.enemies.map((e) => e.hp)).toEqual([99 - dmg, 99 - dmg, 99]);
+    expect(s.enemies.map((e) => e.hp)).toEqual([990 - dmg, 990 - dmg, 990]);
   });
 
   it('属性の矢：最初に当たった敵だけに、属性の相性で増減したダメージ', () => {
     const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 3, y: 2 }), enemy({ x: 4, y: 2 })]);
     const s = act(s0, { kind: 'cast', spell: 'fire_bolt', dir: 'right' });
-    expect(s.enemies.map((e) => e.hp)).toEqual([99 - spellDamage(s0.stats, 'fire_bolt', enemyDef(s0.enemies[0]!), GEN), 99]);
+    expect(s.enemies.map((e) => e.hp)).toEqual([990 - spellDamage(s0.stats, 'fire_bolt', enemyDef(s0.enemies[0]!), GEN), 990]);
     expect(s.cast!.path).toEqual([
       { x: 2, y: 2 },
       { x: 3, y: 2 },
@@ -161,7 +161,7 @@ describe('呪文の働き', () => {
       const around = Math.max(1, Math.round(center * cfg[spell]!.splash!));
       // 炎の連矢は、当たった敵の足元とまわりに燃える床を残すので、同じターンの終わりに、その上の敵が燃える床のダメージを受ける
       const burn = spell === 'fire_chain' ? FIELD_CONFIG.fireDamage : 0;
-      expect(s.enemies.map((e) => e.hp)).toEqual([99 - center - burn, 99 - around - burn, 99 - around - burn, 99]);
+      expect(s.enemies.map((e) => e.hp)).toEqual([990 - center - burn, 990 - around - burn, 990 - around - burn, 990]);
       expect(s.cast!.splash).toEqual([
         { x: 4, y: 3 },
         { x: 4, y: 2 },
@@ -173,15 +173,15 @@ describe('呪文の働き', () => {
   it('連矢：何にも当たらなければまわりは巻き込まない。割合が0ならまわりにはダメージがない。ふつうの矢は巻き込まない', () => {
     const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 3, y: 2 }), enemy({ x: 4, y: 3 })], ['book_fire_chain', 'book_fire_bolt']);
     const miss = act(s0, { kind: 'cast', spell: 'fire_chain', dir: 'up' });
-    expect(miss.enemies.map((e) => e.hp)).toEqual([99, 99]);
+    expect(miss.enemies.map((e) => e.hp)).toEqual([990, 990]);
     expect(miss.cast!.splash).toEqual([]);
     const none = act({ ...s0, mp: 99 }, { kind: 'cast', spell: 'fire_bolt', dir: 'right' });
-    expect(none.enemies[1]!.hp).toBe(99);
+    expect(none.enemies[1]!.hp).toBe(990);
     expect(none.cast!.splash).toEqual([]);
   });
 
   it('連矢：まわりの敵を倒せる。倒した敵は戦った数に入る', () => {
-    const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 3, y: 2 }), enemy({ x: 4, y: 2 }, { hp: 1 })], ['book_fire_chain']);
+    const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 3, y: 2 }), enemy({ x: 4, y: 2 }, { hp: 10 })], ['book_fire_chain']);
     const s = act(s0, { kind: 'cast', spell: 'fire_chain', dir: 'right' });
     expect(s.enemies).toHaveLength(1);
     expect(s.defeated).toBe(s0.defeated + 1);
@@ -224,18 +224,18 @@ describe('呪文の働き', () => {
   it('烈なぎ払い：当たった敵が出血し、あとの3ターン、1ターンに与えたダメージの2割（四捨五入、最低1）を受ける。そのターンは受けない', () => {
     const loadout: ItemId[] = ['book_sweep_bleed'];
     const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 2, y: 2 }), enemy({ x: 3, y: 2 }), enemy({ x: 5, y: 2 })], loadout);
-    const rich = { ...s0, stats: { ...s0.stats, hp: 999, maxHp: 999 } };
+    const rich = { ...s0, stats: { ...s0.stats, hp: 9990, maxHp: 9990 } };
     const dmg = spellDamage(s0.stats, 'sweep_bleed', enemyDef(s0.enemies[0]!), GEN);
     const slip = Math.max(1, Math.round(dmg * cfg.sweep_bleed!.bleedRate!));
     const s1 = act(rich, { kind: 'cast', spell: 'sweep_bleed', dir: 'right' });
-    expect(s1.enemies.map((e) => e.hp)).toEqual([99 - dmg, 99 - dmg, 99]);
+    expect(s1.enemies.map((e) => e.hp)).toEqual([990 - dmg, 990 - dmg, 990]);
     expect(s1.enemies.map((e) => e.bleed)).toEqual([{ amount: slip, turns: 3 }, { amount: slip, turns: 3 }, undefined]);
     expect(s1.cast!.bleeding).toEqual([{ x: 2, y: 2 }, { x: 3, y: 2 }]);
     const s2 = act(s1, { kind: 'wait' });
-    expect(s2.enemies.map((e) => e.hp)).toEqual([99 - dmg - slip, 99 - dmg - slip, 99]);
+    expect(s2.enemies.map((e) => e.hp)).toEqual([990 - dmg - slip, 990 - dmg - slip, 990]);
     expect(s2.hits.filter((h) => h.kind === 'dealt' && h.slip)).toHaveLength(2);
     const s4 = act(s2, { kind: 'wait' }, { kind: 'wait' });
-    expect(s4.enemies.map((e) => e.hp)).toEqual([99 - dmg - slip * 3, 99 - dmg - slip * 3, 99]);
+    expect(s4.enemies.map((e) => e.hp)).toEqual([990 - dmg - slip * 3, 990 - dmg - slip * 3, 990]);
     expect(s4.enemies.map((e) => e.bleed)).toEqual([undefined, undefined, undefined]);
     expect(act(s4, { kind: 'wait' }).enemies.map((e) => e.hp)).toEqual(s4.enemies.map((e) => e.hp)); // 出血は止まっている
   });
@@ -251,9 +251,9 @@ describe('呪文の働き', () => {
     expect(s2.enemies).toHaveLength(0);
     expect(s2.defeated).toBe(s0.defeated + 1);
     // 遠くで気付いていない敵が出血しても、うろつきのまま
-    const calm = arena({ x: 1, y: 2 }, [enemy({ x: 9, y: 2 }, { mode: 'wander', bleed: { amount: 2, turns: 2 } })]);
+    const calm = arena({ x: 1, y: 2 }, [enemy({ x: 9, y: 2 }, { mode: 'wander', bleed: { amount: 20, turns: 2 } })]);
     const s3 = act(calm, { kind: 'wait' });
-    expect(s3.enemies[0]!.hp).toBe(97);
+    expect(s3.enemies[0]!.hp).toBe(970);
     expect(s3.enemies[0]!.mode).toBe('wander');
   });
 
@@ -271,7 +271,7 @@ describe('呪文の働き', () => {
   });
 
   it('呪文で敵を倒すと、ふつうに倒したときと同じ報酬が入る', () => {
-    const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 3, y: 2 }, { hp: 1 })]);
+    const s0 = arena({ x: 1, y: 2 }, [enemy({ x: 3, y: 2 }, { hp: 10 })]);
     const s = act(s0, { kind: 'cast', spell: 'fire_bolt', dir: 'right' });
     expect(s.enemies).toHaveLength(0);
     expect(s.defeated).toBe(1);
@@ -281,13 +281,13 @@ describe('呪文の働き', () => {
   it('癒し：HPがすぐに戻る。減っていなければ唱えられない', () => {
     const s0 = arena({ x: 1, y: 1 }, []);
     expect(step(s0, { kind: 'cast', spell: 'heal' }).ok).toBe(false);
-    const hurt = { ...s0, stats: { ...s0.stats, hp: 10 } };
+    const hurt = { ...s0, stats: { ...s0.stats, hp: 100 } };
     expect(act(hurt, { kind: 'cast', spell: 'heal' }).stats.hp).toBeGreaterThanOrEqual(10 + cfg.heal!.amount!);
   });
 
   it('再生：決まったターンのあいだ、1ターンごとに回復する', () => {
     const s0 = arena({ x: 1, y: 1 }, []);
-    const hurt = { ...s0, stats: { ...s0.stats, hp: 10 } };
+    const hurt = { ...s0, stats: { ...s0.stats, hp: 100 } };
     const s = act(hurt, { kind: 'cast', spell: 'regen' });
     expect(s.regen).not.toBeNull();
     const after = act(s, ...Array.from({ length: cfg.regen!.turns! + 2 }, () => ({ kind: 'wait' }) as const));
@@ -297,7 +297,7 @@ describe('呪文の働き', () => {
 
   it('唱えると、近くのうろついている敵が気付く', () => {
     const s0 = arena({ x: 1, y: 1 }, [enemy({ x: 3, y: 1 }, { mode: 'wander' })]);
-    const hurt = { ...s0, stats: { ...s0.stats, hp: 10 } };
+    const hurt = { ...s0, stats: { ...s0.stats, hp: 100 } };
     const s = act(hurt, { kind: 'cast', spell: 'heal' });
     expect(s.enemies[0]!.mode).not.toBe('wander');
   });

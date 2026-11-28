@@ -56,11 +56,11 @@ describe('倍率を付けた敵の能力（enemyDef）', () => {
     expect(e.hp).toBe(Math.round(enemyBase(FIELD_ENEMY).hp * 3));
   });
 
-  it('攻撃が上がると、守りを引いたあとのダメージが残る（守りの高い防具でも1にならない）', () => {
-    const player: PlayerStats = { hp: 100, maxHp: 100, atk: 6, def: 6, mag: 0, poisonTurns: 0, weapon: null, armor: null, items: [], enchant: null };
-    const weak = { ...enemyBase(FIELD_ENEMY), atk: 7 };
-    expect(enemyHitDamage(player, weak)).toBe(1);
-    expect(enemyHitDamage(player, { ...weak, atk: Math.round(7 * 2) })).toBe(8);
+  it('攻撃が上がると、守りを引いたあとのダメージが残る（守りの高い防具でも最低の10にならない）', () => {
+    const player: PlayerStats = { hp: 1000, maxHp: 1000, atk: 60, def: 60, mag: 0, poisonTurns: 0, weapon: null, armor: null, items: [], enchant: null };
+    const weak = { ...enemyBase(FIELD_ENEMY), atk: 70 };
+    expect(enemyHitDamage(player, weak)).toBe(10);
+    expect(enemyHitDamage(player, { ...weak, atk: Math.round(70 * 2) })).toBe(80);
   });
 });
 

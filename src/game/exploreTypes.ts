@@ -10,7 +10,7 @@ import type { EchoId, EnemyId, ItemId, PlayerStats, SpellId, TraitId, WeaponType
 export const EXPLORE_CONFIG = {
   sightRadius: 3, // 視界の半径（マス）。視界を広げる道具（遠見のランタン）を持っていくと広がる（ExploreState.sightRadius）
   satietyPerAction: 1,
-  starveDamage: 1, // 満腹度0のとき、1行動ごとに減るHP
+  starveDamage: 10, // 満腹度0のとき、1行動ごとに減るHP
 } as const;
 
 export type Dir = 'up' | 'down' | 'left' | 'right';

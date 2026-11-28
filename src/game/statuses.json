@@ -2,7 +2,7 @@
   "poison": {
     "chance": 20,
     "turns": 5,
-    "damage": 1
+    "damage": 10
   },
   "chill": {
     "chance": 30,
@@ -16,7 +16,7 @@
     "burn": {
       "chance": 50,
       "turns": 5,
-      "damage": 2
+      "damage": 20
     },
     "freeze": {
       "chance": 50,

@@ -104,8 +104,8 @@ export const DUNGEON_LIMITS = {
 export const MAGIC_FIELDS: { key: keyof MagicSettings; label: string; min: number; max: number; step: number; hint: string; example: string }[] = [
   { key: 'maxMp', label: '魔力の最大', min: 0, max: 200, step: 1, hint: '呪文を唱えるのに使う魔力の最大です。探索を始めるときは、魔力がいっぱいです。', example: '10で、使う魔力が2の呪文なら、続けて5回唱えられます。' },
   { key: 'regenEvery', label: '魔力が1回復する行動数', min: 1, max: 100, step: 1, hint: 'この行動数ごとに、魔力が1回復します。小さいほど、早く回復します。', example: '5なら、5行動ごとに魔力が1回復（50行動で10回復）。' },
-  { key: 'power', label: '魔法の強さ', min: 0, max: 100, step: 1, hint: '呪文のダメージのもとです。ダメージ＝（魔法の強さ＋武器の魔力）×呪文の倍率（敵の防御は無視する）。武器の魔力は「品物」タブで決めます。', example: '8で、倍率1.5の呪文なら、ダメージは12。魔力2の武器を持てば、（8＋2）×1.5＝15。' },
-  { key: 'staffPower', label: '杖での魔法の強さの倍率', min: 1, max: 5, step: 0.1, hint: '杖を持っているとき、魔法の強さ（武器の魔力を足したあと）に掛ける倍率です。', example: '1.5なら、魔法の強さ8が12になります（1なら、変わりません）。杖の魔力が2なら、（8＋2）×1.5＝15。' },
+  { key: 'power', label: '魔法の強さ', min: 0, max: 1000, step: 1, hint: '呪文のダメージのもとです。ダメージ＝（魔法の強さ＋武器の魔力）×呪文の倍率（敵の防御は無視する）。武器の魔力は「品物」タブで決めます。', example: '80で、倍率1.5の呪文なら、ダメージは120。魔力20の武器を持てば、（80＋20）×1.5＝150。' },
+  { key: 'staffPower', label: '杖での魔法の強さの倍率', min: 1, max: 5, step: 0.1, hint: '杖を持っているとき、魔法の強さ（武器の魔力を足したあと）に掛ける倍率です。', example: '1.5なら、魔法の強さ80が120になります（1なら、変わりません）。杖の魔力が20なら、（80＋20）×1.5＝150。' },
   { key: 'staffMp', label: '杖で増える魔力の最大', min: 0, max: 100, step: 1, hint: '杖を持っているとき、魔力の最大に足される分です。', example: '魔力の最大が10で、これが5なら、杖を持つと15になります。' },
   { key: 'noiseRadius', label: '唱えると気付かれる距離', min: 0, max: 20, step: 1, hint: '呪文を唱えると、このマス数以内の、うろついている敵が気付きます（0：気付かない）。', example: '5なら、唱えた場所から5マス以内の敵が気付きます。' },
 ];
@@ -121,7 +121,7 @@ export const SPELL_FIELDS: Record<SpellId, { key: string; label: string; min: nu
     cost,
     power,
     { key: 'push', label: '吹き飛ばすマス数', min: 0, max: 10, step: 1, integer: true },
-    { key: 'crash', label: 'ぶつかったときの追加ダメージ', min: 0, max: 99, step: 1, integer: true },
+    { key: 'crash', label: 'ぶつかったときの追加ダメージ', min: 0, max: 999, step: 1, integer: true },
   ];
   // 連矢：矢のうえに、当たった敵のまわり8マスの敵に与えるダメージの割合（真ん中の敵に与えるダメージに対して）
   const chain = [cost, power, range, { key: 'splash', label: 'まわりの敵へのダメージの割合', min: 0, max: 2, step: 0.05, integer: false }];
@@ -144,10 +144,10 @@ export const SPELL_FIELDS: Record<SpellId, { key: string; label: string; min: nu
     light_chain: chain,
     dark_bolt: bolt,
     dark_chain: chain,
-    heal: [cost, { key: 'amount', label: '回復するHP', min: 0, max: 999, step: 1, integer: true }],
+    heal: [cost, { key: 'amount', label: '回復するHP', min: 0, max: 9999, step: 1, integer: true }],
     regen: [
       cost,
-      { key: 'amount', label: '1ターンに回復するHP', min: 0, max: 99, step: 1, integer: true },
+      { key: 'amount', label: '1ターンに回復するHP', min: 0, max: 999, step: 1, integer: true },
       { key: 'turns', label: '続くターン数', min: 1, max: 99, step: 1, integer: true },
     ],
     silence: [cost, { key: 'radius', label: '効くマス数（まわり）', min: 1, max: 10, step: 1, integer: true }, { key: 'turns', label: '続くターン数', min: 1, max: 99, step: 1, integer: true }],
@@ -220,13 +220,13 @@ export const GEN_LIMITS = {
   bossMinions: { min: 0, max: 40, step: 1 },
   powerRate: { min: 0.1, max: 10, step: 0.1 },
   floorPowerRate: { min: 0, max: 1, step: 0.01 },
-  startHp: { min: 1, max: 999, step: 1 },
-  startMaxHp: { min: 1, max: 999, step: 1 },
+  startHp: { min: 1, max: 99999, step: 1 },
+  startMaxHp: { min: 1, max: 99999, step: 1 },
   expBase: { min: 1, max: 999, step: 1 },
   expStep: { min: 0, max: 999, step: 1 },
-  hpPerLevel: { min: 0, max: 50, step: 1 },
-  atkPerLevel: { min: 0, max: 10, step: 1 },
-  magPerLevel: { min: 0, max: 10, step: 1 },
+  hpPerLevel: { min: 0, max: 500, step: 1 },
+  atkPerLevel: { min: 0, max: 100, step: 1 },
+  magPerLevel: { min: 0, max: 100, step: 1 },
   maxLevel: { min: 1, max: 99, step: 1 },
   eliteRate: { min: 0, max: 10, step: 0.5 },
 } as const;

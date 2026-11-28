@@ -79,7 +79,7 @@ export function buildPlayer(loadout: readonly ItemId[], echoes?: readonly EchoId
  * 指輪が何個あっても、効く指輪の倍率はすべて掛け算
  */
 export function enemyHitDamage(player: PlayerStats, enemy: EnemyDef): number {
-  const base = Math.max(1, enemy.atk - player.def);
+  const base = Math.max(C.minHit, enemy.atk - player.def);
   return Math.max(1, Math.ceil(base * elementRate(player, enemy) - 1e-9));
 }
 
@@ -110,7 +110,7 @@ export function elementRate(player: PlayerStats, enemy: EnemyDef): number {
 
 /** プレイヤーの攻撃1回で敵が受けるダメージ。武器と体質、付けた属性と敵の属性の相性、敵の物理の倍率（physical）で増減する */
 export function playerHitDamage(player: PlayerStats, enemy: EnemyDef): number {
-  const base = Math.max(1, player.atk - enemy.def);
+  const base = Math.max(C.minHit, player.atk - enemy.def);
   return Math.max(1, Math.round(base * bodyMultiplier(player, enemy) * enchantMultiplier(player, enemy) * bodyDamageRate(player.echoes, enemy.body) * (enemy.physical ?? 1)));
 }
 

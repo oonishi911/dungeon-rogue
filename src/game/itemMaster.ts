@@ -2,7 +2,7 @@
 // items.json には、店で売るすべての品物の名前と値段がある。武器と防具は種類ごとに10段階あり、段階ごとに性能も決める
 // （武器：攻撃力と魔力［魔法の強さに足される。magic.ts］、防具：守りと魔力）。指輪は種類ごとに5段階あり、段階ごとに耐性（何%カットするか）と値段を決める。
 // 情報屋の情報料（information）もここにある。
-// 品物の働き（回復薬はHPを15回復する、など）と、武器と体質の相性・指輪の効く属性は、ここではなくプログラムで決まっている。
+// 品物の働き（回復薬はHPを150回復する、など）と、武器と体質の相性・指輪の効く属性は、ここではなくプログラムで決まっている。
 // items.json は、開発用の管理画面（?view=admin の「品物」タブ。src/ui/ItemPanels.tsx）から書き換えて公開できる。
 // 読めない値が入っていたら、ゲームを動かさずにエラーにする（テストで見つかるので、公開はされない）
 
@@ -81,9 +81,9 @@ export const INFO_LABELS: Record<InfoTopic, string> = { trait: 'ダンジョン�
 export const ITEM_LIMITS = {
   name: { max: 16 },
   price: { min: 1, max: 99999 },
-  atk: { min: 0, max: 99 },
-  mag: { min: 0, max: 99 },
-  def: { min: 0, max: 99 },
+  atk: { min: 0, max: 9999 },
+  mag: { min: 0, max: 9999 },
+  def: { min: 0, max: 9999 },
   cut: { min: 0, max: 100 },
   weak: { min: 0, max: 200 },
   info: { min: 0, max: 99999 }, // 情報料（0なら、はっきり聞くのも無料）
@@ -142,7 +142,7 @@ export function elementGuards(element: Element, cut: number, weak = 0): Guard[] 
 
 /** 道具の働きと説明 */
 export const SUPPLY_INFO: Record<SupplyId, { effect: ItemEffect; text: string }> = {
-  potion: { effect: { kind: 'heal', hp: 15 }, text: 'HPを15回復する' },
+  potion: { effect: { kind: 'heal', hp: 150 }, text: 'HPを150回復する' },
   panacea: { effect: { kind: 'cure' }, text: '毒と鈍足をすべて治す（回復薬では治らない）' },
   food: { effect: { kind: 'food', satiety: 200 }, text: '満腹度を200回復する' },
   fire_whetstone: { effect: { kind: 'enchant', element: 'fire', hits: 5 }, text: '武器に炎の力を宿す（攻撃5回）。氷の敵によく効く。当てた敵の足元に燃える床が残る' },

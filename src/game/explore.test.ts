@@ -306,9 +306,9 @@ describe('道具', () => {
   it('回復薬はHPを回復し、なくなる。HPが満タンなら使えない', () => {
     const s0 = startExplore(8, { loadout: ['potion'], enemyDensity: 0 });
     expect(step(s0, { kind: 'use_item', item: 'potion' }).ok).toBe(false);
-    const hurt = { ...s0, stats: { ...s0.stats, hp: 30 } };
+    const hurt = { ...s0, stats: { ...s0.stats, hp: 300 } };
     const s = act(hurt, { kind: 'use_item', item: 'potion' });
-    expect(s.stats.hp).toBe(45);
+    expect(s.stats.hp).toBe(450);
     expect(s.stats.items).toEqual([]);
     expect(s.turn).toBe(1);
   });
