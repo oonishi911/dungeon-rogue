@@ -32,6 +32,8 @@ import { KEY_ACTIONS, KEY_DIRS, SKILL_KEY, SPELL_KEYS, SWAP_KEY } from './explor
 import { LogList } from './ExploreParts';
 import { NearbyFoes } from './NearbyFoes';
 import { ExploreSide } from './ExploreSide';
+import { ControlsHelp } from './ControlsHelp';
+import { markHelpSeen, shouldAutoOpenHelp } from './controlsHelp';
 import { avoidOnWalk, visibleEnemyIds, type WalkGoal } from './exploreWalk';
 import { chooseDirection, knobOffset, STICK, stickDirections } from './stick';
 
@@ -80,6 +82,16 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const aimingRef = useRef<SpellId | null>(null);
   const [facing, setFacing] = useState<Dir>('down'); // 構えの範囲を描き直すための、主人公の向き
   const [miniOpen, setMiniOpen] = useState(false); // 地図を大きく広げているか
+  // 操作の説明：初めて探索に入ったときだけ自動で開く（そのあとは「操作」ボタン）
+  const [helpOpen, setHelpOpen] = useState(() => shouldAutoOpenHelp());
+  const helpOpenRef = useRef(helpOpen);
+  helpOpenRef.current = helpOpen;
+  const closeHelp = useCallback(() => {
+    markHelpSeen();
+    setHelpOpen(false);
+  }, []);
+  // 指で触る端末か（説明で、スマホの操作を先に出す）
+  const touchDevice = useMemo(() => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, []);
   const [hurtKey, setHurtKey] = useState(0); // 敵に攻撃された回数（画面のふちを一瞬赤くする。変わるたびに、赤いふちの動きをやり直す）
   const feel = useSyncExternalStore(subscribeFeel, feelSettings);
   const [mpShake, setMpShake] = useState(0); // 魔力が足りずに唱えられなかった回数（魔力のゲージを震わせる）
@@ -443,10 +455,21 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     if (state.outcome !== 'ongoing') cancelAim();
   }, [state.outcome, cancelAim]);
 
+  const closeHelpRef = useRef(closeHelp);
+  closeHelpRef.current = closeHelp;
+
   // キーボード：方向キーは押している間ずっと歩く。そのほかのキーは押した回数だけ行う
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
+      // 操作の説明を開いているあいだは、キーで動かない（Esc で閉じる。Enter・スペースは「わかった」ボタンが受ける）
+      if (helpOpenRef.current) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeHelpRef.current();
+        }
+        return;
+      }
       // リタイアを確かめているあいだは、キーで動かない（Esc で探索に戻る）
       if (retiringRef.current) {
         if (e.key === 'Escape') setRetiring(false);
@@ -586,6 +609,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const onStagePointerDown = (e: PointerEvent<HTMLDivElement>) => {
     // 終わったあとの「結果を見る」ボタンなどは、そのまま押せるようにする
     if (stateRef.current.outcome !== 'ongoing' || touchRef.current || e.button !== 0) return;
+    // 操作の説明を開いているあいだは、歩かない
+    if (helpOpenRef.current) return;
     // 3D画面の上に重ねたボタン（待機・リタイアの確かめなど）は、歩く操作にせず、ボタンとして押させる
     if ((e.target as HTMLElement).closest('button, a')) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -662,6 +687,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
           <h1 className="top__title">{floorName}</h1>
         </div>
         <div className="explore-top__actions">
+          <button type="button" className="explore__wait explore__help-button" aria-haspopup="dialog" onClick={() => setHelpOpen(true)}>
+            操作
+          </button>
           <SoundButton />
           <button
             type="button"
@@ -791,6 +819,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
               {lastLog}
             </p>
           )}
+          {helpOpen && !ended && <ControlsHelp touch={touchDevice} onClose={closeHelp} />}
           {leaving && <LeaveDialog onStay={stay} onLeave={leave} />}
           {retiring && !ended && !leaving && (
             <RetireDialog

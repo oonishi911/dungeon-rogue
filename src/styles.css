@@ -5154,3 +5154,111 @@ button {
 .shop__hand--sub {
   background: var(--bone-dim);
 }
+
+/* ===== 操作の説明（ControlsHelp.tsx。2026-11-28） ===== */
+.help {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  padding: 0.75rem;
+  background: rgb(6 12 11 / 0.55);
+}
+
+.help__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(100%, 40rem);
+  max-height: 100%;
+  min-height: 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 10px;
+  background: rgb(11 20 19 / 0.96);
+  box-shadow: 0 0.75rem 2.5rem rgb(0 0 0 / 0.5);
+  overflow: hidden;
+}
+
+.help__title {
+  margin: 0;
+  font-size: var(--step-1);
+}
+
+.help__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.9rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.25rem;
+}
+
+.help__head {
+  margin: 0 0 0.35rem;
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+  letter-spacing: 0.06em;
+}
+
+.help__rows {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+}
+
+.help__row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 11rem) 1fr;
+  gap: 0.75rem;
+  align-items: baseline;
+  font-size: var(--step--1);
+  line-height: 1.5;
+}
+
+.help__row dt {
+  font-weight: 700;
+  color: var(--bone);
+}
+
+.help__row dd {
+  margin: 0;
+  color: var(--bone-dim);
+}
+
+.help__close {
+  flex: none;
+  min-height: 2.75rem;
+}
+
+.help__other {
+  justify-self: start;
+  padding: 0.3rem 0.8rem;
+  border: 1px dashed var(--pine-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bone-dim);
+  font-size: var(--step--1);
+  cursor: pointer;
+}
+
+.help__note {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--bone-dim);
+  text-align: center;
+}
+
+@media (max-width: 48rem) {
+  .help__row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .help__panel {
+    padding: 0.8rem 0.9rem;
+  }
+}
