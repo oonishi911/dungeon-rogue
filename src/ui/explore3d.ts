@@ -34,6 +34,7 @@ import { AFTERGLOW_FX, AMBIENT, BACKGROUND, CAMERA, CHEST, COMBAT_ZOOM, DAMAGE_P
 import { applyFog, createFog, createGroundMist, litBillboard, worldMapped } from './explore3dKit';
 import { asMetal } from './materialLook';
 import { PostFx } from './postFx';
+import { neighborLevel, qualityRange, startLevelOf, type Graphics, type QualityRange } from './graphicsQuality';
 import { feelSettings } from './feelSettings';
 import { normalMapFrom } from './surfaceNormals';
 import { Particles } from './particles';
@@ -108,11 +109,13 @@ export class DungeonView3D {
   private readonly hero = new Hero3D(); // 主人公は立体の模型（敵や宝箱はドット絵の板のまま）
   private heroDir: Dir = 'down'; // 最後に歩いた向き。模型をこの向きへ回す
   private lastFrameAt = performance.now();
-  // 画質の段（QUALITY）。描くのが間に合わなければ下げ、余裕が戻れば上げる。?quality=番号 を付けると、その段に固定する
+  // 画質の段（QUALITY）。設定の「画質」で使ってよい段の範囲が決まる（graphicsQuality.ts）。「ふつう」では、描くのが間に合わなければ下げ、
+  // 余裕が戻れば上げる。?quality=番号 を付けると、その段に固定する
   private readonly fixedQuality = new URLSearchParams(location.search).get('quality') !== null;
-  private level = startLevel();
-  private ceiling = 0; // これより上の段へは上げない（上げてすぐ下がった段は、二度と上げない）
-  private pixelRatio = levelOf(this.level).ratio;
+  private range: QualityRange;
+  private level: number;
+  private ceiling: number; // これより上の段へは上げない（上げてすぐ下がった段は、二度と上げない）
+  private pixelRatio: number;
   private slowFrames = 0; // 描くのが間に合わなかったコマの数（段を下げるかを決める）
   private fastFrames = 0; // 余裕のあるコマが続いた数（段を上げるかを決める）
   private raisedAt = -Infinity; // 段を上げた時刻
@@ -228,7 +231,11 @@ export class DungeonView3D {
   private roomTiles: { map: unknown; tiles: Set<number> } = { map: null, tiles: new Set() }; // 部屋の床のマス（通路と描き分ける）
   private shownPath: Pos[] | null = null;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, graphics: Graphics = 'normal') {
+    this.range = qualityRange(graphics, QUALITY.levels.length);
+    this.level = startLevel(this.range);
+    this.ceiling = this.range.min;
+    this.pixelRatio = levelOf(this.level).ratio;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.setSize(canvas.width, canvas.height, false);
@@ -502,7 +509,7 @@ export class DungeonView3D {
    * elapsed は前のコマからの時間（ms）。長く止まっていたとき（別の画面を見ていたなど）は数えない
    */
   private adaptQuality(elapsed: number, now: number) {
-    if (this.fixedQuality || elapsed > 250) return;
+    if (this.fixedQuality || !this.range.adaptive || elapsed > 250) return;
     if (elapsed > QUALITY.slowMs) {
       this.slowFrames = Math.min(QUALITY.slowFrames * 2, this.slowFrames + (elapsed > 50 ? 3 : 1));
       this.fastFrames = 0;
@@ -523,11 +530,20 @@ export class DungeonView3D {
     }
   }
 
-  /** 今の段から dir（1：下げる、-1：上げる）の向きで、効果が今と変わる最初の段。なければ今の段 */
+  /** 今の段から dir（1：下げる、-1：上げる）の向きで、効果が今と変わる最初の段（設定の範囲の中で）。なければ今の段 */
   private neighborLevel(dir: 1 | -1): number {
     const key = (l: number) => JSON.stringify(levelOf(l));
-    for (let l = this.level + dir; l >= 0 && l < QUALITY.levels.length; l += dir) if (key(l) !== key(this.level)) return l;
-    return this.level;
+    return neighborLevel(this.level, dir, this.range, (a, b) => key(a) === key(b));
+  }
+
+  /** 設定の「画質」を変えたとき：使ってよい段の範囲を変え、その画質の始めの段にする（?quality=番号 で固定しているときは、そのまま） */
+  setGraphics(graphics: Graphics) {
+    this.range = qualityRange(graphics, QUALITY.levels.length);
+    if (this.fixedQuality) return;
+    this.ceiling = this.range.min;
+    this.raisedAt = -Infinity;
+    const next = startLevel(this.range);
+    if (next !== this.level) this.setLevel(next);
   }
 
   private setLevel(level: number) {
@@ -2191,16 +2207,17 @@ function tileRandom(x: number, z: number, n: number): number {
  * 重い見た目（地面をはう霧・画面の仕上げなど）を使うか。?<名前>=off で切り、?<名前>=on で必ず使う。
  * どちらもなければ、処理の弱い端末（コアが4つ未満）では使わない
  */
-function startLevel(): number {
+function startLevel(range: QualityRange): number {
   const q = Number(new URLSearchParams(location.search).get('quality'));
   if (new URLSearchParams(location.search).get('quality') !== null && Number.isInteger(q)) return Math.min(Math.max(q, 0), QUALITY.levels.length - 1);
-  return (navigator.hardwareConcurrency ?? 4) >= QUALITY.fastStartCores ? 0 : 1;
+  return startLevelOf(range, navigator.hardwareConcurrency ?? 4, QUALITY.fastStartCores);
 }
 
-/** ある段の効果。端末の細かさ・弱い端末で使わない効果（rich）を反映する */
+/** ある段の効果。端末の細かさ・弱い端末で使わない効果（rich）を反映する。いちばん上の段（設定で「きれい」を選んだとき）は、弱い端末でも使う */
 function levelOf(level: number) {
   const l = QUALITY.levels[level]!;
-  return { ratio: Math.min(window.devicePixelRatio, l.ratio), mist: l.mist && rich('mist'), particles: l.particles, post: l.post && rich('post'), shadow: l.shadow };
+  const chosen = level === 0;
+  return { ratio: Math.min(window.devicePixelRatio, l.ratio), mist: l.mist && (chosen || rich('mist')), particles: l.particles, post: l.post && (chosen || rich('post')), shadow: l.shadow };
 }
 
 function rich(name: string): boolean {

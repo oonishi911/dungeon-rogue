@@ -168,21 +168,25 @@ export const SUN = 0.25; // 上からの弱い光。壁の側面に陰をつけ�
 // - mist（地面の霧）・particles（空気の粒）・post（画面の仕上げ）：その段で使うか（端末が弱くて最初から使わないものは、ここでも使わない）
 // - shadow：たいまつの影の地図の大きさ
 // 下げる順番は、見た目の損が小さいものから：影の細かさ → 解像度 3→2 → 粒と霧 → 仕上げ → 解像度 1.5
+// 2026-11-29：設定の「画質」（graphicsQuality.ts）のため、いちばん上に「きれい」の段（影を細かく）、いちばん下に「軽い」の段を足した
 export const QUALITY = {
   levels: [
-    { ratio: 3, mist: true, particles: true, post: true, shadow: 1024 },
+    { ratio: 3, mist: true, particles: true, post: true, shadow: 2048 }, // 0：きれい（設定で選んだときだけ）
+    { ratio: 3, mist: true, particles: true, post: true, shadow: 1024 }, // 1〜6：ふつう（自動で上げ下げする）
     { ratio: 2, mist: true, particles: true, post: true, shadow: 1024 },
     { ratio: 2, mist: true, particles: true, post: true, shadow: 512 },
     { ratio: 2, mist: false, particles: false, post: true, shadow: 512 },
     { ratio: 2, mist: false, particles: false, post: false, shadow: 512 },
     { ratio: 1.5, mist: false, particles: false, post: false, shadow: 512 },
+    { ratio: 1, mist: false, particles: false, post: false, shadow: 256 }, // 7：軽い（設定で選んだときだけ）
   ],
-  fastStartCores: 6, // コアがこの数以上の端末は、いちばんきれいな段から始める（それ以外は、2番目の段から）
+  fastStartCores: 6, // コアがこの数以上の端末は、ふつうのいちばんきれいな段から始める（それ以外は、その次の段から）
   slowMs: 26, // 1コマがこれより長くかかったら「遅い」コマ（50ms を超えたら3コマぶんに数える）。遅いコマが slowFrames たまったら1段下げる
   slowFrames: 60,
   fastMs: 20, // 1コマがこれより短いコマが fastFrames 続いたら、1段上げてみる
   fastFrames: 300,
   retryMs: 20000, // 上げてから、この時間のうちにまた下がったら、その段へは二度と上げない
+  lightFrameMs: 33, // 「軽い」では、1秒に30コマまでしか描かない（電池と熱のため）
 } as const;
 export const MAX_ANISOTROPY = 16; // 斜めから見た床がぼけないようにする強さの上限（端末が対応する範囲まで）
 // 宝箱の大きさ（マス）。ふたは奥行きを直径とするかまぼこ形で、本体の上に載る（いちばん上は高さ + 奥行き/2）

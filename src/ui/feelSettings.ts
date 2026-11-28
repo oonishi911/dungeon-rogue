@@ -2,6 +2,7 @@
 // ブラウザに保存し、次に遊ぶときも同じ設定にする。音の設定（audio/settings.ts）と同じ作り。
 // 2026-11-28：設定の画面（SettingsDialog.tsx）を作り、文字の大きさ・頭上の弱点の印・キーの割り当ても、ここに入れた
 
+import { GRAPHICS, type Graphics } from './graphicsQuality';
 import { DEFAULT_BINDINGS, parseBindings, type KeyBindings } from './keyBindings';
 
 export const TEXT_SIZES = ['small', 'normal', 'large'] as const;
@@ -23,13 +24,15 @@ export type FeelSettings = {
   stairsFx: boolean;
   /** 踏破・力尽きたときの音と画面の演出を出すか */
   endFx: boolean;
+  /** 3D 画面の画質（軽い・ふつう・きれい。graphicsQuality.ts） */
+  graphics: Graphics;
   /** 文字の大きさ */
   textSize: TextSize;
   /** キーの割り当て */
   keys: KeyBindings;
 };
 
-export const DEFAULT_FEEL_SETTINGS: FeelSettings = { shake: true, hitStop: true, weakMarks: true, bossMusic: true, stairsFx: true, endFx: true, textSize: 'normal', keys: DEFAULT_BINDINGS };
+export const DEFAULT_FEEL_SETTINGS: FeelSettings = { shake: true, hitStop: true, weakMarks: true, bossMusic: true, stairsFx: true, endFx: true, graphics: 'normal', textSize: 'normal', keys: DEFAULT_BINDINGS };
 
 const KEY = 'dungeon-rogue:feel';
 
@@ -39,7 +42,7 @@ export function parseFeelSettings(raw: string | null): FeelSettings {
   try {
     const data: unknown = JSON.parse(raw);
     if (typeof data !== 'object' || data === null) return { ...DEFAULT_FEEL_SETTINGS };
-    const { shake, hitStop, weakMarks, bossMusic, stairsFx, endFx, textSize, keys } = data as Record<string, unknown>;
+    const { shake, hitStop, weakMarks, bossMusic, stairsFx, endFx, graphics, textSize, keys } = data as Record<string, unknown>;
     return {
       shake: typeof shake === 'boolean' ? shake : DEFAULT_FEEL_SETTINGS.shake,
       hitStop: typeof hitStop === 'boolean' ? hitStop : DEFAULT_FEEL_SETTINGS.hitStop,
@@ -47,6 +50,7 @@ export function parseFeelSettings(raw: string | null): FeelSettings {
       bossMusic: typeof bossMusic === 'boolean' ? bossMusic : DEFAULT_FEEL_SETTINGS.bossMusic,
       stairsFx: typeof stairsFx === 'boolean' ? stairsFx : DEFAULT_FEEL_SETTINGS.stairsFx,
       endFx: typeof endFx === 'boolean' ? endFx : DEFAULT_FEEL_SETTINGS.endFx,
+      graphics: GRAPHICS.includes(graphics as Graphics) ? (graphics as Graphics) : DEFAULT_FEEL_SETTINGS.graphics,
       textSize: TEXT_SIZES.includes(textSize as TextSize) ? (textSize as TextSize) : DEFAULT_FEEL_SETTINGS.textSize,
       keys: parseBindings(keys),
     };
