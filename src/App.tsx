@@ -30,8 +30,8 @@ import { ShopScreen } from './ui/ShopScreen';
 
 type Stage =
   | { kind: 'choose' } // 挑むダンジョンを選ぶ（挑戦の始まり）
-  | { kind: 'informant'; talk: InformantState } // 情報屋との会話（ダンジョンの特性は、もう決まっている）
-  | { kind: 'shop'; dungeon: string; seed: number; intel: readonly Intel[]; atEntry: readonly ItemId[] } // 出発の準備。intel：情報屋から聞いたこと、atEntry：店に入ったときに持っていたもの（店の並びを決める）
+  | { kind: 'informant'; talk: InformantState; atEntry?: readonly ItemId[] } // 情報屋との会話（ダンジョンの特性は、もう決まっている）。atEntry：店から戻ってきたとき、最初に店に入ったときの持ち物（店の並びを変えないように）
+  | { kind: 'shop'; dungeon: string; seed: number; intel: readonly Intel[]; atEntry: readonly ItemId[]; talk: InformantState } // talk：情報屋に戻ったときの会話の続き。 出発の準備。intel：情報屋から聞いたこと、atEntry：店に入ったときに持っていたもの（店の並びを決める）
   | { kind: 'dungeon'; outcome: Departure; seed: number; resume?: ExploreState } // resume：前に中断した探索の続き
   | { kind: 'memory'; scene: Scene; outcome: Departure; expedition: ExploreResult; next: SaveData } // ボスを倒した直後の記憶の画面（ストーリー。story.ts）
   | { kind: 'result'; outcome: Departure; expedition: ExploreResult; next: SaveData };
@@ -116,9 +116,9 @@ export function App() {
           onChange={(next, paid) => {
             setSave(paid);
             writeSave(paid); // 払った情報料は、すぐ保存する
-            setStage({ kind: 'informant', talk: next });
+            setStage({ ...stage, talk: next });
           }}
-          onLeave={() => setStage({ kind: 'shop', dungeon: talk.dungeon, seed: talk.seed, intel: talk.heard, atEntry: save.owned })}
+          onLeave={() => setStage({ kind: 'shop', dungeon: talk.dungeon, seed: talk.seed, intel: talk.heard, atEntry: stage.atEntry ?? save.owned, talk })}
         />
       );
     }
@@ -134,6 +134,8 @@ export function App() {
             setSave(next);
             writeSave(next);
           }}
+          // 情報屋に戻って、もっと聞く（会話は続きから。店に入ったときの持ち物も覚えておく）
+          onBack={() => setStage({ kind: 'informant', talk: stage.talk, atEntry: stage.atEntry })}
           onDepart={() => {
             // 持っていく道具を倉庫から出し、出発した時点で「次の挑戦」として保存する（途中で再読み込みしても、同じ挑戦をやり直せないように）
             const base = departWith(save);
