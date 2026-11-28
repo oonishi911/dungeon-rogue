@@ -34,7 +34,7 @@ import { NearbyFoes } from './NearbyFoes';
 import { ExploreSide } from './ExploreSide';
 import { ControlsHelp } from './ControlsHelp';
 import { markHelpSeen, shouldAutoOpenHelp } from './controlsHelp';
-import { avoidOnWalk, visibleEnemyIds, type WalkGoal } from './exploreWalk';
+import { avoidOnWalk, visibleEnemyIds, walkInterrupt, type WalkGoal } from './exploreWalk';
 import { chooseDirection, knobOffset, STICK, stickDirections } from './stick';
 
 // ミニマップの元の大きさ（px）がこれ以下なら、拡大してもぼかさずドットのまま見せる。
@@ -103,6 +103,10 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const onProgressRef = useRef(onProgress);
   onProgressRef.current = onProgress;
   const viewRef = useRef<HTMLCanvasElement>(null);
+  // 歩き続けていて立ち止まったときの指の位置（そこからはっきり動かすまで歩き出さない）と、最後の指の位置
+  const stickPauseRef = useRef<{ x: number; y: number } | null>(null);
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+
   const miniRef = useRef<HTMLCanvasElement>(null);
 
   // 毎フレームの処理と入力の処理は、React の再描画を待たずに最新の値を使えるよう ref に持つ
@@ -374,16 +378,27 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
         if (queued) {
           queueRef.current = rest;
           perform(queued);
-        } else if (held) {
-          perform({ kind: 'move', dir: held });
-        } else if (stickRef.current) {
-          // 斜めに倒しているときは、指の向きに近い方へ進み、そちらが壁ならもう一方へ進む
+        } else if (held || stickRef.current) {
+          // 押しっぱなし・なぞりで歩き続けているとき：新しい敵が見えた・宝箱を見つけた・攻撃を受けたら、立ち止まる
+          // （もう一度押す・指を動かすと、また歩き出す）
           const s = stateRef.current;
-          const dir = chooseDirection(stickRef.current, (d) => {
-            const to = { x: s.player.x + DIR_DELTA[d].x, y: s.player.y + DIR_DELTA[d].y };
-            return tileAt(s.map, to) !== 'wall';
-          });
-          perform({ kind: 'move', dir });
+          const dir =
+            held ??
+            // 斜めに倒しているときは、指の向きに近い方へ進み、そちらが壁ならもう一方へ進む
+            chooseDirection(stickRef.current!, (d) => {
+              const to = { x: s.player.x + DIR_DELTA[d].x, y: s.player.y + DIR_DELTA[d].y };
+              return tileAt(s.map, to) !== 'wall';
+            });
+          if (perform({ kind: 'move', dir })) {
+            const why = walkInterrupt(s, stateRef.current);
+            if (why && stateRef.current.outcome === 'ongoing') {
+              heldRef.current = [];
+              // なぞっている指は、止まった位置からはっきり動かすまで、歩き出さない（指のわずかな揺れで、すぐ歩き出さないように）
+              if (stickRef.current) stickPauseRef.current = lastPointerRef.current;
+              stickRef.current = null;
+              showInfo(why);
+            }
+          }
         } else if (walkRef.current) {
           walkStep(walkRef.current);
         }
@@ -420,7 +435,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       view3d.dispose();
       view3dRef.current = null;
     };
-  }, [perform, walkStep, no3d]);
+  }, [perform, walkStep, no3d, showInfo]);
 
   // このダンジョンの足音を、最初の一歩から鳴るように読み込んでおく
   useEffect(() => preloadSounds(state.trait), [state.trait]);
@@ -611,6 +626,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     if (stateRef.current.outcome !== 'ongoing' || touchRef.current || e.button !== 0) return;
     // 操作の説明を開いているあいだは、歩かない
     if (helpOpenRef.current) return;
+    stickPauseRef.current = null;
     // 3D画面の上に重ねたボタン（待機・リタイアの確かめなど）は、歩く操作にせず、ボタンとして押させる
     if ((e.target as HTMLElement).closest('button, a')) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -621,6 +637,12 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const onStagePointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const t = touchRef.current;
     if (!t || e.pointerId !== t.id) return;
+    lastPointerRef.current = { x: e.clientX, y: e.clientY };
+    const pause = stickPauseRef.current;
+    if (pause) {
+      if (Math.hypot(e.clientX - pause.x, e.clientY - pause.y) < STICK.dragStart) return;
+      stickPauseRef.current = null;
+    }
     const dx = e.clientX - t.x;
     const dy = e.clientY - t.y;
     if (!t.dragging) {
