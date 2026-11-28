@@ -8,6 +8,7 @@ import { ECHO_MASTER, ITEMS } from './data';
 import { ECHO_CAPS, GENERAL_ECHOES, HUSH_FLOOR, PULSE_FLOOR, ECHO_INFO, type FoeRank } from './echoMaster';
 import { DUAL_PAIRS, dualRingId, gearId } from './itemMaster';
 import { nextInt, nextRandom } from './rng';
+import { RESONANCE, resonates } from './resonance';
 import type { Body, EchoId, Element, EnemyDef, EnemyId, GearBaseId, ItemId, PlayerStats } from './types';
 
 export const echoName = (id: EchoId): string => ECHO_MASTER.effects[id].name;
@@ -16,7 +17,17 @@ export const echoName = (id: EchoId): string => ECHO_MASTER.effects[id].name;
 // 残響は、刻印武器のスロットにはめる（防具にスロットはない）。echoes は、装備している刻印武器にはめた残響
 
 const value = (id: EchoId): number => ECHO_MASTER.effects[id].weapon;
-const total = (ids: readonly EchoId[], match: (id: EchoId) => boolean): number => ids.filter(match).reduce((sum, id) => sum + value(id), 0);
+/** 数字の合計。同じ残響を trioMin 個以上はめると、その残響の分に「三重奏」の上乗せが付く（resonance.ts） */
+function total(ids: readonly EchoId[], match: (id: EchoId) => boolean): number {
+  const count = new Map<EchoId, number>();
+  for (const id of ids) if (match(id)) count.set(id, (count.get(id) ?? 0) + 1);
+  let sum = 0;
+  for (const [id, n] of count) {
+    const base = n * value(id);
+    sum += n >= RESONANCE.trioMin ? base + Math.round((base * RESONANCE.trioShare) / 100) : base;
+  }
+  return sum;
+}
 
 /** 「ただの残響」の分の攻撃力 */
 export const echoAtk = (echoes?: readonly EchoId[]): number => total(echoes ?? [], (id) => id === 'plain');
@@ -32,13 +43,13 @@ export const slumberRate = (echoes: readonly EchoId[] | undefined, asleep: boole
 
 /** 余韻の残響の追加ダメージ（当てたダメージの割合。残響がなければ0、あれば1より減らない） */
 export function lingerDamage(echoes: readonly EchoId[] | undefined, dealt: number): number {
-  const rate = echoSum(echoes, 'linger');
+  const rate = echoSum(echoes, 'linger') * (resonates(echoes, 'afterglow') ? RESONANCE.afterglowTimes : 1); // 深い余韻：2倍
   return rate > 0 && dealt > 0 ? Math.max(1, Math.round((dealt * rate) / 100)) : 0;
 }
 
-/** 分け合いの残響で回復するHP（与えたダメージの割合。残響がなければ0、あれば1より減らない） */
-export function shareHeal(echoes: readonly EchoId[] | undefined, dealt: number): number {
-  const rate = echoSum(echoes, 'share');
+/** 分け合いの残響で回復するHP（与えたダメージの割合。残響がなければ0、あれば1より減らない）。lowHp：HPが半分以下か（命綱で3倍） */
+export function shareHeal(echoes: readonly EchoId[] | undefined, dealt: number, lowHp = false): number {
+  const rate = echoSum(echoes, 'share') * (lowHp && resonates(echoes, 'lifeline') ? RESONANCE.lifelineTimes : 1);
   return rate > 0 && dealt > 0 ? Math.max(1, Math.round((dealt * rate) / 100)) : 0;
 }
 
@@ -77,8 +88,19 @@ export function imbuedElement(echoes?: readonly EchoId[]): Element | null {
 
 /** その体質の敵へのダメージの倍率（柔らかい・硬い・霊体の残響。足し算） */
 export function bodyDamageRate(echoes: readonly EchoId[] | undefined, body: Body): number {
-  return 1 + total(echoes ?? [], (id) => ECHO_INFO[id].body === body) / 100;
+  const myriad = resonates(echoes, 'myriad') ? RESONANCE.myriadDamage : 0; // 万象：どの体質の敵にも効く
+  return 1 + (total(echoes ?? [], (id) => ECHO_INFO[id].body === body) + myriad) / 100;
 }
+
+/** 蒸気（炎＋氷）：通常攻撃のダメージの倍率 */
+export const steamRate = (echoes?: readonly EchoId[]): number => (resonates(echoes, 'steam') ? 1 + RESONANCE.steamDamage / 100 : 1);
+
+/** 日蝕（光＋闇）：敵を倒したときに戻るHP（最大HPの割合。1より減らない。共鳴がなければ0） */
+export const eclipseHeal = (echoes: readonly EchoId[] | undefined, maxHp: number): number =>
+  resonates(echoes, 'eclipse') ? Math.max(1, Math.round((maxHp * RESONANCE.eclipseHeal) / 100)) : 0;
+
+/** 満腹（満ち足り＋ぬくもり）：満ち足りで戻る満腹度 */
+export const satedFeed = (echoes?: readonly EchoId[]): number => echoSum(echoes, 'sated') * (resonates(echoes, 'feast') ? RESONANCE.feastTimes : 1);
 
 /** 満腹度の減りを何%遅くするか（ぬくもりの残響の足し算。90%まで） */
 export const satietySaving = (echoes?: readonly EchoId[]): number => Math.min(ECHO_CAPS.saving, total(echoes ?? [], (id) => id === 'warmth'));

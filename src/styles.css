@@ -5986,3 +5986,38 @@ button {
 .explore__suspend {
   margin-top: 0.4rem;
 }
+
+/* 共鳴（残響の組み合わせ。EngravePanel.tsx、docs/echo-resonance.md） */
+.shop__resonance {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.shop__resonance-on {
+  color: var(--funds);
+}
+
+.shop__resonance-near {
+  color: var(--bone-dim);
+}
+
+.shop__resonance-list {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 8px;
+  font-size: var(--step--1);
+}
+
+.shop__resonance-list summary {
+  cursor: pointer;
+}
+
+.shop__resonance-list ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.3rem;
+}

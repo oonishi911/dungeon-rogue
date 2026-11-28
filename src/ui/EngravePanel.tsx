@@ -4,11 +4,12 @@
 import { useState } from 'react';
 import { ECHO_MASTER, ITEMS } from '../game/data';
 import { echoName } from '../game/echo';
+import { activeResonances, almostResonances, RESONANCE_IDS, RESONANCES, trioEchoes } from '../game/resonance';
 import { ECHO_INFO, echoText } from '../game/echoMaster';
 import { weaponTypeOf } from '../game/combat';
 import { echoStock, engravedName, equipEngraved, equipSubEngraved, isEquipped, isSubGear, setEcho, unequipEngraved } from '../game/engrave';
 import type { SaveData } from '../game/save';
-import type { Result } from '../game/types';
+import type { EchoId, Result } from '../game/types';
 import { ItemIcon } from './ItemIcon';
 
 export function EngravePanel({ save, apply }: { save: SaveData; apply: (r: Result<SaveData>) => void }) {
@@ -64,6 +65,7 @@ export function EngravePanel({ save, apply }: { save: SaveData; apply: (r: Resul
                   })}
                 </span>
                 {g.slots.some((s) => s) && <span className="shop__desc">{g.slots.filter((s) => s).map((s) => echoText(ECHO_MASTER, s!)).join(' ／ ')}</span>}
+                <Resonances slots={g.slots.filter((s): s is NonNullable<typeof s> => Boolean(s))} />
               </div>
               <div className="shop__deal">
                 {sub ? (
@@ -88,6 +90,18 @@ export function EngravePanel({ save, apply }: { save: SaveData; apply: (r: Resul
           );
         })}
       </ul>
+
+      <details className="shop__resonance-list">
+        <summary>共鳴の一覧（残響の組み合わせ）</summary>
+        <p className="muted">武器のスロットに決まった残響がそろうと、おまけの効果が付く（はめる順番は関係ない。効くのは、手に持っている武器のスロットだけ）。</p>
+        <ul>
+          {RESONANCE_IDS.map((id) => (
+            <li key={id}>
+              <strong>{RESONANCES[id].name}</strong>（{RESONANCES[id].recipe}）：{RESONANCES[id].text}
+            </li>
+          ))}
+        </ul>
+      </details>
 
       {picking && (
         <div className="shop__pick-echo" role="group" aria-label="はめる残響を選ぶ">
@@ -143,5 +157,27 @@ export function EngravePanel({ save, apply }: { save: SaveData; apply: (r: Resul
         </ul>
       )}
     </div>
+  );
+}
+
+/** 武器にはめた残響で起きている共鳴と、あと1つで起きる共鳴 */
+function Resonances({ slots }: { slots: EchoId[] }) {
+  const active = activeResonances(slots);
+  const trio = trioEchoes(slots);
+  const near = almostResonances(slots);
+  if (active.length === 0 && near.length === 0) return null;
+  return (
+    <span className="shop__resonance">
+      {active.map((id) => (
+        <span key={id} className="shop__resonance-on">
+          共鳴「{RESONANCES[id].name}」{id === 'trio' ? `（${trio.map(echoName).join('・')}）` : ''}：{RESONANCES[id].text}
+        </span>
+      ))}
+      {near.map(({ id, missing }) => (
+        <span key={id} className="shop__resonance-near">
+          あと{echoName(missing)}で、共鳴「{RESONANCES[id].name}」
+        </span>
+      ))}
+    </span>
   );
 }
