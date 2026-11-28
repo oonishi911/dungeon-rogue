@@ -21,11 +21,14 @@ export const PREPS: Record<TraitId, { right: ItemId[]; wrong: ItemId[] }> = {
   dark: { right: [...FAVORABLE_GEAR.dark], wrong: ['sword', 'plate', 'ring_light_1'] },
 };
 
-/**
- * 外れた準備のクリア率の上限。
- * 無属性のダンジョンは「どの武器でも戦える」「鎧は保険なので効きが弱い」設計なので、外れても差が小さい。
- */
-//
-// 無属性は、通常の敵の強さを半分にしたことで、外れた準備（剣＋鎧＋光の指輪）でもクリア率が約80%になった。
-// そのため上限を緩めている。敵の強さを見直すときに、あわせて見直す
-export const WRONG_LIMIT: Record<TraitId, number> = { fire: 0.2, ice: 0.2, neutral: 0.9, light: 0.2, dark: 0.2 };
+// クリア率の合格の幅（2026-11-28 に、目標のクリア率60%に合わせて見直した）。
+// 属性ごとの回数（TRIALS）が40回だと、クリア率は±8ポイントほどぶれるので、幅は広めに取る。
+/** 正しい準備：ダンジョンの5属性の平均が、目標（TARGET_RATE=60%）の±20ポイントに入る */
+export const RIGHT_BAND = { min: 0.4, max: 0.8 };
+/** 正しい準備でも、属性ごとにこれを下回ったら「その属性だけ厳しすぎる」 */
+export const RIGHT_FLOOR = 0.2;
+/** 外れた準備は、属性ごとにこれ未満（準備で勝負が決まる）。正しい準備との平均の差も、GAP_MIN 以上あること */
+export const WRONG_LIMIT = 0.5;
+export const GAP_MIN = 0.3;
+/** 何も準備しないときは、属性ごとにこれ未満 */
+export const NONE_LIMIT = 0.4;

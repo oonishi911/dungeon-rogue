@@ -201,7 +201,6 @@ export const TREASURE_CONFIG = {
  */
 // レベルの上がり方と強敵の倍率（金貨と経験値）は、ダンジョンごとの設定（src/game/dungeons/*.json の growth。
 // 管理画面 ?view=admin の「HP・レベル・強敵の報酬」タブ）にある。
-// 標準のダンジョンでは、無属性のダンジョンの外れた準備は、報酬なしで77.5%、今の値で87.5%（バランスのテストの上限90%）
 export const REWARD_CONFIG = {
   dropItems: ['potion', 'food'] as readonly ItemId[],
   eliteItems: CHEST_ITEMS, // 強敵が落とす宝箱の道具（マップの宝箱と同じ出やすさ）
