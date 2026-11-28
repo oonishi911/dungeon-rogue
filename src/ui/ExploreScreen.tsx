@@ -9,7 +9,7 @@
 //   ExploreSide.tsx 右側（下）の欄 / ExploreDialogs.tsx 重ねて出す確かめる画面 / ExploreParts.tsx ゲージと記録 / backGuard.ts 戻るの見張り
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react';
-import { preloadSounds, setAmbient } from '../audio/sound';
+import { preloadSounds, setAmbient, setBossMusic } from '../audio/sound';
 import { SPELLS } from '../game/data';
 import { dungeonOfState, isBossFloor, step, upStairs, viewRadius } from '../game/explore';
 import { DIR_DELTA, type Dir, type ExploreAction, type ExploreState } from '../game/exploreTypes';
@@ -497,6 +497,21 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     return () => setAmbient(null);
   }, [state.trait]);
 
+  // 最深部（ボスの階）にいるあいだ、ボス戦の音楽を流す（環境音のかわり。終わったら・設定で切ったら止める）
+  const onBossFloor = isBossFloor(state) && state.outcome === 'ongoing';
+  useEffect(() => {
+    setBossMusic(onBossFloor && feel.bossMusic);
+    return () => setBossMusic(false);
+  }, [onBossFloor, feel.bossMusic]);
+
+  // 階段を降りて別の階へ移ったとき、画面を一瞬暗くして、明るく戻す（階の入れ替わりが急に見えないように）
+  const [fadeKey, setFadeKey] = useState(0);
+  const lastFloor = useRef(state.floor);
+  useEffect(() => {
+    if (state.floor > lastFloor.current && state.outcome === 'ongoing') setFadeKey((k) => k + 1);
+    lastFloor.current = state.floor;
+  }, [state.floor, state.outcome]);
+
   // 小地図：閉じているときは主人公のまわりだけを大きく、開いたときは階全体を描く
   const miniArea = miniOpen ? undefined : miniWindow(state.player);
   const miniW = (miniArea?.w ?? state.map.width) * MINI_CELL;
@@ -808,6 +823,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
             <>
               <div className={`explore__vignette${lowHpClass}${feel.shake ? '' : ' explore__vignette--still'}`} aria-hidden="true" />
               {hurtKey > 0 && <div key={hurtKey} className="explore__hurt" aria-hidden="true" />}
+              {fadeKey > 0 && feel.stairsFx && <div key={`fade${fadeKey}`} className="explore__fade" aria-hidden="true" />}
+              {ended && feel.endFx && <div className={`explore__end explore__end--${state.outcome}`} aria-hidden="true" />}
             </>
           )}
           {/* その場で1ターン待つ。3D画面の右下に重ねる（スマホでは、下に出る記録の行より上） */}

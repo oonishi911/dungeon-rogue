@@ -5,6 +5,7 @@
 import type { Body, SpellId, TraitId, WeaponType } from '../game/types';
 import { loadSoundSettings, writeSoundSettings } from '../storage';
 import { gainOf, type SoundSettings } from './settings';
+import { startBossMusic } from './bossMusic';
 import { sceneLimiter, synthSfx, type SynthKind } from './synth';
 
 // 特性ごとの足音（一歩ごとにこの中から選ぶ。scripts/build-sounds.py の VARIATIONS と数を合わせる）。
@@ -105,6 +106,8 @@ let master: GainNode | null = null; // すべての音（オン・オフ）
 let effects: GainNode | null = null; // 効果音の音量
 let ambience: GainNode | null = null; // 環境音の音量
 let ambientTrait: TraitId | null = null; // 今流したい環境音の特性（音の準備の前でも覚えておく）
+let bossStop: (() => void) | null = null; // ボス戦の音楽を止める関数（流れているあいだだけ）
+let bossWanted = false; // ボス戦の音楽を流したいか（音の準備の前でも覚えておく）
 let ambientPlaying: { trait: TraitId; source: AudioBufferSourceNode; fade: GainNode } | null = null;
 const files = new Map<string, Promise<ArrayBuffer | null>>(); // 読み込んだ音のファイル（音の準備の前から読み込める）
 const buffers = new Map<string, Promise<AudioBuffer | null>>(); // 鳴らせる形にした音
@@ -163,9 +166,24 @@ export function setAmbient(trait: TraitId | null) {
   syncAmbient();
 }
 
+/**
+ * ボス戦の音楽を流す・止める。流しているあいだは、ふだんの環境音を小さくして止める（音量は環境音と同じつまみ）。
+ * 音の準備の前に呼ばれたときは覚えておき、準備ができたら流し始める
+ */
+export function setBossMusic(on: boolean) {
+  bossWanted = on;
+  syncAmbient();
+}
+
 function syncAmbient() {
   if (!context || !ambience) return;
-  if (ambientPlaying?.trait === ambientTrait) return;
+  if (bossWanted && !bossStop) bossStop = startBossMusic(context, ambience);
+  if (!bossWanted && bossStop) {
+    bossStop();
+    bossStop = null;
+  }
+  const wanted = bossWanted ? null : ambientTrait; // ボス戦の音楽のあいだは、環境音を流さない
+  if (ambientPlaying?.trait === wanted || (!ambientPlaying && !wanted)) return;
   // 前の環境音は、なめらかに小さくして止める
   if (ambientPlaying) {
     const { source, fade } = ambientPlaying;
@@ -176,14 +194,14 @@ function syncAmbient() {
     source.stop(now + AMBIENT_FADE.out + 0.05);
     ambientPlaying = null;
   }
-  const trait = ambientTrait;
+  const trait = wanted;
   const name = trait ? AMBIENT_SOUNDS[trait] : undefined;
   if (!trait || !name) return;
   const ctx = context;
   const out = ambience;
   void bufferOf(ctx, name).then((buffer) => {
     // 読み込んでいるあいだに、別のダンジョンへ移った・止めたときは流さない
-    if (!buffer || ambientTrait !== trait || ambientPlaying) return;
+    if (!buffer || (bossWanted ? null : ambientTrait) !== trait || ambientPlaying) return;
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.loop = true;

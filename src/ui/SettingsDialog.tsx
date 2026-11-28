@@ -123,6 +123,9 @@ export function SettingsDialog({ onClose, keyboard = true }: { onClose: () => vo
             </h3>
             <Switch on={feel.shake} label="画面の揺れ" onToggle={() => setFeelSettings({ ...feel, shake: !feel.shake })} />
             <Switch on={feel.hitStop} label="ヒットストップ（当てた一瞬、止まる）" onToggle={() => setFeelSettings({ ...feel, hitStop: !feel.hitStop })} />
+            <Switch on={feel.bossMusic} label="ボス戦の音楽" onToggle={() => setFeelSettings({ ...feel, bossMusic: !feel.bossMusic })} />
+            <Switch on={feel.stairsFx} label="階段を降りる音と暗転" onToggle={() => setFeelSettings({ ...feel, stairsFx: !feel.stairsFx })} />
+            <Switch on={feel.endFx} label="踏破・力尽きたときの音と画面の演出" onToggle={() => setFeelSettings({ ...feel, endFx: !feel.endFx })} />
           </section>
 
           <section aria-labelledby="settings-view" className="settings__group">
