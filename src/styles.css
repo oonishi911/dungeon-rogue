@@ -4731,12 +4731,10 @@ button {
     font-size: var(--step-2, 1.6rem);
   }
 
+  /* 2026-11-28：記録の欄は3D画面の左下に半透明で重ね、3D画面を縦に広げる（下の段はなくした） */
   .explore {
     grid-template-columns: minmax(0, 1fr) 19rem;
-    grid-template-rows: auto 1fr; /* 右の欄が長くても、3D画面のすぐ下に記録が来るよう、余りは下の段に回す */
-    grid-template-areas:
-      'stage side'
-      'log side';
+    grid-template-areas: 'stage side';
     gap: 1rem 1.5rem;
   }
 
@@ -4744,20 +4742,73 @@ button {
     grid-area: stage;
   }
 
+  /* 右の欄は、3D画面と同じ高さに収める（長いときは、欄の中でスクロール。ページ全体は動かない） */
   .explore__side {
     grid-area: side;
-  }
-
-  .explore__log-panel {
-    grid-area: log;
-    align-self: start;
-    max-height: 9.5rem;
+    max-height: clamp(26rem, calc(100vh - 10rem), 56rem);
     overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 0.25rem;
+    scrollbar-width: thin;
   }
 
+  /* 記録：3D画面と同じ枠に重ね、左下に置く。新しい行ほど濃く、古い行はうすく。マウスを乗せると、さかのぼって読める */
+  .explore__log-panel {
+    position: absolute;
+    left: 0.75rem;
+    bottom: 0.75rem;
+    z-index: 2;
+    width: min(30rem, 52%);
+    margin: 0;
+    padding: 0.45rem 0.7rem;
+    border-radius: 6px;
+    background: rgb(11 20 19 / 0.62);
+    max-height: 6.6rem;
+    overflow: hidden;
+    font-size: var(--step--1);
+    line-height: 1.45;
+    -webkit-mask-image: linear-gradient(to top, #000 60%, transparent);
+    mask-image: linear-gradient(to top, #000 60%, transparent);
+    transition: max-height 0.2s ease, background-color 0.2s ease;
+  }
+
+  .explore__log-panel:hover,
+  .explore__log-panel:focus-within {
+    max-height: 16rem;
+    overflow-y: auto;
+    background: rgb(11 20 19 / 0.86);
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .explore__log-panel .panel__title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  /* 新しい行が下に来るように並べる（読み上げの順は、そのまま） */
+  .explore__log-panel .explore__log {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 0.1rem;
+  }
+
+  .explore__log-panel .explore__log li {
+    opacity: 0.62;
+  }
+
+  .explore__log-panel .explore__log li:first-child {
+    opacity: 1;
+  }
+
+  /* 下の記録の段がなくなった分、3D画面を縦に広げる（画面の高さいっぱいまで。横長すぎ・縦長すぎにはしない） */
   .explore__view {
-    aspect-ratio: 16 / 9;
-    max-height: calc(100vh - 16rem);
+    aspect-ratio: auto;
+    height: clamp(26rem, calc(100vh - 10rem), 56rem);
+    max-height: none;
   }
 }
 
