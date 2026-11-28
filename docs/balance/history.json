@@ -1,0 +1,88 @@
+[
+  {
+    "date": "2026-11-28",
+    "label": "調整前（敵の強さは10倍にしたまま）",
+    "trials": 40,
+    "rows": [
+      {
+        "dungeon": "standard",
+        "name": "最初の祠",
+        "rates": {
+          "fire": 0,
+          "ice": 0,
+          "neutral": 0,
+          "light": 0,
+          "dark": 0
+        },
+        "avg": 0
+      },
+      {
+        "dungeon": "a_1",
+        "name": "怪しい祠",
+        "rates": {
+          "fire": 0,
+          "ice": 0,
+          "neutral": 0,
+          "light": 0,
+          "dark": 0
+        },
+        "avg": 0
+      },
+      {
+        "dungeon": "a_2",
+        "name": "深い祠",
+        "rates": {
+          "fire": 0,
+          "ice": 0,
+          "neutral": 0,
+          "light": 0,
+          "dark": 0
+        },
+        "avg": 0
+      }
+    ]
+  },
+  {
+    "date": "2026-11-28",
+    "label": "敵の強さを0.39倍・深い祠の倍率を下げた（#197）",
+    "trials": 80,
+    "rows": [
+      {
+        "dungeon": "standard",
+        "name": "最初の祠",
+        "rates": {
+          "fire": 0.725,
+          "ice": 0.625,
+          "neutral": 0.4375,
+          "light": 0.425,
+          "dark": 0.6
+        },
+        "avg": 0.5625
+      },
+      {
+        "dungeon": "a_1",
+        "name": "怪しい祠",
+        "rates": {
+          "fire": 0.6125,
+          "ice": 0.975,
+          "neutral": 0.6875,
+          "light": 0.5375,
+          "dark": 0.25
+        },
+        "avg": 0.6125
+      },
+      {
+        "dungeon": "a_2",
+        "name": "深い祠",
+        "rates": {
+          "fire": 0.6375,
+          "ice": 0.4,
+          "neutral": 0.3125,
+          "light": 0.7,
+          "dark": 0.475
+        },
+        "avg": 0.505
+      }
+    ]
+  }
+]
