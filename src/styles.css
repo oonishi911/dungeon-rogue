@@ -5262,3 +5262,58 @@ button {
     padding: 0.8rem 0.9rem;
   }
 }
+
+/* 「階段へ」（2026-11-28）：見つけた階段まで歩く。待機のボタンの上に、小さめの丸で重ねる。歩いているあいだは色を変えて「止める」 */
+.explore__go-stairs {
+  position: absolute;
+  right: 1.05rem;
+  bottom: 5.5rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.05rem;
+  width: 3.6rem;
+  height: 3.6rem;
+  padding: 0;
+  border-radius: 50%;
+  background: rgb(11 20 19 / 0.72);
+  border: 1px solid var(--pine-line);
+  color: var(--bone);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.explore__go-stairs:hover {
+  border-color: var(--bone-dim);
+}
+
+.explore__go-stairs:active {
+  transform: scale(0.95);
+}
+
+.explore__go-stairs--on {
+  background: rgb(240 196 106 / 0.85);
+  border-color: rgb(240 196 106);
+  color: var(--ink);
+}
+
+.explore__go-stairs--on .explore__rest-key {
+  color: rgb(11 20 19 / 0.7);
+}
+
+/* スマホ：待機のボタン（下から2.9rem・高さ3.75rem）の上に、重ならないように置く */
+@media (max-width: 48rem) {
+  .explore__go-stairs {
+    right: 1rem;
+    bottom: 7.1rem;
+    width: 3.25rem;
+    height: 3.25rem;
+  }
+
+  .explore__go-stairs .explore__rest-key {
+    display: none;
+  }
+}

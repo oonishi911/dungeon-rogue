@@ -1,7 +1,7 @@
 // 操作の説明を自動で開くか（controlsHelp.ts）
 import { describe, expect, it } from 'vitest';
 import { COMMON_HELP, KEYBOARD_HELP, markHelpSeen, shouldAutoOpenHelp, TOUCH_HELP } from './controlsHelp';
-import { SKILL_KEY, SPELL_KEYS, SWAP_KEY } from './exploreKeys';
+import { SKILL_KEY, SPELL_KEYS, STAIRS_KEY, SWAP_KEY } from './exploreKeys';
 
 const memory = () => {
   const m = new Map<string, string>();
@@ -28,6 +28,7 @@ describe('操作の説明', () => {
     expect(keys).toContain(SPELL_KEYS.join(' ').toUpperCase());
     expect(keys).toContain(SKILL_KEY.toUpperCase());
     expect(keys).toContain(SWAP_KEY.toUpperCase());
+    expect(keys).toContain(STAIRS_KEY.toUpperCase());
     expect(TOUCH_HELP.length).toBeGreaterThan(0);
     expect(COMMON_HELP.length).toBeGreaterThan(0);
   });
