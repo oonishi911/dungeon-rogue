@@ -8,7 +8,8 @@
 import { armorSaving, regenInterval, resistsChill } from './armor';
 import { BOSS_CONFIG, phaseOf, phaseSow, PHASE_MAX } from './bossPhase';
 import { buildPlayer, enemyHitDamage, hitAffinity, itemCapacity, playerHitDamage, swapWeapons, weaponTypeOf } from './combat';
-import { backwaterAtk, echoRate, echoSum, gearName, hushedRange, lampRadius, lingerDamage, lootSeed, noFound, piercedCut, pocketGold, rollLoot, satietySaving, savesSatiety, shareHeal, slumberRate } from './echo';
+import { RESONANCE, resonates } from './resonance';
+import { backwaterAtk, eclipseHeal, echoRate, echoSum, satedFeed, steamRate, gearName, hushedRange, lampRadius, lingerDamage, lootSeed, noFound, piercedCut, pocketGold, rollLoot, satietySaving, savesSatiety, shareHeal, slumberRate } from './echo';
 import { echoName } from './echo';
 import { ECHO_CAPS, FALTER_TURNS, STAGNANT_MIST } from './echoMaster';
 import { enemyBase, enemyReward, expToNext, ITEMS, REWARD_CONFIG, SPELLS, STATUS_MASTER, TRAITS, TRAIT_IDS, TREASURE_CONFIG } from './data';
@@ -907,7 +908,7 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
 
   // 倒したときの残響：満ち足り（満腹度）・吸魔（魔力）・絆（次の通常攻撃）
   let { satiety, mp } = state;
-  const fed = Math.min(state.maxSatiety - satiety, echoSum(stats.echoes, 'sated'));
+  const fed = Math.min(state.maxSatiety - satiety, satedFeed(stats.echoes));
   if (fed > 0) {
     satiety += fed;
     log.push(`満ち足りて、満腹度が${fed}戻った`);
@@ -919,6 +920,12 @@ function defeatReward(state: ExploreState, enemy: MapEnemy): ExploreState {
   }
   const bond = echoSum(stats.echoes, 'bond');
   if (bond > 0) stats = { ...stats, rally: bond };
+  // 日蝕（光＋闇）：倒すと最大HPの一部が戻る
+  const eclipsed = Math.min(stats.maxHp - stats.hp, eclipseHeal(stats.echoes, stats.maxHp));
+  if (eclipsed > 0) {
+    stats = { ...stats, hp: stats.hp + eclipsed };
+    log.push(`日蝕の力で、HPが${eclipsed}戻った`);
+  }
 
   // 経験値とレベルアップ（学びの残響で増える）
   let { level, exp } = state;
@@ -975,7 +982,7 @@ function lootFrom(state: ExploreState, enemy: MapEnemy): ExploreState {
  * 通常攻撃が当たって、敵が生き残ったときの残響のおまけ（確率は探索の乱数。残響がなければ乱数を引かない）。
  * 澱みの残響：敵の足元に毒の霧を残す。ためらいの残響：敵が動けなくなる（ボスには効かない）
  */
-function echoAfterHit(state: ExploreState, target: MapEnemy, dealt: number): ExploreState {
+function echoAfterHit(state: ExploreState, target: MapEnemy, dealt: number, surprise = false): ExploreState {
   const echoes = state.stats.echoes;
   const chance = (id: 'stagnant' | 'falter'): boolean => {
     const rate = echoSum(echoes, id);
@@ -996,6 +1003,14 @@ function echoAfterHit(state: ExploreState, target: MapEnemy, dealt: number): Exp
       log: [...state.log, `${enemyDef(target).name}は、ためらって動けない`],
     };
   }
+  // 忍び足（不意＋ひそやか）：不意打ちを決めた敵が、動けなくなる（ボスには効かない）
+  if (surprise && resonates(echoes, 'stealth') && !enemyDef(target).boss) {
+    state = {
+      ...state,
+      enemies: state.enemies.map((e) => (e.uid === target.uid ? { ...e, stun: Math.max(e.stun ?? 0, RESONANCE.stealthTurns) } : e)),
+      log: [...state.log, `${enemyDef(target).name}は、不意をつかれて動けない`],
+    };
+  }
   return state;
 }
 
@@ -1014,7 +1029,8 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
     slumberRate(echoes, target.asleep) *
     (target.burn ? echoRate(echoes, 'ember') : 1) *
     (state.stats.lastStruck === target.uid ? echoRate(echoes, 'recall') : 1) *
-    (1 + (state.stats.rally ?? 0) / 100);
+    (1 + (state.stats.rally ?? 0) / 100) *
+    steamRate(echoes); // 蒸気（炎＋氷）
   const raw = Math.round(base * surpriseRate * echoBoost);
   // 貫きの残響：盾に防がれる分が減る
   let dmg = guarded ? Math.max(1, Math.round(raw * (1 - piercedCut(ENEMY_CONFIG.shieldCut, echoes)))) : raw;
@@ -1057,7 +1073,7 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
   state = used.state;
   if (used.ended) log.push(used.ended);
   // 分け合いの残響：与えたダメージの一部だけ、HPが戻る
-  const healed = Math.min(state.stats.maxHp - state.stats.hp, shareHeal(state.stats.echoes, dmg + extra));
+  const healed = Math.min(state.stats.maxHp - state.stats.hp, shareHeal(state.stats.echoes, dmg + extra, state.stats.hp * 2 <= state.stats.maxHp));
   if (healed > 0) log.push(`分け合って、HPが${healed}戻った`);
   // 殴った敵を覚え（追憶の残響）、絆の残響の上乗せは使い切る
   const { rally: _rally, ...held } = state.stats;
@@ -1076,7 +1092,7 @@ function playerAttack(state: ExploreState, target: MapEnemy): ExploreState {
   // 攻撃された敵はこちらに気付く
   const hit: MapEnemy = { ...victim, hp, mode: 'chase', justNoticed: surprise, lastSeen: state.player };
   state = { ...state, stats, enemies: state.enemies.map((e) => (e.uid === target.uid ? hit : e)), log };
-  state = echoAfterHit(state, hit, dmg + extra);
+  state = echoAfterHit(state, hit, dmg + extra, surprise);
   // 炎・氷の砥石で殴ると、確率で燃える・凍る（かからない敵には、確率も引かない）
   const kind = foeKindOf(enchantBefore?.element);
   if (enchantBefore && kind && !foeImmune(hit, kind)) {
