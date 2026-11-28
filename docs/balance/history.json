@@ -84,5 +84,48 @@
         "avg": 0.505
       }
     ]
+  },
+  {
+    "date": "2026-11-28",
+    "label": "満腹度を深い祠600に・成長と初期HPを見直し、目標を70%に",
+    "trials": 80,
+    "rows": [
+      {
+        "dungeon": "standard",
+        "name": "最初の祠",
+        "rates": {
+          "fire": 0.9125,
+          "ice": 0.7,
+          "neutral": 0.6875,
+          "light": 0.5875,
+          "dark": 0.6625
+        },
+        "avg": 0.71
+      },
+      {
+        "dungeon": "a_1",
+        "name": "怪しい祠",
+        "rates": {
+          "fire": 0.575,
+          "ice": 0.9625,
+          "neutral": 0.875,
+          "light": 0.7875,
+          "dark": 0.3875
+        },
+        "avg": 0.7175
+      },
+      {
+        "dungeon": "a_2",
+        "name": "深い祠",
+        "rates": {
+          "fire": 0.75,
+          "ice": 0.65,
+          "neutral": 0.5,
+          "light": 0.9125,
+          "dark": 0.6875
+        },
+        "avg": 0.7
+      }
+    ]
   }
 ]

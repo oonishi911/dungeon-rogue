@@ -4,7 +4,7 @@
   "floors": {
     "count": 5,
     "size": 30,
-    "satiety": 350
+    "satiety": 600
   },
   "rooms": {
     "attemptRate": 0.3,
@@ -20,8 +20,8 @@
     "nestMax": 8,
     "stayInRoom": true,
     "bossMinions": 3,
-    "hpRate": 0.5,
-    "atkRate": 0.35,
+    "hpRate": 0.6,
+    "atkRate": 0.45,
     "floorHpRate": 0.15,
     "floorAtkRate": 0.08,
     "echoDrop": true,
@@ -30,11 +30,11 @@
   "growth": {
     "startHp": 100,
     "startMaxHp": 100,
-    "expBase": 10,
-    "expStep": 10,
-    "hpPerLevel": 3,
-    "atkPerLevel": 3,
-    "magPerLevel": 3,
+    "expBase": 5,
+    "expStep": 3,
+    "hpPerLevel": 12,
+    "atkPerLevel": 12,
+    "magPerLevel": 12,
     "maxLevel": 99,
     "eliteRate": 3
   },

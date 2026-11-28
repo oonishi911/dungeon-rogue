@@ -46,26 +46,26 @@ describe('履歴', () => {
 describe('表とグラフ', () => {
   it('目標との差の印', () => {
     expect(mark(TARGET_RATE)).toBe('◎');
-    expect(mark(0.52)).toBe('◎');
-    expect(mark(0.45)).toBe('○');
+    expect(mark(TARGET_RATE + 0.08)).toBe('◎');
+    expect(mark(TARGET_RATE - 0.15)).toBe('○');
     expect(mark(0)).toBe('△');
   });
 
   it('表：いちばん新しい測定と、移り変わり。記録がなければ、測り方を案内する', () => {
-    const md = reportMarkdown([snap('2026-11-27', '前', 0), snap('2026-11-28', '後', 0.6)]);
+    const md = reportMarkdown([snap('2026-11-27', '前', 0), snap('2026-11-28', '後', 0.7)]);
     expect(md).toContain('いちばん新しい測定（2026-11-28・後・属性ごとに80回）');
-    expect(md).toContain('| 最初の祠 | 60% | 60% | 60% | 60% | 60% | **60%** | ◎ |');
-    expect(md).toContain('| 深い祠 | 30% |');
+    expect(md).toContain('| 最初の祠 | 70% | 70% | 70% | 70% | 70% | **70%** | ◎ |');
+    expect(md).toContain('| 深い祠 | 35% |');
     expect(md).toContain('| 2026-11-27 | 前 | 80 | 0% | 0% |');
-    expect(md).toContain('| 2026-11-28 | 後 | 80 | 60% | 30% |');
+    expect(md).toContain('| 2026-11-28 | 後 | 80 | 70% | 35% |');
     expect(reportMarkdown([])).toContain('まだ記録がありません');
   });
 
   it('グラフ：棒と目標の線と名前が入った SVG になる', () => {
-    const svg = chartSvg(snap('2026-11-28', '後', 0.6));
+    const svg = chartSvg(snap('2026-11-28', '後', 0.7));
     expect(svg.startsWith('<svg')).toBe(true);
-    expect(svg).toContain('最初の祠（平均60%）');
-    expect(svg).toContain('目標 60%');
+    expect(svg).toContain('最初の祠（平均70%）');
+    expect(svg).toContain('目標 70%');
     expect(svg.match(/<rect /g)!.length).toBe(1 + 2 * TRAITS.length); // 背景＋棒
     expect(svg).not.toContain('NaN');
   });
