@@ -45,6 +45,7 @@ export interface RunSave {
   base: SaveData; // この挑戦を始めたときの記録（何回目か、など）
   outcome: Departure; // 出発したときに決まったこと（ダンジョン・特性・持ち物）
   seed: number;
+  savedAt?: number; // 保存した時刻（ミリ秒）。「続きから」の画面に、いつの続きかを出すため（前の版の保存にはない）
   state: PackedState;
 }
 
@@ -53,6 +54,7 @@ export interface ResumedRun {
   base: SaveData;
   outcome: Departure;
   seed: number;
+  savedAt: number | null; // 保存した時刻（ミリ秒）。わからなければ null
   state: ExploreState;
 }
 
@@ -97,13 +99,14 @@ function packFloor(floor: FloorMemory): PackedFloor {
 }
 
 /** 探索の途中の状態を、保存する形にする */
-export function packRun(base: SaveData, outcome: Departure, seed: number, state: ExploreState): RunSave {
+export function packRun(base: SaveData, outcome: Departure, seed: number, state: ExploreState, now: number = Date.now()): RunSave {
   const { map, seen, visited, hits: _hits, foes: _foes, fields: _fields, cast: _cast, enemies, chests, ...rest } = state;
   return {
     version: RUN_SAVE_VERSION,
     base,
     outcome,
     seed,
+    savedAt: now,
     state: {
       ...rest,
       log: state.log.slice(-LOG_KEEP),
@@ -295,5 +298,6 @@ export function parseRun(text: string | null): ResumedRun | null {
     fields: [], // 床の跡は数ターンで消えるので、保存しない
     found: parseFound(s.found),
   };
-  return { base, outcome, seed: raw.seed, state };
+  const savedAt = isNumber(raw.savedAt) && raw.savedAt > 0 ? raw.savedAt : null;
+  return { base, outcome, seed: raw.seed, savedAt, state };
 }

@@ -5862,3 +5862,127 @@ button {
     margin-top: auto;
   }
 }
+
+/* ===== 「続きから」の画面（ResumeScreen.tsx。docs/resume.md） ===== */
+.resume {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.resume__card {
+  display: grid;
+  gap: 0.75rem;
+  width: min(100%, 26rem);
+  padding: 1.25rem 1.25rem 1.1rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 12px;
+  background: rgb(11 20 19 / 0.9);
+}
+
+.resume__label {
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--funds);
+  letter-spacing: 0.04em;
+}
+
+.resume__title {
+  margin: 0;
+  font-size: var(--step-2);
+}
+
+.resume__floor {
+  margin: 0;
+  font-size: var(--step-1);
+}
+
+.resume__floors {
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.resume__hp {
+  height: 0.6rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.08);
+  overflow: hidden;
+}
+
+.resume__hp-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #5fbf7a, #9ae0a8);
+}
+
+.resume__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.4rem 0.9rem;
+  margin: 0;
+}
+
+.resume__stats div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.resume__stats dt {
+  font-size: 0.75rem;
+  color: var(--bone-dim);
+}
+
+.resume__stats dd {
+  margin: 0;
+  font-size: var(--step-0);
+  font-variant-numeric: tabular-nums;
+}
+
+.resume__buttons {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.resume__go {
+  min-height: 3rem;
+}
+
+.resume__second,
+.resume__danger {
+  min-height: 2.5rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--bone-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+.resume__danger {
+  border-color: #b4574d;
+  color: #f0b3ab;
+}
+
+.resume__sure {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border: 1px solid #b4574d;
+  border-radius: 8px;
+  font-size: var(--step--1);
+}
+
+.resume__sure p {
+  margin: 0;
+}
+
+.resume__sure .resume__buttons {
+  grid-template-columns: 1fr 1fr;
+}
+
+.explore__suspend {
+  margin-top: 0.4rem;
+}

@@ -54,10 +54,11 @@ interface ExploreScreenProps {
   onFinish?: (state: ExploreState) => void; // 省略すると、終わったあと同じ条件でやり直せる
   onProgress?: (state: ExploreState) => void; // 始まったときと、行動するたびに呼ぶ（途中の状態を保存するため）
   guardBack?: boolean; // ブラウザの「戻る」を一度受け止めて、ページを離れるかを確かめる
+  onSuspend?: () => void; // 「中断してもどる」：探索はそのまま残して、「続きから」の画面へ行く
   devBest?: boolean; // 開発用画面で、いちばん強い装備で試しているか（切り替えのリンクを出す）
 }
 
-export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, guardBack = false, devBest }: ExploreScreenProps) {
+export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, guardBack = false, onSuspend, devBest }: ExploreScreenProps) {
   // 3D表示ができない環境（WebGL2 が使えない、3D表示を作れなかった）では、遊べないことを伝える
   const [no3d, setNo3d] = useState(() => !webglAvailable());
   const [state, setState] = useState<ExploreState>(start);
@@ -960,6 +961,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
           onSwap={swapNow}
           onUseItem={(item) => request({ kind: 'use_item', item })}
           onCloseInfo={() => setInfoOpen(false)}
+          onSuspend={onSuspend && (() => onSuspend())}
           onRetire={() => {
             setInfoOpen(false);
             setRetiring(true);
