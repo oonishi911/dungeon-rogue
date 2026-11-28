@@ -177,7 +177,13 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
       <ul className="shop__list screen__scroll" aria-label={SHELVES.find((s) => s.id === shelf)!.name}>
         {items.length === 0 && <li className="muted shop__empty">{mode === 'buy' ? '並んでいるものはない' : 'まだ持っていない（「買い物」で買える）'}</li>}
         {items.map((id) => (
-          <li key={id} className={`shop__row${mode === 'equip' && inKit(id) ? ' shop__row--on' : ''}`}>
+          <li
+            key={id}
+            className={`shop__row${mode === 'equip' && inKit(id) ? ' shop__row--on' : ''}${
+              // 買い物で、お金が足りない品物は薄くする（持っているものは除く。道具は何度でも買える）
+              mode === 'buy' && ITEMS[id].price > save.gold && (shelf === 'supply' || !save.owned.includes(id)) ? ' shop__row--short' : ''
+            }`}
+          >
             <ItemIcon id={id} size={28} className="shop__icon" />
             {/* 説明は2行に切ってある。押すと全文と、今の装備との比べを出す */}
             <button type="button" className="shop__about" aria-expanded={open === id} onClick={() => setOpen((o) => (o === id ? null : id))}>
@@ -308,8 +314,15 @@ function BuyDeal({ id, shelf, save, atEntry, apply }: { id: ItemId; shelf: Shelf
     <>
       {shelf === 'supply' && <span className="shop__owned">倉庫{count(save.stock, id)}</span>}
       <span className="shop__price">{lost(price)}</span>
-      <button type="button" className={short ? 'shop__buy shop__buy--off' : 'primary shop__buy'} disabled={short} onClick={() => apply(buy(save, id, atEntry))}>
-        {short ? '足りない' : '買う'}
+      <button
+        type="button"
+        className={short ? 'shop__buy shop__buy--off' : 'primary shop__buy'}
+        disabled={short}
+        aria-label={short ? `${ITEMS[id].name}は、忘れ物があと${price - save.gold}足りない` : undefined}
+        onClick={() => apply(buy(save, id, atEntry))}
+      >
+        {/* 足りないときは、あといくら足りないかを出す（2026-11-28） */}
+        {short ? `あと${lost(price - save.gold)}` : '買う'}
       </button>
     </>
   );

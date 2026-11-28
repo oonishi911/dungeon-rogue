@@ -5505,3 +5505,21 @@ button {
     transform: translate(0, 0);
   }
 }
+
+/* 店：お金が足りない品物は、絵と説明を薄くする（押せば説明は読める）。買うボタンは「あと◇30」（2026-11-28。提案 #11） */
+.shop__row--short .shop__icon,
+.shop__row--short .shop__about,
+.shop__row--short .shop__price {
+  opacity: 0.5;
+}
+
+.shop__row--short .shop__about[aria-expanded='true'] {
+  opacity: 0.85;
+}
+
+.shop__row--short .shop__buy--off {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: #e9a08f;
+  border-color: rgb(233 160 143 / 0.45);
+}
