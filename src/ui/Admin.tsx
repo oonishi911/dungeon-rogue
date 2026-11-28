@@ -38,6 +38,7 @@ import { EnemiesPanel } from './EnemyPanels';
 import { EchoPanel } from './EchoPanels';
 import { StatusPanel } from './StatusPanels';
 import { ItemsPanel } from './ItemPanels';
+import { ClearCheckPanel, ClearCheckSummary, draftKey, type CheckRecord } from './ClearCheckPanel';
 import { FloorsPanel, GrowthPanel, MagicPanel, PlacementPanel, PreviewSection, RoomsPanel } from './GenPanels';
 
 const published = (): AdminData => copyJson({ enemies: ENEMY_MASTER, items: ITEM_MASTER, echoes: ECHO_MASTER, statuses: STATUS_MASTER, dungeons: { ...DUNGEONS } });
@@ -66,6 +67,8 @@ export function Admin() {
   const [tab, setTab] = useState<AdminTab>(() => adminTabFromUrl(window.location.search));
   const [dungeonId, setDungeonId] = useState(() => adminDungeonFromUrl(window.location.search, DUNGEON_IDS));
   const [seed, setSeed] = useState(1);
+  // 「クリア率を測る」の結果（ダンジョンごと。測ったときの下書きも覚えておく）
+  const [checks, setChecks] = useState<Record<string, CheckRecord>>({});
   const publisher = usePublish();
   const plan = useMemo(() => planPublish(base, draft), [base, draft]);
 
@@ -222,6 +225,24 @@ export function Admin() {
       {showsPreview(tab) && (
         <PreviewSection settings={dungeon} seed={seed} onNewMap={() => setSeed(Math.floor(Math.random() * 2 ** 31))} />
       )}
+
+      {isDungeonTab(tab) && (
+        <ClearCheckPanel
+          id={current}
+          name={dungeon.name || current}
+          published={dungeonBase ?? null}
+          draft={dungeon}
+          record={checks[current]}
+          onDone={(r) => setChecks((c) => ({ ...c, [current]: r }))}
+        />
+      )}
+
+      <ClearCheckSummary
+        changed={Object.entries(draft.dungeons)
+          .filter(([id, d]) => !base.dungeons[id] || draftKey(base.dungeons[id]!) !== draftKey(d))
+          .map(([id, d]) => ({ id, name: d.name || id, draft: d }))}
+        records={checks}
+      />
 
       <PublishPanel
         changes={plan.changes}
