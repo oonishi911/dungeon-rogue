@@ -93,7 +93,6 @@ export function App() {
     case 'choose':
       return (
         <DungeonSelectScreen
-          run={save.run}
           records={save.records}
           memories={save.memories}
           onNotice={() => setNotice(true)}
@@ -109,7 +108,6 @@ export function App() {
       const { talk } = stage;
       return (
         <InformantScreen
-          run={save.run}
           dungeonName={dungeonOf(talk.dungeon).name}
           state={talk}
           save={save}
@@ -125,7 +123,6 @@ export function App() {
     case 'shop':
       return (
         <ShopScreen
-          run={save.run}
           dungeonName={dungeonOf(stage.dungeon).name}
           intel={stage.intel}
           atEntry={stage.atEntry}

@@ -22,7 +22,6 @@ import { engravedName } from '../game/engrave';
 import { equipRing, fingers, kitRings, unequipRing } from '../game/ring';
 
 interface ShopScreenProps {
-  run: number;
   dungeonName: string;
   intel: readonly Intel[]; // 情報屋から聞いたこと（ダンジョンの属性は、聞かなければわからない）
   save: SaveData;
@@ -32,7 +31,7 @@ interface ShopScreenProps {
   onDepart: () => void;
 }
 
-export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, onBack, onDepart }: ShopScreenProps) {
+export function ShopScreen({ dungeonName, intel, save, atEntry, onChange, onBack, onDepart }: ShopScreenProps) {
   const [mode, setMode] = useState<'buy' | 'equip'>('buy');
   const [tab, setTab] = useState<Shelf | 'engrave'>('weapon');
   const shelf: Shelf = tab === 'engrave' ? 'weapon' : tab;
@@ -94,7 +93,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
             <span aria-hidden="true">‹</span> 情報屋に戻る
           </button>
           <p className="top__run">
-            {run}回目の挑戦 ・ {dungeonName} ・ 出発の準備
+            {dungeonName} ・ 出発の準備
           </p>
           <h1 className="top__title">{LOST.shop}</h1>
         </div>

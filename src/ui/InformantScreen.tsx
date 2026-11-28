@@ -9,7 +9,6 @@ import { FRAGMENTS, LOST, MEMORY_COUNT, lost } from '../game/story';
 import { RoomBackdrop } from './RoomBackdrop';
 
 interface InformantScreenProps {
-  run: number;
   dungeonName: string;
   state: InformantState;
   save: SaveData;
@@ -17,7 +16,7 @@ interface InformantScreenProps {
   onLeave: () => void; // 忘れ物屋へ行く
 }
 
-export function InformantScreen({ run, dungeonName, state, save, onChange, onLeave }: InformantScreenProps) {
+export function InformantScreen({ dungeonName, state, save, onChange, onLeave }: InformantScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const log = useRef<HTMLOListElement>(null);
   const left = questionsLeft(state);
@@ -44,7 +43,7 @@ export function InformantScreen({ run, dungeonName, state, save, onChange, onLea
       <header className="top">
         <div>
           <p className="top__run">
-            {run}回目の挑戦 ・ {dungeonName}
+            {dungeonName}
           </p>
           <h1 className="top__title">情報屋</h1>
         </div>

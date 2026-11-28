@@ -65,7 +65,7 @@ export function Meter({ label, value, max, tone, unit, gaugeOnly, warnBelow, pul
         <span>{label}</span>
         {!gaugeOnly && (
           <span className={`meter__num${low ? ' meter__num--low' : ''}`}>
-            {unit ? `${unit} ` : ''}
+            {unit && <span className="meter__unit">{unit} </span>}
             <b>{value}</b> / {max}
           </span>
         )}

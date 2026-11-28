@@ -9,7 +9,6 @@ import { bestFloorText, bossesOf, type DungeonRecords } from '../game/records';
 import { GearIcon, SettingsDialog } from './SettingsDialog';
 
 interface DungeonSelectScreenProps {
-  run: number;
   records: DungeonRecords; // ダンジョンごとの記録
   memories: readonly string[]; // 取り戻した記憶（倒したボスの ID）
   onChoose: (dungeon: string) => void;
@@ -17,15 +16,12 @@ interface DungeonSelectScreenProps {
   onBestiary: () => void; // 敵の図鑑を開く
 }
 
-export function DungeonSelectScreen({ run, records, memories, onChoose, onNotice, onBestiary }: DungeonSelectScreenProps) {
+export function DungeonSelectScreen({ records, memories, onChoose, onNotice, onBestiary }: DungeonSelectScreenProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   return (
     <main className="screen screen--narrow screen--fit choose">
       <header className="top">
         <div>
-          <p className="top__run">
-            {run}回目の挑戦
-          </p>
           <h1 className="top__title">ダンジョンを選ぶ</h1>
         </div>
         <div className="choose__tools">

@@ -24,7 +24,7 @@ export function ResultScreen({ run, outcome, expedition, gold, onNextRun }: Resu
       <header className="top">
         <div>
           <p className="top__run">
-            {run}回目の挑戦{dungeonName && ` ・ ${dungeonName}`}
+            {dungeonName}
           </p>
           <h1 className="top__title">{cleared ? 'ダンジョンを踏破した' : expedition.outcome === 'retired' ? `${where}でリタイアした` : `${where}で力尽きた`}</h1>
         </div>
