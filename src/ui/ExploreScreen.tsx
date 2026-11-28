@@ -34,7 +34,7 @@ import { NearbyFoes } from './NearbyFoes';
 import { ExploreSide } from './ExploreSide';
 import { ControlsHelp } from './ControlsHelp';
 import { countStickUse, markHelpSeen, shouldAutoOpenHelp, shouldShowStickHint } from './controlsHelp';
-import { avoidOnWalk, knownStairs, visibleEnemyIds, walkInterrupt, type WalkGoal } from './exploreWalk';
+import { avoidOnWalk, knownStairs, visibleEnemyIds, type WalkGoal } from './exploreWalk';
 import { chooseDirection, knobOffset, STICK, stickDirections } from './stick';
 
 // ミニマップの元の大きさ（px）がこれ以下なら、拡大してもぼかさずドットのまま見せる。
@@ -107,9 +107,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const onProgressRef = useRef(onProgress);
   onProgressRef.current = onProgress;
   const viewRef = useRef<HTMLCanvasElement>(null);
-  // 歩き続けていて立ち止まったときの指の位置（そこからはっきり動かすまで歩き出さない）と、最後の指の位置
-  const stickPauseRef = useRef<{ x: number; y: number } | null>(null);
-  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
 
   const miniRef = useRef<HTMLCanvasElement>(null);
 
@@ -314,7 +311,10 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     heldRef.current = heldRef.current.filter((d) => d !== dir);
   }, []);
 
-  /** タップ・クリックで向かっている先へ1歩進む。着いた・進めない・攻撃したら止まる（敵が見えても立ち止まらない） */
+  /**
+   * タップ・クリックで向かっている先へ1歩進む。着いた・進めないときは止まる。
+   * 途中の敵に当たって攻撃したときは止まらず、倒すまで攻撃してから、また歩く（2026-11-29）
+   */
   const walkStep = useCallback(
     (goal: WalkGoal) => {
       const s = stateRef.current;
@@ -329,20 +329,21 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       }
       const before = s.player;
       const action = walkToward(s, goal.pos, avoidOnWalk(s, goal.pos));
-      // 着いた・進めない・敵を攻撃した（その場から動かなかった）ときは止まる
-      if (!action || !perform(action) || samePos(before, stateRef.current.player)) {
+      // 着いた・進めないときは止まる。その場から動かなかったときは、敵を攻撃したのなら続け、そうでなければ止まる
+      const attacked = () => stateRef.current.hits.some((h) => h.kind === 'dealt');
+      if (!action || !perform(action) || (samePos(before, stateRef.current.player) && !attacked())) {
         walkRef.current = null;
       }
     },
     [perform],
   );
 
-  // 「階段へ」（2026-11-28）：見つけた下り階段まで歩く。もう一度押すと止める。敵が見えたなどで立ち止まる（walkInterrupt）
+  // 「階段へ」（2026-11-28）：見つけた下り階段まで歩く。もう一度押すと止める（途中で立ち止まらない。2026-11-29）
   const [walkingStairs, setWalkingStairs] = useState(false);
   const goStairs = useCallback(() => {
     const s = stateRef.current;
     if (s.outcome !== 'ongoing') return;
-    if (walkRef.current?.stopOnSight) {
+    if (walkRef.current?.stairs) {
       walkRef.current = null;
       setWalkingStairs(false);
       return;
@@ -361,7 +362,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     heldRef.current = [];
     queueRef.current = [];
     stickRef.current = null;
-    walkRef.current = { pos: to, enemy: null, stopOnSight: true };
+    walkRef.current = { pos: to, enemy: null, stairs: true };
     setWalkingStairs(true);
   }, []);
   const goStairsRef = useRef(goStairs);
@@ -413,8 +414,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
           queueRef.current = rest;
           perform(queued);
         } else if (held || stickRef.current) {
-          // なぞりで歩き続けているとき：壁にさえぎられずに新しい敵が見えた・宝箱を見つけた・攻撃を受けたら、立ち止まる
-          // （指を動かすと、また歩き出す）。方向キーの押しっぱなしは止めない（離せばすぐ止まるので）
+          // なぞり・方向キーの押しっぱなしで歩き続けているとき。敵が見えても、宝箱を見つけても、攻撃を受けても立ち止まらない（2026-11-29）
           const s = stateRef.current;
           const dir =
             held ??
@@ -423,30 +423,12 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
               const to = { x: s.player.x + DIR_DELTA[d].x, y: s.player.y + DIR_DELTA[d].y };
               return tileAt(s.map, to) !== 'wall';
             });
-          if (perform({ kind: 'move', dir }) && !held) {
-            const why = walkInterrupt(s, stateRef.current);
-            if (why && stateRef.current.outcome === 'ongoing') {
-              // なぞっている指は、止まった位置からはっきり動かすまで、歩き出さない（指のわずかな揺れで、すぐ歩き出さないように）
-              if (stickRef.current) stickPauseRef.current = lastPointerRef.current;
-              stickRef.current = null;
-              showInfo(why);
-            }
-          }
+          perform({ kind: 'move', dir });
         } else if (walkRef.current) {
-          const goal = walkRef.current;
-          const before = stateRef.current;
-          walkStep(goal);
-          // 「階段へ」で歩いているとき：敵が見えた・宝箱を見つけた・攻撃を受けたら立ち止まる
-          if (goal.stopOnSight && walkRef.current === goal && stateRef.current !== before) {
-            const why = walkInterrupt(before, stateRef.current);
-            if (why && stateRef.current.outcome === 'ongoing') {
-              walkRef.current = null;
-              showInfo(why);
-            }
-          }
+          walkStep(walkRef.current);
         }
         // 「階段へ」のボタンの表示（歩いているあいだは「止める」）。ほかの操作で取りやめたときも、ここで戻る
-        setWalkingStairs(walkRef.current?.stopOnSight === true);
+        setWalkingStairs(walkRef.current?.stairs === true);
       }
       const current = stateRef.current;
       if (sight.state !== current) {
@@ -692,7 +674,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     if (stateRef.current.outcome !== 'ongoing' || touchRef.current || e.button !== 0) return;
     // 操作の説明を開いているあいだは、歩かない
     if (helpOpenRef.current) return;
-    stickPauseRef.current = null;
     // 3D画面の上に重ねたボタン（待機・リタイアの確かめなど）は、歩く操作にせず、ボタンとして押させる
     if ((e.target as HTMLElement).closest('button, a')) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -703,12 +684,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const onStagePointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const t = touchRef.current;
     if (!t || e.pointerId !== t.id) return;
-    lastPointerRef.current = { x: e.clientX, y: e.clientY };
-    const pause = stickPauseRef.current;
-    if (pause) {
-      if (Math.hypot(e.clientX - pause.x, e.clientY - pause.y) < STICK.dragStart) return;
-      stickPauseRef.current = null;
-    }
     const dx = e.clientX - t.x;
     const dy = e.clientY - t.y;
     if (!t.dragging) {
@@ -835,7 +810,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
                 className={`explore__go-stairs${walkingStairs ? ' explore__go-stairs--on' : ''}`}
                 onClick={goStairs}
                 aria-pressed={walkingStairs}
-                title={walkingStairs ? `階段へ歩くのを止める（${keyLabel(feel.keys.stairs)} キー）` : `見つけた階段まで歩く。敵が見えたら立ち止まる（${keyLabel(feel.keys.stairs)} キー）`}
+                title={walkingStairs ? `階段へ歩くのを止める（${keyLabel(feel.keys.stairs)} キー）` : `見つけた階段まで歩く（${keyLabel(feel.keys.stairs)} キー）`}
               >
                 {walkingStairs ? '止める' : '階段へ'}
                 <span className="explore__rest-key">{keyLabel(feel.keys.stairs)}</span>
