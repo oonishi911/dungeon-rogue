@@ -33,7 +33,7 @@ import { LogList } from './ExploreParts';
 import { NearbyFoes } from './NearbyFoes';
 import { ExploreSide } from './ExploreSide';
 import { ControlsHelp } from './ControlsHelp';
-import { markHelpSeen, shouldAutoOpenHelp } from './controlsHelp';
+import { countStickUse, markHelpSeen, shouldAutoOpenHelp, shouldShowStickHint } from './controlsHelp';
 import { avoidOnWalk, knownStairs, visibleEnemyIds, walkInterrupt, type WalkGoal } from './exploreWalk';
 import { chooseDirection, knobOffset, STICK, stickDirections } from './stick';
 
@@ -92,6 +92,8 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   }, []);
   // 指で触る端末か（説明で、スマホの操作を先に出す）
   const touchDevice = useMemo(() => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, []);
+  // なぞって歩く目印（指で触る端末で、まだ数回しかなぞっていないとき）
+  const [stickHint, setStickHint] = useState(() => shouldShowStickHint());
   const [hurtKey, setHurtKey] = useState(0); // 敵に攻撃された回数（画面のふちを一瞬赤くする。変わるたびに、赤いふちの動きをやり直す）
   const feel = useSyncExternalStore(subscribeFeel, feelSettings);
   const [mpShake, setMpShake] = useState(0); // 魔力が足りずに唱えられなかった回数（魔力のゲージを震わせる）
@@ -695,6 +697,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     if (!t.dragging) {
       if (Math.hypot(dx, dy) < STICK.dragStart) return;
       t.dragging = true;
+      if (stickHint && !countStickUse()) setStickHint(false);
     }
     aimStick(stickDirections(dx, dy));
     const knob = knobOffset(dx, dy);
@@ -833,6 +836,13 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
               待機
               <span className="explore__rest-key">スペース</span>
             </button>
+          )}
+          {/* なぞって歩く目印（2026-11-28。提案 #9）：どこをなぞってもよいが、親指を置きやすい左下に、薄い輪で示す */}
+          {touchDevice && stickHint && !stick && !ended && !aiming && !helpOpen && (
+            <div className="stick-hint" aria-hidden="true">
+              <span className="stick-hint__ring" />
+              <span className="stick-hint__text">なぞって歩く</span>
+            </div>
           )}
           {stick && (
             <div className="stick" style={{ left: stick.x, top: stick.y }} aria-hidden="true">

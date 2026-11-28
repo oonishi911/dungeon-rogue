@@ -22,6 +22,30 @@ export function markHelpSeen(storage: Pick<Storage, 'setItem'> | null = safeStor
   }
 }
 
+const STICK_KEY = 'dungeon-rogue:stick-uses';
+/** なぞって歩いた回数がこれに届いたら、目印（なぞって歩く）を出さない */
+export const STICK_HINT_UNTIL = 3;
+
+/** なぞって歩く目印を出すか（まだ STICK_HINT_UNTIL 回なぞっていなければ出す。保存が読めなければ出す） */
+export function shouldShowStickHint(storage: Pick<Storage, 'getItem'> | null = safeStorage()): boolean {
+  try {
+    return Number(storage?.getItem(STICK_KEY) ?? 0) < STICK_HINT_UNTIL;
+  } catch {
+    return true;
+  }
+}
+
+/** なぞって歩いた回数を1つ増やす。目印をまだ出すかを返す */
+export function countStickUse(storage: Pick<Storage, 'getItem' | 'setItem'> | null = safeStorage()): boolean {
+  try {
+    const n = Number(storage?.getItem(STICK_KEY) ?? 0) + 1;
+    storage?.setItem(STICK_KEY, String(n));
+    return n < STICK_HINT_UNTIL;
+  } catch {
+    return false;
+  }
+}
+
 function safeStorage(): Storage | null {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage;

@@ -1,6 +1,6 @@
 // 操作の説明を自動で開くか（controlsHelp.ts）
 import { describe, expect, it } from 'vitest';
-import { COMMON_HELP, KEYBOARD_HELP, markHelpSeen, shouldAutoOpenHelp, TOUCH_HELP } from './controlsHelp';
+import { COMMON_HELP, countStickUse, KEYBOARD_HELP, markHelpSeen, shouldAutoOpenHelp, shouldShowStickHint, STICK_HINT_UNTIL, TOUCH_HELP } from './controlsHelp';
 import { SKILL_KEY, SPELL_KEYS, STAIRS_KEY, SWAP_KEY } from './exploreKeys';
 
 const memory = () => {
@@ -31,5 +31,15 @@ describe('操作の説明', () => {
     expect(keys).toContain(STAIRS_KEY.toUpperCase());
     expect(TOUCH_HELP.length).toBeGreaterThan(0);
     expect(COMMON_HELP.length).toBeGreaterThan(0);
+  });
+});
+
+describe('なぞって歩く目印', () => {
+  it('決まった回数なぞるまで出し、そのあとは出さない', () => {
+    const s = memory();
+    expect(shouldShowStickHint(s)).toBe(true);
+    for (let i = 1; i < STICK_HINT_UNTIL; i++) expect(countStickUse(s)).toBe(true);
+    expect(countStickUse(s)).toBe(false);
+    expect(shouldShowStickHint(s)).toBe(false);
   });
 });
