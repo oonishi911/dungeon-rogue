@@ -22,6 +22,9 @@ export const SKILL_KEY = 'f';
 // 武器の持ち替え（サブ武器があるとき）は q キー
 export const SWAP_KEY = 'q';
 
+// 見つけた階段まで歩く（2026-11-28）は g キー
+export const STAIRS_KEY = 'g';
+
 export const KEY_ACTIONS: Record<string, ExploreAction> = {
   ' ': { kind: 'wait' },
   '.': { kind: 'wait' },

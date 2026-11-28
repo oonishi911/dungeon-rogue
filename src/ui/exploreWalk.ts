@@ -10,12 +10,23 @@ import type { Pos } from '../game/map';
 export interface WalkGoal {
   pos: Pos;
   enemy: number | null; // 敵をタップしたときはその敵（動いても追いかける）
+  stopOnSight?: boolean; // 歩き続けるときと同じく、敵が見えた・宝箱を見つけた・攻撃を受けたら立ち止まる（「階段へ」で歩くとき）
 }
 
-/** タップで歩くときに、できるだけ通らないマス。階段は踏むと階を移ってしまうので、行き先でなければ避ける */
-export function avoidOnWalk(state: ExploreState): Set<string> {
+/** 見つけた下り階段の場所（まだ見ていない・足元にあるときは null）。「階段へ」で向かう先 */
+export function knownStairs(state: ExploreState): Pos | null {
+  const st = state.map.stairs;
+  if (!st || !state.seen[st.y * state.map.width + st.x]) return null;
+  if (st.x === state.player.x && st.y === state.player.y) return null;
+  return st;
+}
+
+/** タップで歩くときに、できるだけ通らないマス。階段は踏むと階を移ってしまうので、行き先でなければ避ける（goal を渡すと、そのマスは避けない） */
+export function avoidOnWalk(state: ExploreState, goal?: Pos): Set<string> {
   const up = upStairs(state);
-  return new Set([state.map.stairs, up].filter((p): p is Pos => p !== null).map(key));
+  const avoid = new Set([state.map.stairs, up].filter((p): p is Pos => p !== null).map(key));
+  if (goal) avoid.delete(key(goal));
+  return avoid;
 }
 
 /** 今見えている敵の番号 */

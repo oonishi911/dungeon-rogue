@@ -28,13 +28,13 @@ import { feelSettings, subscribeFeel } from './feelSettings';
 import { devBestHref } from './exploreDev';
 import { EndingPanel, LeaveDialog, RetireDialog } from './ExploreDialogs';
 import { playFeedback } from './exploreFeedback';
-import { KEY_ACTIONS, KEY_DIRS, SKILL_KEY, SPELL_KEYS, SWAP_KEY } from './exploreKeys';
+import { KEY_ACTIONS, KEY_DIRS, SKILL_KEY, SPELL_KEYS, STAIRS_KEY, SWAP_KEY } from './exploreKeys';
 import { LogList } from './ExploreParts';
 import { NearbyFoes } from './NearbyFoes';
 import { ExploreSide } from './ExploreSide';
 import { ControlsHelp } from './ControlsHelp';
 import { markHelpSeen, shouldAutoOpenHelp } from './controlsHelp';
-import { avoidOnWalk, visibleEnemyIds, walkInterrupt, type WalkGoal } from './exploreWalk';
+import { avoidOnWalk, knownStairs, visibleEnemyIds, walkInterrupt, type WalkGoal } from './exploreWalk';
 import { chooseDirection, knobOffset, STICK, stickDirections } from './stick';
 
 // ミニマップの元の大きさ（px）がこれ以下なら、拡大してもぼかさずドットのまま見せる。
@@ -324,7 +324,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
         goal.pos = foe.pos;
       }
       const before = s.player;
-      const action = walkToward(s, goal.pos, avoidOnWalk(s));
+      const action = walkToward(s, goal.pos, avoidOnWalk(s, goal.pos));
       // 着いた・進めない・敵を攻撃した（その場から動かなかった）ときは止まる
       if (!action || !perform(action) || samePos(before, stateRef.current.player)) {
         walkRef.current = null;
@@ -332,6 +332,36 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     },
     [perform],
   );
+
+  // 「階段へ」（2026-11-28）：見つけた下り階段まで歩く。もう一度押すと止める。敵が見えたなどで立ち止まる（walkInterrupt）
+  const [walkingStairs, setWalkingStairs] = useState(false);
+  const goStairs = useCallback(() => {
+    const s = stateRef.current;
+    if (s.outcome !== 'ongoing') return;
+    if (walkRef.current?.stopOnSight) {
+      walkRef.current = null;
+      setWalkingStairs(false);
+      return;
+    }
+    const to = knownStairs(s);
+    if (!to) {
+      setError('まだ階段を見つけていない');
+      return;
+    }
+    if (!walkToward(s, to, avoidOnWalk(s, to))) {
+      setError('階段までの道がわからない');
+      return;
+    }
+    aimingRef.current = null;
+    setAiming(null);
+    heldRef.current = [];
+    queueRef.current = [];
+    stickRef.current = null;
+    walkRef.current = { pos: to, enemy: null, stopOnSight: true };
+    setWalkingStairs(true);
+  }, []);
+  const goStairsRef = useRef(goStairs);
+  goStairsRef.current = goStairs;
 
   // 毎フレーム：前の動きが終わっていれば次の行動を1つ行い、画面を描く
   useEffect(() => {
@@ -400,8 +430,20 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
             }
           }
         } else if (walkRef.current) {
-          walkStep(walkRef.current);
+          const goal = walkRef.current;
+          const before = stateRef.current;
+          walkStep(goal);
+          // 「階段へ」で歩いているとき：敵が見えた・宝箱を見つけた・攻撃を受けたら立ち止まる
+          if (goal.stopOnSight && walkRef.current === goal && stateRef.current !== before) {
+            const why = walkInterrupt(before, stateRef.current);
+            if (why && stateRef.current.outcome === 'ongoing') {
+              walkRef.current = null;
+              showInfo(why);
+            }
+          }
         }
+        // 「階段へ」のボタンの表示（歩いているあいだは「止める」）。ほかの操作で取りやめたときも、ここで戻る
+        setWalkingStairs(walkRef.current?.stopOnSight === true);
       }
       const current = stateRef.current;
       if (sight.state !== current) {
@@ -507,6 +549,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       if (key === SWAP_KEY) {
         e.preventDefault();
         if (!e.repeat && stateRef.current.stats.sub) swapRef.current();
+        return;
+      }
+      if (key === STAIRS_KEY) {
+        e.preventDefault();
+        if (!e.repeat) goStairsRef.current();
         return;
       }
       if (key === SKILL_KEY) {
@@ -681,6 +728,12 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
   const dungeon = dungeonOfState(state);
   const visibleEnemies = state.enemies.filter((e) => visible.has(e.pos.y * state.map.width + e.pos.x));
   const onStairs = state.map.stairs !== null && samePos(state.player, state.map.stairs);
+  // 見つけた下り階段（足元でなければ）まで、見た通路を通って行けるとき、「階段へ」のボタンを出す
+  // （壁の切れ目から階段だけが見えていて、そこまでの道をまだ見ていないときは出さない）
+  const stairsKnown = useMemo(() => {
+    const to = knownStairs(state);
+    return to !== null && walkPath(state, to, avoidOnWalk(state, to)) !== null;
+  }, [state]);
   const ended = state.outcome !== 'ongoing';
   const floorName = isBossFloor(state) ? '最深部' : `地下${state.floor + 1}階`;
   // 低いHP：HPの割合が warn 以下で赤いふちを出し、critical 以下で脈打つ
@@ -752,6 +805,20 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
             </>
           )}
           {/* その場で1ターン待つ。3D画面の右下に重ねる（スマホでは、下に出る記録の行より上） */}
+          {!ended && !aiming && (
+            stairsKnown && (
+              <button
+                type="button"
+                className={`explore__go-stairs${walkingStairs ? ' explore__go-stairs--on' : ''}`}
+                onClick={goStairs}
+                aria-pressed={walkingStairs}
+                title={walkingStairs ? '階段へ歩くのを止める（G キー）' : '見つけた階段まで歩く。敵が見えたら立ち止まる（G キー）'}
+              >
+                {walkingStairs ? '止める' : '階段へ'}
+                <span className="explore__rest-key">G</span>
+              </button>
+            )
+          )}
           {!ended && !aiming && (
             <button
               type="button"

@@ -44,6 +44,12 @@ export function devFoes(state: ExploreState): ExploreState {
 }
 
 // 開発用画面で持たせる装備と道具
+/** ?reveal=1 なら、階の地図を全部見えた状態で始める（「階段へ」・小地図の確認用） */
+export function devReveal(state: ExploreState): ExploreState {
+  if (!new URLSearchParams(location.search).has('reveal')) return state;
+  return { ...state, seen: state.seen.map(() => true) };
+}
+
 export const DEV_LOADOUT: ItemId[] = ['sword', 'hammer', 'plate', 'ring_all_2', 'potion', 'potion', 'panacea', 'food', 'fire_whetstone', 'ice_whetstone', 'book_shockwave', 'book_fire_bolt', 'book_heal'];
 
 /** 開発用画面の「いちばん強い装備で試す」の切り替え先（今のダンジョンの特性のまま、装備だけを切り替える） */
