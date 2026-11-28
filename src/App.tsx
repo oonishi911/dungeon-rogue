@@ -14,6 +14,7 @@ import { newSave, type SaveData } from './game/save';
 import { bossOf, startInformant, type InformantState, type Intel } from './game/informant';
 import { recall, toneOf, type Scene } from './game/story';
 import { receiveLoot, kitEchoes, kitSubEchoes } from './game/engrave';
+import { recordRun } from './game/records';
 import { departWith, fitKit, kitLoadout, returnWith } from './game/shop';
 import type { Departure, ItemId } from './game/types';
 import { clearRun, loadRun, loadSave, writeRun, writeSave } from './storage';
@@ -43,7 +44,10 @@ const newSeed = () => Math.floor(Math.random() * 2 ** 31);
  */
 function saveAfter(save: SaveData, state: ExploreState, outcome: Departure): { save: SaveData; scene: Scene | null } {
   // 拾った刻印武器と残響は、力尽きても、リタイアしても、倉庫に入る（失わない）
-  const base = receiveLoot(returnWith({ ...save, run: save.run + 1 }, toResult(state).goldBrought, state.stats.items), state.found);
+  const result = toResult(state);
+  const loot = receiveLoot(returnWith({ ...save, run: save.run + 1 }, result.goldBrought, state.stats.items), state.found);
+  // ダンジョンごとの記録（挑んだ回数・いちばん深い階・踏破した回数）を足す
+  const base = { ...loot, records: recordRun(loot.records, outcome.dungeon, result) };
   if (state.outcome !== 'cleared') return { save: base, scene: null };
   const got = recall(base, bossOf(outcome.dungeon, outcome.trait));
   return { save: got.save, scene: got.scene };
@@ -90,6 +94,8 @@ export function App() {
       return (
         <DungeonSelectScreen
           run={save.run}
+          records={save.records}
+          memories={save.memories}
           onNotice={() => setNotice(true)}
           onBestiary={() => setBestiaryOpen(true)}
           onChoose={(dungeon) => {

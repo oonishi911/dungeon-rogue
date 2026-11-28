@@ -1,19 +1,23 @@
 // 挑戦の始まり：どのダンジョンに挑むかを選ぶ画面。
 // 並ぶのは src/game/dungeons/ にある設定ファイル（管理画面で作ったダンジョン）すべて。
 // ダンジョンごとに、階の数・広さ・満腹度を見せる（ダンジョンの属性は、選んだあとに決まる）
+// 2026-11-28：これまでの記録（挑んだ回数・いちばん深い階・踏破）と、取り戻した記憶の数も見せる。広い画面では横に並べる
 
 import { DUNGEON_IDS, dungeonOf } from '../game/dungeons';
+import { bestFloorText, bossesOf, type DungeonRecords } from '../game/records';
 
 interface DungeonSelectScreenProps {
   run: number;
+  records: DungeonRecords; // ダンジョンごとの記録
+  memories: readonly string[]; // 取り戻した記憶（倒したボスの ID）
   onChoose: (dungeon: string) => void;
   onNotice: () => void; // 注意書きと相談窓口を読む
   onBestiary: () => void; // 敵の図鑑を開く
 }
 
-export function DungeonSelectScreen({ run, onChoose, onNotice, onBestiary }: DungeonSelectScreenProps) {
+export function DungeonSelectScreen({ run, records, memories, onChoose, onNotice, onBestiary }: DungeonSelectScreenProps) {
   return (
-    <main className="screen screen--narrow screen--fit">
+    <main className="screen screen--narrow screen--fit choose">
       <header className="top">
         <div>
           <p className="top__run">
@@ -31,11 +35,16 @@ export function DungeonSelectScreen({ run, onChoose, onNotice, onBestiary }: Dun
         {DUNGEON_IDS.map((id) => {
           const d = dungeonOf(id);
           const headingId = `choose-${id}`;
+          const r = records[id];
+          const best = r ? bestFloorText(id, r.best) : null;
+          const bosses = bossesOf(id);
+          const recalled = bosses.filter((b) => memories.includes(b)).length;
           return (
-            <li key={id} className="choose__item">
+            <li key={id} className={`choose__item${r?.clears ? ' choose__item--cleared' : ''}`}>
               <section aria-labelledby={headingId}>
                 <h2 id={headingId} className="panel__title choose__name">
                   {d.name}
+                  {r?.clears ? <span className="choose__badge">踏破</span> : null}
                 </h2>
                 {d.description && <p className="choose__text">{d.description}</p>}
                 <dl className="facts choose__facts">
@@ -54,6 +63,33 @@ export function DungeonSelectScreen({ run, onChoose, onNotice, onBestiary }: Dun
                     <dd>{d.floors.satiety}</dd>
                   </div>
                 </dl>
+                {/* これまでの記録（まだ挑んでいなければ、そう書く） */}
+                <p className="choose__record">
+                  {r ? (
+                    <>
+                      挑んだ <b>{r.tries}</b>回 ・ いちばん深く <b>{best ?? '—'}</b>
+                      {r.clears > 0 && (
+                        <>
+                          {' '}
+                          ・ 踏破 <b>{r.clears}</b>回
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    'まだ挑んでいない'
+                  )}
+                </p>
+                <p className="choose__memories" aria-label={`取り戻した記憶 ${recalled}/${bosses.length}`}>
+                  <span className="choose__memories-label">取り戻した記憶</span>
+                  <span className="choose__pips" aria-hidden="true">
+                    {bosses.map((b) => (
+                      <span key={b} className={`choose__pip${memories.includes(b) ? ' choose__pip--on' : ''}`} />
+                    ))}
+                  </span>
+                  <span className="choose__memories-num">
+                    {recalled}/{bosses.length}
+                  </span>
+                </p>
                 <button type="button" className="primary choose__go" onClick={() => onChoose(id)} aria-describedby={headingId}>
                   このダンジョンに挑む
                 </button>
