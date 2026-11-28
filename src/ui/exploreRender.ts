@@ -7,6 +7,22 @@ import { type ExploreState } from '../game/exploreTypes';
 import type { Pos } from '../game/map';
 
 export const MINI_CELL = 3; // ミニマップの1マスの大きさ（px）
+/** 閉じているときの小地図に描く、主人公のまわりの半径（マス）。2026-11-28：全体を縮めると読めないので、まわりだけを大きく描く */
+export const MINI_LOCAL_RADIUS = 7;
+
+/** 小地図に描く範囲（マスの左上と幅・高さ） */
+export interface MiniWindow {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** 主人公のまわり（半径 MINI_LOCAL_RADIUS）の範囲。主人公がいつも真ん中に来るよう、マップの端でもずらさない（外は空白） */
+export function miniWindow(player: Pos, radius = MINI_LOCAL_RADIUS): MiniWindow {
+  const size = radius * 2 + 1;
+  return { x: player.x - radius, y: player.y - radius, w: size, h: size };
+}
 
 /** 敵の頭上に出すマークと、文字で伝える状態 */
 export const ENEMY_MARK: Record<EnemyMode, { mark: string; text: string }> = {
@@ -55,13 +71,16 @@ export const lerp = (a: Pos, b: Pos, t: number): Pos => ({ x: a.x + (b.x - a.x) 
 /**
  * ミニマップを描く：見えた床、上り・下り階段、まだ開けていない宝箱（見えたもの）、見えている敵（visible は今見えているマス）、主人公。
  * 2026-11-23：敵と宝箱の印を足し、階段は縁取りして、床と見分けやすくした
+ * 2026-11-28：area を渡すと、その範囲だけを描く（閉じているときの、主人公のまわり）。渡さなければ全体
  */
-export function drawMinimap(canvas: HTMLCanvasElement, state: ExploreState, colors: Colors, visible?: ReadonlySet<number>) {
+export function drawMinimap(canvas: HTMLCanvasElement, state: ExploreState, colors: Colors, visible?: ReadonlySet<number>, area?: MiniWindow) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const { map, seen, player } = state;
   // 3D画面の上に重ねるので、背景は塗らずに透かす（下地の濃さは CSS で決める）
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (area) ctx.translate(-area.x * MINI_CELL, -area.y * MINI_CELL);
   ctx.fillStyle = colors.mini;
   map.tiles.forEach((t, i) => {
     if (t === 'floor' && seen[i]) ctx.fillRect((i % map.width) * MINI_CELL, Math.floor(i / map.width) * MINI_CELL, MINI_CELL, MINI_CELL);
