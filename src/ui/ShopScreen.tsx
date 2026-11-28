@@ -28,10 +28,11 @@ interface ShopScreenProps {
   save: SaveData;
   atEntry: readonly ItemId[]; // 店に入ったときに持っていたもの（並びはこれで決まり、店で買っても広がらない）
   onChange: (save: SaveData) => void; // 買った・選んだたびに呼ぶ（すぐ保存する）
+  onBack: () => void; // 情報屋に戻る（2026-11-28）
   onDepart: () => void;
 }
 
-export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, onDepart }: ShopScreenProps) {
+export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, onBack, onDepart }: ShopScreenProps) {
   const [mode, setMode] = useState<'buy' | 'equip'>('buy');
   const [tab, setTab] = useState<Shelf | 'engrave'>('weapon');
   const shelf: Shelf = tab === 'engrave' ? 'weapon' : tab;
@@ -88,6 +89,10 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
       <RoomBackdrop save={save} />
       <header className="top">
         <div>
+          {/* 情報屋に戻って、もっと話を聞ける（買ったもの・装備はそのまま） */}
+          <button type="button" className="shop__back" onClick={onBack}>
+            <span aria-hidden="true">‹</span> 情報屋に戻る
+          </button>
           <p className="top__run">
             {run}回目の挑戦 ・ {dungeonName} ・ 出発の準備
           </p>

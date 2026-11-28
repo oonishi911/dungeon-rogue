@@ -1280,6 +1280,28 @@ button {
   min-height: 2.75rem;
 }
 
+/* 店の上の「情報屋に戻る」（2026-11-28） */
+.shop__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2.25rem;
+  margin: 0 0 0.35rem;
+  padding: 0.2rem 0.85rem 0.2rem 0.6rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 999px;
+  background: rgb(11 20 19 / 0.6);
+  color: var(--bone-dim);
+  font: inherit;
+  font-size: var(--step--1);
+  cursor: pointer;
+}
+
+.shop__back:hover {
+  border-color: var(--bone-dim);
+  color: var(--bone);
+}
+
 .choose__tools {
   display: flex;
   flex-wrap: wrap;
