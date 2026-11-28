@@ -798,6 +798,13 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
             />
           )}
           {ended && !leaving && <EndingPanel text={lastLog} onFinish={onFinish && (() => onFinish(state))} onRestart={restart} />}
+          {/* 記録：パソコンでは3D画面の左下に半透明で重ねる（スマホでは出さず、いちばん新しい1行を3D画面の上に重ねる） */}
+          <section className="explore__log-panel" aria-labelledby="explore-log">
+            <h2 id="explore-log" className="panel__title">
+              記録
+            </h2>
+            <LogList lines={recentLog} total={state.log.length} />
+          </section>
         </div>
 
         <ExploreSide
@@ -824,14 +831,6 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
             setRetiring(true);
           }}
         />
-
-        {/* 記録：パソコンでは3D画面の下（スマホでは出さず、いちばん新しい1行を3D画面の上に重ねる） */}
-        <section className="explore__log-panel" aria-labelledby="explore-log">
-          <h2 id="explore-log" className="panel__title">
-            記録
-          </h2>
-          <LogList lines={recentLog} total={state.log.length} />
-        </section>
       </div>
     </main>
   );
