@@ -4640,6 +4640,18 @@ button {
   opacity: 1;
 }
 
+/* 2026-11-28：閉じているときは主人公のまわりだけを大きく描くので、枠を大きくし、下地を濃くして読みやすくする */
+.explore__mini-button:not(.explore__mini-button--open) {
+  --mini-size: min(26%, 10rem);
+}
+
+.explore__mini--local {
+  border: 1px solid rgb(236 229 211 / 0.18);
+  border-radius: 6px;
+  background: rgb(11 20 19 / 0.62);
+  opacity: 0.95;
+}
+
 .explore__mini-legend {
   display: flex;
   flex-wrap: wrap;
@@ -4672,7 +4684,7 @@ button {
 /* スマホ：呪文は、アイコンと使う魔力だけの小さなボタンを、5つまで1行に等しく並べる（名前は長押しで出る） */
 @media (max-width: 48rem) {
   .explore__mini-button {
-    width: min(28%, 6.5rem);
+    width: min(30%, 7.5rem);
     right: 0.75rem;
   }
 

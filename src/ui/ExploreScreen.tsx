@@ -20,7 +20,7 @@ import { SoundButton } from './SoundButton';
 import { walkPath, walkToward } from '../game/path';
 import type { ItemId, SpellId } from '../game/types';
 import { useBackGuard } from './backGuard';
-import { drawMinimap, MINI_CELL, motionOf, readColors, type Frame, type Motion } from './exploreRender';
+import { drawMinimap, MINI_CELL, miniWindow, motionOf, readColors, type Frame, type Motion } from './exploreRender';
 import { DungeonView3D, webglAvailable } from './explore3d';
 import { LOST, lost } from '../game/story';
 import { INTRO_FX, LOW_HP } from './explore3dConfig';
@@ -425,9 +425,13 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     return () => setAmbient(null);
   }, [state.trait]);
 
+  // 小地図：閉じているときは主人公のまわりだけを大きく、開いたときは階全体を描く
+  const miniArea = miniOpen ? undefined : miniWindow(state.player);
+  const miniW = (miniArea?.w ?? state.map.width) * MINI_CELL;
+  const miniH = (miniArea?.h ?? state.map.height) * MINI_CELL;
   useEffect(() => {
-    if (miniRef.current) drawMinimap(miniRef.current, state, readColors(), visible);
-  }, [state, visible]);
+    if (miniRef.current) drawMinimap(miniRef.current, state, readColors(), visible, miniOpen ? undefined : miniWindow(state.player));
+  }, [state, visible, miniOpen, miniW, miniH]);
 
   // 構えの範囲：構えている呪文の届くマスを、主人公の向きに合わせて床に出す
   const preview = useMemo(() => (aiming && state.outcome === 'ongoing' ? spellPreview(state, aiming, facing, dungeonOfState(state).spells) : null), [aiming, facing, state]);
@@ -759,7 +763,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
               {intro.name}
             </p>
           )}
-          {/* この階の地図。3D画面の右上に、半透明で重ねる。押すと大きく広げ、もう一度押すと戻す。広いマップは縮めて表示するので、なめらかに縮める */}
+          {/* この階の地図。3D画面の右上に、半透明で重ねる（主人公のまわりだけを大きく）。押すと階全体を大きく広げ、もう一度押すと戻す。広いマップは縮めて表示するので、なめらかに縮める */}
           <button
             type="button"
             className={`explore__mini-button${miniOpen ? ' explore__mini-button--open' : ''}`}
@@ -769,9 +773,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
           >
             <canvas
               ref={miniRef}
-              className={`explore__mini${state.map.width * MINI_CELL > MINI_SHARP_MAX ? ' explore__mini--dense' : ''}`}
-              width={state.map.width * MINI_CELL}
-              height={state.map.height * MINI_CELL}
+              className={`explore__mini${miniOpen ? '' : ' explore__mini--local'}${miniW > MINI_SHARP_MAX ? ' explore__mini--dense' : ''}`}
+              width={miniW}
+              height={miniH}
               role="img"
               aria-label="この階の地図（歩いて見えた範囲。緑が自分、白い四角が階段、赤が見えている敵、金色が宝箱）"
             />
