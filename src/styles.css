@@ -6079,3 +6079,64 @@ button {
   display: grid;
   gap: 0.3rem;
 }
+
+/* 管理画面の「クリア率を測る」（2026-11-29） */
+.clear-check__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0.5rem 0;
+}
+
+.clear-check__actions progress {
+  flex: 1 1 8rem;
+  max-width: 16rem;
+}
+
+.clear-check__table-wrap {
+  overflow-x: auto;
+}
+
+.clear-check__table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  margin: 0.5rem 0;
+}
+
+.clear-check__table th,
+.clear-check__table td {
+  padding: 0.3rem 0.55rem;
+  text-align: right;
+  border-bottom: 1px solid var(--line, rgba(127, 127, 127, 0.3));
+  white-space: nowrap;
+}
+
+.clear-check__table th[scope='row'] {
+  text-align: left;
+}
+
+.clear-check__row--main td,
+.clear-check__row--main th {
+  font-weight: 600;
+}
+
+.clear-check__warnings,
+.clear-check__error,
+.clear-check-summary__warn {
+  color: #d0573a;
+}
+
+.clear-check__warnings {
+  padding-left: 1.2rem;
+  margin: 0.4rem 0;
+}
+
+.clear-check__stale {
+  font-style: italic;
+}
+
+.clear-check-summary ul {
+  padding-left: 1.2rem;
+  margin: 0.3rem 0;
+}
