@@ -108,7 +108,6 @@ export function App() {
       const { talk } = stage;
       return (
         <InformantScreen
-          run={save.run}
           dungeonName={dungeonOf(talk.dungeon).name}
           state={talk}
           save={save}
