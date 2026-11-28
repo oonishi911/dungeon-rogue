@@ -28,13 +28,13 @@
     "engravedDrop": true
   },
   "growth": {
-    "startHp": 100,
-    "startMaxHp": 100,
-    "expBase": 10,
-    "expStep": 10,
-    "hpPerLevel": 3,
-    "atkPerLevel": 3,
-    "magPerLevel": 3,
+    "startHp": 125,
+    "startMaxHp": 125,
+    "expBase": 5,
+    "expStep": 3,
+    "hpPerLevel": 10,
+    "atkPerLevel": 10,
+    "magPerLevel": 10,
     "maxLevel": 99,
     "eliteRate": 3
   },

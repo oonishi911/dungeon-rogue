@@ -21,14 +21,14 @@ export const PREPS: Record<TraitId, { right: ItemId[]; wrong: ItemId[] }> = {
   dark: { right: [...FAVORABLE_GEAR.dark], wrong: ['sword', 'plate', 'ring_light_1'] },
 };
 
-// クリア率の合格の幅（2026-11-28 に、目標のクリア率60%に合わせて見直した）。
+// クリア率の合格の幅（2026-11-28 に、目標のクリア率に合わせて見直した（60%→70%））。
 // 属性ごとの回数（TRIALS）が40回だと、クリア率は±8ポイントほどぶれるので、幅は広めに取る。
-/** 正しい準備：ダンジョンの5属性の平均が、目標（TARGET_RATE=60%）の±20ポイントに入る */
-export const RIGHT_BAND = { min: 0.4, max: 0.8 };
+/** 正しい準備：ダンジョンの5属性の平均が、目標（TARGET_RATE=70%）の±20ポイントに入る */
+export const RIGHT_BAND = { min: 0.5, max: 0.9 };
 /** 正しい準備でも、属性ごとにこれを下回ったら「その属性だけ厳しすぎる」 */
 export const RIGHT_FLOOR = 0.2;
 /** 外れた準備は、属性ごとにこれ未満（準備で勝負が決まる）。正しい準備との平均の差も、GAP_MIN 以上あること */
-export const WRONG_LIMIT = 0.5;
+export const WRONG_LIMIT = 0.6;
 export const GAP_MIN = 0.3;
 /** 何も準備しないときは、属性ごとにこれ未満 */
 export const NONE_LIMIT = 0.4;

@@ -11,7 +11,7 @@ import type { TraitId } from './types';
 export const TRAITS: readonly TraitId[] = ['fire', 'ice', 'neutral', 'light', 'dark'];
 export const TRAIT_NAMES: Record<TraitId, string> = { fire: '炎', ice: '氷', neutral: '無', light: '光', dark: '闇' };
 /** 目標のクリア率（正しい準備で、このあたりに合わせる） */
-export const TARGET_RATE = 0.6;
+export const TARGET_RATE = 0.7;
 
 export interface ClearRow {
   dungeon: string; // ダンジョンの ID
