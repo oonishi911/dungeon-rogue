@@ -3,7 +3,7 @@
 import { key } from '../game/enemies';
 import { upStairs } from '../game/explore';
 import type { ExploreState } from '../game/exploreTypes';
-import { visibleTiles } from '../game/exploreSight';
+import { canSee, visibleTiles } from '../game/exploreSight';
 import type { Pos } from '../game/map';
 
 /** タップ・クリックで向かっている先 */
@@ -35,15 +35,21 @@ export function visibleEnemyIds(state: ExploreState): Set<number> {
   return new Set(state.enemies.filter((e) => visible.has(e.pos.y * state.map.width + e.pos.x)).map((e) => e.uid));
 }
 
+/** 壁にさえぎられずに見えている敵の番号（立ち止まるかどうかに使う。壁の向こうの敵では止まらない） */
+export function sightedEnemyIds(state: ExploreState): Set<number> {
+  return new Set(state.enemies.filter((e) => canSee(state.map, state.player, e.pos, state.sightRadius)).map((e) => e.uid));
+}
+
 /**
- * 歩き続けているとき（方向キーの押しっぱなし・画面のなぞり）に、立ち止まるわけ（2026-11-28）。止まらなければ null。
- * 新しい敵が見えた・まだ開けていない宝箱を初めて見つけた・攻撃を受けた、のどれか
+ * 歩き続けているとき（画面のなぞり・「階段へ」）に、立ち止まるわけ（2026-11-28）。止まらなければ null。
+ * 壁にさえぎられずに新しい敵が見えた・まだ開けていない宝箱を初めて見つけた・攻撃を受けた、のどれか。
+ * 方向キーの押しっぱなしでは止めない（自分で離せばすぐ止まるので）
  */
 export function walkInterrupt(prev: ExploreState, next: ExploreState): string | null {
   if (next.map !== prev.map) return null; // 階を移ったときは、そのまま
   if (next.hits.some((h) => h.kind === 'taken')) return '攻撃を受けたので、立ち止まった';
-  const before = visibleEnemyIds(prev);
-  const now = visibleEnemyIds(next);
+  const before = sightedEnemyIds(prev);
+  const now = sightedEnemyIds(next);
   for (const id of now) if (!before.has(id)) return '敵が見えたので、立ち止まった';
   const seenChest = (s: ExploreState, c: ExploreState['chests'][number]) => !c.opened && s.seen[c.pos.y * s.map.width + c.pos.x];
   if (next.chests.some((c, i) => seenChest(next, c) && !(prev.chests[i] && seenChest(prev, prev.chests[i]!)))) return '宝箱を見つけたので、立ち止まった';

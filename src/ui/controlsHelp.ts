@@ -66,7 +66,7 @@ export interface HelpRow {
 export function keyboardHelp(b: KeyBindings = DEFAULT_BINDINGS): HelpRow[] {
   const L = keyLabel;
   return [
-    { how: `矢印キー／${[b.up, b.left, b.down, b.right].map(L).join(' ')}`, what: '歩く（押しているあいだ歩き続ける。敵が見えた・宝箱を見つけた・攻撃を受けたら立ち止まる）。敵のいる方へ歩くと攻撃' },
+    { how: `矢印キー／${[b.up, b.left, b.down, b.right].map(L).join(' ')}`, what: '歩く（押しているあいだ歩き続ける）。敵のいる方へ歩くと攻撃' },
     { how: 'マスをクリック', what: 'そこまで歩く（敵なら攻撃しに行く。歩いている途中にクリックで止まる）' },
     { how: b.wait === ' ' ? 'スペース' : `${L(b.wait)}／.`, what: 'その場で1ターン待つ' },
     { how: spellKeys(b).map(L).join(' '), what: '呪文を構える。矢印で向きを変え、同じキーか Enter で唱える（Esc でやめる）' },
@@ -84,7 +84,7 @@ export const KEYBOARD_HELP: HelpRow[] = keyboardHelp();
 /** スマホ（指） */
 export const TOUCH_HELP: HelpRow[] = [
   { how: 'マスをタップ', what: 'そこまで歩く（敵なら攻撃しに行く。歩いている途中にタップで止まる）' },
-  { how: '画面をなぞる', what: 'なぞった向きに歩き続ける（指を離すと止まる。敵が見えた・宝箱を見つけた・攻撃を受けたら立ち止まる）' },
+  { how: '画面をなぞる', what: 'なぞった向きに歩き続ける（指を離すと止まる。壁ごしでなく敵が見えた・宝箱を見つけた・攻撃を受けたら立ち止まる）' },
   { how: '主人公をダブルタップ', what: 'その場で1ターン待つ（「待機」ボタンでも）' },
   { how: '「階段へ」ボタン', what: '見つけた階段まで歩く（もう一度押すと止める。敵が見えたら立ち止まる）' },
   { how: '呪文のボタン', what: '押したまま指をずらして向きを選び、離すと唱える。軽く押すと構え、もう一度押すと唱える' },
