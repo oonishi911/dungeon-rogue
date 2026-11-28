@@ -36,6 +36,7 @@ interface ExploreSideProps {
   onUseItem: (item: ItemId) => void;
   onCloseInfo: () => void;
   onRetire: () => void;
+  onSuspend?: (() => void) | undefined; // 「中断してもどる」（ないときは出さない）
   onInfo: (text: string) => void; // 説明を、3D画面の上に短く出す（状態のアイコンを押したとき・呪文を長押ししたとき）
 }
 
@@ -48,7 +49,7 @@ const AIM_DRAG = 40;
 /** これより短く押して離したら「さっと押した」とみなす（ミリ秒）。構えたままにして、もう一度押すと唱える */
 const QUICK_TAP_MS = 260;
 
-export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibleEnemies, recentLog, aiming, infoOpen, onCast, onAimStart, onAimDir, onAimRelease, onSkill, onSwap, onUseItem, onCloseInfo, onRetire, onInfo }: ExploreSideProps) {
+export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibleEnemies, recentLog, aiming, infoOpen, onCast, onAimStart, onAimDir, onAimRelease, onSkill, onSwap, onUseItem, onCloseInfo, onRetire, onSuspend, onInfo }: ExploreSideProps) {
   const keys = useSyncExternalStore(subscribeFeel, feelSettings).keys; // 設定で変えたキーを、ボタンに出す
   const { stats } = state;
   const skill = skillOf(stats.weapon, stats.echoes); // 持っている武器の固有技（素手なら無い）
@@ -321,6 +322,11 @@ export function ExploreSide({ state, dungeon, ended, mpShake, itemGroups, visibl
           <h3 className="meter__head">記録</h3>
           <LogList lines={recentLog} total={state.log.length} />
         </section>
+        {onSuspend && (
+          <button type="button" className="explore__wait explore__suspend" disabled={ended} onClick={onSuspend}>
+            中断してもどる
+          </button>
+        )}
         {/* 押してすぐには終わらず、確かめてからリタイアする */}
         <button
           type="button"

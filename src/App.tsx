@@ -7,9 +7,9 @@
 import { useState } from 'react';
 import { depart } from './game/depart';
 import { dungeonOf } from './game/dungeons';
-import { startExplore, toResult, traitForSeed } from './game/explore';
+import { startExplore, step, toResult, traitForSeed } from './game/explore';
 import { type ExploreResult, type ExploreState } from './game/exploreTypes';
-import { packRun } from './game/runSave';
+import { packRun, type ResumedRun } from './game/runSave';
 import { newSave, type SaveData } from './game/save';
 import { bossOf, startInformant, type InformantState, type Intel } from './game/informant';
 import { recall, toneOf, type Scene } from './game/story';
@@ -26,12 +26,14 @@ import { InformantScreen } from './ui/InformantScreen';
 import { LoadingScreen } from './ui/LoadingScreen';
 import { MemoryScreen } from './ui/MemoryScreen';
 import { NoticeScreen } from './ui/NoticeScreen';
+import { ResumeScreen } from './ui/ResumeScreen';
 import { ShopScreen } from './ui/ShopScreen';
 
 type Stage =
   | { kind: 'choose' } // 挑むダンジョンを選ぶ（挑戦の始まり）
   | { kind: 'informant'; talk: InformantState; atEntry?: readonly ItemId[] } // 情報屋との会話（ダンジョンの特性は、もう決まっている）。atEntry：店から戻ってきたとき、最初に店に入ったときの持ち物（店の並びを変えないように）
   | { kind: 'shop'; dungeon: string; seed: number; intel: readonly Intel[]; atEntry: readonly ItemId[]; talk: InformantState } // talk：情報屋に戻ったときの会話の続き。 出発の準備。intel：情報屋から聞いたこと、atEntry：店に入ったときに持っていたもの（店の並びを決める）
+  | { kind: 'resume'; run: ResumedRun } // 中断した探索の「続きから」の画面
   | { kind: 'dungeon'; outcome: Departure; seed: number; resume?: ExploreState } // resume：前に中断した探索の続き
   | { kind: 'memory'; scene: Scene; outcome: Departure; expedition: ExploreResult; next: SaveData } // ボスを倒した直後の記憶の画面（ストーリー。story.ts）
   | { kind: 'result'; outcome: Departure; expedition: ExploreResult; next: SaveData };
@@ -53,10 +55,10 @@ function saveAfter(save: SaveData, state: ExploreState, outcome: Departure): { s
   return { save: got.save, scene: got.scene };
 }
 
-/** 開いたときの始まり。探索の途中で閉じていれば（戻る・再読み込みなど）、その続きから始める */
+/** 開いたときの始まり。探索の途中で閉じていれば（戻る・再読み込みなど）、「続きから」の画面を出す */
 function firstLoad(): { save: SaveData; stage: Stage } {
   const run = loadRun();
-  if (run) return { save: run.base, stage: { kind: 'dungeon', outcome: run.outcome, seed: run.seed, resume: run.state } };
+  if (run) return { save: run.base, stage: { kind: 'resume', run } };
   return { save: loadSave() ?? newSave(), stage: { kind: 'choose' } };
 }
 
@@ -142,6 +144,25 @@ export function App() {
           }}
         />
       );
+    case 'resume': {
+      const { run } = stage;
+      return (
+        <ResumeScreen
+          run={run}
+          onContinue={() => setStage({ kind: 'dungeon', outcome: run.outcome, seed: run.seed, resume: run.state })}
+          onGiveUp={() => {
+            // リタイアしたことにして、持ち帰る分を数える（探索の画面のリタイアと同じ）
+            const stepped = step(run.state, { kind: 'retire' });
+            const ended = stepped.ok ? stepped.value : { ...run.state, outcome: 'retired' as const };
+            const { save: next } = saveAfter(run.base, ended, run.outcome);
+            setSave(next);
+            writeSave(next);
+            clearRun();
+            setStage({ kind: 'result', outcome: run.outcome, expedition: toResult(ended), next });
+          }}
+        />
+      );
+    }
     case 'dungeon': {
       const { outcome, seed, resume } = stage;
       return (
@@ -161,6 +182,11 @@ export function App() {
             }
           }}
           guardBack
+          // 「中断してもどる」：いまの状態は1手ごとに保存してあるので、保存した続きを「続きから」の画面に出す
+          onSuspend={() => {
+            const saved = loadRun();
+            if (saved) setStage({ kind: 'resume', run: saved });
+          }}
           onFinish={(state) => {
             const { save: next, scene } = saveAfter(save, state, outcome);
             writeSave(next);
