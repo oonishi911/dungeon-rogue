@@ -23,8 +23,9 @@ import { useBackGuard } from './backGuard';
 import { drawMinimap, MINI_CELL, miniWindow, motionOf, readColors, type Frame, type Motion } from './exploreRender';
 import { DungeonView3D, webglAvailable } from './explore3d';
 import { LOST, lost } from '../game/story';
-import { INTRO_FX, LOW_HP } from './explore3dConfig';
+import { INTRO_FX, LOW_HP, QUALITY } from './explore3dConfig';
 import { feelSettings, subscribeFeel } from './feelSettings';
+import { shouldDraw } from './graphicsQuality';
 import { devBestHref } from './exploreDev';
 import { EndingPanel, LeaveDialog, RetireDialog } from './ExploreDialogs';
 import { playFeedback } from './exploreFeedback';
@@ -375,7 +376,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     if (no3d || !canvas) return;
     let view3d: DungeonView3D;
     try {
-      view3d = new DungeonView3D(canvas);
+      view3d = new DungeonView3D(canvas, feelSettings().graphics);
     } catch {
       setNo3d(true);
       return;
@@ -406,6 +407,7 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
     };
     let frameId = 0;
     let lastTick = performance.now();
+    let lastDrawAt = -Infinity;
     const tick = (now: number) => {
       if (now - motionRef.current.start >= STEP_MS && now >= busyUntilRef.current && stateRef.current.outcome === 'ongoing') {
         const held = heldRef.current.at(-1);
@@ -451,7 +453,11 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
         walkTarget: walkRef.current?.pos ?? null,
         walkPath: routeFor(current, walkRef.current?.pos ?? null),
       };
-      view3d.render(frame);
+      // 画質が「軽い」なら、1秒に30コマまでしか描かない（歩く・戦う処理は、上で毎コマ進める）
+      if (shouldDraw(feelSettings().graphics, now - lastDrawAt, QUALITY.lightFrameMs)) {
+        lastDrawAt = now;
+        view3d.render(frame);
+      }
       frameId = requestAnimationFrame(tick);
     };
     frameId = requestAnimationFrame(tick);
@@ -463,6 +469,9 @@ export function ExploreScreen({ start, run: runNumber, onFinish, onProgress, gua
       view3dRef.current = null;
     };
   }, [perform, walkStep, no3d, showInfo]);
+
+  // 設定の「画質」を変えたら、3D 画面にすぐ反映する
+  useEffect(() => view3dRef.current?.setGraphics(feel.graphics), [feel.graphics]);
 
   // このダンジョンの足音を、最初の一歩から鳴るように読み込んでおく
   useEffect(() => preloadSounds(state.trait), [state.trait]);

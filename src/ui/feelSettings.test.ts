@@ -8,7 +8,13 @@ const D = DEFAULT_FEEL_SETTINGS;
 describe('設定', () => {
   it('保存がなければ、ふだんの設定（揺れ・ヒットストップ・弱点の印はあり、文字は中、キーはふだんの割り当て）', () => {
     expect(parseFeelSettings(null)).toEqual(D);
-    expect(D).toEqual({ shake: true, hitStop: true, weakMarks: true, bossMusic: true, stairsFx: true, endFx: true, textSize: 'normal', keys: DEFAULT_BINDINGS });
+    expect(D).toEqual({ shake: true, hitStop: true, weakMarks: true, bossMusic: true, stairsFx: true, endFx: true, graphics: 'normal', textSize: 'normal', keys: DEFAULT_BINDINGS });
+  });
+
+  it('画質（軽い・ふつう・きれい）を読む。知らない値は、ふつう', () => {
+    expect(parseFeelSettings('{"graphics":"light"}').graphics).toBe('light');
+    expect(parseFeelSettings('{"graphics":"high"}').graphics).toBe('high');
+    expect(parseFeelSettings('{"graphics":"ultra"}').graphics).toBe('normal');
   });
 
   it('ボス戦の音楽・階段の演出・踏破や力尽きたときの演出も、切れる', () => {

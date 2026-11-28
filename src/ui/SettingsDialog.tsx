@@ -5,6 +5,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { playSample, setSoundSettings, soundSettings, unlockSound } from '../audio/sound';
 import type { SoundSettings } from '../audio/settings';
 import { DEFAULT_FEEL_SETTINGS, feelSettings, setFeelSettings, subscribeFeel, TEXT_SIZE_NAMES, TEXT_SIZES } from './feelSettings';
+import { GRAPHICS, GRAPHICS_HINTS, GRAPHICS_NAMES } from './graphicsQuality';
 import { BIND_IDS, BIND_NAMES, canBind, DEFAULT_BINDINGS, keyLabel, rebind, type BindId } from './keyBindings';
 
 function Switch({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
@@ -132,6 +133,17 @@ export function SettingsDialog({ onClose, keyboard = true }: { onClose: () => vo
             <h3 id="settings-view" className="settings__head">
               表示
             </h3>
+            <div className="settings__row" role="radiogroup" aria-label="画質">
+              <span>画質</span>
+              <span className="settings__seg">
+                {GRAPHICS.map((g) => (
+                  <button key={g} type="button" role="radio" aria-checked={feel.graphics === g} title={GRAPHICS_HINTS[g]} onClick={() => setFeelSettings({ ...feel, graphics: g })}>
+                    {GRAPHICS_NAMES[g]}
+                  </button>
+                ))}
+              </span>
+            </div>
+            <p className="settings__hint">{GRAPHICS_HINTS[feel.graphics]}</p>
             <div className="settings__row" role="radiogroup" aria-label="文字の大きさ">
               <span>文字の大きさ</span>
               <span className="settings__seg">
