@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 380" width="760" height="380" role="img" aria-label="ダンジョンごと・属性ごとのクリア率（2026-11-28）" font-family="system-ui, 'Hiragino Sans', 'Noto Sans JP', sans-serif">
+<rect width="760" height="380" fill="#ffffff"/>
+<text x="52" y="24" font-size="15" font-weight="700" fill="#1d2b29">クリア率（正しい準備・属性ごと80回）　2026-11-28</text>
+<line x1="52" y1="318" x2="744" y2="318" stroke="#e2e6e4"/>
+<text x="44" y="322" font-size="11" text-anchor="end" fill="#5b6866">0%</text>
+<line x1="52" y1="263.20000000000005" x2="744" y2="263.20000000000005" stroke="#e2e6e4"/>
+<text x="44" y="267.20000000000005" font-size="11" text-anchor="end" fill="#5b6866">20%</text>
+<line x1="52" y1="208.4" x2="744" y2="208.4" stroke="#e2e6e4"/>
+<text x="44" y="212.4" font-size="11" text-anchor="end" fill="#5b6866">40%</text>
+<line x1="52" y1="153.60000000000002" x2="744" y2="153.60000000000002" stroke="#e2e6e4"/>
+<text x="44" y="157.60000000000002" font-size="11" text-anchor="end" fill="#5b6866">60%</text>
+<line x1="52" y1="98.79999999999998" x2="744" y2="98.79999999999998" stroke="#e2e6e4"/>
+<text x="44" y="102.79999999999998" font-size="11" text-anchor="end" fill="#5b6866">80%</text>
+<line x1="52" y1="44" x2="744" y2="44" stroke="#e2e6e4"/>
+<text x="44" y="48" font-size="11" text-anchor="end" fill="#5b6866">100%</text>
+<rect x="94.33333333333333" y="119.35000000000001" width="26" height="198.65" fill="#d9593a"><title>最初の祠・炎：73%</title></rect>
+<text x="107.33333333333333" y="115.35000000000001" font-size="10" text-anchor="middle" fill="#33403e">73</text>
+<text x="107.33333333333333" y="332" font-size="10" text-anchor="middle" fill="#5b6866">炎</text>
+<rect x="124.33333333333333" y="146.75" width="26" height="171.25" fill="#4a9ad8"><title>最初の祠・氷：63%</title></rect>
+<text x="137.33333333333331" y="142.75" font-size="10" text-anchor="middle" fill="#33403e">63</text>
+<text x="137.33333333333331" y="332" font-size="10" text-anchor="middle" fill="#5b6866">氷</text>
+<rect x="154.33333333333331" y="198.125" width="26" height="119.875" fill="#8c867c"><title>最初の祠・無：44%</title></rect>
+<text x="167.33333333333331" y="194.125" font-size="10" text-anchor="middle" fill="#33403e">44</text>
+<text x="167.33333333333331" y="332" font-size="10" text-anchor="middle" fill="#5b6866">無</text>
+<rect x="184.33333333333331" y="201.54999999999998" width="26" height="116.45" fill="#d4b43a"><title>最初の祠・光：43%</title></rect>
+<text x="197.33333333333331" y="197.54999999999998" font-size="10" text-anchor="middle" fill="#33403e">43</text>
+<text x="197.33333333333331" y="332" font-size="10" text-anchor="middle" fill="#5b6866">光</text>
+<rect x="214.33333333333331" y="153.60000000000002" width="26" height="164.4" fill="#6f55a0"><title>最初の祠・闇：60%</title></rect>
+<text x="227.33333333333331" y="149.60000000000002" font-size="10" text-anchor="middle" fill="#33403e">60</text>
+<text x="227.33333333333331" y="332" font-size="10" text-anchor="middle" fill="#5b6866">闇</text>
+<text x="167.33333333333331" y="352" font-size="12" font-weight="700" text-anchor="middle" fill="#1d2b29">最初の祠（平均56%）</text>
+<rect x="324.99999999999994" y="150.17499999999998" width="26" height="167.82500000000002" fill="#d9593a"><title>怪しい祠・炎：61%</title></rect>
+<text x="337.99999999999994" y="146.17499999999998" font-size="10" text-anchor="middle" fill="#33403e">61</text>
+<text x="337.99999999999994" y="332" font-size="10" text-anchor="middle" fill="#5b6866">炎</text>
+<rect x="354.99999999999994" y="50.85000000000001" width="26" height="267.15" fill="#4a9ad8"><title>怪しい祠・氷：98%</title></rect>
+<text x="367.99999999999994" y="46.85000000000001" font-size="10" text-anchor="middle" fill="#33403e">98</text>
+<text x="367.99999999999994" y="332" font-size="10" text-anchor="middle" fill="#5b6866">氷</text>
+<rect x="384.99999999999994" y="129.625" width="26" height="188.375" fill="#8c867c"><title>怪しい祠・無：69%</title></rect>
+<text x="397.99999999999994" y="125.625" font-size="10" text-anchor="middle" fill="#33403e">69</text>
+<text x="397.99999999999994" y="332" font-size="10" text-anchor="middle" fill="#5b6866">無</text>
+<rect x="414.99999999999994" y="170.72500000000002" width="26" height="147.275" fill="#d4b43a"><title>怪しい祠・光：54%</title></rect>
+<text x="427.99999999999994" y="166.72500000000002" font-size="10" text-anchor="middle" fill="#33403e">54</text>
+<text x="427.99999999999994" y="332" font-size="10" text-anchor="middle" fill="#5b6866">光</text>
+<rect x="444.99999999999994" y="249.5" width="26" height="68.5" fill="#6f55a0"><title>怪しい祠・闇：25%</title></rect>
+<text x="457.99999999999994" y="245.5" font-size="10" text-anchor="middle" fill="#33403e">25</text>
+<text x="457.99999999999994" y="332" font-size="10" text-anchor="middle" fill="#5b6866">闇</text>
+<text x="397.99999999999994" y="352" font-size="12" font-weight="700" text-anchor="middle" fill="#1d2b29">怪しい祠（平均61%）</text>
+<rect x="555.6666666666666" y="143.32500000000002" width="26" height="174.67499999999998" fill="#d9593a"><title>深い祠・炎：64%</title></rect>
+<text x="568.6666666666666" y="139.32500000000002" font-size="10" text-anchor="middle" fill="#33403e">64</text>
+<text x="568.6666666666666" y="332" font-size="10" text-anchor="middle" fill="#5b6866">炎</text>
+<rect x="585.6666666666666" y="208.4" width="26" height="109.60000000000001" fill="#4a9ad8"><title>深い祠・氷：40%</title></rect>
+<text x="598.6666666666666" y="204.4" font-size="10" text-anchor="middle" fill="#33403e">40</text>
+<text x="598.6666666666666" y="332" font-size="10" text-anchor="middle" fill="#5b6866">氷</text>
+<rect x="615.6666666666666" y="232.375" width="26" height="85.625" fill="#8c867c"><title>深い祠・無：31%</title></rect>
+<text x="628.6666666666666" y="228.375" font-size="10" text-anchor="middle" fill="#33403e">31</text>
+<text x="628.6666666666666" y="332" font-size="10" text-anchor="middle" fill="#5b6866">無</text>
+<rect x="645.6666666666666" y="126.20000000000002" width="26" height="191.79999999999998" fill="#d4b43a"><title>深い祠・光：70%</title></rect>
+<text x="658.6666666666666" y="122.20000000000002" font-size="10" text-anchor="middle" fill="#33403e">70</text>
+<text x="658.6666666666666" y="332" font-size="10" text-anchor="middle" fill="#5b6866">光</text>
+<rect x="675.6666666666666" y="187.85" width="26" height="130.15" fill="#6f55a0"><title>深い祠・闇：48%</title></rect>
+<text x="688.6666666666666" y="183.85" font-size="10" text-anchor="middle" fill="#33403e">48</text>
+<text x="688.6666666666666" y="332" font-size="10" text-anchor="middle" fill="#5b6866">闇</text>
+<text x="628.6666666666666" y="352" font-size="12" font-weight="700" text-anchor="middle" fill="#1d2b29">深い祠（平均51%）</text>
+<line x1="52" y1="153.60000000000002" x2="744" y2="153.60000000000002" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="744" y="148.60000000000002" font-size="11" text-anchor="end" fill="#c0392b">目標 60%</text>
+</svg>

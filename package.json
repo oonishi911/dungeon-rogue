@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:balance": "vitest run --config vitest.balance.config.ts",
+    "balance:report": "vite-node scripts/balance-report.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
