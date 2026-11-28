@@ -1076,11 +1076,7 @@ button {
   align-self: center;
 }
 
-.sound {
-  position: relative;
-}
-
-.sound__toggle {
+.explore__settings-button {
   display: grid;
   place-items: center;
   min-width: 2.5rem;
@@ -1088,58 +1084,212 @@ button {
   color: var(--bone);
 }
 
-/* 効果音の設定：ボタンの下に重ねて開く */
-.sound__panel {
-  position: absolute;
-  top: calc(100% + 0.4rem);
-  right: 0;
-  z-index: 30;
+/* 設定の画面（2026-11-28）：画面全体に重ねて出す。音・演出・表示・キーの割り当て */
+.settings {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
   display: grid;
-  gap: 0.6rem;
-  width: 14rem;
+  place-items: center;
   padding: 0.75rem;
-  background: var(--pine-deep);
-  border: 1px solid var(--pine-line);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+  background: rgb(6 12 11 / 0.6);
 }
 
-.sound__title {
+.settings__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(100%, 34rem);
+  max-height: 100%;
+  min-height: 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 10px;
+  background: rgb(11 20 19 / 0.97);
+  box-shadow: 0 0.75rem 2.5rem rgb(0 0 0 / 0.5);
+  overflow: hidden;
+}
+
+.settings__title {
+  margin: 0;
+  font-size: var(--step-1);
+}
+
+.settings__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 1.1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.25rem;
+}
+
+.settings__group {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.settings__head {
   margin: 0;
   font-size: var(--step--1);
   color: var(--bone-dim);
+  letter-spacing: 0.06em;
 }
 
-.sound__switch {
-  justify-self: start;
-  min-width: 4.5rem;
-  min-height: 2.25rem;
+.settings__switch,
+.settings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.4rem 0.35rem 0.8rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 8px;
+  background: var(--pine-deep);
   color: var(--bone);
-}
-
-.sound__switch[aria-pressed='true'] {
-  background: var(--funds);
-  border-color: var(--funds);
-}
-
-.sound__switch--wide {
-  justify-self: stretch;
+  font: inherit;
+  font-size: var(--step--1);
   text-align: left;
 }
 
-.sound__volume {
+.settings__switch {
+  cursor: pointer;
+}
+
+.settings__state {
+  flex: none;
+  min-width: 3.2rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.06);
+  color: var(--bone-dim);
+  text-align: center;
+}
+
+.settings__switch[aria-pressed='true'] .settings__state {
+  background: var(--funds);
+  color: var(--bone);
+  font-weight: 700;
+}
+
+.settings__seg {
+  display: inline-flex;
+  border: 1px solid var(--pine-line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.settings__seg button {
+  min-width: 2.75rem;
+  min-height: 2.1rem;
+  border: 0;
+  background: transparent;
+  color: var(--bone-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+.settings__seg button[aria-checked='true'] {
+  background: var(--funds);
+  color: var(--bone);
+  font-weight: 700;
+}
+
+.settings__volume {
   display: grid;
   gap: 0.35rem;
   font-size: var(--step--1);
 }
 
-.sound__volume input {
+.settings__volume input {
   width: 100%;
   accent-color: var(--procure);
 }
 
-.sound__volume input:disabled {
+.settings__volume input:disabled {
   opacity: 0.4;
+}
+
+.settings__hint,
+.settings__note {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--bone-dim);
+}
+
+.settings__note:empty {
+  display: none;
+}
+
+.settings__keys {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.3rem 0.9rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings__key-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--step--1);
+}
+
+.settings__kbd {
+  min-width: 3.2rem;
+  text-align: center;
+  font-family: inherit;
+}
+
+.settings__change,
+.settings__reset {
+  min-height: 2.1rem;
+  padding: 0.2rem 0.75rem;
+  border: 1px solid var(--pine-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bone);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.settings__change[aria-pressed='true'] {
+  border-color: var(--funds);
+  color: var(--funds);
+}
+
+.settings__reset {
+  justify-self: start;
+}
+
+.settings__reset:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.settings__close {
+  flex: none;
+  min-height: 2.75rem;
+}
+
+.choose__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.choose__settings {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 /* ===== スマホ：1画面に収める =====

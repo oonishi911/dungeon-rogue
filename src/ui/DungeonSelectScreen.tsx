@@ -3,8 +3,10 @@
 // ダンジョンごとに、階の数・広さ・満腹度を見せる（ダンジョンの属性は、選んだあとに決まる）
 // 2026-11-28：これまでの記録（挑んだ回数・いちばん深い階・踏破）と、取り戻した記憶の数も見せる。広い画面では横に並べる
 
+import { useState } from 'react';
 import { DUNGEON_IDS, dungeonOf } from '../game/dungeons';
 import { bestFloorText, bossesOf, type DungeonRecords } from '../game/records';
+import { GearIcon, SettingsDialog } from './SettingsDialog';
 
 interface DungeonSelectScreenProps {
   run: number;
@@ -16,6 +18,7 @@ interface DungeonSelectScreenProps {
 }
 
 export function DungeonSelectScreen({ run, records, memories, onChoose, onNotice, onBestiary }: DungeonSelectScreenProps) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   return (
     <main className="screen screen--narrow screen--fit choose">
       <header className="top">
@@ -25,10 +28,17 @@ export function DungeonSelectScreen({ run, records, memories, onChoose, onNotice
           </p>
           <h1 className="top__title">ダンジョンを選ぶ</h1>
         </div>
-        <button type="button" className="choose__bestiary" onClick={onBestiary}>
-          敵の図鑑
-        </button>
+        <div className="choose__tools">
+          <button type="button" className="choose__bestiary" onClick={onBestiary}>
+            敵の図鑑
+          </button>
+          <button type="button" className="choose__bestiary choose__settings" aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}>
+            <GearIcon />
+            設定
+          </button>
+        </div>
       </header>
+      {settingsOpen && <SettingsDialog keyboard={!(typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches)} onClose={() => setSettingsOpen(false)} />}
 
       {/* スマホでは、画面全体は動かさず、この一覧の中だけを動かす */}
       <ul className="choose__list screen__scroll" aria-label="挑めるダンジョン">

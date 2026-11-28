@@ -6,6 +6,7 @@ import { Admin } from './ui/Admin';
 import { ExploreDevScreen } from './ui/ExploreDevScreen';
 import { MapViewer } from './ui/MapViewer';
 import { MemoryDevScreen } from './ui/MemoryDevScreen';
+import { applyTextSize } from './ui/feelSettings';
 import './styles.css';
 
 const view = new URLSearchParams(location.search).get('view');
@@ -13,6 +14,9 @@ const view = new URLSearchParams(location.search).get('view');
 // スマホのブラウザは、画面に触れるかキーを押すまで音を出させてくれないので、そのときに音の準備をする
 // （iPhone の Safari は、指を離したときでないと許さないことがあるので、離したときにも準備する）
 for (const type of ['pointerdown', 'pointerup', 'touchend', 'keydown'] as const) window.addEventListener(type, unlockSound, { capture: true });
+
+// 設定の画面で選んだ文字の大きさを、はじめから当てる
+applyTextSize();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
