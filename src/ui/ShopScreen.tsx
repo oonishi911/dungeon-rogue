@@ -179,7 +179,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
         {items.map((id) => (
           <li key={id} className={`shop__row${mode === 'equip' && inKit(id) ? ' shop__row--on' : ''}`}>
             <ItemIcon id={id} size={28} className="shop__icon" />
-            {/* 説明は1行に切ってある。押すと全文を出す */}
+            {/* 説明は2行に切ってある。押すと全文と、今の装備との比べを出す */}
             <button type="button" className="shop__about" aria-expanded={open === id} onClick={() => setOpen((o) => (o === id ? null : id))}>
               <span className="shop__name">
                 {ITEMS[id].name}
@@ -187,6 +187,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
                 {(shelf === 'weapon' || shelf === 'armor') && <Compare id={id} save={save} />}
               </span>
               <span className="shop__desc">{ITEMS[id].description}</span>
+              {open === id && (shelf === 'weapon' || shelf === 'armor') && <VersusLine id={id} save={save} />}
             </button>
             <div className="shop__deal">
               {mode === 'buy' ? (
@@ -411,6 +412,41 @@ function Compare({ id, save }: { id: ItemId; save: SaveData }) {
           {d > 0 ? `+${d}` : d}
         </span>
       ))}
+    </span>
+  );
+}
+
+/** 開いたときの、今の装備との比べ：攻撃・魔力・守りを「今 → この品」で並べる（装備しているものなら、その数字だけ） */
+function VersusLine({ id, save }: { id: ItemId; save: SaveData }) {
+  const e = ITEMS[id].effect;
+  if (e.kind !== 'weapon' && e.kind !== 'armor') return null;
+  const cur = e.kind === 'weapon' ? save.kit.weapon : save.kit.armor;
+  const c = cur ? ITEMS[cur].effect : null;
+  const rows: [string, number, number][] =
+    e.kind === 'weapon'
+      ? [
+          ['攻撃', c?.kind === 'weapon' ? c.atk : 0, e.atk],
+          ['魔力', c?.kind === 'weapon' ? c.mag : 0, e.mag],
+        ]
+      : [
+          ['守り', c?.kind === 'armor' ? c.def : 0, e.def],
+          ['魔力', c?.kind === 'armor' ? c.mag : 0, e.mag],
+        ];
+  const same = cur === id;
+  return (
+    <span className="shop__vs">
+      <span className="shop__vs-head">{same ? '装備している' : cur ? `今の${ITEMS[cur].name}とくらべて` : '何も装備していないときとくらべて'}</span>
+      {rows.map(([k, before, after]) =>
+        same ? (
+          <span key={k}>
+            {k} <b>{after}</b>
+          </span>
+        ) : (
+          <span key={k}>
+            {k} {before} → <b className={after > before ? 'shop__up' : after < before ? 'shop__down' : undefined}>{after}</b>
+          </span>
+        ),
+      )}
     </span>
   );
 }

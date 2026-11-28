@@ -2114,10 +2114,12 @@ button {
   color: var(--bone-dim);
   font-size: var(--step--1);
   line-height: 1.4;
-  /* 説明は1行に収め、はみ出す分は「…」にする（品物を押すと全文） */
-  white-space: nowrap;
+  /* 説明は2行まで出し、はみ出す分は「…」にする（品物を押すと全文と、今の装備との比べ。2026-11-28 に1行から2行へ） */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .shop__about {
@@ -2130,7 +2132,32 @@ button {
 }
 
 .shop__about[aria-expanded='true'] .shop__desc {
-  white-space: normal;
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: none;
+}
+
+/* 開いたとき：今の装備との比べ（攻撃・魔力・守りを、今 → この品で並べる） */
+.shop__vs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+  margin-top: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  background: rgb(236 229 211 / 0.06);
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.shop__vs b {
+  color: var(--bone);
+  font-weight: 700;
+}
+
+.shop__vs-head {
+  flex: 1 0 100%;
+  font-size: 0.72rem;
 }
 
 .shop__deal {
