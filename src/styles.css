@@ -393,6 +393,62 @@ button {
   }
 }
 
+/* 階段を降りたときの暗転（真っ暗から明るく戻る）と、踏破（白い光がふくらんで消える）・力尽きた（暗く赤く沈む）ときの画面の演出（2026-11-28） */
+.explore__fade,
+.explore__end {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.explore__fade {
+  background: #000;
+  animation: stairs-fade 0.7s ease-out forwards;
+}
+
+.explore__end--cleared {
+  background: radial-gradient(circle at 50% 50%, rgba(255, 244, 200, 0.95), rgba(255, 220, 140, 0) 70%);
+  animation: clear-glow 1.4s ease-out forwards;
+}
+
+.explore__end--defeated {
+  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 20%, rgba(60, 0, 8, 0.92));
+  animation: defeat-sink 1.6s ease-in forwards;
+}
+
+@keyframes stairs-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes clear-glow {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  25% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.35;
+    transform: scale(1.4);
+  }
+}
+
+@keyframes defeat-sink {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* 「動きを減らす」設定・手応えの設定で揺れを切っているときは、脈打たず、赤いふちだけを出す */
 .explore__vignette--still {
   animation: none;
@@ -403,7 +459,9 @@ button {
     animation: none;
   }
 
-  .explore__hurt {
+  .explore__hurt,
+  .explore__fade,
+  .explore__end {
     animation-duration: 0.01s;
   }
 }

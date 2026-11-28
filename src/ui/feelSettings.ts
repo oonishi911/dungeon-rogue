@@ -17,13 +17,19 @@ export type FeelSettings = {
   hitStop: boolean;
   /** 敵の頭上に、弱点の印を出すか */
   weakMarks: boolean;
+  /** ボス戦の音楽を流すか */
+  bossMusic: boolean;
+  /** 階段を降りるときの音と暗転を出すか */
+  stairsFx: boolean;
+  /** 踏破・力尽きたときの音と画面の演出を出すか */
+  endFx: boolean;
   /** 文字の大きさ */
   textSize: TextSize;
   /** キーの割り当て */
   keys: KeyBindings;
 };
 
-export const DEFAULT_FEEL_SETTINGS: FeelSettings = { shake: true, hitStop: true, weakMarks: true, textSize: 'normal', keys: DEFAULT_BINDINGS };
+export const DEFAULT_FEEL_SETTINGS: FeelSettings = { shake: true, hitStop: true, weakMarks: true, bossMusic: true, stairsFx: true, endFx: true, textSize: 'normal', keys: DEFAULT_BINDINGS };
 
 const KEY = 'dungeon-rogue:feel';
 
@@ -33,11 +39,14 @@ export function parseFeelSettings(raw: string | null): FeelSettings {
   try {
     const data: unknown = JSON.parse(raw);
     if (typeof data !== 'object' || data === null) return { ...DEFAULT_FEEL_SETTINGS };
-    const { shake, hitStop, weakMarks, textSize, keys } = data as Record<string, unknown>;
+    const { shake, hitStop, weakMarks, bossMusic, stairsFx, endFx, textSize, keys } = data as Record<string, unknown>;
     return {
       shake: typeof shake === 'boolean' ? shake : DEFAULT_FEEL_SETTINGS.shake,
       hitStop: typeof hitStop === 'boolean' ? hitStop : DEFAULT_FEEL_SETTINGS.hitStop,
       weakMarks: typeof weakMarks === 'boolean' ? weakMarks : DEFAULT_FEEL_SETTINGS.weakMarks,
+      bossMusic: typeof bossMusic === 'boolean' ? bossMusic : DEFAULT_FEEL_SETTINGS.bossMusic,
+      stairsFx: typeof stairsFx === 'boolean' ? stairsFx : DEFAULT_FEEL_SETTINGS.stairsFx,
+      endFx: typeof endFx === 'boolean' ? endFx : DEFAULT_FEEL_SETTINGS.endFx,
       textSize: TEXT_SIZES.includes(textSize as TextSize) ? (textSize as TextSize) : DEFAULT_FEEL_SETTINGS.textSize,
       keys: parseBindings(keys),
     };

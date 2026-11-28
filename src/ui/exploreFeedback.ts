@@ -9,6 +9,7 @@ import { samePos } from '../game/exploreSight';
 import type { Pos } from '../game/map';
 import { weaponOf, type DungeonView3D } from './explore3d';
 import { FOE_FX, HIT_STOP, KILL_CHAIN } from './explore3dConfig';
+import { feelSettings } from './feelSettings';
 import { HAPTICS, vibrate } from './haptics';
 
 // 敵の攻撃の音を鳴らす間合い（秒）。afterAttack：主人公も攻撃したとき、その音のあとに鳴らすまで。gap：敵が何体も攻撃したとき、1体ずつずらす間。max：1回の行動で鳴らす数
@@ -104,6 +105,9 @@ export function playFeedback(prev: ExploreState, next: ExploreState, view3d: Dun
     if (delay > 0) window.setTimeout(show, delay);
     else show();
   }
+  // 階段を降りた（別の階へ移った）ときは、階段の音。踏破・力尽きたときは、その音（設定で切れる）
+  if (next.outcome === 'ongoing' && next.map !== prev.map && next.floor > prev.floor && feelSettings().stairsFx) playSynth('stairs');
+  if (prev.outcome === 'ongoing' && next.outcome !== 'ongoing' && feelSettings().endFx) playSynth(next.outcome === 'cleared' ? 'clear' : 'defeat', 1, 0.25);
   // 同じ階で1歩進んだら足音を鳴らす（階を移ったとき・その場で戦ったときは鳴らさない）
   if (next.map === prev.map && !samePos(prev.player, next.player)) playFootstep(next.trait);
   // 主人公のいるマスの宝箱から金貨か道具を取ったら、宝箱の音を鳴らす（持ち物がいっぱいで何も取れなかったときは鳴らさない。

@@ -7,7 +7,7 @@ import { hiss, tone } from './synthParts';
 
 export { sceneLimiter } from './sceneSynth';
 
-export type SynthKind = 'freeze' | 'burn' | 'smash' | 'sear' | 'arcane' | 'steam' | 'swap' | 'kill' | SceneKind;
+export type SynthKind = 'freeze' | 'burn' | 'smash' | 'sear' | 'arcane' | 'steam' | 'swap' | 'kill' | 'stairs' | 'clear' | 'defeat' | SceneKind;
 
 /** 効果音を1つ鳴らす。when は鳴らし始める時刻（AudioContext の時間） */
 export function synthSfx(ctx: AudioContext, out: AudioNode, kind: SynthKind, when: number, pitch = 1) {
@@ -43,6 +43,21 @@ export function synthSfx(ctx: AudioContext, out: AudioNode, kind: SynthKind, whe
     case 'kill': // 倒した音：ぽんと弾ける。pitch が上がると高く鳴る（連続で倒すほど上がる）
       tone(ctx, out, when, { freq: 520 * pitch, endFreq: 780 * pitch, len: 0.16, gain: 0.3 });
       tone(ctx, out, when, { type: 'triangle', freq: 1040 * pitch, len: 0.1, gain: 0.14 });
+      break;
+    case 'stairs': // 階段を降りる音：石を踏む低い音が、一段ごとに下がり、最後に遠くへ響く
+      [0, 0.09, 0.18].forEach((d, i) => {
+        tone(ctx, out, when + d, { type: 'triangle', freq: 180 - i * 22, endFreq: 70, len: 0.14, gain: 0.3 });
+        hiss(ctx, out, when + d, { type: 'lowpass', from: 1400, len: 0.06, gain: 0.12 });
+      });
+      tone(ctx, out, when + 0.3, { freq: 110, endFreq: 82, len: 0.7, gain: 0.12, attack: 0.1 });
+      break;
+    case 'clear': // 踏破：上がっていく和音（ド・ミ・ソ・高いド）に、きらめき
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(ctx, out, when + i * 0.11, { freq: f, len: 0.9 - i * 0.05, gain: 0.16, attack: 0.02 }));
+      hiss(ctx, out, when + 0.4, { type: 'highpass', from: 6000, len: 0.6, gain: 0.08, attack: 0.1 });
+      break;
+    case 'defeat': // 力尽きた：重い一撃のあと、音が沈んでいく
+      tone(ctx, out, when, { type: 'triangle', freq: 120, endFreq: 38, len: 0.5, gain: 0.5 });
+      [440, 392, 349.23, 293.66].forEach((f, i) => tone(ctx, out, when + 0.15 + i * 0.28, { type: 'triangle', freq: f, endFreq: f * 0.97, len: 0.7, gain: 0.12, attack: 0.03 }));
       break;
     default: // 記憶の動く場面の音
       sceneSfx(ctx, out, kind, when, pitch);
