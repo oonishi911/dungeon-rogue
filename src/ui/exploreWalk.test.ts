@@ -20,15 +20,13 @@ describe('歩き続けているときに立ち止まるわけ', () => {
     expect(walkInterrupt(s, { ...s, hits: [{ kind: 'taken', at: s.player, amount: 10 }] })).toContain('攻撃');
   });
 
-  it('新しく敵が見えたら止まる（前から見えていた敵では止まらない）', () => {
+  it('敵が見えただけでは止まらない', () => {
     const s = base();
     const foe = { uid: 1, id: 'goblin' as const, elite: false, pos: s.player, hp: 10, mode: 'wander' as const, justNoticed: false, lastSeen: null, searchTurns: 0 };
-    const seen = { ...s, enemies: [foe] };
-    expect(walkInterrupt(s, seen)).toContain('敵');
-    expect(walkInterrupt(seen, seen)).toBeNull();
+    expect(walkInterrupt(s, { ...s, enemies: [foe] })).toBeNull();
   });
 
-  it('壁の向こうの敵が視界の半径に入っても、止まらない', () => {
+  it('壁の向こうの敵は、見えている敵に数えない（sightedEnemyIds）', () => {
     const s = base();
     const w = s.map.width;
     // 主人公の右に壁を立て、その向こうに敵を置く
@@ -37,10 +35,9 @@ describe('歩き続けているときに立ち止まるわけ', () => {
     tiles[wall.y * w + wall.x] = 'wall';
     const walled = { ...s, map: { ...s.map, tiles } };
     const foe = { uid: 1, id: 'goblin' as const, elite: false, pos: { x: s.player.x + 2, y: s.player.y }, hp: 10, mode: 'wander' as const, justNoticed: false, lastSeen: null, searchTurns: 0 };
-    expect(walkInterrupt(walled, { ...walled, enemies: [foe] })).toBeNull();
     expect(sightedEnemyIds({ ...walled, enemies: [foe] }).size).toBe(0);
-    // 壁がなければ止まる
-    expect(walkInterrupt(s, { ...s, enemies: [foe] })).toContain('敵');
+    // 壁がなければ数える
+    expect(sightedEnemyIds({ ...s, enemies: [foe] }).size).toBe(1);
   });
 
   it('まだ開けていない宝箱を初めて見つけたら止まる', () => {
