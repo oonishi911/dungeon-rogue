@@ -133,7 +133,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
               <div className="shop__auto-actions">
                 <button
                   type="button"
-                  className="shop__buy"
+                  className="shop__buy shop__buy--second"
                   onClick={() => {
                     onChange(auto.before);
                     setAuto(null);
@@ -141,7 +141,7 @@ export function ShopScreen({ run, dungeonName, intel, save, atEntry, onChange, o
                 >
                   元に戻す
                 </button>
-                <button type="button" className="shop__buy" onClick={() => setAuto(null)}>
+                <button type="button" className="shop__buy shop__buy--second" onClick={() => setAuto(null)}>
                   閉じる
                 </button>
               </div>
@@ -383,7 +383,7 @@ function EquipDeal({ id, shelf, save, apply }: { id: ItemId; shelf: Shelf; save:
         // サブ武器：探索中に持ち替えて使う（メインとちがう種類。道具を持てる数が1つ減る）
         <button
           type="button"
-          className={isSub ? 'shop__buy shop__buy--off' : 'shop__buy'}
+          className={isSub ? 'shop__buy shop__buy--off' : 'shop__buy shop__buy--second'}
           title="持ち替えて使う2本目の武器（メインとちがう種類。道具を持てる数が1つ減る）"
           onClick={() => apply(equipSub(save, isSub ? null : id))}
         >
