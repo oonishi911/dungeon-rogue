@@ -73,7 +73,7 @@ export function EngravePanel({ save, apply }: { save: SaveData; apply: (r: Resul
                 ) : (
                   canSub && (
                     // サブ武器：探索中に持ち替えて使う（メインとちがう種類。道具を持てる数が1つ減る）
-                    <button type="button" className="shop__buy" title="持ち替えて使う2本目の武器（メインとちがう種類。道具を持てる数が1つ減る）" onClick={() => apply(equipSubEngraved(save, g.uid))}>
+                    <button type="button" className="shop__buy shop__buy--second" title="持ち替えて使う2本目の武器（メインとちがう種類。道具を持てる数が1つ減る）" onClick={() => apply(equipSubEngraved(save, g.uid))}>
                       サブにする
                     </button>
                   )

@@ -5523,3 +5523,22 @@ button {
   color: #e9a08f;
   border-color: rgb(233 160 143 / 0.45);
 }
+
+/* 店：ふたつめの操作のボタン（サブにする など）。押せるのに灰色で、押せないボタンに見えていたので、
+   縁取りの明るいボタンにする（2026-11-28。提案 #12） */
+.shop__buy--second {
+  border: 1px solid var(--bone);
+  border-radius: 4px;
+  background: rgb(236 229 211 / 0.08);
+  color: var(--bone);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.shop__buy--second:hover {
+  background: rgb(236 229 211 / 0.18);
+}
+
+.shop__buy--second:active {
+  transform: translateY(1px);
+}
