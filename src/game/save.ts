@@ -6,6 +6,7 @@
 // 昔の記録にあった rank（ランク）・exp（踏破の経験）・carried（持ち越したカード）・bonusGold（持ち帰った金貨）は、今は使わない。
 // 残っていても読み飛ばす（次に保存するときに消える）。金貨・持ち物・倉庫がない昔の記録は、どれも空から始める。
 
+import { parseRecords, type DungeonRecords } from './records';
 import { ENEMIES, ITEMS } from './data';
 import { ECHO_IDS } from './echoMaster';
 import { ringId } from './itemMaster';
@@ -48,12 +49,13 @@ export interface SaveData {
   engraved: EngravedGear[]; // 持っている刻印武器（力尽きても、なくならない）
   echoes: EchoId[]; // 倉庫の残響（スロットにはめていないもの。同じ残響は何個でも並べる）
   met: EnemyId[]; // 出会ったことのある敵（敵の図鑑に載る。出会った順。docs/enemy-weakness.md）
+  records: DungeonRecords; // ダンジョンごとの記録（挑んだ回数・いちばん深い階・踏破した回数。records.ts）
 }
 
 export const emptyKit = (): Kit => ({ weapon: null, armor: null, books: [], take: [] });
 
 export function newSave(): SaveData {
-  return { version: SAVE_VERSION, run: 1, gold: 0, owned: [], stock: [], kit: emptyKit(), memories: [], fragments: 0, noticeSeen: false, engraved: [], echoes: [], met: [] };
+  return { version: SAVE_VERSION, run: 1, gold: 0, owned: [], stock: [], kit: emptyKit(), memories: [], fragments: 0, noticeSeen: false, engraved: [], echoes: [], met: [], records: {} };
 }
 
 const isItem = (v: unknown): v is ItemId => typeof v === 'string' && v in ITEMS;
@@ -88,7 +90,9 @@ export function parseSave(text: string | null): SaveData | null {
   const kit = parseKit(d.kit, owned, engraved, memories.length);
   // 出会った敵（ない昔の記録は、空から始める。今いない敵は捨てる）
   const met = Array.isArray(d.met) ? [...new Set(d.met.filter((id): id is EnemyId => typeof id === 'string' && id in ENEMIES))] : [];
-  return { version: SAVE_VERSION, run: d.run, gold, owned, stock, kit, memories, fragments, noticeSeen: d.noticeSeen === true, engraved, echoes, met };
+  // ダンジョンごとの記録（ない昔の記録は、空から始める）
+  const records = parseRecords(d.records);
+  return { version: SAVE_VERSION, run: d.run, gold, owned, stock, kit, memories, fragments, noticeSeen: d.noticeSeen === true, engraved, echoes, met, records };
 }
 
 const isEcho = (v: unknown): v is EchoId => typeof v === 'string' && (ECHO_IDS as readonly string[]).includes(v);

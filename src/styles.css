@@ -5578,3 +5578,82 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== ダンジョンを選ぶ：これまでの記録と、取り戻した記憶（2026-11-28。提案 #14） ===== */
+.choose__name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.choose__badge {
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: var(--procure);
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.choose__item--cleared {
+  border-color: rgb(240 196 106 / 0.45);
+}
+
+.choose__record {
+  margin: 0 0 0.35rem;
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.choose__record b {
+  color: var(--bone);
+}
+
+.choose__memories {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  font-size: var(--step--1);
+  color: var(--bone-dim);
+}
+
+.choose__pips {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.choose__pip {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  border: 1px solid var(--bone-dim);
+}
+
+.choose__pip--on {
+  background: #f0c46a;
+  border-color: #f0c46a;
+}
+
+/* 広い画面：カードを横に並べる（ダンジョンが3つなら3列） */
+@media (min-width: 64rem) {
+  .choose {
+    max-width: 72rem;
+  }
+
+  .choose .choose__list {
+    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+    align-items: stretch;
+  }
+
+  .choose .choose__item > section {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .choose .choose__go {
+    margin-top: auto;
+  }
+}
